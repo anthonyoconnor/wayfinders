@@ -65,6 +65,23 @@ describe("KnowledgeSystem expedition resolution", () => {
     expect(world.getExpeditionStamp(2, 0)).toBe(0);
     expect(world.getKnowledge(0, 0)).toBe(KnowledgeState.Supported);
   });
+
+  it("resolves only the indices recorded for the expedition", () => {
+    const world = new WorldGrid(20, 20, 5);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const knowledge = new KnowledgeSystem(world);
+    const changed = knowledge.revealIndices([1, 2, 21], 12);
+    expect(changed.changedCount).toBe(3);
+
+    world.forEachTile = () => {
+      throw new Error("expedition resolution must not scan the world");
+    };
+
+    expect(knowledge.commitExpedition(12).changedIndices).toEqual([1, 2, 21]);
+    expect(world.getKnowledgeAtIndex(1)).toBe(KnowledgeState.Supported);
+    expect(world.getKnowledgeAtIndex(2)).toBe(KnowledgeState.Supported);
+    expect(world.getKnowledgeAtIndex(21)).toBe(KnowledgeState.Supported);
+  });
 });
 
 describe("GameSimulation expedition lifecycle", () => {

@@ -7,6 +7,42 @@ import { WorldGrid } from "../src/tidebound/world/WorldGrid.ts";
 import { makeConfig, makeShip } from "./helpers.ts";
 
 describe("VisibilitySystem and KnowledgeSystem", () => {
+it("maintains O(1) world knowledge and visibility counts across indexed updates", () => {
+  const world = new WorldGrid(5, 3, 4);
+  expect(world.getKnowledgeCount(KnowledgeState.Unknown)).toBe(15);
+  expect(world.getKnowledgeCount(KnowledgeState.Personal)).toBe(0);
+  expect(world.getKnowledgeCount(KnowledgeState.Supported)).toBe(0);
+  expect(world.currentVisibleCount).toBe(0);
+
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  world.setKnowledge(4, 2, KnowledgeState.Personal, 7);
+  world.setKnowledge(4, 2, KnowledgeState.Personal, 8);
+  expect(world.getKnowledgeCount(KnowledgeState.Unknown)).toBe(13);
+  expect(world.getKnowledgeCount(KnowledgeState.Personal)).toBe(1);
+  expect(world.getKnowledgeCount(KnowledgeState.Supported)).toBe(1);
+  expect(world.getKnowledgeAtIndex(world.index(4, 2))).toBe(KnowledgeState.Personal);
+
+  const firstVisible = world.index(0, 0);
+  const secondVisible = world.index(4, 2);
+  world.setVisibleNowAtIndex(firstVisible, true);
+  world.setVisibleNow(4, 2, true);
+  world.setVisibleNowAtIndex(firstVisible, true);
+  expect(world.currentVisibleCount).toBe(2);
+  expect(world.isVisibleNowAtIndex(secondVisible)).toBe(true);
+
+  world.clearVisibility();
+  expect(world.currentVisibleCount).toBe(0);
+  expect(world.isVisibleNowAtIndex(firstVisible)).toBe(false);
+  expect(world.isVisibleNowAtIndex(secondVisible)).toBe(false);
+
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Supported);
+  expect(world.getKnowledgeCount(KnowledgeState.Unknown)).toBe(0);
+  expect(world.getKnowledgeCount(KnowledgeState.Personal)).toBe(0);
+  expect(world.getKnowledgeCount(KnowledgeState.Supported)).toBe(15);
+  expect(world.currentVisibleCount).toBe(0);
+});
+
 it("reveals the circular radius and stamps newly observed cells", () => {
   const config = makeConfig({ navigation: { sightRadius: 2 } });
   const world = new WorldGrid(9, 9, 4);
@@ -23,6 +59,27 @@ it("reveals the circular radius and stamps newly observed cells", () => {
   expect(world.getKnowledge(6, 4)).toBe(KnowledgeState.Personal);
   expect(world.getExpeditionStamp(6, 4)).toBe(17);
   expect(world.getKnowledge(4, 4)).toBe(KnowledgeState.Supported);
+});
+
+it("reuses observation bookkeeping without mutating prior updates or retaining stale visibility", () => {
+  const config = makeConfig({ navigation: { sightRadius: 2 } });
+  const world = new WorldGrid(64, 64, 8);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  const visibility = new VisibilitySystem(world, config);
+
+  const first = visibility.updateAt({ x: 10, y: 10 });
+  const firstObserved = [...first.observedIndices];
+  const firstCurrent = [...first.currentVisibleIndices];
+  const staleIndex = world.index(8, 10);
+  expect(world.isVisibleNowAtIndex(staleIndex)).toBe(true);
+
+  const second = visibility.updateAt({ x: 50, y: 50 });
+  expect(first.observedIndices).toEqual(firstObserved);
+  expect(first.currentVisibleIndices).toEqual(firstCurrent);
+  expect(world.isVisibleNowAtIndex(staleIndex)).toBe(false);
+  expect(world.currentVisibleCount).toBe(second.currentVisibleIndices.length);
+  expect(second.currentVisibleIndices.every((index) => world.isVisibleNowAtIndex(index))).toBe(true);
+  expect(second.observedIndices).toEqual([...second.observedIndices].sort((left, right) => left - right));
 });
 
 it("keeps a sight blocker visible while hiding cells behind it", () => {

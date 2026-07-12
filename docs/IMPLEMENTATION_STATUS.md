@@ -54,7 +54,7 @@ Status: complete — stop here for user playtesting
 - Configured Supported / Personal / Unknown costs of 0 / 0.5 / 1 bundle-units per tile.
 - Cost-limited forward Dijkstra mask showing only reachable Unknown water.
 - Known-water, multi-source return Dijkstra with comfortable, warning, critical and impossible margins.
-- Reusable WebGL-rendered forward and return textures with dotted, diagonal and crosshatched accessibility treatments.
+- Reusable chunk-sized WebGL forward and return textures with dotted, diagonal and crosshatched accessibility treatments.
 - World legend uses words and patterns without exposing resource arithmetic.
 - Current sight remains full colour; return risk appears only on Personal water behind the ship.
 - The default configuration generates eight non-home islands with stable IDs and descriptors.
@@ -149,11 +149,74 @@ validate the technical design's mobile performance target and does not assert
 that sailing is enjoyable, that the overlays are intuitively clear, or that
 wreck pacing and repeated expeditions feel satisfying to a player.
 
-Human sentiment status: **not collected**. Product-owner gate decision:
-**pending**. Do not start production art or roadmap Milestones 4–5 until that
-decision is recorded as **Proceed** or **Rework**. Next action: a human tester
-completes the subjective questions in `MILESTONE_3_PLAYTEST.md` and the product
-owner records that gate decision here.
+Human playtest status: initial feedback reported sluggish sailing and requested
+the performance rework recorded below. Product-owner gate decision: **pending**.
+Do not start production art or roadmap Milestones 4–5 until the tester repeats
+the playtest on the remediated build and the product owner records **Proceed**
+or another **Rework** decision here.
+
+## Milestone 3 performance remediation — 2026-07-12
+
+Status: **complete — ready for repeat human playtesting**.
+
+The first human playtest reported that the ship became sluggish after the
+scattered islands were added. The cause was cumulative world-wide work in the
+render, overlay, diagnostics and search paths rather than the configured ship
+speed. The remediation keeps normal sailing local or sparse:
+
+- static world art is split into camera-culled chunk graphics over one ocean
+  rectangle;
+- knowledge, forward-range and return-risk masks use reusable chunk textures
+  with sparse dirty-chunk uploads and cross-chunk edge invalidation;
+- snapshots and browser diagnostics read maintained counts instead of scanning
+  the map and DOM writes are throttled to meaningful revisions or 10 Hz;
+- visibility clears only the previous sight set, expedition return/wreck
+  resolves only the owning expedition's indices, and return boundaries derive
+  from Personal-water neighbours;
+- Dijkstra reuses cost, parent, visited, settled-node and numeric heap buffers,
+  then post-processes only settled forward candidates or known Personal water;
+- provision-only range/risk changes update cached cost groups without a new
+  path search;
+- supported-water painting and island flood validation are bounded or
+  early-exiting generation-only work.
+
+Doubling both dimensions from `96 x 96` to `192 x 192` quadruples logical tiles
+from 9,216 to 36,864. A warmed deterministic simulation probe produced these
+conservative timings (the slower observation from two final runs is shown):
+
+| Probe | Before, 96 x 96 | Final, 96 x 96 | Before, 192 x 192 | Final, 192 x 192 |
+| --- | ---: | ---: | ---: | ---: |
+| Moving fixed update, mean | 4.745 ms | 0.162 ms | 18.384 ms | 0.157 ms |
+| Moving fixed update, p95 | 11.417 ms | 1.577 ms | 39.854 ms | 1.643 ms |
+| Snapshot, median | 7.55 ms | 0.0045 ms | 35.69 ms | 0.0009 ms |
+| Developer teleport, median | 11.63 ms | 1.519 ms | 44.32 ms | 1.340 ms |
+
+The final fixed-update p95 is well below the 16.67 ms render-frame interval at
+both sizes. Generation remains intentionally area-scaled and off the movement
+loop. Browser checks loaded both sizes, teleported into far chunks, exercised
+range changes, showed continuous fog/overlay rendering, preserved the
+four-second wreck transition and reported no console warnings or errors.
+These desktop and local-simulation results do **not** replace the outstanding
+mid-range mobile-device validation.
+
+Final verification on this workstation:
+
+- TypeScript typecheck: 2.9 seconds wall time;
+- system/unit tests: 77/77 across nine files, 2.00 seconds reported by Vitest
+  in the clean pipeline (4.1 seconds standalone command wall time);
+- production build: 11.7 seconds command wall time, including 8.45 seconds in
+  Vite;
+- complete sequential `npm.cmd run check` pipeline: 18.1 seconds wall time;
+- active browser validation: approximately 65 seconds across default and
+  doubled dimensions, far-chunk/overlay checks and the four-second wreck hold.
+
+The browser check is an in-app functional smoke pass rather than a separately
+installed browser-test runner. Its console contained no warnings or errors.
+
+Critical decision: no Web Worker was added. Sparse main-thread work is now
+inside the current budget, while a worker would add state-transfer and
+determinism complexity without evidence that it is needed. Repeat human
+playtesting is the next action; Milestones 4–5 remain out of scope.
 
 ### Reusable Milestone 3 regression checks
 
@@ -189,7 +252,7 @@ living-world work have not been started.
 7. **Camera input.** Wheel and Q/E share a clamped zoom range; the camera always follows the authoritative ship position. Free camera panning was omitted because it made it easier to lose the ship without helping the Milestone 0–3 loop.
 8. **Visibility shape.** Line of sight is a Euclidean circle on the square grid. Land and rock block cells behind them but remain visible themselves. This matches the five-tile technical radius while giving the exploration trail a broader, softer silhouette than a Manhattan diamond.
 9. **Teleport knowledge.** Developer teleport reveals only the destination sight disc; it does not create a false Personal corridor between origin and destination.
-10. **Fog masks.** Changed chunks are composited into one reusable low-resolution world mask, then bilinearly sampled by Phaser's WebGL renderer. The single display quad avoids camera-scale seams while retaining chunk-scoped data updates. A custom production shader remains unnecessary for developer art at this review gate.
+10. **Fog masks.** Each chunk owns one reusable, padded low-resolution mask texture that Phaser samples bilinearly. Changed chunks invalidate neighbouring padding, and adjacent quads overlap by one world pixel to prevent camera-scale seams. This keeps texture dimensions independent of world size; a custom production shader remains unnecessary for developer art at this review gate.
 11. **Expedition ownership.** Normal movement starts an expedition on leaving Supported water. Only Personal tiles carrying that expedition's ID can be committed or reverted, and resolution clears those stamps to zero. Crossing Supported water away from home does not resolve the expedition.
 12. **Provision budget correction.** The technical document prints `bundles + (1 - accumulator)` for overlay reach, which grants a nonexistent extra bundle when the accumulator is zero. The implementation uses `bundles - accumulator`, so physical cargo and overlay distance agree exactly. Tests lock this decision.
 13. **Wreck consequence.** Natural travel consumption crossing from a positive bundle count to zero outside Supported water begins one immediate wreck transition. The failed stamped Personal route returns to Unknown, earlier Supported routes survive and a wreck record is left at the loss position. Direct developer provision removal does not itself trigger a wreck.
@@ -207,3 +270,4 @@ living-world work have not been started.
 25. **Placement and navigability.** The default generator places eight islands using configured home clearance, six-tile world margins, eleven-tile minimum channels and bounded placement attempts with deterministic fallback. A two-tile half-width eastbound corridor remains completely clear from the home dock; atolls receive a cardinally connected lagoon passage; and a final flood check requires passable water from the dock to reach all four world edges and every atoll centre.
 26. **Island presentation and concealment.** Each kind uses a distinct generated developer-art palette and minimal terrain marks. Unknown interiors remain fully opaque so island silhouettes cannot leak before reveal. This is functional exploration content, not production island art or Milestone 4 environmental polish.
 27. **Wreck-transition pacing.** Wreck onset and route rollback occur immediately, but generation advancement and dock respawn wait for four simulation seconds. During the hold, current sight remains frozen on a visible wreck marker, the camera stays at the loss site, movement, teleport, cargo editing, live gameplay tuning and repeated forced wrecks are suppressed, and the old generation remains authoritative. Explicit world regeneration remains available as a deterministic cancellation/reset. Completion atomically clears loss-site visibility, advances generation and expedition ID once, creates the fully supplied dock ship, recalculates overlays and discards held-input overshoot.
+28. **Performance scaling.** Normal sailing is kept independent of total world area wherever practical: camera-culled static chunk graphics replace world-wide render command submission; fog and risk uploads are chunk-local; visibility, knowledge, expedition and diagnostic counts use sparse indices or counters; and path searches reuse typed buffers and process settled/known candidates. Doubling both dimensions quadruples generation data, so generation remains area-scaled and off the movement loop. A Web Worker was not added because the optimized `192 x 192` simulation remains within the frame budget; mobile-device validation is still outstanding.

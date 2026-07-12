@@ -1,6 +1,5 @@
 import { prototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
-import { gridToChunk, gridToLocal } from "./CoordinateSystem";
 import {
   KnowledgeState,
   TerrainType,
@@ -12,6 +11,15 @@ import { WorldChunk } from "./WorldChunk";
 
 export class WorldGrid {
   private readonly chunks = new Map<string, WorldChunk>();
+  private readonly loadedChunks: WorldChunk[] = [];
+  private readonly chunkColumns: number;
+  private readonly chunkRows: number;
+  private readonly chunksByIndex: Array<WorldChunk | undefined>;
+  private readonly knowledgeCounts: number[];
+  private readonly personalKnowledgeIndices = new Set<number>();
+  private readonly supportedKnowledgeIndices = new Set<number>();
+  private readonly visibleIndices = new Set<number>();
+  private readonly visibilityDirtyChunks = new Set<WorldChunk>();
 
   knowledgeVersion = 0;
   terrainVersion = 0;
@@ -26,10 +34,36 @@ export class WorldGrid {
       throw new RangeError("World dimensions must be positive integers");
     }
     if (!Number.isInteger(chunkSize) || chunkSize <= 0) throw new RangeError("Chunk size must be a positive integer");
+    this.chunkColumns = Math.ceil(width / chunkSize);
+    this.chunkRows = Math.ceil(height / chunkSize);
+    this.chunksByIndex = new Array<WorldChunk | undefined>(this.chunkColumns * this.chunkRows);
+    this.knowledgeCounts = [this.tileCount, 0, 0];
   }
 
   get tileCount(): number {
     return this.width * this.height;
+  }
+
+  get currentVisibleCount(): number {
+    return this.visibleIndices.size;
+  }
+
+  getKnowledgeCount(knowledge: KnowledgeState): number {
+    const count = this.knowledgeCounts[knowledge];
+    if (count === undefined) throw new RangeError(`Invalid knowledge state ${knowledge}`);
+    return count;
+  }
+
+  getPersonalKnowledgeIndices(): ReadonlySet<number> {
+    return this.personalKnowledgeIndices;
+  }
+
+  getSupportedKnowledgeIndices(): ReadonlySet<number> {
+    return this.supportedKnowledgeIndices;
+  }
+
+  getVisibleIndices(): ReadonlySet<number> {
+    return this.visibleIndices;
   }
 
   static chunkKey(chunkX: number, chunkY: number): string {
@@ -51,27 +85,38 @@ export class WorldGrid {
   }
 
   getOrCreateChunk(chunkX: number, chunkY: number): WorldChunk {
+    const directIndex = this.directChunkIndex(chunkX, chunkY);
+    if (directIndex >= 0) {
+      const directChunk = this.chunksByIndex[directIndex];
+      if (directChunk) return directChunk;
+    }
+
     const key = WorldGrid.chunkKey(chunkX, chunkY);
     let chunk = this.chunks.get(key);
     if (!chunk) {
       chunk = new WorldChunk(chunkX, chunkY, this.chunkSize);
       this.chunks.set(key, chunk);
+      this.loadedChunks.push(chunk);
     }
+    if (directIndex >= 0) this.chunksByIndex[directIndex] = chunk;
     return chunk;
   }
 
   getChunk(chunkX: number, chunkY: number): WorldChunk | undefined {
+    const directIndex = this.directChunkIndex(chunkX, chunkY);
+    if (directIndex >= 0) return this.chunksByIndex[directIndex];
     return this.chunks.get(WorldGrid.chunkKey(chunkX, chunkY));
   }
 
   getChunkAt(x: number, y: number, create = true): WorldChunk | undefined {
     if (!this.inBounds(x, y)) return undefined;
-    const chunkPoint = gridToChunk({ x, y }, this.chunkSize);
-    return create ? this.getOrCreateChunk(chunkPoint.x, chunkPoint.y) : this.getChunk(chunkPoint.x, chunkPoint.y);
+    const chunkX = Math.floor(x / this.chunkSize);
+    const chunkY = Math.floor(y / this.chunkSize);
+    return create ? this.getOrCreateChunk(chunkX, chunkY) : this.getChunk(chunkX, chunkY);
   }
 
   getLoadedChunks(): readonly WorldChunk[] {
-    return [...this.chunks.values()];
+    return this.loadedChunks;
   }
 
   getTerrain(x: number, y: number): TerrainType {
@@ -102,15 +147,32 @@ export class WorldGrid {
     return chunk.knowledge[index] as KnowledgeState;
   }
 
-  setKnowledge(x: number, y: number, knowledge: KnowledgeState, expeditionStamp?: number): boolean {
-    const { chunk, index } = this.locate(x, y);
+  getKnowledgeAtIndex(worldIndex: number): KnowledgeState {
+    const chunk = this.chunkAtIndex(worldIndex);
+    return chunk.knowledge[this.localIndexFromWorldIndex(worldIndex)] as KnowledgeState;
+  }
+
+  setKnowledgeAtIndex(worldIndex: number, knowledge: KnowledgeState, expeditionStamp?: number): boolean {
+    const chunk = this.chunkAtIndex(worldIndex);
+    const index = this.localIndexFromWorldIndex(worldIndex);
     const nextStamp = expeditionStamp ?? chunk.expeditionStamp[index];
     if (chunk.knowledge[index] === knowledge && chunk.expeditionStamp[index] === nextStamp) return false;
+    const previousKnowledge = chunk.knowledge[index] as KnowledgeState;
     chunk.knowledge[index] = knowledge;
     chunk.expeditionStamp[index] = nextStamp;
+    if (previousKnowledge !== knowledge) {
+      this.knowledgeCounts[previousKnowledge]--;
+      this.knowledgeCounts[knowledge]++;
+      this.removeKnowledgeIndex(worldIndex, previousKnowledge);
+      this.addKnowledgeIndex(worldIndex, knowledge);
+    }
     chunk.markDirty();
     this.knowledgeVersion++;
     return true;
+  }
+
+  setKnowledge(x: number, y: number, knowledge: KnowledgeState, expeditionStamp?: number): boolean {
+    return this.setKnowledgeAtIndex(this.index(x, y), knowledge, expeditionStamp);
   }
 
   isVisibleNow(x: number, y: number): boolean {
@@ -118,31 +180,51 @@ export class WorldGrid {
     return chunk.visibleNow[index] !== 0;
   }
 
+  isVisibleNowAtIndex(worldIndex: number): boolean {
+    const chunk = this.chunkAtIndex(worldIndex);
+    return chunk.visibleNow[this.localIndexFromWorldIndex(worldIndex)] !== 0;
+  }
+
   setVisibleNow(x: number, y: number, visible: boolean): boolean {
-    const { chunk, index } = this.locate(x, y);
+    return this.setVisibleNowAtIndex(this.index(x, y), visible);
+  }
+
+  setVisibleNowAtIndex(worldIndex: number, visible: boolean): boolean {
+    const chunk = this.chunkAtIndex(worldIndex);
+    const index = this.localIndexFromWorldIndex(worldIndex);
     const value = visible ? 1 : 0;
     if (chunk.visibleNow[index] === value) return false;
     chunk.visibleNow[index] = value;
+    if (visible) this.visibleIndices.add(worldIndex);
+    else this.visibleIndices.delete(worldIndex);
     chunk.markDirty(false);
     this.visibilityVersion++;
     return true;
   }
 
   clearVisibility(): void {
-    let changed = false;
-    for (const chunk of this.chunks.values()) {
-      if (!chunk.visibleNow.some(Boolean)) continue;
-      chunk.visibleNow.fill(0);
-      chunk.markDirty(false);
-      changed = true;
+    if (this.visibleIndices.size === 0) return;
+
+    for (const worldIndex of this.visibleIndices) {
+      const chunk = this.chunkAtIndex(worldIndex);
+      chunk.visibleNow[this.localIndexFromWorldIndex(worldIndex)] = 0;
+      this.visibilityDirtyChunks.add(chunk);
     }
-    if (changed) this.visibilityVersion++;
+    for (const chunk of this.visibilityDirtyChunks) chunk.markDirty(false);
+    this.visibilityDirtyChunks.clear();
+    this.visibleIndices.clear();
+    this.visibilityVersion++;
   }
 
   isMovementBlocked(x: number, y: number): boolean {
     if (!this.inBounds(x, y)) return true;
     const { chunk, index } = this.locate(x, y);
     return chunk.movementBlocked[index] !== 0;
+  }
+
+  isMovementBlockedAtIndex(worldIndex: number): boolean {
+    const chunk = this.chunkAtIndex(worldIndex);
+    return chunk.movementBlocked[this.localIndexFromWorldIndex(worldIndex)] !== 0;
   }
 
   setMovementBlocked(x: number, y: number, blocked: boolean): boolean {
@@ -161,6 +243,11 @@ export class WorldGrid {
     return chunk.sightBlocked[index] !== 0;
   }
 
+  isSightBlockedAtIndex(worldIndex: number): boolean {
+    const chunk = this.chunkAtIndex(worldIndex);
+    return chunk.sightBlocked[this.localIndexFromWorldIndex(worldIndex)] !== 0;
+  }
+
   setSightBlocked(x: number, y: number, blocked: boolean): boolean {
     const { chunk, index } = this.locate(x, y);
     const value = blocked ? 1 : 0;
@@ -174,6 +261,11 @@ export class WorldGrid {
   getExpeditionStamp(x: number, y: number): number {
     const { chunk, index } = this.locate(x, y);
     return chunk.expeditionStamp[index];
+  }
+
+  getExpeditionStampAtIndex(worldIndex: number): number {
+    const chunk = this.chunkAtIndex(worldIndex);
+    return chunk.expeditionStamp[this.localIndexFromWorldIndex(worldIndex)];
   }
 
   setExpeditionStamp(x: number, y: number, expeditionId: number): boolean {
@@ -218,10 +310,10 @@ export class WorldGrid {
   fill(terrain: TerrainType, knowledge: KnowledgeState): void {
     const movementBlocked = terrainBlocksMovement(terrain) ? 1 : 0;
     const sightBlocked = terrainBlocksSight(terrain) ? 1 : 0;
-    const chunkColumns = Math.ceil(this.width / this.chunkSize);
-    const chunkRows = Math.ceil(this.height / this.chunkSize);
-    for (let chunkY = 0; chunkY < chunkRows; chunkY++) {
-      for (let chunkX = 0; chunkX < chunkColumns; chunkX++) {
+    this.visibleIndices.clear();
+    this.visibilityDirtyChunks.clear();
+    for (let chunkY = 0; chunkY < this.chunkRows; chunkY++) {
+      for (let chunkX = 0; chunkX < this.chunkColumns; chunkX++) {
         const chunk = this.getOrCreateChunk(chunkX, chunkY);
         chunk.terrain.fill(terrain);
         chunk.knowledge.fill(knowledge);
@@ -233,6 +325,16 @@ export class WorldGrid {
         chunk.resourceId.fill(-1);
         chunk.markDirty();
       }
+    }
+    this.knowledgeCounts.fill(0);
+    this.knowledgeCounts[knowledge] = this.tileCount;
+    this.personalKnowledgeIndices.clear();
+    this.supportedKnowledgeIndices.clear();
+    if (knowledge !== KnowledgeState.Unknown) {
+      const indices = knowledge === KnowledgeState.Personal
+        ? this.personalKnowledgeIndices
+        : this.supportedKnowledgeIndices;
+      for (let index = 0; index < this.tileCount; index++) indices.add(index);
     }
     this.terrainVersion++;
     this.knowledgeVersion++;
@@ -252,9 +354,52 @@ export class WorldGrid {
 
   private locate(x: number, y: number): { chunk: WorldChunk; index: number } {
     this.assertInBounds(x, y);
-    const chunkPoint = gridToChunk({ x, y }, this.chunkSize);
-    const localPoint = gridToLocal({ x, y }, this.chunkSize);
-    const chunk = this.getOrCreateChunk(chunkPoint.x, chunkPoint.y);
-    return { chunk, index: chunk.index(localPoint.x, localPoint.y) };
+    const chunkX = Math.floor(x / this.chunkSize);
+    const chunkY = Math.floor(y / this.chunkSize);
+    const localX = x - chunkX * this.chunkSize;
+    const localY = y - chunkY * this.chunkSize;
+    const chunk = this.getOrCreateChunk(chunkX, chunkY);
+    return { chunk, index: localY * this.chunkSize + localX };
+  }
+
+  private chunkAtIndex(worldIndex: number): WorldChunk {
+    this.assertWorldIndex(worldIndex);
+    const x = worldIndex % this.width;
+    const y = Math.floor(worldIndex / this.width);
+    return this.getOrCreateChunk(Math.floor(x / this.chunkSize), Math.floor(y / this.chunkSize));
+  }
+
+  private localIndexFromWorldIndex(worldIndex: number): number {
+    const x = worldIndex % this.width;
+    const y = Math.floor(worldIndex / this.width);
+    return (y % this.chunkSize) * this.chunkSize + (x % this.chunkSize);
+  }
+
+  private assertWorldIndex(worldIndex: number): void {
+    if (!Number.isInteger(worldIndex) || worldIndex < 0 || worldIndex >= this.tileCount) {
+      throw new RangeError(`Invalid world index ${worldIndex}`);
+    }
+  }
+
+  private directChunkIndex(chunkX: number, chunkY: number): number {
+    if (
+      !Number.isInteger(chunkX)
+      || !Number.isInteger(chunkY)
+      || chunkX < 0
+      || chunkY < 0
+      || chunkX >= this.chunkColumns
+      || chunkY >= this.chunkRows
+    ) return -1;
+    return chunkY * this.chunkColumns + chunkX;
+  }
+
+  private addKnowledgeIndex(worldIndex: number, knowledge: KnowledgeState): void {
+    if (knowledge === KnowledgeState.Personal) this.personalKnowledgeIndices.add(worldIndex);
+    else if (knowledge === KnowledgeState.Supported) this.supportedKnowledgeIndices.add(worldIndex);
+  }
+
+  private removeKnowledgeIndex(worldIndex: number, knowledge: KnowledgeState): void {
+    if (knowledge === KnowledgeState.Personal) this.personalKnowledgeIndices.delete(worldIndex);
+    else if (knowledge === KnowledgeState.Supported) this.supportedKnowledgeIndices.delete(worldIndex);
   }
 }

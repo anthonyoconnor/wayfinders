@@ -66,11 +66,17 @@ export class TideboundScene extends Phaser.Scene {
   private debugGraphics!: Phaser.GameObjects.Graphics;
   private domAbort?: AbortController;
   private readonly eventUnsubscribers: Array<() => void> = [];
+  private gameHost?: HTMLElement;
+  private gameStatus?: HTMLElement;
+  private provisionOutput?: HTMLOutputElement;
   private teleportOnClick = false;
   private islandInspectionIndex = 0;
   private datasetGenerated?: GameSimulation["generated"];
-  private lastRenderedRevision = -1;
-  private lastReportedOverlayRevision = -1;
+  private lastDebugRevision = -1;
+  private lastDebugOverlayRevision = -1;
+  private lastDiagnosticsRevision = -1;
+  private lastDiagnosticsOverlayRevision = -1;
+  private lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
 
   constructor() {
     super({ key: "TideboundScene" });
@@ -85,6 +91,8 @@ export class TideboundScene extends Phaser.Scene {
     this.shipRenderer = new ShipRenderer(this);
     this.gridGraphics = this.add.graphics().setDepth(70);
     this.debugGraphics = this.add.graphics().setDepth(71);
+    this.gameHost = document.querySelector<HTMLElement>("#game-host") ?? undefined;
+    this.gameStatus = document.querySelector<HTMLElement>("#game-status") ?? undefined;
 
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Keyboard input is unavailable");
@@ -113,8 +121,7 @@ export class TideboundScene extends Phaser.Scene {
 
     const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
     if (sceneStatus) sceneStatus.textContent = "Exploration sandbox active";
-    const gameStatus = document.querySelector<HTMLElement>("#game-status");
-    if (gameStatus) gameStatus.textContent = "WASD / arrows sail · wheel or Q/E zoom · Developer tools tune";
+    if (this.gameStatus) this.gameStatus.textContent = "WASD / arrows sail · wheel or Q/E zoom · Developer tools tune";
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyBindings());
   }
@@ -177,11 +184,12 @@ export class TideboundScene extends Phaser.Scene {
     if (this.simulation.debug.currentSight) {
       this.debugGraphics.fillStyle(PALETTE.sight, 0.12);
       this.debugGraphics.lineStyle(1, PALETTE.sight, 0.38);
-      world.forEachTile((x, y) => {
-        if (!world.isVisibleNow(x, y)) return;
+      for (const index of world.getVisibleIndices()) {
+        const x = index % world.width;
+        const y = Math.floor(index / world.width);
         this.debugGraphics.fillRect(x * size, y * size, size, size);
         this.debugGraphics.strokeRect(x * size, y * size, size, size);
-      });
+      }
     }
 
   }
@@ -199,8 +207,12 @@ export class TideboundScene extends Phaser.Scene {
       force,
     );
     this.cargoRenderer.sync(this.simulation.ship.provisions);
-    const host = document.querySelector<HTMLElement>("#game-host");
-    if (host) {
+    const diagnosticsDue = force
+      || this.lastDiagnosticsRevision !== this.simulation.revision
+      || this.lastDiagnosticsOverlayRevision !== this.simulation.overlaysRevision
+      || this.time.now - this.lastDiagnosticsAt >= 100;
+    const host = this.gameHost;
+    if (diagnosticsDue && host) {
       if (this.datasetGenerated !== this.simulation.generated) {
         host.dataset.seed = String(this.simulation.generated.seed);
         host.dataset.islandCount = String(this.simulation.generated.islands.length);
@@ -237,12 +249,20 @@ export class TideboundScene extends Phaser.Scene {
       host.dataset.knowledgeVersion = String(this.simulation.world.knowledgeVersion);
       host.dataset.visibilityVersion = String(this.simulation.world.visibilityVersion);
     }
-    document.documentElement.dataset.wayfindersReady = "true";
-    if (
-      force
-      || this.lastRenderedRevision !== this.simulation.revision
-      || this.lastReportedOverlayRevision !== this.simulation.overlaysRevision
-    ) {
+    if (document.documentElement.dataset.wayfindersReady !== "true") {
+      document.documentElement.dataset.wayfindersReady = "true";
+    }
+
+    const debugChanged = force
+      || this.lastDebugRevision !== this.simulation.revision
+      || this.lastDebugOverlayRevision !== this.simulation.overlaysRevision;
+    if (debugChanged) {
+      this.renderDebug();
+      this.lastDebugRevision = this.simulation.revision;
+      this.lastDebugOverlayRevision = this.simulation.overlaysRevision;
+    }
+
+    if (diagnosticsDue) {
       const snapshot = this.simulation.snapshot();
       this.updateProvisionOutput();
       if (host) {
@@ -256,12 +276,11 @@ export class TideboundScene extends Phaser.Scene {
         host.dataset.returnCritical = String(snapshot.risk.critical);
         host.dataset.returnImpossible = String(snapshot.risk.impossible);
       }
-      this.renderDebug();
-      this.lastRenderedRevision = this.simulation.revision;
-      this.lastReportedOverlayRevision = this.simulation.overlaysRevision;
+      this.lastDiagnosticsRevision = this.simulation.revision;
+      this.lastDiagnosticsOverlayRevision = this.simulation.overlaysRevision;
+      this.lastDiagnosticsAt = this.time.now;
     }
-    const status = document.querySelector<HTMLElement>("#game-status");
-    if (status) {
+    if (diagnosticsDue && this.gameStatus) {
       const message = this.simulation.wreckPresentationActive
         ? `Ship wrecked · next generation departs in ${this.simulation.respawnSecondsRemaining.toFixed(1)}s`
         : this.simulation.stranded
@@ -269,7 +288,7 @@ export class TideboundScene extends Phaser.Scene {
         : this.simulation.expeditionActive
         ? "Expedition underway · return to the home dock to secure the route"
         : "WASD / arrows sail · wheel or Q/E zoom · Developer tools tune";
-      if (status.textContent !== message) status.textContent = message;
+      if (this.gameStatus.textContent !== message) this.gameStatus.textContent = message;
     }
   }
 
@@ -353,6 +372,8 @@ export class TideboundScene extends Phaser.Scene {
           ${this.numberMarkup("fog-noise", "Fog noise strength", prototypeConfig.overlays.fogNoise, 0, 1, 0.02)}
         </fieldset>
       </div>`;
+
+    this.provisionOutput = slot.querySelector<HTMLOutputElement>("[data-output='provisions']") ?? undefined;
 
     slot.querySelectorAll<HTMLInputElement>("input[data-overlay]").forEach((input) => {
       input.addEventListener("change", () => {
@@ -470,15 +491,20 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private updateProvisionOutput(): void {
-    const output = document.querySelector<HTMLOutputElement>("#scene-tools-slot [data-output='provisions']");
-    if (output) output.value = `${this.simulation.ship.provisions} developer bundles`;
+    if (this.provisionOutput) {
+      this.provisionOutput.value = `${this.simulation.ship.provisions} developer bundles`;
+    }
   }
 
   private afterWorldChanged(): void {
     this.islandInspectionIndex = 0;
     this.renderWorld();
     this.configureCamera();
-    this.lastRenderedRevision = -1;
+    this.lastDebugRevision = -1;
+    this.lastDebugOverlayRevision = -1;
+    this.lastDiagnosticsRevision = -1;
+    this.lastDiagnosticsOverlayRevision = -1;
+    this.lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
     this.updateProvisionOutput();
     this.syncPresentation(true);
   }
@@ -639,6 +665,9 @@ export class TideboundScene extends Phaser.Scene {
 
   private destroyBindings(): void {
     this.domAbort?.abort();
+    this.gameHost = undefined;
+    this.gameStatus = undefined;
+    this.provisionOutput = undefined;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.knowledgeOverlay.destroy();
     this.riskOverlay.destroy();

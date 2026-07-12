@@ -6,11 +6,7 @@ import {
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import { KnowledgeSystem } from "../exploration/KnowledgeSystem";
 import { ProvisionSystem, knowledgeTravelCost } from "../exploration/ProvisionSystem";
-import {
-  ReturnPathSystem,
-  ReturnRiskLevel,
-  type ReturnPathResult,
-} from "../exploration/ReturnPathSystem";
+import { ReturnPathSystem, type ReturnPathResult } from "../exploration/ReturnPathSystem";
 import { VisibilitySystem } from "../exploration/VisibilitySystem";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
 import type { GeneratedWorld } from "../world/WorldGenerator";
@@ -352,30 +348,21 @@ export class GameSimulation {
   }
 
   snapshot(): SimulationSnapshot {
-    const knowledge = { supported: 0, personal: 0, unknown: 0, visibleNow: 0 };
+    const knowledge = {
+      supported: this.world.getKnowledgeCount(KnowledgeState.Supported),
+      personal: this.world.getKnowledgeCount(KnowledgeState.Personal),
+      unknown: this.world.getKnowledgeCount(KnowledgeState.Unknown),
+      visibleNow: this.world.currentVisibleCount,
+    };
     const risk = {
       budget: this.forwardRange.budget,
-      forwardReachable: 0,
-      comfortable: 0,
-      warning: 0,
-      critical: 0,
-      impossible: 0,
+      forwardReachable: this.forwardRange.reachableCount,
+      comfortable: this.returnPaths.riskCounts.comfortable,
+      warning: this.returnPaths.riskCounts.warning,
+      critical: this.returnPaths.riskCounts.critical,
+      impossible: this.returnPaths.riskCounts.impossible,
       stranded: this.stranded,
     };
-    this.world.forEachTile((x, y, index) => {
-      const state = this.world.getKnowledge(x, y);
-      if (state === KnowledgeState.Unknown) knowledge.unknown++;
-      else if (state === KnowledgeState.Personal) knowledge.personal++;
-      else knowledge.supported++;
-      if (this.world.isVisibleNow(x, y)) knowledge.visibleNow++;
-      if (this.forwardRange.mask[index]) risk.forwardReachable++;
-      switch (this.returnPaths.risk[index]) {
-        case ReturnRiskLevel.Comfortable: risk.comfortable++; break;
-        case ReturnRiskLevel.Warning: risk.warning++; break;
-        case ReturnRiskLevel.Critical: risk.critical++; break;
-        case ReturnRiskLevel.Impossible: risk.impossible++; break;
-      }
-    });
     return {
       seed: this.generated.seed,
       ship: { ...this.ship },

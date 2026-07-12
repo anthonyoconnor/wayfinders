@@ -9,10 +9,16 @@ export interface KnowledgeUpdate {
 
 /** Converts observed Unknown tiles into expedition-stamped Personal knowledge. */
 export class KnowledgeSystem {
-  constructor(private world: WorldGrid) {}
+  private readonly indicesByExpedition = new Map<number, Set<number>>();
+
+  constructor(private world: WorldGrid) {
+    this.indexExistingPersonalKnowledge();
+  }
 
   setWorld(world: WorldGrid): void {
     this.world = world;
+    this.indicesByExpedition.clear();
+    this.indexExistingPersonalKnowledge();
   }
 
   applyVisibility(update: Pick<VisibilityUpdate, "observedIndices">, expeditionId: number): KnowledgeUpdate {
@@ -54,9 +60,9 @@ export class KnowledgeSystem {
 
     const changedIndices: number[] = [];
     for (const index of indices) {
-      const point = this.world.pointFromIndex(index);
-      if (this.world.getKnowledge(point.x, point.y) !== KnowledgeState.Unknown) continue;
-      this.world.setKnowledge(point.x, point.y, KnowledgeState.Personal, expeditionId);
+      if (this.world.getKnowledgeAtIndex(index) !== KnowledgeState.Unknown) continue;
+      this.world.setKnowledgeAtIndex(index, KnowledgeState.Personal, expeditionId);
+      this.getExpeditionIndices(expeditionId).add(index);
       changedIndices.push(index);
     }
     return { changedIndices, changedCount: changedIndices.length };
@@ -79,14 +85,33 @@ export class KnowledgeSystem {
     }
 
     const changedIndices: number[] = [];
-    this.world.forEachTile((x, y, index) => {
+    const expeditionIndices = this.indicesByExpedition.get(expeditionId);
+    if (!expeditionIndices) return { changedIndices, changedCount: 0 };
+
+    for (const index of expeditionIndices) {
       if (
-        this.world.getKnowledge(x, y) !== KnowledgeState.Personal
-        || this.world.getExpeditionStamp(x, y) !== expeditionId
-      ) return;
-      this.world.setKnowledge(x, y, target, 0);
+        this.world.getKnowledgeAtIndex(index) !== KnowledgeState.Personal
+        || this.world.getExpeditionStampAtIndex(index) !== expeditionId
+      ) continue;
+      this.world.setKnowledgeAtIndex(index, target, 0);
       changedIndices.push(index);
-    });
+    }
+    this.indicesByExpedition.delete(expeditionId);
     return { changedIndices, changedCount: changedIndices.length };
+  }
+
+  private getExpeditionIndices(expeditionId: number): Set<number> {
+    let indices = this.indicesByExpedition.get(expeditionId);
+    if (!indices) {
+      indices = new Set<number>();
+      this.indicesByExpedition.set(expeditionId, indices);
+    }
+    return indices;
+  }
+
+  private indexExistingPersonalKnowledge(): void {
+    for (const index of this.world.getPersonalKnowledgeIndices()) {
+      this.getExpeditionIndices(this.world.getExpeditionStampAtIndex(index)).add(index);
+    }
   }
 }

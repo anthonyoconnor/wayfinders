@@ -406,36 +406,62 @@ export class IslandGenerator {
     if (grid.isMovementBlocked(dock.x, dock.y)) throw new RangeError("Island generation blocked the home dock");
     const visited = new Uint8Array(grid.tileCount);
     const queue = new Int32Array(grid.tileCount);
+    const unreachedAtollCenters = new Set<number>();
+    for (const island of islands) {
+      if (island.kind === IslandKind.Atoll) {
+        unreachedAtollCenters.add(grid.index(island.center.x, island.center.y));
+      }
+    }
     let head = 0;
     let tail = 0;
     const start = grid.index(dock.x, dock.y);
     visited[start] = 1;
     queue[tail++] = start;
-    const reached = { north: false, east: false, south: false, west: false };
+    let reachedEdges = 0;
+    const allEdges = 0b1111;
 
     while (head < tail) {
       const index = queue[head++];
-      const point = grid.pointFromIndex(index);
-      if (point.y === 0) reached.north = true;
-      if (point.x === grid.width - 1) reached.east = true;
-      if (point.y === grid.height - 1) reached.south = true;
-      if (point.x === 0) reached.west = true;
-      const neighbors = [
-        [point.x - 1, point.y],
-        [point.x + 1, point.y],
-        [point.x, point.y - 1],
-        [point.x, point.y + 1],
-      ] as const;
-      for (const [x, y] of neighbors) {
-        if (!grid.inBounds(x, y) || grid.isMovementBlocked(x, y)) continue;
-        const neighbor = grid.index(x, y);
-        if (visited[neighbor]) continue;
-        visited[neighbor] = 1;
-        queue[tail++] = neighbor;
+      const x = index % grid.width;
+      const y = Math.floor(index / grid.width);
+      if (y === 0) reachedEdges |= 0b0001;
+      if (x === grid.width - 1) reachedEdges |= 0b0010;
+      if (y === grid.height - 1) reachedEdges |= 0b0100;
+      if (x === 0) reachedEdges |= 0b1000;
+      unreachedAtollCenters.delete(index);
+      if (reachedEdges === allEdges && unreachedAtollCenters.size === 0) return;
+
+      if (x > 0) {
+        const neighbor = index - 1;
+        if (!visited[neighbor] && !grid.isMovementBlockedAtIndex(neighbor)) {
+          visited[neighbor] = 1;
+          queue[tail++] = neighbor;
+        }
+      }
+      if (x + 1 < grid.width) {
+        const neighbor = index + 1;
+        if (!visited[neighbor] && !grid.isMovementBlockedAtIndex(neighbor)) {
+          visited[neighbor] = 1;
+          queue[tail++] = neighbor;
+        }
+      }
+      if (y > 0) {
+        const neighbor = index - grid.width;
+        if (!visited[neighbor] && !grid.isMovementBlockedAtIndex(neighbor)) {
+          visited[neighbor] = 1;
+          queue[tail++] = neighbor;
+        }
+      }
+      if (y + 1 < grid.height) {
+        const neighbor = index + grid.width;
+        if (!visited[neighbor] && !grid.isMovementBlockedAtIndex(neighbor)) {
+          visited[neighbor] = 1;
+          queue[tail++] = neighbor;
+        }
       }
     }
 
-    if (!reached.north || !reached.east || !reached.south || !reached.west) {
+    if (reachedEdges !== allEdges) {
       throw new RangeError("Generated islands disconnected the home dock from the open ocean");
     }
     for (const island of islands) {

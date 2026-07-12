@@ -3,25 +3,43 @@ import { prototypeConfig } from "../config/prototypeConfig";
 import type { DebugVisibilityState } from "../core/GameSimulation";
 import type { ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import { ReturnRiskLevel, type ReturnPathResult } from "../exploration/ReturnPathSystem";
+import type { WorldChunk } from "../world/WorldChunk";
 import type { WorldGrid } from "../world/WorldGrid";
+import { addCardinalChunkDependents } from "./OverlayChunkInvalidation";
 
-interface OverlayView {
+interface OverlayChunkView {
   forwardTexture: Phaser.Textures.CanvasTexture;
   forwardImage: Phaser.GameObjects.Image;
+  forwardKey: string;
   returnTexture: Phaser.Textures.CanvasTexture;
   returnImage: Phaser.GameObjects.Image;
-  width: number;
-  height: number;
+  returnKey: string;
 }
 
 const OVERLAY_SCALE = 6;
 
-/** Renders the cost-grid results without exposing hidden terrain or numbers. */
+/**
+ * Renders cost-grid results into independently uploaded chunk textures. The
+ * previous implementation refreshed two world-sized canvases for every budget
+ * threshold change. This version compares only sparse range/risk/visibility
+ * candidates, redraws only affected chunks, and lets Phaser cull chunk images.
+ */
 export class RiskOverlayRenderer {
-  private view?: OverlayView;
-  private lastRevision = -1;
-  private lastSignature = "";
+  private readonly views = new Map<string, OverlayChunkView>();
   private readonly keyPrefix: string;
+  private lastWorld?: WorldGrid;
+  private lastRevision = -1;
+  private lastVisibilityVersion = -1;
+  private lastSignature = "";
+  private forwardPresented = new Uint8Array(0);
+  private returnPresented = new Uint8Array(0);
+  private lastForward?: ForwardRangeResult;
+  private lastReturning?: ReturnPathResult;
+  private lastForwardCandidates: readonly number[] = [];
+  private lastReturnPersonal: readonly number[] = [];
+  private lastVisibleIndices: readonly number[] = [];
+  private lastForwardVisible?: boolean;
+  private lastReturnVisible?: boolean;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.keyPrefix = `${String(scene.sys.settings.key)}-risk`;
@@ -35,114 +53,284 @@ export class RiskOverlayRenderer {
     revision: number,
     force = false,
   ): void {
-    const view = this.getOrCreateView(world);
-    view.forwardImage.setVisible(debug.forwardRange);
-    view.returnImage.setVisible(debug.returnViability);
+    const worldChanged = this.lastWorld !== world;
+    if (worldChanged) {
+      this.destroyViews();
+      this.forwardPresented = new Uint8Array(world.tileCount);
+      this.returnPresented = new Uint8Array(world.tileCount);
+      this.lastWorld = world;
+      this.lastRevision = -1;
+      this.lastVisibilityVersion = -1;
+      this.lastSignature = "";
+      this.lastForward = undefined;
+      this.lastReturning = undefined;
+      this.lastForwardCandidates = [];
+      this.lastReturnPersonal = [];
+      this.lastVisibleIndices = [];
+      this.lastForwardVisible = undefined;
+      this.lastReturnVisible = undefined;
+    }
 
-    const signature = `${prototypeConfig.overlays.forwardOverlayOpacity}:${prototypeConfig.overlays.returnOverlayOpacity}`;
-    if (!force && revision === this.lastRevision && signature === this.lastSignature) return;
+    const chunks = world.getLoadedChunks();
+    const signature = `${prototypeConfig.overlays.forwardOverlayOpacity}:`
+      + `${prototypeConfig.overlays.returnOverlayOpacity}`;
+    const styleChanged = signature !== this.lastSignature;
+    const visibilityChanged = world.visibilityVersion !== this.lastVisibilityVersion;
+    const dataChanged = revision !== this.lastRevision
+      || forward !== this.lastForward
+      || returning !== this.lastReturning;
+    const chunksChanged = chunks.length !== this.views.size;
+    const debugChanged = debug.forwardRange !== this.lastForwardVisible
+      || debug.returnViability !== this.lastReturnVisible;
+    if (!force && !worldChanged && !styleChanged && !visibilityChanged && !dataChanged && !chunksChanged && !debugChanged) {
+      return;
+    }
+
+    const newChunks: WorldChunk[] = [];
+    if (worldChanged || chunksChanged) {
+      for (const chunk of chunks) {
+        if (!this.views.has(this.chunkKey(chunk))) newChunks.push(chunk);
+        this.getOrCreateChunkView(chunk);
+      }
+    }
+    if (worldChanged || chunksChanged || debugChanged) {
+      for (const view of this.views.values()) {
+        view.forwardImage.setVisible(debug.forwardRange);
+        view.returnImage.setVisible(debug.returnViability);
+      }
+    }
+
+    const redrawAll = force || worldChanged || styleChanged;
+    const dirtyForward = new Set<WorldChunk>();
+    const dirtyReturn = new Set<WorldChunk>();
+
+    if (force || worldChanged || dataChanged || chunksChanged) {
+      this.updateForwardIndices(world, forward, this.lastForwardCandidates, dirtyForward);
+      this.updateForwardIndices(world, forward, forward.candidateIndices, dirtyForward);
+      this.updateReturnIndices(world, returning, this.lastReturnPersonal, dirtyReturn);
+      this.updateReturnIndices(world, returning, returning.personalIndices, dirtyReturn);
+    } else if (visibilityChanged) {
+      this.updateBothAtIndices(world, forward, returning, this.lastVisibleIndices, dirtyForward, dirtyReturn);
+      this.updateBothAtIndices(world, forward, returning, world.getVisibleIndices(), dirtyForward, dirtyReturn);
+    }
+
+    if (redrawAll) {
+      for (const chunk of chunks) {
+        dirtyForward.add(chunk);
+        dirtyReturn.add(chunk);
+      }
+    } else if (chunksChanged) {
+      // Chunks are append-only. Any view without prior presented pixels must be
+      // uploaded once even when the simulation data itself did not change.
+      for (const chunk of newChunks) {
+        dirtyForward.add(chunk);
+        dirtyReturn.add(chunk);
+      }
+    }
+
+    for (const chunk of dirtyForward) {
+      const view = this.views.get(this.chunkKey(chunk));
+      if (!view) continue;
+      this.renderForwardChunk(world, chunk, view.forwardTexture);
+      view.forwardTexture.refresh();
+    }
+    for (const chunk of dirtyReturn) {
+      const view = this.views.get(this.chunkKey(chunk));
+      if (!view) continue;
+      this.renderReturnChunk(world, chunk, view.returnTexture);
+      view.returnTexture.refresh();
+    }
+
     this.lastRevision = revision;
+    this.lastVisibilityVersion = world.visibilityVersion;
     this.lastSignature = signature;
-    this.renderForward(world, forward, view.forwardTexture);
-    this.renderReturn(world, returning, view.returnTexture);
+    this.lastForward = forward;
+    this.lastReturning = returning;
+    this.lastForwardCandidates = forward.candidateIndices;
+    this.lastReturnPersonal = returning.personalIndices;
+    this.lastVisibleIndices = [...world.getVisibleIndices()];
+    this.lastForwardVisible = debug.forwardRange;
+    this.lastReturnVisible = debug.returnViability;
   }
 
   destroy(): void {
-    this.view?.forwardImage.destroy();
-    this.view?.returnImage.destroy();
-    for (const suffix of ["forward", "return"]) {
-      const key = `${this.keyPrefix}-${suffix}`;
-      if (this.scene.textures.exists(key)) this.scene.textures.remove(key);
-    }
-    this.view = undefined;
+    this.destroyViews();
+    this.lastWorld = undefined;
+    this.forwardPresented = new Uint8Array(0);
+    this.returnPresented = new Uint8Array(0);
+    this.lastForward = undefined;
+    this.lastReturning = undefined;
+    this.lastForwardCandidates = [];
+    this.lastReturnPersonal = [];
+    this.lastVisibleIndices = [];
+    this.lastForwardVisible = undefined;
+    this.lastReturnVisible = undefined;
   }
 
-  private getOrCreateView(world: WorldGrid): OverlayView {
-    if (this.view?.width === world.width && this.view.height === world.height) return this.view;
-    this.destroy();
+  private updateBothAtIndices(
+    world: WorldGrid,
+    forward: ForwardRangeResult,
+    returning: ReturnPathResult,
+    indices: Iterable<number>,
+    dirtyForward: Set<WorldChunk>,
+    dirtyReturn: Set<WorldChunk>,
+  ): void {
+    for (const index of indices) {
+      this.updateForwardIndex(world, forward, index, dirtyForward);
+      this.updateReturnIndex(world, returning, index, dirtyReturn);
+    }
+  }
 
-    const textureWidth = world.width * OVERLAY_SCALE;
-    const textureHeight = world.height * OVERLAY_SCALE;
-    const displayWidth = world.width * prototypeConfig.navigation.tileSize;
-    const displayHeight = world.height * prototypeConfig.navigation.tileSize;
-    const forwardKey = `${this.keyPrefix}-forward`;
-    const returnKey = `${this.keyPrefix}-return`;
-    const forwardTexture = this.scene.textures.createCanvas(forwardKey, textureWidth, textureHeight);
-    const returnTexture = this.scene.textures.createCanvas(returnKey, textureWidth, textureHeight);
-    if (!forwardTexture || !returnTexture) throw new Error("Could not create range-overlay textures");
+  private updateForwardIndices(
+    world: WorldGrid,
+    forward: ForwardRangeResult,
+    indices: Iterable<number>,
+    dirtyChunks: Set<WorldChunk>,
+  ): void {
+    for (const index of indices) this.updateForwardIndex(world, forward, index, dirtyChunks);
+  }
+
+  private updateReturnIndices(
+    world: WorldGrid,
+    returning: ReturnPathResult,
+    indices: Iterable<number>,
+    dirtyChunks: Set<WorldChunk>,
+  ): void {
+    for (const index of indices) this.updateReturnIndex(world, returning, index, dirtyChunks);
+  }
+
+  private updateForwardIndex(
+    world: WorldGrid,
+    forward: ForwardRangeResult,
+    index: number,
+    dirtyChunks: Set<WorldChunk>,
+  ): void {
+    const next = forward.mask[index] !== 0 && !world.isVisibleNowAtIndex(index) ? 1 : 0;
+    if (this.forwardPresented[index] === next) return;
+    this.forwardPresented[index] = next;
+    addCardinalChunkDependents(world, index, dirtyChunks);
+  }
+
+  private updateReturnIndex(
+    world: WorldGrid,
+    returning: ReturnPathResult,
+    index: number,
+    dirtyChunks: Set<WorldChunk>,
+  ): void {
+    const next = world.isVisibleNowAtIndex(index) ? ReturnRiskLevel.Hidden : returning.risk[index];
+    if (this.returnPresented[index] === next) return;
+    this.returnPresented[index] = next;
+    const x = index % world.width;
+    const y = Math.floor(index / world.width);
+    const chunk = world.getChunkAt(x, y, false);
+    if (chunk) dirtyChunks.add(chunk);
+  }
+
+  private getOrCreateChunkView(chunk: WorldChunk): OverlayChunkView {
+    const key = this.chunkKey(chunk);
+    const existing = this.views.get(key);
+    if (existing) return existing;
+
+    const texturePixels = chunk.size * OVERLAY_SCALE;
+    const displayPixels = chunk.size * prototypeConfig.navigation.tileSize;
+    const worldX = chunk.chunkX * displayPixels;
+    const worldY = chunk.chunkY * displayPixels;
+    const forwardKey = `${this.keyPrefix}-forward-${chunk.chunkX}-${chunk.chunkY}`;
+    const returnKey = `${this.keyPrefix}-return-${chunk.chunkX}-${chunk.chunkY}`;
+    const forwardTexture = this.scene.textures.createCanvas(forwardKey, texturePixels, texturePixels);
+    const returnTexture = this.scene.textures.createCanvas(returnKey, texturePixels, texturePixels);
+    if (!forwardTexture || !returnTexture) throw new Error("Could not create range-overlay chunk textures");
     forwardTexture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     returnTexture.setFilter(Phaser.Textures.FilterMode.LINEAR);
 
-    const forwardImage = this.scene.add.image(0, 0, forwardKey).setOrigin(0).setDisplaySize(
-      displayWidth,
-      displayHeight,
-    ).setDepth(37);
-    const returnImage = this.scene.add.image(0, 0, returnKey).setOrigin(0).setDisplaySize(
-      displayWidth,
-      displayHeight,
-    ).setDepth(38);
-    this.view = {
+    const forwardImage = this.scene.add.image(worldX, worldY, forwardKey)
+      .setOrigin(0)
+      .setDisplaySize(displayPixels, displayPixels)
+      .setDepth(37);
+    const returnImage = this.scene.add.image(worldX, worldY, returnKey)
+      .setOrigin(0)
+      .setDisplaySize(displayPixels, displayPixels)
+      .setDepth(38);
+    const view = {
       forwardTexture,
       forwardImage,
+      forwardKey,
       returnTexture,
       returnImage,
-      width: world.width,
-      height: world.height,
+      returnKey,
     };
-    this.lastRevision = -1;
-    return this.view;
+    this.views.set(key, view);
+    return view;
   }
 
-  private renderForward(
+  private destroyViews(): void {
+    for (const view of this.views.values()) {
+      view.forwardImage.destroy();
+      view.returnImage.destroy();
+      if (this.scene.textures.exists(view.forwardKey)) this.scene.textures.remove(view.forwardKey);
+      if (this.scene.textures.exists(view.returnKey)) this.scene.textures.remove(view.returnKey);
+    }
+    this.views.clear();
+  }
+
+  private renderForwardChunk(
     world: WorldGrid,
-    result: ForwardRangeResult,
+    chunk: WorldChunk,
     texture: Phaser.Textures.CanvasTexture,
   ): void {
     const context = texture.getContext();
     context.clearRect(0, 0, texture.width, texture.height);
     const opacity = prototypeConfig.overlays.forwardOverlayOpacity;
 
-    for (let index = 0; index < result.mask.length; index++) {
-      if (!result.mask[index]) continue;
-      const { x, y } = world.pointFromIndex(index);
-      if (world.isVisibleNow(x, y)) continue;
-      const px = x * OVERLAY_SCALE;
-      const py = y * OVERLAY_SCALE;
-      context.fillStyle = `rgba(165, 192, 190, ${opacity})`;
-      context.fillRect(px, py, OVERLAY_SCALE, OVERLAY_SCALE);
+    for (let localY = 0; localY < chunk.size; localY++) {
+      const y = chunk.chunkY * chunk.size + localY;
+      if (y >= world.height) break;
+      for (let localX = 0; localX < chunk.size; localX++) {
+        const x = chunk.chunkX * chunk.size + localX;
+        if (x >= world.width) break;
+        const index = y * world.width + x;
+        if (!this.forwardPresented[index]) continue;
+        const px = localX * OVERLAY_SCALE;
+        const py = localY * OVERLAY_SCALE;
+        context.fillStyle = `rgba(165, 192, 190, ${opacity})`;
+        context.fillRect(px, py, OVERLAY_SCALE, OVERLAY_SCALE);
 
-      if (this.touchesOutside(result.mask, world, x, y)) {
-        context.fillStyle = `rgba(226, 230, 210, ${Math.min(0.9, opacity * 3.4)})`;
-        context.fillRect(px + OVERLAY_SCALE / 2 - 0.5, py, 1, 1);
-        context.fillRect(px + OVERLAY_SCALE / 2 - 0.5, py + OVERLAY_SCALE - 1, 1, 1);
-        context.fillRect(px, py + OVERLAY_SCALE / 2 - 0.5, 1, 1);
-        context.fillRect(px + OVERLAY_SCALE - 1, py + OVERLAY_SCALE / 2 - 0.5, 1, 1);
+        if (this.touchesOutside(this.forwardPresented, world, x, y)) {
+          context.fillStyle = `rgba(226, 230, 210, ${Math.min(0.9, opacity * 3.4)})`;
+          context.fillRect(px + OVERLAY_SCALE / 2 - 0.5, py, 1, 1);
+          context.fillRect(px + OVERLAY_SCALE / 2 - 0.5, py + OVERLAY_SCALE - 1, 1, 1);
+          context.fillRect(px, py + OVERLAY_SCALE / 2 - 0.5, 1, 1);
+          context.fillRect(px + OVERLAY_SCALE - 1, py + OVERLAY_SCALE / 2 - 0.5, 1, 1);
+        }
       }
     }
-    texture.refresh();
   }
 
-  private renderReturn(
+  private renderReturnChunk(
     world: WorldGrid,
-    result: ReturnPathResult,
+    chunk: WorldChunk,
     texture: Phaser.Textures.CanvasTexture,
   ): void {
     const context = texture.getContext();
     context.clearRect(0, 0, texture.width, texture.height);
     const opacity = prototypeConfig.overlays.returnOverlayOpacity;
 
-    for (let index = 0; index < result.risk.length; index++) {
-      const level = result.risk[index] as ReturnRiskLevel;
-      if (level === ReturnRiskLevel.Hidden) continue;
-      const { x, y } = world.pointFromIndex(index);
-      if (world.isVisibleNow(x, y)) continue;
-      const px = x * OVERLAY_SCALE;
-      const py = y * OVERLAY_SCALE;
-      context.fillStyle = this.riskColor(level, opacity);
-      context.fillRect(px, py, OVERLAY_SCALE, OVERLAY_SCALE);
-      this.drawRiskPattern(context, level, px, py, opacity);
+    for (let localY = 0; localY < chunk.size; localY++) {
+      const y = chunk.chunkY * chunk.size + localY;
+      if (y >= world.height) break;
+      for (let localX = 0; localX < chunk.size; localX++) {
+        const x = chunk.chunkX * chunk.size + localX;
+        if (x >= world.width) break;
+        const index = y * world.width + x;
+        const level = this.returnPresented[index] as ReturnRiskLevel;
+        if (level === ReturnRiskLevel.Hidden) continue;
+        const px = localX * OVERLAY_SCALE;
+        const py = localY * OVERLAY_SCALE;
+        context.fillStyle = this.riskColor(level, opacity);
+        context.fillRect(px, py, OVERLAY_SCALE, OVERLAY_SCALE);
+        this.drawRiskPattern(context, level, px, py, opacity);
+      }
     }
-    texture.refresh();
   }
 
   private riskColor(level: ReturnRiskLevel, opacity: number): string {
@@ -182,7 +370,17 @@ export class RiskOverlayRenderer {
   }
 
   private touchesOutside(mask: Uint8Array, world: WorldGrid, x: number, y: number): boolean {
-    const neighbors = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const;
-    return neighbors.some(([nx, ny]) => !world.inBounds(nx, ny) || mask[world.index(nx, ny)] === 0);
+    return x === 0
+      || y === 0
+      || x + 1 >= world.width
+      || y + 1 >= world.height
+      || mask[y * world.width + x - 1] === 0
+      || mask[y * world.width + x + 1] === 0
+      || mask[(y - 1) * world.width + x] === 0
+      || mask[(y + 1) * world.width + x] === 0;
+  }
+
+  private chunkKey(chunk: WorldChunk): string {
+    return `${chunk.chunkX},${chunk.chunkY}`;
   }
 }

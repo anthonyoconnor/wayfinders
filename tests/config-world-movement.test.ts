@@ -8,7 +8,7 @@ import {
   resetPrototypeConfig,
   validatePrototypeConfig,
 } from "../src/tidebound/config/prototypeConfig";
-import { dijkstra, reconstructDijkstraPath } from "../src/tidebound/navigation/Dijkstra";
+import { dijkstra, DijkstraWorkspace, reconstructDijkstraPath } from "../src/tidebound/navigation/Dijkstra";
 import { createShipStateAtGrid, MovementSystem } from "../src/tidebound/navigation/MovementSystem";
 import { gridToArt, gridToWorld, worldToGrid } from "../src/tidebound/world/CoordinateSystem";
 import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData";
@@ -200,5 +200,39 @@ describe("navigation foundations", () => {
 
     expect(result.costs[3]).toBe(2.5);
     expect(reconstructDijkstraPath(result, 3)).toEqual([0, 2, 1, 3]);
+  });
+
+  it("reuses numeric heap capacity and exposes sparse settled nodes", () => {
+    const workspace = new DijkstraWorkspace();
+    const first = dijkstra({
+      nodeCount: 130,
+      starts: Array.from({ length: 130 }, (_, node) => node),
+      workspace,
+      forEachNeighbor: () => undefined,
+    });
+    const expandedCapacity = workspace.queue.capacity;
+
+    expect(first.settledCount).toBe(130);
+    expect(new Set(first.settledIndices.slice(0, first.settledCount)).size).toBe(130);
+    expect(expandedCapacity).toBeGreaterThanOrEqual(130);
+    const firstBuffers = [
+      first.costs.buffer,
+      first.parents.buffer,
+      first.visited.buffer,
+      first.settledIndices.buffer,
+    ];
+
+    const second = dijkstra({
+      nodeCount: 2,
+      starts: [0],
+      workspace,
+      forEachNeighbor: () => undefined,
+    });
+    expect(second.settledIndices.slice(0, second.settledCount)).toEqual(new Int32Array([0]));
+    expect(workspace.queue.capacity).toBe(expandedCapacity);
+    expect(second.costs.buffer).toBe(firstBuffers[0]);
+    expect(second.parents.buffer).toBe(firstBuffers[1]);
+    expect(second.visited.buffer).toBe(firstBuffers[2]);
+    expect(second.settledIndices.buffer).toBe(firstBuffers[3]);
   });
 });

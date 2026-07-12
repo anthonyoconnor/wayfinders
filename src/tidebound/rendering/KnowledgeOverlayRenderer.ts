@@ -4,29 +4,32 @@ import { seededValue } from "../world/WorldGenerator";
 import type { WorldChunk } from "../world/WorldChunk";
 import type { WorldGrid } from "../world/WorldGrid";
 import { KnowledgeState } from "../world/TileData";
+import { addPaddedChunkNeighbours } from "./OverlayChunkInvalidation";
 
-interface MaskView {
+interface MaskChunkView {
   image: Phaser.GameObjects.Image;
   texture: Phaser.Textures.CanvasTexture;
-  worldWidth: number;
-  worldHeight: number;
+  textureKey: string;
 }
 
 const MASK_SCALE = 4;
 const MASK_PADDING_TILES = 1;
 
 /**
- * Reusable, bilinear knowledge mask. Changed chunks are redrawn into one world
- * texture so camera scaling cannot expose seams between adjacent chunk quads.
+ * Reusable, bilinear knowledge mask. Each chunk owns a small padded texture;
+ * changes invalidate that chunk and its neighbours so the sampled padding at
+ * chunk boundaries never becomes stale.
  */
 export class KnowledgeOverlayRenderer {
-  private readonly lastChunkRevisions = new Map<string, number>();
+  private readonly views = new Map<string, MaskChunkView>();
   private readonly scratch: HTMLCanvasElement;
   private readonly filtered: HTMLCanvasElement;
-  private readonly textureKey: string;
-  private view?: MaskView;
+  private readonly textureKeyPrefix: string;
   private lastWorld?: WorldGrid;
   private lastSignature = "";
+  private lastKnowledgeVersion = -1;
+  private lastVisibilityVersion = -1;
+  private observedRevisions = new WeakMap<WorldChunk, number>();
 
   constructor(private readonly scene: Phaser.Scene) {
     const paddedPixels = (prototypeConfig.navigation.chunkSize + MASK_PADDING_TILES * 2) * MASK_SCALE;
@@ -34,7 +37,7 @@ export class KnowledgeOverlayRenderer {
     this.filtered = document.createElement("canvas");
     this.scratch.width = this.scratch.height = paddedPixels;
     this.filtered.width = this.filtered.height = paddedPixels;
-    this.textureKey = `${String(scene.sys.settings.key)}-knowledge-mask`;
+    this.textureKeyPrefix = `${String(scene.sys.settings.key)}-knowledge-mask`;
   }
 
   sync(world: WorldGrid, seed: number, force = false): void {
@@ -45,48 +48,92 @@ export class KnowledgeOverlayRenderer {
     ].join(":");
     const worldChanged = this.lastWorld !== world;
     const styleChanged = this.lastSignature !== signature;
-    const view = this.getOrCreateView(world);
+    if (worldChanged) {
+      this.destroyViews();
+      this.observedRevisions = new WeakMap();
+      this.lastKnowledgeVersion = -1;
+      this.lastVisibilityVersion = -1;
+    }
     this.lastWorld = world;
     this.lastSignature = signature;
 
-    let changed = false;
-    for (const chunk of world.getLoadedChunks()) {
-      const key = `${chunk.chunkX},${chunk.chunkY}`;
-      const previousRevision = this.lastChunkRevisions.get(key);
-      if (!force && !worldChanged && !styleChanged && previousRevision === chunk.revision) continue;
-      this.renderChunk(world, chunk, seed, view.texture);
-      this.lastChunkRevisions.set(key, chunk.revision);
-      changed = true;
+    const chunks = world.getLoadedChunks();
+    const redrawAll = force || worldChanged || styleChanged;
+    const knowledgeChanged = world.knowledgeVersion !== this.lastKnowledgeVersion;
+    const visibilityChanged = world.visibilityVersion !== this.lastVisibilityVersion;
+    const chunksChanged = chunks.length !== this.views.size;
+    if (!redrawAll && !knowledgeChanged && !visibilityChanged && !chunksChanged) return;
+
+    const dirtyChunks = new Set<WorldChunk>();
+
+    for (const chunk of chunks) {
+      this.getOrCreateChunkView(chunk);
+      const revisionChanged = this.observedRevisions.get(chunk) !== chunk.revision;
+      this.observedRevisions.set(chunk, chunk.revision);
+      if (redrawAll) {
+        dirtyChunks.add(chunk);
+      } else if (revisionChanged) {
+        addPaddedChunkNeighbours(world, chunk, MASK_PADDING_TILES, dirtyChunks);
+      }
     }
-    if (changed) view.texture.refresh();
+
+    for (const chunk of dirtyChunks) {
+      const view = this.views.get(this.chunkKey(chunk));
+      if (!view) continue;
+      this.renderChunk(world, chunk, seed, view.texture);
+      view.texture.refresh();
+    }
+
+    this.lastKnowledgeVersion = world.knowledgeVersion;
+    this.lastVisibilityVersion = world.visibilityVersion;
   }
 
   destroy(): void {
-    this.view?.image.destroy();
-    if (this.scene.textures.exists(this.textureKey)) this.scene.textures.remove(this.textureKey);
-    this.view = undefined;
-    this.lastChunkRevisions.clear();
+    this.destroyViews();
+    this.lastWorld = undefined;
+    this.lastKnowledgeVersion = -1;
+    this.lastVisibilityVersion = -1;
   }
 
-  private getOrCreateView(world: WorldGrid): MaskView {
-    if (this.view?.worldWidth === world.width && this.view.worldHeight === world.height) return this.view;
-    this.view?.image.destroy();
-    if (this.scene.textures.exists(this.textureKey)) this.scene.textures.remove(this.textureKey);
+  private getOrCreateChunkView(chunk: WorldChunk): MaskChunkView {
+    const key = `${chunk.chunkX},${chunk.chunkY}`;
+    const existing = this.views.get(key);
+    if (existing) return existing;
 
-    const texture = this.scene.textures.createCanvas(
-      this.textureKey,
-      world.width * MASK_SCALE,
-      world.height * MASK_SCALE,
-    );
-    if (!texture) throw new Error(`Could not create knowledge mask texture ${this.textureKey}`);
+    const textureKey = `${this.textureKeyPrefix}-${chunk.chunkX}-${chunk.chunkY}`;
+    const paddingPixels = MASK_PADDING_TILES * MASK_SCALE;
+    const chunkPixels = chunk.size * MASK_SCALE;
+    const texturePixels = chunkPixels + paddingPixels * 2;
+    const texture = this.scene.textures.createCanvas(textureKey, texturePixels, texturePixels);
+    if (!texture) throw new Error(`Could not create knowledge mask texture ${textureKey}`);
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-    const image = this.scene.add.image(0, 0, this.textureKey).setOrigin(0).setDisplaySize(
-      world.width * prototypeConfig.navigation.tileSize,
-      world.height * prototypeConfig.navigation.tileSize,
-    ).setDepth(35);
-    this.view = { image, texture, worldWidth: world.width, worldHeight: world.height };
-    this.lastChunkRevisions.clear();
-    return this.view;
+    texture.add("chunk", 0, paddingPixels, paddingPixels, chunkPixels, chunkPixels);
+    const displayPixels = chunk.size * prototypeConfig.navigation.tileSize;
+    const image = this.scene.add.image(
+      chunk.chunkX * displayPixels,
+      chunk.chunkY * displayPixels,
+      textureKey,
+      "chunk",
+    ).setOrigin(0)
+      // A one-world-pixel overlap prevents sub-pixel camera scaling from
+      // exposing the boundary between independently filtered chunk quads.
+      .setDisplaySize(displayPixels + 1, displayPixels + 1)
+      .setDepth(35);
+    const view = { image, texture, textureKey };
+    this.views.set(key, view);
+    return view;
+  }
+
+  private destroyViews(): void {
+    for (const view of this.views.values()) {
+      view.image.destroy();
+      if (this.scene.textures.exists(view.textureKey)) this.scene.textures.remove(view.textureKey);
+    }
+    this.views.clear();
+  }
+
+  private chunkKey(chunk: WorldChunk): string {
+    return `${chunk.chunkX},${chunk.chunkY}`;
   }
 
   private renderChunk(
@@ -137,21 +184,7 @@ export class KnowledgeOverlayRenderer {
     filteredContext.drawImage(this.scratch, 0, 0);
     filteredContext.restore();
 
-    const sourceOffset = padding * MASK_SCALE;
-    const chunkPixels = chunk.size * MASK_SCALE;
-    const targetX = chunk.chunkX * chunkPixels;
-    const targetY = chunk.chunkY * chunkPixels;
-    targetContext.clearRect(targetX, targetY, chunkPixels, chunkPixels);
-    targetContext.drawImage(
-      this.filtered,
-      sourceOffset,
-      sourceOffset,
-      chunkPixels,
-      chunkPixels,
-      targetX,
-      targetY,
-      chunkPixels,
-      chunkPixels,
-    );
+    targetContext.clearRect(0, 0, texture.width, texture.height);
+    targetContext.drawImage(this.filtered, 0, 0);
   }
 }

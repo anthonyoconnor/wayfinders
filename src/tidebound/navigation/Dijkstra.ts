@@ -1,4 +1,4 @@
-import { MinPriorityQueue } from "./PriorityQueue";
+import { NumericMinPriorityQueue } from "./PriorityQueue";
 
 export interface DijkstraStart {
   node: number;
@@ -7,15 +7,78 @@ export interface DijkstraStart {
 
 export interface DijkstraOptions {
   nodeCount: number;
-  starts: readonly DijkstraStart[];
+  starts: readonly (DijkstraStart | number)[];
   maxCost?: number;
   forEachNeighbor: (node: number, visit: (neighbor: number, traversalCost: number) => void) => void;
+  workspace?: DijkstraWorkspace;
 }
 
 export interface DijkstraResult {
   costs: Float64Array;
   parents: Int32Array;
   visited: Uint8Array;
+  /** Settled nodes, packed into the first `settledCount` slots. */
+  settledIndices: Int32Array;
+  settledCount: number;
+}
+
+interface DijkstraBuffers {
+  costs: Float64Array;
+  parents: Int32Array;
+  visited: Uint8Array;
+  settledIndices: Int32Array;
+}
+
+/**
+ * Retains the numeric heap and graph-sized typed buffers across searches.
+ * Results backed by a workspace remain valid only until that workspace is
+ * used again; callers that need longer-lived results should omit `workspace`.
+ */
+export class DijkstraWorkspace {
+  readonly queue = new NumericMinPriorityQueue();
+  private costs = new Float64Array(0);
+  private parents = new Int32Array(0);
+  private visited = new Uint8Array(0);
+  private settledIndices = new Int32Array(0);
+  private touched = new Uint8Array(0);
+  private touchedIndices = new Int32Array(0);
+  private touchedCount = 0;
+
+  prepare(nodeCount: number): DijkstraBuffers {
+    if (this.costs.length < nodeCount) {
+      this.costs = new Float64Array(nodeCount);
+      this.parents = new Int32Array(nodeCount);
+      this.visited = new Uint8Array(nodeCount);
+      this.settledIndices = new Int32Array(nodeCount);
+      this.touched = new Uint8Array(nodeCount);
+      this.touchedIndices = new Int32Array(nodeCount);
+      this.costs.fill(Number.POSITIVE_INFINITY);
+      this.parents.fill(-1);
+      this.touchedCount = 0;
+    } else {
+      for (let offset = 0; offset < this.touchedCount; offset++) {
+        const index = this.touchedIndices[offset];
+        this.costs[index] = Number.POSITIVE_INFINITY;
+        this.parents[index] = -1;
+        this.visited[index] = 0;
+        this.touched[index] = 0;
+      }
+      this.touchedCount = 0;
+    }
+
+    return {
+      costs: this.costs.subarray(0, nodeCount),
+      parents: this.parents.subarray(0, nodeCount),
+      visited: this.visited.subarray(0, nodeCount),
+      settledIndices: this.settledIndices.subarray(0, nodeCount),
+    };
+  }
+
+  markTouched(index: number): void {
+    if (this.touched[index]) return;
+    this.touched[index] = 1;
+    this.touchedIndices[this.touchedCount++] = index;
+  }
 }
 
 export function dijkstra(options: DijkstraOptions): DijkstraResult {
@@ -23,48 +86,65 @@ export function dijkstra(options: DijkstraOptions): DijkstraResult {
   if (!Number.isInteger(nodeCount) || nodeCount <= 0) throw new RangeError("nodeCount must be a positive integer");
 
   const maxCost = options.maxCost ?? Number.POSITIVE_INFINITY;
-  const costs = new Float64Array(nodeCount);
-  const parents = new Int32Array(nodeCount);
-  const visited = new Uint8Array(nodeCount);
-  costs.fill(Number.POSITIVE_INFINITY);
-  parents.fill(-1);
+  const workspace = options.workspace;
+  const buffers = workspace?.prepare(nodeCount);
+  const costs = buffers?.costs ?? new Float64Array(nodeCount);
+  const parents = buffers?.parents ?? new Int32Array(nodeCount);
+  const visited = buffers?.visited ?? new Uint8Array(nodeCount);
+  const settledIndices = buffers?.settledIndices ?? new Int32Array(nodeCount);
+  let settledCount = 0;
+  if (!buffers) {
+    costs.fill(Number.POSITIVE_INFINITY);
+    parents.fill(-1);
+  }
 
-  const queue = new MinPriorityQueue<number>();
+  const queue = workspace?.queue ?? new NumericMinPriorityQueue();
+  queue.clear();
   for (const start of starts) {
-    const cost = start.cost ?? 0;
-    if (!Number.isInteger(start.node) || start.node < 0 || start.node >= nodeCount) {
-      throw new RangeError(`Start node ${start.node} is outside graph`);
+    const node = typeof start === "number" ? start : start.node;
+    const cost = typeof start === "number" ? 0 : start.cost ?? 0;
+    if (!Number.isInteger(node) || node < 0 || node >= nodeCount) {
+      throw new RangeError(`Start node ${node} is outside graph`);
     }
     if (!Number.isFinite(cost) || cost < 0) throw new RangeError("Start costs must be finite and non-negative");
-    if (cost > maxCost || cost >= costs[start.node]) continue;
-    costs[start.node] = cost;
-    queue.enqueue(start.node, cost);
+    if (cost > maxCost || cost >= costs[node]) continue;
+    workspace?.markTouched(node);
+    costs[node] = cost;
+    queue.enqueue(node, cost);
   }
+
+  let activeNode = -1;
+  let activePriority = 0;
+  const visit = (neighbor: number, traversalCost: number): void => {
+    if (!Number.isInteger(neighbor) || neighbor < 0 || neighbor >= nodeCount) {
+      throw new RangeError(`Neighbor node ${neighbor} is outside graph`);
+    }
+    if (!Number.isFinite(traversalCost) || traversalCost < 0) {
+      throw new RangeError("Dijkstra traversal costs must be finite and non-negative");
+    }
+
+    const nextCost = activePriority + traversalCost;
+    if (nextCost > maxCost || nextCost >= costs[neighbor]) return;
+    workspace?.markTouched(neighbor);
+    costs[neighbor] = nextCost;
+    parents[neighbor] = activeNode;
+    queue.enqueue(neighbor, nextCost);
+  };
 
   while (!queue.empty) {
-    const entry = queue.dequeue()!;
-    const node = entry.value;
-    if (entry.priority !== costs[node]) continue;
-    if (entry.priority > maxCost) break;
+    const node = queue.dequeueNode()!;
+    const priority = queue.dequeuedPriority;
+    if (priority !== costs[node]) continue;
+    if (priority > maxCost) break;
     visited[node] = 1;
+    settledIndices[settledCount++] = node;
 
-    forEachNeighbor(node, (neighbor, traversalCost) => {
-      if (!Number.isInteger(neighbor) || neighbor < 0 || neighbor >= nodeCount) {
-        throw new RangeError(`Neighbor node ${neighbor} is outside graph`);
-      }
-      if (!Number.isFinite(traversalCost) || traversalCost < 0) {
-        throw new RangeError("Dijkstra traversal costs must be finite and non-negative");
-      }
-
-      const nextCost = entry.priority + traversalCost;
-      if (nextCost > maxCost || nextCost >= costs[neighbor]) return;
-      costs[neighbor] = nextCost;
-      parents[neighbor] = node;
-      queue.enqueue(neighbor, nextCost);
-    });
+    activeNode = node;
+    activePriority = priority;
+    forEachNeighbor(node, visit);
   }
 
-  return { costs, parents, visited };
+  return { costs, parents, visited, settledIndices, settledCount };
 }
 
 export function reconstructDijkstraPath(result: DijkstraResult, destination: number): number[] {

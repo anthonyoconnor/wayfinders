@@ -57,6 +57,8 @@ export function traceGridCenters(from: GridPoint, to: GridPoint): GridPoint[] {
 export class VisibilitySystem {
   private offsets: VisibilityOffset[] = [];
   private offsetRadius = -1;
+  private observedStamps = new Uint32Array(0);
+  private observationStamp = 0;
 
   constructor(
     private world: WorldGrid,
@@ -65,6 +67,8 @@ export class VisibilitySystem {
 
   setWorld(world: WorldGrid): void {
     this.world = world;
+    this.observedStamps = new Uint32Array(0);
+    this.observationStamp = 0;
   }
 
   getVisibleIndices(origin: GridPoint): number[] {
@@ -72,14 +76,7 @@ export class VisibilitySystem {
     this.ensureOffsets();
 
     const visible: number[] = [];
-    for (const offset of this.offsets) {
-      const targetX = origin.x + offset.dx;
-      const targetY = origin.y + offset.dy;
-      if (!this.world.inBounds(targetX, targetY)) continue;
-      if (this.hasLineOfSight(origin.x, origin.y, targetX, targetY)) {
-        visible.push(this.world.index(targetX, targetY));
-      }
-    }
+    this.appendVisibleIndices(origin, visible);
     return visible;
   }
 
@@ -90,25 +87,28 @@ export class VisibilitySystem {
   updateForMovement(from: GridPoint, to: GridPoint): VisibilityUpdate {
     this.assertTile(from, "Visibility start");
     this.assertTile(to, "Visibility destination");
+    this.ensureOffsets();
 
     const crossedCenters = traceGridCenters(from, to);
-    const observedMask = new Uint8Array(this.world.tileCount);
-    for (const center of crossedCenters) {
-      for (const index of this.getVisibleIndices(center)) observedMask[index] = 1;
-    }
-
-    const currentVisibleIndices = this.getVisibleIndices(to);
-    this.world.clearVisibility();
-    for (const index of currentVisibleIndices) {
-      const point = this.world.pointFromIndex(index);
-      this.world.setVisibleNow(point.x, point.y, true);
-    }
-
     const observedIndices: number[] = [];
-    for (let index = 0; index < observedMask.length; index++) {
-      if (observedMask[index]) observedIndices.push(index);
+    const currentVisibleIndices: number[] = [];
+    const stamp = this.nextObservationStamp();
+    const finalCenterIndex = crossedCenters.length - 1;
+    for (let centerIndex = 0; centerIndex < crossedCenters.length; centerIndex++) {
+      this.appendMovementVisibility(
+        crossedCenters[centerIndex],
+        observedIndices,
+        stamp,
+        centerIndex === finalCenterIndex ? currentVisibleIndices : undefined,
+      );
     }
 
+    this.world.clearVisibility();
+    for (const index of currentVisibleIndices) this.world.setVisibleNowAtIndex(index, true);
+
+    // The former full-mask scan produced ascending world indices. Preserve that
+    // observable ordering while sorting only the radius-bounded observation set.
+    observedIndices.sort((left, right) => left - right);
     return { currentVisibleIndices, observedIndices, crossedCenters };
   }
 
@@ -134,6 +134,51 @@ export class VisibilitySystem {
     offsets.sort((left, right) => left.distanceSquared - right.distanceSquared || left.dy - right.dy || left.dx - right.dx);
     this.offsets = offsets;
     this.offsetRadius = radius;
+  }
+
+  private appendVisibleIndices(origin: GridPoint, output: number[]): void {
+    for (const offset of this.offsets) {
+      const targetX = origin.x + offset.dx;
+      const targetY = origin.y + offset.dy;
+      if (!this.world.inBounds(targetX, targetY)) continue;
+      if (this.hasLineOfSight(origin.x, origin.y, targetX, targetY)) {
+        output.push(this.world.index(targetX, targetY));
+      }
+    }
+  }
+
+  private appendMovementVisibility(
+    origin: GridPoint,
+    observedIndices: number[],
+    stamp: number,
+    currentVisibleIndices?: number[],
+  ): void {
+    for (const offset of this.offsets) {
+      const targetX = origin.x + offset.dx;
+      const targetY = origin.y + offset.dy;
+      if (!this.world.inBounds(targetX, targetY)) continue;
+      if (!this.hasLineOfSight(origin.x, origin.y, targetX, targetY)) continue;
+
+      const index = this.world.index(targetX, targetY);
+      currentVisibleIndices?.push(index);
+      if (this.observedStamps[index] === stamp) continue;
+      this.observedStamps[index] = stamp;
+      observedIndices.push(index);
+    }
+  }
+
+  private nextObservationStamp(): number {
+    if (this.observedStamps.length !== this.world.tileCount) {
+      this.observedStamps = new Uint32Array(this.world.tileCount);
+      this.observationStamp = 0;
+    }
+
+    this.observationStamp = (this.observationStamp + 1) >>> 0;
+    if (this.observationStamp === 0) {
+      this.observedStamps.fill(0);
+      this.observationStamp = 1;
+    }
+    return this.observationStamp;
   }
 
   private hasLineOfSight(fromX: number, fromY: number, toX: number, toY: number): boolean {

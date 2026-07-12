@@ -1454,6 +1454,21 @@ Target:
 
 Pathfinding should run only after tile, provision or knowledge changes.
 
+The Milestone 3 implementation keeps normal sailing work proportional to the
+local explored area rather than total world area:
+
+- static terrain is recorded in camera-culled chunk graphics over one ocean
+  rectangle;
+- fog, forward-range and return-risk masks use reusable chunk-sized textures,
+  and only chunks affected by sparse knowledge, visibility or risk candidates
+  are redrawn and uploaded;
+- visibility clearing, diagnostics, knowledge counts, expedition resolution
+  and return-boundary discovery use maintained index sets and counters;
+- Dijkstra searches reuse typed cost, parent, visited, settled-node and numeric
+  heap buffers, then post-process only settled or known-water candidates;
+- provision-only changes reclassify cached cost groups without rerunning path
+  searches.
+
 Scattered-island profile construction, bounded placement, terrain painting and
 four-edge flood validation run only during world generation or regeneration.
 They must not execute during the normal movement loop. Placement attempts are
@@ -1468,6 +1483,10 @@ If Dijkstra exceeds the budget:
 5. move calculations to a Web Worker only after profiling confirms the need.
 
 Do not begin with a Web Worker.
+
+The current measured simulation work remains below budget at `192 x 192`, so a
+Web Worker is intentionally deferred. Generation and initial static rendering
+may still scale with total area because they run only on load or regeneration.
 
 ---
 

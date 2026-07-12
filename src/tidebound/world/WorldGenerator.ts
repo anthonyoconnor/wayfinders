@@ -90,16 +90,25 @@ export class WorldGenerator {
     const baseRadius = this.config.world.supportedWaterRadius;
     const noiseAmplitude = this.config.world.supportedBoundaryNoise;
     const noiseScale = this.config.world.supportedNoiseScale;
+    const maximumRadius = baseRadius + noiseAmplitude;
+    const extent = Math.ceil(maximumRadius);
+    const minX = Math.max(0, center.x - extent);
+    const maxX = Math.min(grid.width - 1, center.x + extent);
+    const minY = Math.max(0, center.y - extent);
+    const maxY = Math.min(grid.height - 1, center.y + extent);
 
-    grid.forEachTile((x, y) => {
-      const dx = x - center.x;
-      const dy = y - center.y;
-      const distance = Math.hypot(dx, dy);
-      const noise = valueNoise(seed, x, y, noiseScale) * 2 - 1;
-      if (distance <= baseRadius + noise * noiseAmplitude) {
-        grid.setKnowledge(x, y, KnowledgeState.Supported, 0);
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - center.x;
+        const dy = y - center.y;
+        const distance = Math.hypot(dx, dy);
+        if (distance > maximumRadius) continue;
+        const noise = valueNoise(seed, x, y, noiseScale) * 2 - 1;
+        if (distance <= baseRadius + noise * noiseAmplitude) {
+          grid.setKnowledge(x, y, KnowledgeState.Supported, 0);
+        }
       }
-    });
+    }
   }
 
   private paintHomeIsland(
