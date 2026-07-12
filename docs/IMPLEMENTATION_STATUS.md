@@ -106,6 +106,74 @@ switched atomically to generation two, the exact dock, twelve bundles and no
 pending wreck. The camera centred on the replacement ship and the browser
 console remained clean.
 
+## Milestone 3 review result — 2026-07-12
+
+Build reviewed: commit `4454a40` in the local WebGL development build, using
+the default configuration and seeds 13371 and 13372.
+
+Desktop browser acceptance result: **Passed**.
+
+- Seed 13371 reported eight islands, four kinds and three size bands. Cycling
+  **Inspect next island** visited all eight from passable inspection points and
+  included Rocky Skerry, High Island, Atoll and Low Cay descriptors. Repeating
+  seed 13371 produced the same ordered inspection results; seed 13372 produced
+  a different repeatable scatter while retaining the `8 / 4 / 3` inventory.
+- Opaque Unknown fog concealed terrain outside current sight. Revealed island
+  terrain, the physical cargo rack and the patterned voyage overlays were all
+  visibly present with distinct developer-art treatments.
+- A browser-driven expedition created 79 Personal tiles. Entering Supported
+  water away from home left the expedition active and did not replenish the
+  ship. Entering the exact dock converted those 79 tiles to Supported, restored
+  cargo from eleven to twelve bundles, recorded one successful return and kept
+  generation one.
+- With no active expedition, leaving the dock in Supported water with eleven
+  bundles and re-entering the exact dock restored twelve bundles without
+  changing expedition, return or generation state.
+- A forced wreck at tile `4,4` immediately changed 79 failed Personal tiles
+  back to Unknown, preserved all 662 pre-existing Supported tiles, showed one
+  wreck,
+  set cargo to zero and suppressed input while generation one remained at the
+  loss site. Completion produced a fully supplied generation-two ship at the
+  exact dock with one retained wreck and no pending transition.
+- Revisiting `4,4` in generation two emitted `Found wreck 1 from generation 1`.
+  Regeneration then reset the build to generation one, expedition one, zero
+  returns, zero failures, zero wrecks, zero Personal tiles and twelve bundles
+  at the dock.
+- The browser console contained no warnings or errors. Natural movement,
+  natural final-bundle exhaustion, exact-dock precedence and fixed-step timing
+  remain covered by the automated suite.
+
+Engineering disposition: **ready for human playtest**. No objective blocker was
+found in the default desktop-browser configuration. This result does not
+validate the technical design's mobile performance target and does not assert
+that sailing is enjoyable, that the overlays are intuitively clear, or that
+wreck pacing and repeated expeditions feel satisfying to a player.
+
+Human sentiment status: **not collected**. Product-owner gate decision:
+**pending**. Do not start production art or roadmap Milestones 4–5 until that
+decision is recorded as **Proceed** or **Rework**. Next action: a human tester
+completes the subjective questions in `MILESTONE_3_PLAYTEST.md` and the product
+owner records that gate decision here.
+
+### Reusable Milestone 3 regression checks
+
+For every candidate build at this gate:
+
+1. Run `npm.cmd run check` and record the passing test/file counts and build result.
+2. Confirm seed 13371 reports `8 / 4 / 3`, same-seed regeneration is identical,
+   an alternate seed changes the scatter and the intended seed restores cleanly.
+3. Confirm an expedition remains active in remote Supported water, then verify
+   only exact-dock return converts its Personal route, replenishes cargo and
+   preserves the generation.
+4. Confirm exact-dock entry without an active expedition replenishes cargo
+   without changing expedition, return or generation state.
+5. Confirm wreck onset rolls back only failed Personal knowledge, preserves
+   earlier Supported routes, shows one loss-site marker and suppresses input for
+   four seconds; completion must advance once and supply the exact-dock ship.
+6. Confirm a later generation can discover the wreck and regeneration resets
+   routes, wrecks, counters and generation.
+7. Confirm the browser console remains free of warnings and errors.
+
 Development is intentionally paused at the revised Milestone 3 review gate.
 Generic discoveries, save/load, cross-session persistence and Milestone 5
 living-world work have not been started.
