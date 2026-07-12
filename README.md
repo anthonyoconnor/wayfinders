@@ -8,12 +8,21 @@ same generation. Running out of supplies outside Supported water leaves a
 discoverable wreck, discards the failed Personal route, respawns a fully
 supplied ship at home and advances the generation.
 
+Every seed also produces a stable set of eight non-home islands in the default
+configuration. High Islands, Low Cays, Atolls and Rocky Skerries appear across
+small, medium and large sizes, remain fully concealed by opaque Unknown fog
+until revealed, and use developer art only. They are unnamed terrain rather
+than Milestone 4 discovery or reward records.
+
 ```powershell
 npm.cmd install
 npm.cmd run dev
 ```
 
 Open `http://127.0.0.1:5173/`. Use WASD or the arrow keys to sail, and the mouse wheel or Q/E to zoom.
+
+The Developer tools drawer includes **Inspect next island** for cycling through
+the seed's stable island descriptors from passable inspection points.
 
 Supported routes, wrecks and generation state persist for the current generated
 runtime. Regenerating the world or reloading the browser resets them; save/load

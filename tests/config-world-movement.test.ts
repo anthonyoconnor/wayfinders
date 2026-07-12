@@ -6,6 +6,7 @@ import {
   patchPrototypeConfig,
   prototypeConfig,
   resetPrototypeConfig,
+  validatePrototypeConfig,
 } from "../src/tidebound/config/prototypeConfig";
 import { dijkstra, reconstructDijkstraPath } from "../src/tidebound/navigation/Dijkstra";
 import { createShipStateAtGrid, MovementSystem } from "../src/tidebound/navigation/MovementSystem";
@@ -13,6 +14,7 @@ import { gridToArt, gridToWorld, worldToGrid } from "../src/tidebound/world/Coor
 import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData";
 import { WorldGenerator } from "../src/tidebound/world/WorldGenerator";
 import { WorldGrid } from "../src/tidebound/world/WorldGrid";
+import { makeConfig } from "./helpers";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
@@ -21,6 +23,7 @@ describe("prototype configuration", () => {
   it("keeps defaults deeply frozen and resets the mutable live copy", () => {
     expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG)).toBe(true);
     expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG.navigation)).toBe(true);
+    expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG.islands)).toBe(true);
     expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG.movement)).toBe(true);
 
     const defaultSpeed = DEFAULT_PROTOTYPE_CONFIG.movement.shipSpeed;
@@ -56,6 +59,26 @@ describe("prototype configuration", () => {
       unsubscribe();
     }
   });
+
+  it("validates island tuning atomically", () => {
+    const changed = patchPrototypeConfig({ islands: { count: 9, minimumChannelWidth: 10 } });
+    expect([...changed]).toEqual(["islands"]);
+    expect(prototypeConfig.islands.count).toBe(9);
+    expect(prototypeConfig.islands.minimumChannelWidth).toBe(10);
+
+    expect(() => patchPrototypeConfig({ islands: { maxRadius: 1 } })).toThrow(
+      "islands.maxRadius must be at least islands.minRadius",
+    );
+    expect(prototypeConfig.islands.maxRadius).toBe(DEFAULT_PROTOTYPE_CONFIG.islands.maxRadius);
+
+    const legacyEnvelopeDoesNotFit = makeConfig({
+      world: { width: 30, height: 30, hiddenObstacleRadius: 10 },
+      islands: { count: 1, minRadius: 2, maxRadius: 2 },
+    });
+    expect(() => validatePrototypeConfig(legacyEnvelopeDoesNotFit)).toThrow(
+      "world dimensions are too small for the configured scattered islands",
+    );
+  });
 });
 
 describe("world foundations", () => {
@@ -77,6 +100,7 @@ describe("world foundations", () => {
     second.grid.forEachTile((x, y) => secondTiles.push(second.grid.getTile(x, y)));
 
     expect(second.landmarks).toEqual(first.landmarks);
+    expect(second.islands).toEqual(first.islands);
     expect(secondTiles).toEqual(firstTiles);
   });
 

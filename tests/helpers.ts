@@ -10,6 +10,7 @@ export function makeConfig(patch: DeepPartial<PrototypeConfig> = {}): PrototypeC
   const config: PrototypeConfig = {
     navigation: { ...DEFAULT_PROTOTYPE_CONFIG.navigation },
     world: { ...DEFAULT_PROTOTYPE_CONFIG.world },
+    islands: { ...DEFAULT_PROTOTYPE_CONFIG.islands },
     provisions: { ...DEFAULT_PROTOTYPE_CONFIG.provisions },
     returnRisk: { ...DEFAULT_PROTOTYPE_CONFIG.returnRisk },
     overlays: { ...DEFAULT_PROTOTYPE_CONFIG.overlays },

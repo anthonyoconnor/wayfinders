@@ -55,6 +55,12 @@ Use the following implementation decisions:
 - Ship footprint: one navigation tile
 - Ship sight radius: five navigation tiles
 - World chunk size: 32 × 32 navigation tiles
+- Default non-home island count: 8
+- Island kinds: High Island, Low Cay, Atoll and Rocky Skerry
+- Island sizes: small, medium and large
+- Island descriptor identity: stable for a seed and configuration
+- Island random streams: separate deterministic placement, profile, shape and terrain namespaces
+- Unknown fog opacity: fully opaque over unrevealed terrain
 - Unknown-water provision cost: 1 per navigation-tile distance
 - Personal-water provision cost: 0.5 per navigation-tile distance
 - Supported-water provision cost: 0
@@ -90,6 +96,23 @@ export const PrototypeConfig = {
     tileSize: 32,
     sightRadius: 5,
     chunkSize: 32,
+  },
+
+  islands: {
+    count: 8,
+    minRadius: 2,
+    maxRadius: 6,
+    apronWidth: 1.25,
+    minimumChannelWidth: 11,
+    homeClearance: 2,
+    edgeMargin: 6,
+    placementAttempts: 64,
+    edgeNoise: 0.24,
+    safeCorridorHalfWidth: 2,
+    highIslandWeight: 1,
+    lowCayWeight: 1,
+    atollWeight: 1,
+    rockySkerryWeight: 1,
   },
 
   provisions: {
@@ -134,6 +157,11 @@ The panel should expose at least:
 - Fog transition width
 - Fog noise strength
 
+Island-generation values remain in the same configuration module but take
+effect on regeneration rather than mutating an existing generated world. The
+Developer tools drawer provides **Inspect next island** to cycle through the
+stable descriptor list without exposing islands through normal play UI.
+
 Changing a value should automatically invalidate and rebuild only the affected systems.
 
 Examples:
@@ -154,6 +182,8 @@ The following values must never appear as hardcoded literals outside the configu
 - Ship movement speed
 - Overlay opacity
 - Fog parameters
+- Island count, radii, apron, channels, home clearance, edge margin,
+  placement attempts, edge noise, safe corridor and kind weights
 
 
 
@@ -216,6 +246,7 @@ Planned capabilities:
 - View line of sight
 - View forward exploration range
 - View return viability
+- Inspect the next deterministic scattered island from a passable water tile
 - Instantly regenerate test worlds
 
 The sandbox uses the same simulation systems as the main game but presents them in an environment optimised for rapid iteration.
@@ -249,6 +280,8 @@ src/
       WorldChunk.ts
       TileData.ts
       CoordinateSystem.ts
+      SeededRandom.ts
+      IslandGenerator.ts
       WorldGenerator.ts
     exploration/
       KnowledgeSystem.ts
@@ -394,6 +427,43 @@ index = localY * CHUNK_SIZE + localX;
 
 Use `expeditionStamp` to identify which personal tiles belong to the current expedition. This allows failed-expedition knowledge to be reverted without scanning historical expedition data.
 
+Generated non-home islands use stable descriptors separate from per-tile
+terrain:
+
+```ts
+enum IslandKind {
+  HighIsland = "high-island",
+  LowCay = "low-cay",
+  Atoll = "atoll",
+  RockySkerry = "rocky-skerry",
+}
+
+enum IslandSize {
+  Small = "small",
+  Medium = "medium",
+  Large = "large",
+}
+
+interface GeneratedIsland {
+  id: number;
+  kind: IslandKind;
+  size: IslandSize;
+  center: GridPoint;
+  radiusX: number;
+  radiusY: number;
+  outerRadius: number;
+  rotation: number;
+  shapeSeed: number;
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
+}
+```
+
+The home island uses ID `0`; default non-home descriptors use stable IDs
+`1` through `8`. `islandId` links painted terrain back to its descriptor.
+Milestone 3 island descriptors contain no names, rewards, settlements,
+resources or `DiscoveryRecord` state. Their tile `resourceId` values remain
+unset; those systems remain Milestone 4 work.
+
 ---
 
 ## 7. Chunking
@@ -432,7 +502,8 @@ in Milestone 4.
 
 ## 8. World Generation
 
-For the prototype, use a deterministic seed and a hand-authored or semi-authored starting region.
+For the prototype, use a deterministic seed, a fixed home region and a
+bounded procedural scatter of non-home islands.
 
 The starting world must contain:
 
@@ -440,22 +511,50 @@ The starting world must contain:
 - supported water around the home island;
 - an uneven gray-to-black boundary;
 - open unknown water beyond the boundary;
-- at least one hidden island;
-- at least one hidden resource location;
-- navigable sea routes wide enough for the five-tile visibility radius.
+- eight non-home islands in the default configuration;
+- High Island, Low Cay, Atoll and Rocky Skerry kinds;
+- small, medium and large size bands;
+- stable island IDs and descriptors for the same seed and configuration;
+- configured home exclusion, world margins and minimum inter-island channels;
+- a fully open eastbound corridor from the home dock;
+- passable ocean connectivity from the dock to all four world edges;
+- no island names, rewards, settlements, resource records or generic
+  discovery records.
 
 Generation sequence:
 
 1. Fill the world with deep ocean.
-2. Place the home island.
-3. Add shallow-water and reef bands.
-4. Mark land and blocking terrain.
-5. Mark the starting supported-water mask.
-6. Distort the supported boundary with seeded low-frequency noise.
-7. Place hidden discoveries outside supported water.
-8. Create visual decoration from the resulting terrain.
+2. Place the fixed home island, harbour and exact return dock.
+3. Add the home shallow-water and reef band.
+4. Paint and noise-distort the starting Supported-water mask.
+5. Build all non-home profiles from the profile namespace before placement.
+6. Guarantee that the default descriptor set represents all four kinds and
+   all three size bands, then use configured weights for remaining profiles.
+7. Assign stable IDs, radii, rotation and shape seed independently of placement.
+8. Place the first profile near the configured legacy obstacle distance, then
+   place remaining profiles largest-first using the placement namespace.
+9. Reject candidates which violate world margins, home exclusion, the full
+   eastbound safe corridor or minimum channel width.
+10. After the configured bounded attempt count, use a deterministic full-grid
+    fallback scan or fail with an actionable configuration error.
+11. Paint each footprint from its separate shape and terrain namespaces using
+    Land, Rock, Reef and ShallowOcean tiles appropriate to its kind.
+12. Carve a deterministic cardinally connected channel from every atoll lagoon
+    to open ocean.
+13. Set stable `islandId` values, authoritative terrain collision and sight
+    blocking, and initial Unknown knowledge.
+14. Flood-fill passable water from the dock and require reachability to the
+    north, east, south and west world edges and every atoll centre.
+15. Create developer-art palettes and decoration from the descriptors and
+    terrain without adding discovery metadata.
 
 The supported boundary is gameplay data, not a rendered gradient. Rendering derives the gradient from it.
+
+Use separate deterministic namespaces for placement, descriptor profile,
+shape and terrain sampling. Future Milestone 4 discovery placement must use a
+different namespace so adding names, rewards or records cannot move, resize or
+repaint the Milestone 3 island set. Do not use `Math.random()` or iteration
+order as a source of island identity.
 
 ---
 
@@ -909,7 +1008,12 @@ The ship renders above overlays so it remains readable.
 
 - Supported: unmodified base scene
 - Personal: desaturated and slightly darkened
-- Unknown: near-black opaque fog
+- Unknown: near-black, fully opaque fog
+
+Unknown interiors use alpha `1` so high-contrast land, rock, reef and island
+decoration cannot silhouette through. Bilinear smoothing and blur apply only at
+knowledge boundaries. Forward-range treatment may appear over Unknown fog but
+must never reveal base terrain or island descriptors.
 
 ### Current visibility
 
@@ -1010,6 +1114,18 @@ Gameplay terrain is not read back from rendered tilemap layers. Both rendering a
 
 This prevents art edits from silently changing navigation rules.
 
+For Milestone 3, each `IslandKind` uses a distinct generated developer-art
+palette and minimal terrain decoration:
+
+- High Island: land-dominant mass with darker high ground and sparse simple vegetation marks;
+- Low Cay: low, narrow sand/land form with broad shallow-water apron;
+- Atoll: reef ring and shallow lagoon with a deterministic navigable passage;
+- Rocky Skerry: rock-dominant silhouette with sparse land and reef fringe.
+
+These palettes and marks communicate terrain composition only. Do not add
+production sprites, names, settlements, rewards, resources or generic
+discovery presentation before Milestone 4.
+
 ---
 
 ## 25. Discoveries
@@ -1017,6 +1133,11 @@ This prevents art edits from silently changing navigation rules.
 Generic discoveries are a Milestone 4 feature. The runtime wreck markers
 created by Milestone 3 use `WreckRecord` and remain separate from this
 provisional-discovery lifecycle.
+
+Likewise, Milestone 3 `GeneratedIsland` descriptors are deterministic base
+terrain, not `DiscoveryRecord` objects. They have no names, rewards,
+settlements or resource records. Milestone 4 may attach returned discovery
+records to those stable island IDs without changing base generation.
 
 ```ts
 export const enum DiscoveryType {
@@ -1104,6 +1225,11 @@ Save:
 
 Do not save derived overlays or pathfinding output. Rebuild them on load.
 
+Do not serialize unchanged Milestone 3 island descriptors or base island
+terrain. Reconstruct them from the saved world seed and generation-versioned
+configuration, then apply only saved terrain modifications and Milestone 4
+discovery records keyed by stable island ID.
+
 Use browser storage through the existing persistence layer. Use IndexedDB when no existing storage layer is present.
 
 ---
@@ -1167,6 +1293,7 @@ The development build must provide toggles for:
 - active chunks;
 - current expedition stamps;
 - active expedition ID and generation;
+- island IDs, kinds, sizes, bounds and placement-clearance diagnostics;
 - runtime wreck records and discovered state.
 
 Debug visuals may be numeric and tile-based. Release visuals must hide them.
@@ -1176,6 +1303,8 @@ Add deterministic controls:
 - reset expedition;
 - add/remove provisions;
 - teleport to tile;
+- **Inspect next island**, cycling stable descriptor order and teleporting to a
+  passable inspection point within or immediately beside its footprint;
 - force successful return;
 - force wreck;
 - enter the home dock without an active expedition;
@@ -1201,6 +1330,22 @@ Required unit tests:
 - does not reveal beyond radius;
 - respects blockers;
 - fills crossed tiles during fast movement.
+
+### Scattered islands
+
+- the default configuration produces eight non-home descriptors with IDs `1` through `8`;
+- the same seed and configuration reproduce identical descriptors, island IDs and painted terrain;
+- all four kinds and all three size bands appear in the default descriptor set;
+- descriptor identity remains stable when placement order is optimized largest-first;
+- placement, profile, shape and terrain namespaces are deterministic and independent;
+- islands respect configured world margins, home exclusion and minimum channel width;
+- the complete eastbound corridor from the home dock remains clear;
+- a dock-centred passable-water flood reaches all four world edges;
+- painted Land, Rock and Reef tiles use authoritative movement and sight rules;
+- island tiles begin Unknown and contain no names, rewards, settlements, resource IDs or generic discovery records;
+- Unknown fog interiors are fully opaque and range overlays reveal no island terrain;
+- bounded placement attempts use deterministic fallback or return an actionable configuration error;
+- **Inspect next island** cycles stable descriptor order and chooses passable inspection points.
 
 ### Provisions
 
@@ -1267,6 +1412,11 @@ Target:
 - no pathfinding on every render frame.
 
 Pathfinding should run only after tile, provision or knowledge changes.
+
+Scattered-island profile construction, bounded placement, terrain painting and
+four-edge flood validation run only during world generation or regeneration.
+They must not execute during the normal movement loop. Placement attempts are
+bounded by configuration before deterministic fallback scanning.
 
 If Dijkstra exceeds the budget:
 
@@ -1368,6 +1518,14 @@ Completion condition: the player can visually identify both remaining forward re
 
 ### Milestone 6 — Expedition Resolution (completes roadmap Milestone 3)
 
+- Generate the default eight stable non-home island descriptors.
+- Represent High Island, Low Cay, Atoll and Rocky Skerry kinds across small,
+  medium and large sizes.
+- Preserve home exclusion, world margins, minimum channels, the full eastbound
+  safe corridor and passable-water connectivity to all four world edges.
+- Render island kinds with generated developer art while fully opaque Unknown
+  fog hides unrevealed terrain.
+- Exclude island names, rewards, settlements, resources and discovery records.
 - Start expedition on leaving Supported water.
 - Track current expedition-stamped Personal tiles separately from generation.
 - Resolve successful return only at the exact home dock.
@@ -1397,7 +1555,6 @@ survives across browser sessions.
 ### Milestone 8 — Prototype Content
 
 - Add home island.
-- Add hidden island.
 - Add fishing ground.
 - Add an anchorage or authored historic-wreck discovery distinct from runtime player wrecks.
 - Add return presentation.
@@ -1440,6 +1597,15 @@ when all of the following are true:
 26. Regeneration or browser reload resets runtime routes, wrecks and generation before Milestone 4 persistence exists.
 27. Normal exploration contains no numerical resource bar or route forecast.
 28. The prototype maintains the performance targets on desktop and mobile browsers.
+29. The default configuration generates eight non-home islands with stable IDs and descriptors.
+30. Regenerating the same seed reproduces island kind, size, centre, radii, rotation, shape seed, bounds and painted terrain.
+31. High Island, Low Cay, Atoll and Rocky Skerry kinds and small, medium and large sizes all appear in the default set.
+32. Islands respect configured home exclusion, world margins and minimum channel width.
+33. The complete eastbound home-dock corridor remains clear and passable ocean reaches all four world edges.
+34. Fully opaque Unknown fog prevents terrain or decoration from silhouetting before reveal.
+35. Revealed islands use functional developer art and authoritative terrain collision and sight blocking.
+36. Milestone 3 islands have no names, rewards, settlements, resource records or generic discovery records.
+37. Developer tools can inspect the stable descriptor list using **Inspect next island**.
 
 Milestone 4 is complete when save/load preserves Supported routes, wreck
 records, generation state, discovered wreck state and returned generic

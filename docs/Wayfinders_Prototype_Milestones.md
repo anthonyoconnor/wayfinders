@@ -17,6 +17,7 @@ Examples include:
 - Placeholder ship
 - Simple dock
 - Placeholder reefs and rocks
+- Simple scattered-island silhouettes, palettes and terrain compositions
 - Temporary overlays and effects
 
 Only enough art should be created to clearly communicate the exploration mechanics.
@@ -120,6 +121,16 @@ what survives into later voyages and generations.
 -   Different movement costs for Supported, Personal and Unknown water
 -   Forward exploration range overlay
 -   Return viability overlay
+-   A default of eight deterministic non-home islands with stable IDs and
+    descriptors
+-   High Island, Low Cay, Atoll and Rocky Skerry island kinds
+-   Small, medium and large island sizes
+-   Minimum channels, home exclusion, world margins, a fully open eastbound
+    corridor and four-edge open-ocean validation
+-   Fully opaque Unknown fog which prevents unrevealed islands from
+    silhouetting through
+-   Functional developer-art presentation only; islands have no names,
+    rewards, settlements, resource records or generic discovery records
 -   Expedition begins when the ship leaves Supported water
 -   Successful expedition return only at the exact home dock
 -   Current expedition-stamped Personal knowledge becomes Supported water
@@ -142,6 +153,18 @@ what survives into later voyages and generations.
 
 The player can decide whether to continue exploring or return home using
 only information presented in the world, without numerical UI.
+
+Under the default configuration, regenerating the same seed reproduces the
+same eight island IDs, kinds, sizes, centres, dimensions, rotations, shape
+seeds and bounds. The default set contains all four island kinds and all three
+size bands. Island placement preserves configured channels and margins, leaves the complete
+eastbound route from the home dock unobstructed, and keeps passable ocean
+connected from the dock to all four world edges.
+
+Unrevealed island terrain remains completely hidden behind opaque Unknown fog.
+After reveal, island land, rocks and reefs use the normal authoritative
+movement- and sight-blocking rules without exposing names, rewards or M4
+discovery state.
 
 A successful expedition ends only at the exact home dock. Only Personal
 tiles stamped for that expedition become Supported, their stamps are
@@ -173,6 +196,8 @@ meaningful discoveries.
 ## Features
 
 -   Discoveries
+-   Island names, rewards, settlements, resources and returned discovery
+    records
 -   Save and load
 -   Cross-session persistence for Supported routes, wrecks, generation state
     and returned discoveries
@@ -249,6 +274,10 @@ replenish or respawn -> continue with the same or next generation.
 - Is it clear that failed Personal knowledge was lost while earlier Supported routes survived?
 - Does discovering an earlier generation's wreck reinforce the inheritance theme?
 - Is it clear that safe return continues the same generation while only wreck advances it?
+- Do the four island kinds and three size bands read clearly in developer art?
+- Do scattered islands create interesting route choices without closing the ocean?
+- Does opaque Unknown fog prevent island silhouettes or terrain from leaking before reveal?
+- Do islands feel worth investigating even though names, rewards and settlements are intentionally deferred?
 - Would repeated expeditions remain engaging?
 
 ## Decision

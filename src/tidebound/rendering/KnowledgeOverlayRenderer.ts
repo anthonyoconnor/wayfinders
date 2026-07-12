@@ -119,7 +119,9 @@ export class KnowledgeOverlayRenderer {
         const noise = (seededValue(seed + 809, worldX, worldY) - 0.5) * prototypeConfig.overlays.fogNoise;
         if (world.getKnowledge(worldX, worldY) === KnowledgeState.Unknown) {
           const shade = Math.round(5 + noise * 22);
-          scratchContext.fillStyle = `rgba(${Math.max(1, shade)}, ${Math.max(7, shade + 5)}, ${Math.max(10, shade + 8)}, 0.97)`;
+          // Unknown interiors are fully opaque so high-contrast terrain cannot
+          // silhouette through fog; smoothing applies only at knowledge edges.
+          scratchContext.fillStyle = `rgba(${Math.max(1, shade)}, ${Math.max(7, shade + 5)}, ${Math.max(10, shade + 8)}, 1)`;
         } else {
           const shade = Math.round(65 + noise * 30);
           scratchContext.fillStyle = `rgba(${shade}, ${shade + 5}, ${shade + 8}, 0.62)`;

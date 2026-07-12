@@ -17,6 +17,22 @@ export interface PrototypeConfig {
     hiddenObstacleRadius: number;
     hiddenObstacleDistance: number;
   };
+  islands: {
+    count: number;
+    minRadius: number;
+    maxRadius: number;
+    apronWidth: number;
+    minimumChannelWidth: number;
+    homeClearance: number;
+    edgeMargin: number;
+    placementAttempts: number;
+    edgeNoise: number;
+    safeCorridorHalfWidth: number;
+    highIslandWeight: number;
+    lowCayWeight: number;
+    atollWeight: number;
+    rockySkerryWeight: number;
+  };
   provisions: {
     startingBundles: number;
     supportedCost: number;
@@ -83,6 +99,22 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
     hiddenObstacleRadius: 2,
     hiddenObstacleDistance: 24,
   },
+  islands: {
+    count: 8,
+    minRadius: 2,
+    maxRadius: 6,
+    apronWidth: 1.25,
+    minimumChannelWidth: 11,
+    homeClearance: 2,
+    edgeMargin: 6,
+    placementAttempts: 64,
+    edgeNoise: 0.24,
+    safeCorridorHalfWidth: 2,
+    highIslandWeight: 1,
+    lowCayWeight: 1,
+    atollWeight: 1,
+    rockySkerryWeight: 1,
+  },
   provisions: {
     startingBundles: 12,
     supportedCost: 0,
@@ -115,6 +147,7 @@ function cloneConfig(config: DeepReadonly<PrototypeConfig>): PrototypeConfig {
   return {
     navigation: { ...config.navigation },
     world: { ...config.world },
+    islands: { ...config.islands },
     provisions: { ...config.provisions },
     returnRisk: { ...config.returnRisk },
     overlays: { ...config.overlays },
@@ -249,6 +282,31 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   positiveInteger(config.world.shallowWaterRadius, "world.shallowWaterRadius");
   positiveInteger(config.world.hiddenObstacleRadius, "world.hiddenObstacleRadius");
   nonNegative(config.world.hiddenObstacleDistance, "world.hiddenObstacleDistance");
+  positiveInteger(config.islands.count, "islands.count");
+  positive(config.islands.minRadius, "islands.minRadius");
+  positive(config.islands.maxRadius, "islands.maxRadius");
+  positive(config.islands.apronWidth, "islands.apronWidth");
+  nonNegative(config.islands.minimumChannelWidth, "islands.minimumChannelWidth");
+  nonNegative(config.islands.homeClearance, "islands.homeClearance");
+  nonNegative(config.islands.edgeMargin, "islands.edgeMargin");
+  positiveInteger(config.islands.placementAttempts, "islands.placementAttempts");
+  unitInterval(config.islands.edgeNoise, "islands.edgeNoise");
+  nonNegative(config.islands.safeCorridorHalfWidth, "islands.safeCorridorHalfWidth");
+  nonNegative(config.islands.highIslandWeight, "islands.highIslandWeight");
+  nonNegative(config.islands.lowCayWeight, "islands.lowCayWeight");
+  nonNegative(config.islands.atollWeight, "islands.atollWeight");
+  nonNegative(config.islands.rockySkerryWeight, "islands.rockySkerryWeight");
+  if (config.islands.maxRadius < config.islands.minRadius) {
+    throw new RangeError("islands.maxRadius must be at least islands.minRadius");
+  }
+  if (
+    config.islands.highIslandWeight
+    + config.islands.lowCayWeight
+    + config.islands.atollWeight
+    + config.islands.rockySkerryWeight <= 0
+  ) {
+    throw new RangeError("at least one island archetype weight must be positive");
+  }
 
   nonNegativeInteger(config.provisions.startingBundles, "provisions.startingBundles");
   nonNegative(config.provisions.supportedCost, "provisions.supportedCost");
@@ -286,9 +344,21 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   if (config.world.width < startingRegionDiameter || config.world.height < startingRegionDiameter) {
     throw new RangeError("world dimensions must contain the complete shallow-water starting region");
   }
-  const obstacleMinimumDimension = (config.world.hiddenObstacleRadius + 2) * 2 + 1;
-  if (config.world.width < obstacleMinimumDimension || config.world.height < obstacleMinimumDimension) {
-    throw new RangeError("world dimensions are too small for the configured hidden obstacle");
+  const maximumPaintScale = 1.12 + config.islands.edgeNoise / 2;
+  const legacyIslandEnvelope = Math.max(
+    config.world.hiddenObstacleRadius + config.islands.apronWidth,
+    config.world.hiddenObstacleRadius * maximumPaintScale,
+  );
+  const configuredIslandEnvelope = Math.max(
+    config.islands.maxRadius + config.islands.apronWidth,
+    config.islands.maxRadius * maximumPaintScale,
+  );
+  const islandCenterMargin = Math.ceil(
+    Math.max(legacyIslandEnvelope, configuredIslandEnvelope) + config.islands.edgeMargin,
+  );
+  const scatteredIslandMinimumDimension = islandCenterMargin * 2 + 1;
+  if (config.world.width < scatteredIslandMinimumDimension || config.world.height < scatteredIslandMinimumDimension) {
+    throw new RangeError("world dimensions are too small for the configured scattered islands");
   }
   if (config.movement.collisionEpsilon >= config.navigation.tileSize) {
     throw new RangeError("movement.collisionEpsilon must be smaller than navigation.tileSize");

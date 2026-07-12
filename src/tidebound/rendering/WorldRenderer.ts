@@ -1,8 +1,10 @@
 import Phaser from "phaser";
 import { prototypeConfig } from "../config/prototypeConfig";
 import { gridToWorld } from "../world/CoordinateSystem";
-import { seededValue, type GeneratedWorld } from "../world/WorldGenerator";
+import { IslandKind, type GeneratedIsland } from "../world/IslandGenerator";
+import { seededValue } from "../world/SeededRandom";
 import { KnowledgeState, TerrainType } from "../world/TileData";
+import type { GeneratedWorld } from "../world/WorldGenerator";
 
 const COLORS = {
   ocean: 0x082f40,
@@ -21,6 +23,55 @@ const COLORS = {
   sailcloth: 0xf0d79b,
   buoy: 0xf0c467,
 } as const;
+
+interface IslandPalette {
+  shallow: number;
+  shallowSupported: number;
+  land: number;
+  landDark: number;
+  rock: number;
+  reef: number;
+  coast: number;
+}
+
+const ISLAND_PALETTES: Record<IslandKind, IslandPalette> = {
+  [IslandKind.HighIsland]: {
+    shallow: 0x2d858b,
+    shallowSupported: 0x3b9696,
+    land: 0x779459,
+    landDark: 0x49683e,
+    rock: 0x65706d,
+    reef: 0x91b59b,
+    coast: 0xd2bb7f,
+  },
+  [IslandKind.LowCay]: {
+    shallow: 0x4aa1a0,
+    shallowSupported: 0x63b8b0,
+    land: 0xd4bd78,
+    landDark: 0xb89a5c,
+    rock: 0x837a68,
+    reef: 0xb6c68d,
+    coast: 0xf0d691,
+  },
+  [IslandKind.Atoll]: {
+    shallow: 0x3ca9a5,
+    shallowSupported: 0x57c0b5,
+    land: 0xe0c77f,
+    landDark: 0xc6a867,
+    rock: 0x7a8580,
+    reef: 0x79c8a4,
+    coast: 0xf3dda0,
+  },
+  [IslandKind.RockySkerry]: {
+    shallow: 0x346f7a,
+    shallowSupported: 0x4b8790,
+    land: 0x68745d,
+    landDark: 0x4b5549,
+    rock: 0x515d60,
+    reef: 0x76988d,
+    coast: 0xa99b7d,
+  },
+};
 
 /** Developer-art renderer. Gameplay terrain remains owned by WorldGrid. */
 export class WorldRenderer {
@@ -42,6 +93,7 @@ export class WorldRenderer {
   render(generated: GeneratedWorld): void {
     const { grid, landmarks, seed } = generated;
     const size = prototypeConfig.navigation.tileSize;
+    const islandsById = new Map(generated.islands.map((island) => [island.id, island]));
     this.clear();
 
     this.water.fillStyle(COLORS.ocean, 1);
@@ -52,26 +104,30 @@ export class WorldRenderer {
       const px = x * size;
       const py = y * size;
       const supported = tile.knowledge === KnowledgeState.Supported;
+      const island = islandsById.get(tile.islandId);
+      const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
 
       let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
       if (tile.terrain === TerrainType.ShallowOcean) {
-        waterColor = supported ? COLORS.shallowSupported : COLORS.shallow;
+        waterColor = supported ? palette.shallowSupported : palette.shallow;
       }
       this.water.fillStyle(waterColor, 1);
       this.water.fillRect(px, py, size + 1, size + 1);
 
       if (tile.terrain === TerrainType.Land) {
-        const variation = seededValue(seed + 401, x, y) > 0.5 ? COLORS.land : COLORS.landDark;
+        const variation = seededValue(seed + 401, x, y) > 0.5 ? palette.land : palette.landDark;
         this.terrain.fillStyle(variation, 1);
         this.terrain.fillRoundedRect(px + 1, py + 1, size - 2, size - 2, size * 0.18);
       } else if (tile.terrain === TerrainType.Rock) {
-        this.terrain.fillStyle(COLORS.rock, 1);
+        this.terrain.fillStyle(palette.rock, 1);
         this.terrain.fillTriangle(px + size * 0.12, py + size * 0.84, px + size * 0.52, py + size * 0.12, px + size * 0.9, py + size * 0.84);
       } else if (tile.terrain === TerrainType.Reef) {
-        this.terrain.fillStyle(COLORS.reef, 0.9);
+        this.terrain.fillStyle(palette.reef, 0.9);
         this.terrain.fillCircle(px + size * 0.32, py + size * 0.54, size * 0.15);
         this.terrain.fillCircle(px + size * 0.63, py + size * 0.42, size * 0.12);
       }
+
+      if (island) this.drawIslandDecoration(island, tile.terrain, x, y, px, py, size, seed);
 
       if ((x + y) % 2 === 0 && tile.terrain !== TerrainType.Land) {
         const waveOffset = seededValue(seed + 503, x, y) * size * 0.24;
@@ -91,7 +147,7 @@ export class WorldRenderer {
       }
     });
 
-    this.drawCoast(generated);
+    this.drawCoast(generated, islandsById);
     this.drawHome(generated);
 
     const labelAt = gridToWorld({ x: landmarks.homeCenter.x, y: landmarks.homeCenter.y - prototypeConfig.world.homeIslandRadius - 2 });
@@ -115,12 +171,14 @@ export class WorldRenderer {
     this.structures.destroy();
   }
 
-  private drawCoast(generated: GeneratedWorld): void {
+  private drawCoast(generated: GeneratedWorld, islandsById: ReadonlyMap<number, GeneratedIsland>): void {
     const { grid } = generated;
     const size = prototypeConfig.navigation.tileSize;
-    this.coast.lineStyle(Math.max(2, size * 0.1), COLORS.sand, 0.95);
     grid.forEachTile((x, y) => {
       if (grid.getTerrain(x, y) !== TerrainType.Land) return;
+      const island = islandsById.get(grid.getTile(x, y).islandId);
+      const coast = island ? ISLAND_PALETTES[island.kind].coast : COLORS.sand;
+      this.coast.lineStyle(Math.max(2, size * 0.1), coast, 0.95);
       const left = x * size;
       const top = y * size;
       if (y === 0 || grid.getTerrain(x, y - 1) !== TerrainType.Land) this.coast.lineBetween(left, top, left + size, top);
@@ -128,6 +186,39 @@ export class WorldRenderer {
       if (y + 1 >= grid.height || grid.getTerrain(x, y + 1) !== TerrainType.Land) this.coast.lineBetween(left, top + size, left + size, top + size);
       if (x === 0 || grid.getTerrain(x - 1, y) !== TerrainType.Land) this.coast.lineBetween(left, top, left, top + size);
     });
+  }
+
+  private drawIslandDecoration(
+    island: GeneratedIsland,
+    terrain: TerrainType,
+    x: number,
+    y: number,
+    px: number,
+    py: number,
+    size: number,
+    seed: number,
+  ): void {
+    const detail = seededValue(seed + 907 + island.id * 53, x, y);
+    if (island.kind === IslandKind.HighIsland && terrain === TerrainType.Land && detail > 0.68) {
+      this.structures.fillStyle(0x315b3a, 0.85);
+      this.structures.fillTriangle(
+        px + size * 0.28,
+        py + size * 0.7,
+        px + size * 0.5,
+        py + size * 0.25,
+        px + size * 0.72,
+        py + size * 0.7,
+      );
+    } else if (island.kind === IslandKind.LowCay && terrain === TerrainType.Land && detail > 0.72) {
+      this.structures.lineStyle(2, 0xf1dda0, 0.75);
+      this.structures.lineBetween(px + size * 0.25, py + size * 0.58, px + size * 0.75, py + size * 0.46);
+    } else if (island.kind === IslandKind.Atoll && terrain === TerrainType.Reef && detail > 0.72) {
+      this.structures.fillStyle(0xe4a37b, 0.78);
+      this.structures.fillCircle(px + size * 0.5, py + size * 0.5, size * 0.06);
+    } else if (island.kind === IslandKind.RockySkerry && terrain === TerrainType.Rock && detail > 0.58) {
+      this.structures.lineStyle(1.5, 0x9aa3a0, 0.55);
+      this.structures.lineBetween(px + size * 0.38, py + size * 0.38, px + size * 0.58, py + size * 0.68);
+    }
   }
 
   private drawHome(generated: GeneratedWorld): void {

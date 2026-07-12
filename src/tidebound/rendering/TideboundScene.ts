@@ -9,6 +9,7 @@ import { GameSimulation } from "../core/GameSimulation";
 import { SimulationClock } from "../core/SimulationClock";
 import type { MovementInput } from "../core/types";
 import { worldToGrid } from "../world/CoordinateSystem";
+import type { GeneratedIsland } from "../world/IslandGenerator";
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
@@ -66,6 +67,8 @@ export class TideboundScene extends Phaser.Scene {
   private domAbort?: AbortController;
   private readonly eventUnsubscribers: Array<() => void> = [];
   private teleportOnClick = false;
+  private islandInspectionIndex = 0;
+  private datasetGenerated?: GameSimulation["generated"];
   private lastRenderedRevision = -1;
   private lastReportedOverlayRevision = -1;
 
@@ -198,7 +201,13 @@ export class TideboundScene extends Phaser.Scene {
     this.cargoRenderer.sync(this.simulation.ship.provisions);
     const host = document.querySelector<HTMLElement>("#game-host");
     if (host) {
-      host.dataset.seed = String(this.simulation.generated.seed);
+      if (this.datasetGenerated !== this.simulation.generated) {
+        host.dataset.seed = String(this.simulation.generated.seed);
+        host.dataset.islandCount = String(this.simulation.generated.islands.length);
+        host.dataset.islandKinds = String(new Set(this.simulation.generated.islands.map(({ kind }) => kind)).size);
+        host.dataset.islandSizes = String(new Set(this.simulation.generated.islands.map(({ size }) => size)).size);
+        this.datasetGenerated = this.simulation.generated;
+      }
       host.dataset.tileX = String(this.simulation.ship.currentTileX);
       host.dataset.tileY = String(this.simulation.ship.currentTileY);
       host.dataset.tileKnowledge = KnowledgeState[
@@ -295,6 +304,7 @@ export class TideboundScene extends Phaser.Scene {
           <legend>World and ship</legend>
           <label>Seed <input data-field="seed" type="number" step="1" value="${this.simulation.generated.seed}"></label>
           <button data-action="regenerate" type="button">Regenerate current seed</button>
+          <button data-action="inspect-island" type="button">Inspect next island</button>
           <div class="tool-row">
             <button data-action="teleport-click" type="button" aria-pressed="false">Teleport by clicking</button>
             <label>X <input data-field="teleport-x" type="number" step="1" value="${this.simulation.ship.currentTileX}"></label>
@@ -351,6 +361,9 @@ export class TideboundScene extends Phaser.Scene {
     slot.querySelector<HTMLButtonElement>("[data-action='teleport-click']")?.addEventListener("click", () => {
       this.teleportOnClick = !this.teleportOnClick;
       this.updateTeleportButton();
+    }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-action='inspect-island']")?.addEventListener("click", () => {
+      this.inspectNextIsland();
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='teleport-coordinates']")?.addEventListener("click", () => {
       const x = Math.trunc(this.field("teleport-x").valueAsNumber);
@@ -443,11 +456,63 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private afterWorldChanged(): void {
+    this.islandInspectionIndex = 0;
     this.renderWorld();
     this.configureCamera();
     this.lastRenderedRevision = -1;
     this.updateProvisionOutput();
     this.syncPresentation(true);
+  }
+
+  private inspectNextIsland(): void {
+    const islands = this.simulation.generated.islands;
+    if (islands.length === 0) {
+      this.log("This seed contains no scattered islands.");
+      return;
+    }
+    const island = islands[this.islandInspectionIndex % islands.length];
+    this.islandInspectionIndex++;
+    const tile = this.findIslandInspectionTile(island);
+    if (!tile || !this.simulation.teleport(tile)) {
+      this.log(`Could not find a passable inspection point for island ${island.id}.`);
+      return;
+    }
+    this.log(`Inspecting ${island.size} ${island.kind} ${island.id} from ${tile.x}, ${tile.y}.`);
+  }
+
+  private findIslandInspectionTile(island: GeneratedIsland): { x: number; y: number } | undefined {
+    let closestWater: { x: number; y: number } | undefined;
+    let closestDistance = Number.POSITIVE_INFINITY;
+    for (let y = island.bounds.minY; y <= island.bounds.maxY; y++) {
+      for (let x = island.bounds.minX; x <= island.bounds.maxX; x++) {
+        if (!this.simulation.world.inBounds(x, y) || this.simulation.world.isMovementBlocked(x, y)) continue;
+        if (this.simulation.world.getTile(x, y).islandId !== island.id) continue;
+        const distance = Math.hypot(x - island.center.x, y - island.center.y);
+        if (distance >= closestDistance) continue;
+        closestDistance = distance;
+        closestWater = { x, y };
+      }
+    }
+    if (closestWater) return closestWater;
+
+    // A configured morphology could paint no passable interior. Keep a bounded
+    // outside-ring fallback so the inspection control still cannot hang.
+    const baseRadius = Math.ceil(island.outerRadius + 1);
+    for (let extra = 0; extra <= 3; extra++) {
+      const radius = baseRadius + extra;
+      for (let step = 0; step < 24; step++) {
+        const angle = island.rotation + step / 24 * Math.PI * 2;
+        const tile = {
+          x: Math.round(island.center.x + Math.cos(angle) * radius),
+          y: Math.round(island.center.y + Math.sin(angle) * radius),
+        };
+        if (
+          this.simulation.world.inBounds(tile.x, tile.y)
+          && !this.simulation.world.isMovementBlocked(tile.x, tile.y)
+        ) return tile;
+      }
+    }
+    return undefined;
   }
 
   private installBrowserDebugApi(): void {

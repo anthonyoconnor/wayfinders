@@ -1,7 +1,11 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
-import { KnowledgeState, TerrainType, terrainBlocksMovement, terrainBlocksSight } from "./TileData";
+import { IslandGenerator, type GeneratedIsland } from "./IslandGenerator";
+import { seededValue } from "./SeededRandom";
+import { KnowledgeState, TerrainType } from "./TileData";
 import { WorldGrid } from "./WorldGrid";
+
+export { seededValue } from "./SeededRandom";
 
 export interface WorldLandmarks {
   homeCenter: GridPoint;
@@ -16,17 +20,7 @@ export interface GeneratedWorld {
   seed: number;
   grid: WorldGrid;
   landmarks: WorldLandmarks;
-}
-
-function mix32(value: number): number {
-  value = Math.imul(value ^ (value >>> 16), 0x7feb352d);
-  value = Math.imul(value ^ (value >>> 15), 0x846ca68b);
-  return (value ^ (value >>> 16)) >>> 0;
-}
-
-export function seededValue(seed: number, x: number, y: number): number {
-  const mixed = mix32(seed ^ Math.imul(x, 0x1f123bb5) ^ Math.imul(y, 0x5f356495));
-  return mixed / 0x1_0000_0000;
+  islands: readonly GeneratedIsland[];
 }
 
 function smoothStep(value: number): number {
@@ -71,8 +65,8 @@ export class WorldGenerator {
     this.paintSupportedWater(grid, seed, homeCenter);
     this.paintHomeIsland(grid, seed, homeCenter, harbour, dock);
 
-    const hiddenObstacleCenter = this.chooseHiddenObstacleCenter(grid, seed, homeCenter);
-    this.paintHiddenObstacle(grid, seed, hiddenObstacleCenter);
+    const islands = new IslandGenerator(this.config).generate(grid, seed, homeCenter, dock);
+    const hiddenObstacleCenter = { ...islands[0].center };
 
     const hiddenResource = this.chooseHiddenResource(grid, seed, homeCenter, hiddenObstacleCenter);
     grid.setResourceId(hiddenResource.x, hiddenResource.y, 1);
@@ -80,6 +74,7 @@ export class WorldGenerator {
     return {
       seed,
       grid,
+      islands,
       landmarks: {
         homeCenter,
         harbour,
@@ -127,7 +122,8 @@ export class WorldGenerator {
           this.setTerrain(grid, x, y, TerrainType.Land);
           grid.setIslandId(x, y, 0);
         } else if (distance <= shallowRadius + edgeNoise) {
-          const protectsHarbourApproach = x >= center.x + landRadius - 1 && Math.abs(y - center.y) <= 1;
+          const protectsHarbourApproach = x >= center.x + landRadius - 1
+            && Math.abs(y - center.y) <= this.config.islands.safeCorridorHalfWidth;
           const reefChance = seededValue(seed + 79, x, y);
           const terrain = !protectsHarbourApproach && distance > shallowRadius - 1.2 && reefChance > 0.88
             ? TerrainType.Reef
@@ -147,37 +143,6 @@ export class WorldGenerator {
     this.setTerrain(grid, dock.x, dock.y, TerrainType.ShallowOcean);
   }
 
-  private chooseHiddenObstacleCenter(grid: WorldGrid, seed: number, home: GridPoint): GridPoint {
-    const angle = seededValue(seed + 101, 0, 0) * Math.PI * 2;
-    const distance = this.config.world.hiddenObstacleDistance;
-    const radius = this.config.world.hiddenObstacleRadius;
-    const margin = radius + 2;
-    return {
-      x: Math.max(margin, Math.min(grid.width - margin - 1, Math.round(home.x + Math.cos(angle) * distance))),
-      y: Math.max(margin, Math.min(grid.height - margin - 1, Math.round(home.y + Math.sin(angle) * distance))),
-    };
-  }
-
-  private paintHiddenObstacle(grid: WorldGrid, seed: number, center: GridPoint): void {
-    const radius = this.config.world.hiddenObstacleRadius;
-    for (let y = center.y - radius - 1; y <= center.y + radius + 1; y++) {
-      for (let x = center.x - radius - 1; x <= center.x + radius + 1; x++) {
-        if (!grid.inBounds(x, y)) continue;
-        const distance = Math.hypot(x - center.x, y - center.y);
-        const edgeNoise = (seededValue(seed + 211, x, y) - 0.5) * 0.8;
-        if (distance <= radius + edgeNoise) {
-          const terrain = distance < radius * 0.55 ? TerrainType.Land : TerrainType.Rock;
-          this.setTerrain(grid, x, y, terrain);
-          grid.setIslandId(x, y, 1);
-          grid.setKnowledge(x, y, KnowledgeState.Unknown, 0);
-        } else if (distance <= radius + 1) {
-          this.setTerrain(grid, x, y, TerrainType.ShallowOcean);
-          grid.setKnowledge(x, y, KnowledgeState.Unknown, 0);
-        }
-      }
-    }
-  }
-
   private chooseHiddenResource(grid: WorldGrid, seed: number, home: GridPoint, obstacle: GridPoint): GridPoint {
     const offsetSign = seededValue(seed + 307, 0, 0) < 0.5 ? -1 : 1;
     const candidate = {
@@ -194,7 +159,5 @@ export class WorldGenerator {
 
   private setTerrain(grid: WorldGrid, x: number, y: number, terrain: TerrainType): void {
     grid.setTerrain(x, y, terrain);
-    grid.setMovementBlocked(x, y, terrainBlocksMovement(terrain));
-    grid.setSightBlocked(x, y, terrainBlocksSight(terrain));
   }
 }

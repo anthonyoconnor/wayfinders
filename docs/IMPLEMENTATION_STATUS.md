@@ -57,6 +57,16 @@ Status: complete — stop here for user playtesting
 - Reusable WebGL-rendered forward and return textures with dotted, diagonal and crosshatched accessibility treatments.
 - World legend uses words and patterns without exposing resource arithmetic.
 - Current sight remains full colour; return risk appears only on Personal water behind the ship.
+- The default configuration generates eight non-home islands with stable IDs and descriptors.
+- High Island, Low Cay, Atoll and Rocky Skerry kinds are represented across small, medium and large sizes.
+- Placement uses separate deterministic namespaces for descriptor profile, placement, shape and terrain.
+- Configured minimum channels, home exclusion and world margins keep islands separated from home and one another.
+- A fully clear eastbound corridor remains open from the home dock, and a passable-water flood validates access from the dock to all four world edges.
+- Atolls receive a deterministic cardinal channel, and lagoon centres must pass the same open-ocean reachability check.
+- Unknown fog interiors are fully opaque so island terrain and decoration cannot silhouette before reveal.
+- Island kinds use distinct generated developer-art palettes and terrain marks only.
+- Milestone 3 islands carry no names, rewards, settlements, resource records or generic discovery records.
+- Developer tools provide **Inspect next island**, which cycles stable descriptor order and teleports to a passable inspection point.
 - An expedition starts when the ship leaves Supported water and remains active when crossing Supported water away from home.
 - Successful return resolves only on entering the exact generated home dock.
 - Successful return converts only Personal tiles stamped for the current expedition to Supported, clears those stamps, replenishes configured starting bundles, clears fractional provision use and keeps the same generation.
@@ -67,16 +77,24 @@ Status: complete — stop here for user playtesting
 - Supported routes, wreck records and generation state persist through later expeditions and wrecks in the current generated runtime.
 - Regeneration or browser reload resets runtime routes, wrecks and generation; save/load and cross-session persistence remain Milestone 4.
 
-Verification: the full `npm.cmd run check` pipeline passes: TypeScript,
-44 automated tests across seven files, and the production Vite build. The
-dependency audit reports zero vulnerabilities. In-app browser playtesting
-verified exact-dock success, 79 stamped Personal tiles converting to Supported,
-12-bundle dock replenishment, same-generation continuation, nonlethal developer
-depletion, forced-wreck rollback, full-cargo generation respawn and a clearly
-labelled wreck becoming visible to the later generation. Automated tests also
-cover natural final-bundle exhaustion, dock-success precedence, lifecycle event
-order, retained prior Supported routes, persistent wreck discovery and
-fixed-step transition suppression.
+Verification: the full `npm.cmd run check` pipeline passes TypeScript, 63
+automated tests across eight files and the production Vite build; the
+dependency audit reports zero vulnerabilities. Automated
+island checks cover same-seed descriptor and terrain equality, different-seed
+variation, the default eight-island/four-kind/three-size inventory, painted
+footprint bounds, margins, home clearance, eleven-tile channels, the eastbound
+safe lane, authoritative collision and sight flags, hidden-terrain range
+privacy, navigable atoll lagoons, representative regression seeds and explicit
+validation failure for impossible placement envelopes.
+The generator's four-edge flood validation runs for every generated world.
+
+In-app browser playtesting confirmed fully concealed islands at the default
+dock, all four distinct developer-art kinds through **Inspect next island**,
+the `8 / 4 / 3` island/kind/size inventory for seeds 13371 and 13372, a changed
+scatter for the alternate seed, restoration of seed 13371 at the dock, and no
+browser console warnings or errors. The earlier exact-dock return, route
+conversion, replenishment, wreck rollback, respawn and wreck-discovery voyage
+also remains covered by the automated suite.
 
 Development is intentionally paused at the revised Milestone 3 review gate.
 Generic discoveries, save/load, cross-session persistence and Milestone 5
@@ -106,3 +124,7 @@ living-world work have not been started.
 20. **Runtime persistence boundary.** Successful routes, wreck records and generation state persist through later voyages and wrecks in the current generated runtime. Regeneration or browser reload resets them. Save/load and cross-session persistence remain Milestone 4 features.
 21. **Generation model.** Expedition ID and generation are separate. Every resolved expedition advances its expedition ID, but only wreck advances the generation. A successful return replenishes the current navigator and allows the same generation to sail again.
 22. **Wreck discovery boundary.** A runtime wreck is an immutable marker hidden by Unknown fog until a later generation sees it. Once discovered, the marker remains identified for later runtime voyages even when it leaves current sight or a later expedition fails; discovering it does not restore failed knowledge. Generic discovery types, returned-discovery progression and cross-session discovery persistence remain Milestone 4.
+23. **Island scope boundary.** The eight default non-home islands are Milestone 3 base terrain and navigation content, not generic discoveries. High Island, Low Cay, Atoll and Rocky Skerry kinds and their size bands affect descriptor shape, terrain composition, collision, sight blocking and developer-art presentation only. Names, rewards, settlements, resources and `DiscoveryRecord` state remain Milestone 4.
+24. **Deterministic island identity.** A seed and configuration produce stable descriptor IDs, kinds, sizes, centres, radii, rotations, shape seeds and bounds. Profile, placement, shape and terrain sampling use separate deterministic namespaces, allowing later discovery systems to use another namespace without moving or repainting the reviewed island world.
+25. **Placement and navigability.** The default generator places eight islands using configured home clearance, six-tile world margins, eleven-tile minimum channels and bounded placement attempts with deterministic fallback. A two-tile half-width eastbound corridor remains completely clear from the home dock; atolls receive a cardinally connected lagoon passage; and a final flood check requires passable water from the dock to reach all four world edges and every atoll centre.
+26. **Island presentation and concealment.** Each kind uses a distinct generated developer-art palette and minimal terrain marks. Unknown interiors remain fully opaque so island silhouettes cannot leak before reveal. This is functional exploration content, not production island art or Milestone 4 environmental polish.
