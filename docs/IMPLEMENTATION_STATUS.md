@@ -36,7 +36,7 @@ Verification: TypeScript check, 21 unit tests, production build and an in-browse
 Status: complete
 
 - Circular, blocker-aware current line of sight using the live configured radius.
-- Unknown cells observed during the current voyage become expedition-stamped Personal knowledge.
+- Unknown cells behind the moving ship become expedition-stamped Personal knowledge; visible water at and ahead of the ship remains Unknown until it falls behind.
 - Every crossed navigation-tile centre is observed, preventing gaps during fast or diagonal movement.
 - Near-black Unknown fog, grey Personal water and full-colour current visibility.
 - Bilinear, noise-softened transitions rendered from reusable chunk-updated mask data.
@@ -47,7 +47,22 @@ Verification: TypeScript check, 23 unit tests, production build, and an in-brows
 
 ## Milestone 3 — Risk
 
-Status: pending
+Status: complete — stop here for user playtesting
+
+- Physical, countable provision bundles in an on-board cargo rack; no visible numerical resource bar.
+- Distance-based charging captured before the corresponding observation update.
+- Configured Supported / Personal / Unknown costs of 0 / 0.5 / 1 bundle-units per tile.
+- Cost-limited forward Dijkstra mask showing only reachable Unknown water.
+- Known-water, multi-source return Dijkstra with comfortable, warning, critical and impossible margins.
+- Reusable WebGL-rendered forward and return textures with dotted, diagonal and crosshatched accessibility treatments.
+- World legend uses words and patterns without exposing resource arithmetic.
+- Current sight remains full colour; return risk appears only on Personal water behind the ship.
+- Empty cargo stops propulsion outside Supported water and leaves developer recovery available.
+- Re-entering Supported water gives a brief safe-passage cue without applying Milestone 4 progression.
+
+Verification: TypeScript check, 33 unit tests, production build, dependency audit and browser playtesting pass. Browser voyages verified bundle consumption, shrinking forward reach, all return-risk states, zero-bundle stranding and a viable return to Supported water. The final natural fixed-step voyage spent 5.25 bundle-units on the outward frontier leg and about 2.74 on its Personal-water retrace.
+
+Development is intentionally paused at the Milestone 3 review gate. Milestones 4 and 5 have not been started.
 
 ## Decisions to review at Milestone 3
 
@@ -62,3 +77,11 @@ Status: pending
 9. **Teleport knowledge.** Developer teleport reveals only the destination sight disc; it does not create a false Personal corridor between origin and destination.
 10. **Fog masks.** Changed chunks are composited into one reusable low-resolution world mask, then bilinearly sampled by Phaser's WebGL renderer. The single display quad avoids camera-scale seams while retaining chunk-scoped data updates. A custom production shader remains unnecessary for developer art at this review gate.
 11. **Voyage scope.** Personal knowledge uses one current expedition stamp and lasts until regeneration. Safe-return conversion and failure rollback are deliberately not implemented because they are Milestone 4 features.
+12. **Provision budget correction.** The technical document prints `bundles + (1 - accumulator)` for overlay reach, which grants a nonexistent extra bundle when the accumulator is zero. The implementation uses `bundles - accumulator`, so physical cargo and overlay distance agree exactly. Tests lock this decision.
+13. **Zero-bundle consequence.** A ship with empty cargo can turn but cannot propel itself outside Supported water. The sandbox's add-bundle, teleport and regenerate controls prevent this playtest consequence from blocking iteration.
+14. **Physical cargo presentation.** Each bundle is a countable crate in a screen-space “Provisions Aboard” rack, following the supplied overlay concept. A hidden live text equivalent exists for accessibility; normal visual play has no number.
+15. **Risk accessibility.** Comfortable return is neutral, warning uses sparse diagonals, critical uses denser diagonals and impossible return uses a red crosshatch. Current sight is excluded so the colours read as a trail behind the ship rather than a tint over the immediate sailing area.
+16. **Unknown-terrain privacy.** Forward search treats still-Unknown blockers as ordinary Unknown water. Once observed, actual terrain and collision apply. The overlay therefore cannot reveal hidden islands or reefs.
+17. **Return feedback boundary.** Re-entering Supported water gives a temporary “Safe Passage” cue, but Personal knowledge is not converted and nothing is saved. This improves the Milestone 3 review experience without implementing Milestone 4 legacy.
+18. **Dependency advisory.** Runtime dependencies audit clean. Vitest was patched from 3.2.4 to 3.2.7 to remove a development-server advisory before handoff.
+19. **Outward/return asymmetry.** The supplied concept requires the current forward range to cost full bundles and the trail home to cost half. Current sight therefore reveals terrain visually, while broad perpendicular strips centred on navigation tiles the ship has actually left commit passable water to Personal knowledge. The occupied and forward water remains Unknown while advancing, making an outward leg cost twice its Personal retrace without turns pre-charting untouched sea. Visible blocking landmarks are remembered immediately because they cannot discount travel. Stationary developer teleport still reveals its full sight disc for inspection. This intentionally refines the technical document's broader visible-to-Personal rule to preserve its own full-cost-out/half-cost-back requirement.

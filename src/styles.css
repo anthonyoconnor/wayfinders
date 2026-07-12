@@ -119,6 +119,79 @@ a:focus-visible {
   pointer-events: none;
 }
 
+.risk-legend {
+  position: fixed;
+  z-index: 18;
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  left: max(0.75rem, env(safe-area-inset-left));
+  display: grid;
+  gap: 0.3rem;
+  max-width: 12rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.45rem;
+  color: var(--shell-muted);
+  background: rgba(3, 17, 23, 0.72);
+  box-shadow: 0 0.4rem 1.5rem rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(0.55rem);
+  font-size: 0.68rem;
+  line-height: 1.2;
+  pointer-events: none;
+}
+
+.risk-legend p {
+  margin: 0 0 0.15rem;
+  color: #d8c591;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.risk-legend span {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.legend-swatch {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 1px solid rgba(225, 235, 224, 0.55);
+  background: rgba(164, 174, 163, 0.5);
+}
+
+.legend-swatch--forward {
+  border-style: dashed;
+  background: rgba(165, 192, 190, 0.28);
+}
+
+.legend-swatch--warning {
+  background: #d98d26;
+}
+
+.legend-swatch--warning::after,
+.legend-swatch--danger::before,
+.legend-swatch--danger::after {
+  position: absolute;
+  inset: 45% -10% auto;
+  height: 1px;
+  background: rgba(30, 20, 16, 0.75);
+  content: "";
+  transform: rotate(-45deg);
+}
+
+.legend-swatch--danger {
+  background: #b5292d;
+}
+
+.legend-swatch--danger::after {
+  transform: rotate(45deg);
+}
+
 .game-status,
 .tool-toggle {
   margin: 0;
@@ -424,6 +497,11 @@ a:focus-visible {
     inset: max(0.5rem, env(safe-area-inset-top)) max(0.5rem, env(safe-area-inset-right))
       max(0.5rem, env(safe-area-inset-bottom)) max(0.5rem, env(safe-area-inset-left));
     width: auto;
+  }
+
+  .risk-legend {
+    max-width: 9.5rem;
+    font-size: 0.6rem;
   }
 }
 
