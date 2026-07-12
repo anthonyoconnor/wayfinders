@@ -9,6 +9,8 @@ import { GameSimulation } from "../core/GameSimulation";
 import { SimulationClock } from "../core/SimulationClock";
 import type { MovementInput } from "../core/types";
 import { worldToGrid } from "../world/CoordinateSystem";
+import { KnowledgeState } from "../world/TileData";
+import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { ShipRenderer } from "./ShipRenderer";
 import { WorldRenderer } from "./WorldRenderer";
 
@@ -52,6 +54,7 @@ export class TideboundScene extends Phaser.Scene {
   private readonly clock = new SimulationClock();
   private keys!: MovementKeys;
   private worldRenderer!: WorldRenderer;
+  private knowledgeOverlay!: KnowledgeOverlayRenderer;
   private shipRenderer!: ShipRenderer;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private debugGraphics!: Phaser.GameObjects.Graphics;
@@ -65,9 +68,10 @@ export class TideboundScene extends Phaser.Scene {
 
   create(): void {
     this.worldRenderer = new WorldRenderer(this);
+    this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
     this.shipRenderer = new ShipRenderer(this);
-    this.gridGraphics = this.add.graphics().setDepth(20);
-    this.debugGraphics = this.add.graphics().setDepth(30);
+    this.gridGraphics = this.add.graphics().setDepth(70);
+    this.debugGraphics = this.add.graphics().setDepth(71);
 
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Keyboard input is unavailable");
@@ -180,16 +184,32 @@ export class TideboundScene extends Phaser.Scene {
 
   private syncPresentation(force = false): void {
     this.shipRenderer.sync(this.simulation.ship);
+    this.knowledgeOverlay.sync(this.simulation.world, this.simulation.generated.seed, force);
     const host = document.querySelector<HTMLElement>("#game-host");
     if (host) {
       host.dataset.seed = String(this.simulation.generated.seed);
       host.dataset.tileX = String(this.simulation.ship.currentTileX);
       host.dataset.tileY = String(this.simulation.ship.currentTileY);
+      host.dataset.tileKnowledge = KnowledgeState[
+        this.simulation.world.getKnowledge(this.simulation.ship.currentTileX, this.simulation.ship.currentTileY)
+      ].toLowerCase();
+      host.dataset.heading = this.simulation.ship.heading.toFixed(1);
+      host.dataset.speed = this.simulation.ship.speed.toFixed(2);
+      host.dataset.collided = String(this.simulation.lastMovement.collided);
       host.dataset.provisions = String(this.simulation.ship.provisions);
       host.dataset.simulationRevision = String(this.simulation.revision);
+      host.dataset.knowledgeVersion = String(this.simulation.world.knowledgeVersion);
+      host.dataset.visibilityVersion = String(this.simulation.world.visibilityVersion);
     }
     document.documentElement.dataset.wayfindersReady = "true";
     if (force || this.lastRenderedRevision !== this.simulation.revision) {
+      const snapshot = this.simulation.snapshot();
+      if (host) {
+        host.dataset.personalTiles = String(snapshot.knowledge.personal);
+        host.dataset.supportedTiles = String(snapshot.knowledge.supported);
+        host.dataset.unknownTiles = String(snapshot.knowledge.unknown);
+        host.dataset.visibleTiles = String(snapshot.knowledge.visibleNow);
+      }
       this.renderDebug();
       this.lastRenderedRevision = this.simulation.revision;
     }
@@ -317,7 +337,9 @@ export class TideboundScene extends Phaser.Scene {
     if (!Number.isFinite(value)) return;
     let patch: DeepPartial<PrototypeConfig> | undefined;
     switch (id) {
-      case "sight-radius": patch = { navigation: { sightRadius: value } }; break;
+      case "sight-radius":
+        patch = { navigation: { sightRadius: value } };
+        break;
       case "starting-bundles":
         patch = { provisions: { startingBundles: value } };
         this.simulation.setProvisions(value);
@@ -338,6 +360,7 @@ export class TideboundScene extends Phaser.Scene {
     if (!patch) return;
     try {
       patchPrototypeConfig(patch);
+      if (id === "sight-radius") this.simulation.refreshVisibility();
       this.simulation.revision++;
     } catch (error) {
       this.log(error instanceof Error ? error.message : "Configuration value was rejected.");
@@ -399,6 +422,7 @@ export class TideboundScene extends Phaser.Scene {
 
   private destroyBindings(): void {
     this.domAbort?.abort();
+    this.knowledgeOverlay.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
     if (window.__WAYFINDERS__?.snapshot().seed === this.simulation.generated.seed) delete window.__WAYFINDERS__;

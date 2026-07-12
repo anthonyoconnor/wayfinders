@@ -12,6 +12,7 @@ export class WorldChunk {
   visible = false;
   dirty = true;
   modified = false;
+  revision = 0;
 
   constructor(
     readonly chunkX: number,
@@ -43,5 +44,6 @@ export class WorldChunk {
   markDirty(modified = true): void {
     this.dirty = true;
     this.modified ||= modified;
+    this.revision++;
   }
 }

@@ -3,10 +3,13 @@ import {
   prototypeConfig,
   type PrototypeConfig,
 } from "../config/prototypeConfig";
+import { KnowledgeSystem } from "../exploration/KnowledgeSystem";
+import { VisibilitySystem } from "../exploration/VisibilitySystem";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import { WorldGenerator } from "../world/WorldGenerator";
 import type { WorldGrid } from "../world/WorldGrid";
+import { KnowledgeState } from "../world/TileData";
 import { GameEvents } from "./GameEvents";
 import type { GridPoint, MovementInput, MovementResult, ShipState } from "./types";
 
@@ -22,6 +25,7 @@ export interface SimulationSnapshot {
   ship: Readonly<ShipState>;
   tile: GridPoint;
   world: { width: number; height: number };
+  knowledge: { supported: number; personal: number; unknown: number; visibleNow: number };
   debug: Readonly<DebugVisibilityState>;
 }
 
@@ -42,8 +46,8 @@ export class GameSimulation {
   readonly debug: DebugVisibilityState = {
     navigationGrid: false,
     currentSight: false,
-    forwardRange: true,
-    returnViability: true,
+    forwardRange: false,
+    returnViability: false,
   };
 
   generated!: GeneratedWorld;
@@ -52,7 +56,10 @@ export class GameSimulation {
   revision = 0;
 
   private movement!: MovementSystem;
+  private visibility!: VisibilitySystem;
+  private knowledge!: KnowledgeSystem;
   private readonly generator: WorldGenerator;
+  private readonly currentExpeditionId = 1;
 
   constructor(readonly config: PrototypeConfig = prototypeConfig) {
     this.generator = new WorldGenerator(config);
@@ -64,13 +71,15 @@ export class GameSimulation {
   }
 
   update(input: MovementInput, deltaSeconds: number): MovementResult {
+    const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     this.lastMovement = this.movement.update(this.ship, input, deltaSeconds);
     if (this.lastMovement.tileChanged) {
+      const currentTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
+      const visibility = this.visibility.updateForMovement(previousTile, currentTile);
+      const knowledge = this.knowledge.applyVisibility(visibility, this.currentExpeditionId);
       this.revision++;
-      this.events.emit("shipEnteredTile", {
-        x: this.ship.currentTileX,
-        y: this.ship.currentTileY,
-      });
+      this.events.emit("shipEnteredTile", currentTile);
+      if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
     }
     return this.lastMovement;
   }
@@ -86,6 +95,10 @@ export class GameSimulation {
       this.config,
     );
     this.movement = new MovementSystem(this.world, this.config);
+    this.visibility = new VisibilitySystem(this.world, this.config);
+    this.knowledge = new KnowledgeSystem(this.world);
+    const initialVisibility = this.visibility.updateAt(this.generated.landmarks.dock);
+    this.knowledge.applyVisibility(initialVisibility, this.currentExpeditionId);
     this.lastMovement = NO_MOVEMENT;
     this.revision++;
     this.events.emit("worldRegenerated", { seed: normalizedSeed });
@@ -94,11 +107,22 @@ export class GameSimulation {
   teleport(tile: GridPoint): boolean {
     if (!this.world.inBounds(tile.x, tile.y) || this.world.isMovementBlocked(tile.x, tile.y)) return false;
     this.movement.teleport(this.ship, tile);
+    const visibility = this.visibility.updateAt(tile);
+    const knowledge = this.knowledge.applyVisibility(visibility, this.currentExpeditionId);
     this.lastMovement = NO_MOVEMENT;
     this.revision++;
     this.events.emit("shipTeleported", tile);
     this.events.emit("shipEnteredTile", tile);
+    if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
     return true;
+  }
+
+  refreshVisibility(): void {
+    const tile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
+    const visibility = this.visibility.updateAt(tile);
+    const knowledge = this.knowledge.applyVisibility(visibility, this.currentExpeditionId);
+    this.revision++;
+    if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
   }
 
   setProvisions(value: number): void {
@@ -121,11 +145,20 @@ export class GameSimulation {
   }
 
   snapshot(): SimulationSnapshot {
+    const knowledge = { supported: 0, personal: 0, unknown: 0, visibleNow: 0 };
+    this.world.forEachTile((x, y) => {
+      const state = this.world.getKnowledge(x, y);
+      if (state === KnowledgeState.Unknown) knowledge.unknown++;
+      else if (state === KnowledgeState.Personal) knowledge.personal++;
+      else knowledge.supported++;
+      if (this.world.isVisibleNow(x, y)) knowledge.visibleNow++;
+    });
     return {
       seed: this.generated.seed,
       ship: { ...this.ship },
       tile: { x: this.ship.currentTileX, y: this.ship.currentTileY },
       world: { width: this.world.width, height: this.world.height },
+      knowledge,
       debug: { ...this.debug },
     };
   }
