@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#061923" />
+    <meta
+      name="description"
+      content="Wayfinders, a browser exploration prototype about charting a scattered ocean world."
+    />
+    <title>Wayfinders Prototype</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#developer-tools-toggle">Skip to developer tools</a>
+
+    <div id="app" class="app-shell">
+      <main id="game-region" class="game-region" aria-labelledby="game-title">
+        <h1 id="game-title" class="visually-hidden">Wayfinders Prototype</h1>
+        <p id="game-instructions" class="visually-hidden">
+          The game canvas uses keyboard controls once a scene is active. Open developer tools for
+          simulation controls and diagnostics.
+        </p>
+
+        <div
+          id="game-host"
+          class="game-host"
+          data-game-host
+          tabindex="0"
+          aria-label="Wayfinders game canvas"
+          aria-describedby="game-instructions game-status"
+        ></div>
+
+        <div class="shell-controls" aria-label="Prototype controls">
+          <p id="game-status" class="game-status" role="status" aria-live="polite">
+            Starting renderer…
+          </p>
+          <button
+            id="developer-tools-toggle"
+            class="tool-toggle"
+            type="button"
+            aria-controls="developer-tools-panel"
+            aria-expanded="false"
+          >
+            Developer tools
+          </button>
+        </div>
+      </main>
+
+      <aside
+        id="developer-tools-panel"
+        class="developer-tools"
+        aria-labelledby="developer-tools-title"
+        hidden
+      >
+        <header class="developer-tools__header">
+          <div>
+            <p class="eyebrow">Prototype sandbox</p>
+            <h2 id="developer-tools-title">Developer tools</h2>
+          </div>
+          <button id="developer-tools-close" class="icon-button" type="button" aria-label="Close developer tools">
+            <span aria-hidden="true">×</span>
+          </button>
+        </header>
+
+        <div id="developer-tools-root" class="developer-tools__content" data-developer-tools-root>
+          <section class="tool-section" aria-labelledby="runtime-title">
+            <h3 id="runtime-title">Runtime</h3>
+            <dl class="runtime-summary">
+              <div>
+                <dt>Renderer</dt>
+                <dd id="renderer-status">Booting WebGL</dd>
+              </div>
+              <div>
+                <dt>Phaser</dt>
+                <dd id="phaser-version">Detecting…</dd>
+              </div>
+              <div>
+                <dt>Scene</dt>
+                <dd id="scene-status">Awaiting scene binding</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section class="tool-section" aria-labelledby="scene-tools-title">
+            <h3 id="scene-tools-title">Scene tools</h3>
+            <div id="scene-tools-slot" class="tool-slot" data-scene-tools-slot>
+              <p>Teleport, overlay, world, and tuning controls will appear here when the exploration scene connects.</p>
+            </div>
+          </section>
+
+          <section class="tool-section tool-section--log" aria-labelledby="diagnostics-title">
+            <h3 id="diagnostics-title">Diagnostics</h3>
+            <div
+              id="developer-log"
+              class="developer-log"
+              data-developer-log
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+              tabindex="0"
+            >
+              <p>Application shell initialized.</p>
+            </div>
+          </section>
+        </div>
+      </aside>
+
+      <noscript>
+        <div class="fatal-message" role="alert">
+          Wayfinders needs JavaScript enabled to start the game.
+        </div>
+      </noscript>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

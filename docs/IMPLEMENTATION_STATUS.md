@@ -1,0 +1,39 @@
+# Wayfinders implementation status
+
+This file is the continuation point for prototype work. The project is intentionally paused after Milestone 3 for the review gate in `Wayfinders_Prototype_Milestones.md`.
+
+## Milestone 0 — Developer Sandbox
+
+Status: complete
+
+- Browser application scaffold: Phaser 3.90, TypeScript, Vite and Vitest.
+- Deterministic seeded world generation and a live, mutable prototype configuration.
+- Developer tools for water-tile teleportation by coordinate or click.
+- Runtime provision add/remove controls.
+- Live controls for sight, provisions, movement costs, speed, risk thresholds, overlay opacity and fog presentation.
+- Toggles for navigation grid, line of sight, forward range and return viability.
+- Regeneration from the currently entered seed without a restart.
+- Browser automation surface exposed as `window.__WAYFINDERS__`.
+
+Verification: TypeScript check, 20 unit tests and a production Vite build pass.
+
+## Milestone 1 — Home Waters
+
+Status: pending
+
+## Milestone 2 — Exploration
+
+Status: pending
+
+## Milestone 3 — Risk
+
+Status: pending
+
+## Decisions to review at Milestone 3
+
+1. **Reuse boundary.** The older Ship Game Prototype was used as an architectural and version reference only. Its click-to-sail polygon navigation and production presentation were not copied because Wayfinders requires a WASD square-grid prototype and developer art.
+2. **Teleport safety.** “Any tile” is implemented as any navigable water tile. Land, reef and rock remain blocked so teleporting cannot leave the simulation in an invalid state.
+3. **Developer UI.** Numerical tuning is confined to the developer drawer. It is not part of the normal play presentation and therefore does not undermine the Milestone 3 no-numerical-player-UI test.
+4. **Live starting provisions.** Changing “starting bundles” also changes the current sandbox cargo immediately. This makes the tuning control observable without requiring regeneration.
+5. **Milestone 0 overlays.** Before their final Milestone 3 grid calculations are connected, the forward and return toggles display provisional range rings. They are development hooks, not the final risk presentation.
+
