@@ -5,8 +5,9 @@ Playable Phaser/TypeScript exploration prototype, completed through Milestone
 gate. Successful expeditions resolve only at the exact home dock, convert the
 current Personal route to Supported water, replenish supplies and continue the
 same generation. Running out of supplies outside Supported water leaves a
-discoverable wreck, discards the failed Personal route, respawns a fully
-supplied ship at home and advances the generation.
+discoverable wreck and discards the failed Personal route. After a four-second
+wreck presentation at the loss site, a fully supplied ship respawns at home
+and the generation advances.
 
 Every seed also produces a stable set of eight non-home islands in the default
 configuration. High Islands, Low Cays, Atolls and Rocky Skerries appear across

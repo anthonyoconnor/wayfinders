@@ -71,13 +71,14 @@ Status: complete — stop here for user playtesting
 - Successful return resolves only on entering the exact generated home dock.
 - Successful return converts only Personal tiles stamped for the current expedition to Supported, clears those stamps, replenishes configured starting bundles, clears fractional provision use and keeps the same generation.
 - Entering the exact dock without an active expedition also replenishes supplies without changing expedition or generation state.
-- Natural supply exhaustion outside Supported water resolves an immediate wreck; exact-dock return takes precedence if both occur on the same movement step.
-- Wreck resolution reverts only failed-expedition Personal knowledge, preserves earlier Supported routes, records a discoverable wreck at the loss location, respawns a fully supplied ship at the dock and advances the generation exactly once.
+- Natural supply exhaustion outside Supported water begins an immediate wreck transition; exact-dock return takes precedence if both occur on the same movement step.
+- Wreck onset reverts only failed-expedition Personal knowledge, preserves earlier Supported routes, records and displays the wreck at the loss location, freezes input and holds the old generation there for four seconds.
+- Wreck completion then clears the loss-site visibility, respawns a fully supplied ship at the dock and advances the generation exactly once.
 - Successful returns never advance the generation.
 - Supported routes, wreck records and generation state persist through later expeditions and wrecks in the current generated runtime.
 - Regeneration or browser reload resets runtime routes, wrecks and generation; save/load and cross-session persistence remain Milestone 4.
 
-Verification: the full `npm.cmd run check` pipeline passes TypeScript, 63
+Verification: the full `npm.cmd run check` pipeline passes TypeScript, 66
 automated tests across eight files and the production Vite build; the
 dependency audit reports zero vulnerabilities. Automated
 island checks cover same-seed descriptor and terrain equality, different-seed
@@ -87,6 +88,10 @@ safe lane, authoritative collision and sight flags, hidden-terrain range
 privacy, navigable atoll lagoons, representative regression seeds and explicit
 validation failure for impossible placement envelopes.
 The generator's four-edge flood validation runs for every generated world.
+Automated wreck checks cover the 3.999/4.000-second boundary, old-generation
+authority during the hold, input and developer-control suppression, event
+order, exactly-once advancement, large-delta overshoot, regeneration
+cancellation and fixed-step buffer clearing.
 
 In-app browser playtesting confirmed fully concealed islands at the default
 dock, all four distinct developer-art kinds through **Inspect next island**,
@@ -94,7 +99,12 @@ the `8 / 4 / 3` island/kind/size inventory for seeds 13371 and 13372, a changed
 scatter for the alternate seed, restoration of seed 13371 at the dock, and no
 browser console warnings or errors. The earlier exact-dock return, route
 conversion, replenishment, wreck rollback, respawn and wreck-discovery voyage
-also remains covered by the automated suite.
+also remains covered by the automated suite. A new forced-wreck browser check
+confirmed a visible generation-one wreck and countdown at the loss site with
+zero cargo and suppressed input; after four seconds the same diagnostics
+switched atomically to generation two, the exact dock, twelve bundles and no
+pending wreck. The camera centred on the replacement ship and the browser
+console remained clean.
 
 Development is intentionally paused at the revised Milestone 3 review gate.
 Generic discoveries, save/load, cross-session persistence and Milestone 5
@@ -114,7 +124,7 @@ living-world work have not been started.
 10. **Fog masks.** Changed chunks are composited into one reusable low-resolution world mask, then bilinearly sampled by Phaser's WebGL renderer. The single display quad avoids camera-scale seams while retaining chunk-scoped data updates. A custom production shader remains unnecessary for developer art at this review gate.
 11. **Expedition ownership.** Normal movement starts an expedition on leaving Supported water. Only Personal tiles carrying that expedition's ID can be committed or reverted, and resolution clears those stamps to zero. Crossing Supported water away from home does not resolve the expedition.
 12. **Provision budget correction.** The technical document prints `bundles + (1 - accumulator)` for overlay reach, which grants a nonexistent extra bundle when the accumulator is zero. The implementation uses `bundles - accumulator`, so physical cargo and overlay distance agree exactly. Tests lock this decision.
-13. **Wreck consequence.** Natural travel consumption crossing from a positive bundle count to zero outside Supported water causes one immediate wreck. The failed stamped Personal route returns to Unknown, earlier Supported routes survive, a wreck record is left at the loss position, and a fully provisioned replacement ship respawns at the dock. Direct developer provision removal does not itself trigger a wreck.
+13. **Wreck consequence.** Natural travel consumption crossing from a positive bundle count to zero outside Supported water begins one immediate wreck transition. The failed stamped Personal route returns to Unknown, earlier Supported routes survive and a wreck record is left at the loss position. Direct developer provision removal does not itself trigger a wreck.
 14. **Physical cargo presentation.** Each bundle is a countable crate in a screen-space “Provisions Aboard” rack, following the supplied overlay concept. A hidden live text equivalent exists for accessibility; normal visual play has no number.
 15. **Risk accessibility.** Comfortable return is neutral, warning uses sparse diagonals, critical uses denser diagonals and impossible return uses a red crosshatch. Current sight is excluded so the colours read as a trail behind the ship rather than a tint over the immediate sailing area.
 16. **Unknown-terrain privacy.** Forward search treats still-Unknown blockers as ordinary Unknown water. Once observed, actual terrain and collision apply. The overlay therefore cannot reveal hidden islands or reefs.
@@ -128,3 +138,4 @@ living-world work have not been started.
 24. **Deterministic island identity.** A seed and configuration produce stable descriptor IDs, kinds, sizes, centres, radii, rotations, shape seeds and bounds. Profile, placement, shape and terrain sampling use separate deterministic namespaces, allowing later discovery systems to use another namespace without moving or repainting the reviewed island world.
 25. **Placement and navigability.** The default generator places eight islands using configured home clearance, six-tile world margins, eleven-tile minimum channels and bounded placement attempts with deterministic fallback. A two-tile half-width eastbound corridor remains completely clear from the home dock; atolls receive a cardinally connected lagoon passage; and a final flood check requires passable water from the dock to reach all four world edges and every atoll centre.
 26. **Island presentation and concealment.** Each kind uses a distinct generated developer-art palette and minimal terrain marks. Unknown interiors remain fully opaque so island silhouettes cannot leak before reveal. This is functional exploration content, not production island art or Milestone 4 environmental polish.
+27. **Wreck-transition pacing.** Wreck onset and route rollback occur immediately, but generation advancement and dock respawn wait for four simulation seconds. During the hold, current sight remains frozen on a visible wreck marker, the camera stays at the loss site, movement, teleport, cargo editing, live gameplay tuning and repeated forced wrecks are suppressed, and the old generation remains authoritative. Explicit world regeneration remains available as a deterministic cancellation/reset. Completion atomically clears loss-site visibility, advances generation and expedition ID once, creates the fully supplied dock ship, recalculates overlays and discards held-input overshoot.

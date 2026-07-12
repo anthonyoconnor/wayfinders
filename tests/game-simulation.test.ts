@@ -48,7 +48,7 @@ describe("GameSimulation exploration integration", () => {
     expect(simulation.world.getKnowledge(midpoint.x, midpoint.y)).toBe(KnowledgeState.Unknown);
   });
 
-  it("wrecks an out-of-provisions ship and respawns the next generation at the dock", () => {
+  it("holds the visible wreck for four seconds before respawning the next generation", () => {
     const simulation = new GameSimulation();
     expect(simulation.teleport({ x: 4, y: 4 })).toBe(true);
     expect(simulation.world.getKnowledge(4, 4)).toBe(KnowledgeState.Personal);
@@ -59,14 +59,51 @@ describe("GameSimulation exploration integration", () => {
     expect(simulation.forceWreck()).toBe(true);
 
     expect(simulation.world).toBe(world);
-    expect(simulation.ship).not.toBe(lostShip);
-    expect(simulation.generation).toBe(2);
+    expect(simulation.ship).toBe(lostShip);
+    expect(simulation.wreckPresentationActive).toBe(true);
+    expect(simulation.respawnSecondsRemaining).toBe(4);
+    expect(simulation.pendingWreckId).toBe(1);
+    expect(simulation.snapshot().expedition).toMatchObject({
+      generation: 1,
+      atDock: false,
+      wreckPresentationActive: true,
+      respawnSecondsRemaining: 4,
+      pendingWreckId: 1,
+    });
+    expect(simulation.generation).toBe(1);
     expect(simulation.failedExpeditions).toBe(1);
-    expect(simulation.atDock).toBe(true);
-    expect(simulation.ship.provisions).toBe(simulation.config.provisions.startingBundles);
+    expect(simulation.atDock).toBe(false);
+    expect(simulation.ship.provisions).toBe(0);
+    expect(simulation.world.isVisibleNow(4, 4)).toBe(true);
     expect(simulation.wrecks).toHaveLength(1);
     expect(simulation.wrecks[0]).toMatchObject({ generation: 1, tileX: 4, tileY: 4 });
     expect(simulation.world.getKnowledge(4, 4)).toBe(KnowledgeState.Unknown);
+
+    const wreckPosition = { x: simulation.ship.worldX, y: simulation.ship.worldY, heading: simulation.ship.heading };
+    simulation.update({ turn: 1, throttle: 1 }, 3.999);
+    expect(simulation.forceWreck()).toBe(false);
+    simulation.addProvisions(5);
+    simulation.refreshVisibility();
+    expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(false);
+    expect(simulation.ship).toBe(lostShip);
+    expect({ x: simulation.ship.worldX, y: simulation.ship.worldY, heading: simulation.ship.heading }).toEqual(
+      wreckPosition,
+    );
+    expect(simulation.ship.provisions).toBe(0);
+    expect(simulation.wrecks[0].discovered).toBe(false);
+    expect(simulation.generation).toBe(1);
+    expect(simulation.respawnSecondsRemaining).toBeCloseTo(0.001, 6);
+
+    simulation.update({ turn: 1, throttle: 1 }, 0.001);
+
+    expect(simulation.wreckPresentationActive).toBe(false);
+    expect(simulation.respawnSecondsRemaining).toBe(0);
+    expect(simulation.pendingWreckId).toBeNull();
+    expect(simulation.ship).not.toBe(lostShip);
+    expect(simulation.generation).toBe(2);
+    expect(simulation.atDock).toBe(true);
+    expect(simulation.ship.provisions).toBe(simulation.config.provisions.startingBundles);
+    expect(simulation.world.isVisibleNow(4, 4)).toBe(false);
   });
 
   it("charges the outward Unknown leg at roughly twice the Personal return leg", () => {

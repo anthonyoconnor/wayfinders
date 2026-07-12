@@ -187,7 +187,7 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private syncPresentation(force = false): void {
-    this.shipRenderer.sync(this.simulation.ship);
+    this.shipRenderer.sync(this.simulation.ship, !this.simulation.wreckPresentationActive);
     this.wreckRenderer.sync(this.simulation.wrecks, this.simulation.world);
     this.knowledgeOverlay.sync(this.simulation.world, this.simulation.generated.seed, force);
     this.riskOverlay.sync(
@@ -225,6 +225,11 @@ export class TideboundScene extends Phaser.Scene {
       host.dataset.failedExpeditions = String(this.simulation.failedExpeditions);
       host.dataset.atDock = String(this.simulation.atDock);
       host.dataset.wrecks = String(this.simulation.wrecks.length);
+      host.dataset.wreckPresentation = String(this.simulation.wreckPresentationActive);
+      host.dataset.respawnSeconds = this.simulation.respawnSecondsRemaining.toFixed(3);
+      host.dataset.lifecyclePhase = this.simulation.wreckPresentationActive ? "wreck-hold" : "active";
+      host.dataset.inputSuppressed = String(this.simulation.wreckPresentationActive);
+      host.dataset.pendingWreckId = String(this.simulation.pendingWreckId ?? "");
       host.dataset.stranded = String(this.simulation.stranded);
       host.dataset.overlaysRevision = String(this.simulation.overlaysRevision);
       host.dataset.riskBudget = this.simulation.forwardRange.budget.toFixed(3);
@@ -257,7 +262,9 @@ export class TideboundScene extends Phaser.Scene {
     }
     const status = document.querySelector<HTMLElement>("#game-status");
     if (status) {
-      const message = this.simulation.stranded
+      const message = this.simulation.wreckPresentationActive
+        ? `Ship wrecked · next generation departs in ${this.simulation.respawnSecondsRemaining.toFixed(1)}s`
+        : this.simulation.stranded
         ? "Developer zero-cargo state · add a bundle or force a wreck"
         : this.simulation.expeditionActive
         ? "Expedition underway · return to the home dock to secure the route"
@@ -268,6 +275,10 @@ export class TideboundScene extends Phaser.Scene {
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.teleportOnClick) return;
+    if (this.simulation.wreckPresentationActive) {
+      this.log("Teleport is unavailable during the wreck presentation.");
+      return;
+    }
     const tile = worldToGrid(pointer.worldX, pointer.worldY);
     if (this.simulation.teleport(tile)) {
       this.teleportOnClick = false;
@@ -366,6 +377,10 @@ export class TideboundScene extends Phaser.Scene {
       this.inspectNextIsland();
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='teleport-coordinates']")?.addEventListener("click", () => {
+      if (this.simulation.wreckPresentationActive) {
+        this.log("Teleport is unavailable during the wreck presentation.");
+        return;
+      }
       const x = Math.trunc(this.field("teleport-x").valueAsNumber);
       const y = Math.trunc(this.field("teleport-y").valueAsNumber);
       if (!this.simulation.teleport({ x, y })) this.log(`Tile ${x}, ${y} is blocked or outside the world.`);
@@ -380,8 +395,8 @@ export class TideboundScene extends Phaser.Scene {
       this.updateProvisionOutput();
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='force-wreck']")?.addEventListener("click", () => {
-      if (!this.simulation.forceWreck()) this.log("Move outside Supported water before forcing a wreck.");
-      this.updateProvisionOutput();
+      if (this.simulation.wreckPresentationActive) this.log("The wreck presentation is already in progress.");
+      else if (!this.forceWreckForTesting()) this.log("Move outside Supported water before forcing a wreck.");
     }, { signal });
   }
 
@@ -395,6 +410,10 @@ export class TideboundScene extends Phaser.Scene {
 
   private applyLiveConfig(id: string, value: number): void {
     if (!Number.isFinite(value)) return;
+    if (this.simulation.wreckPresentationActive) {
+      this.log("Live gameplay tuning is paused during the wreck presentation.");
+      return;
+    }
     let patch: DeepPartial<PrototypeConfig> | undefined;
     switch (id) {
       case "sight-radius":
@@ -465,6 +484,10 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private inspectNextIsland(): void {
+    if (this.simulation.wreckPresentationActive) {
+      this.log("Island inspection is unavailable during the wreck presentation.");
+      return;
+    }
     const islands = this.simulation.generated.islands;
     if (islands.length === 0) {
       this.log("This seed contains no scattered islands.");
@@ -525,9 +548,7 @@ export class TideboundScene extends Phaser.Scene {
         return this.simulation.snapshot();
       },
       forceWreck: () => {
-        const resolved = this.simulation.forceWreck();
-        this.updateProvisionOutput();
-        return resolved;
+        return this.forceWreckForTesting();
       },
       regenerate: (seed) => {
         this.simulation.regenerate(seed);
@@ -547,6 +568,13 @@ export class TideboundScene extends Phaser.Scene {
     log.scrollTop = log.scrollHeight;
   }
 
+  private forceWreckForTesting(): boolean {
+    const started = this.simulation.forceWreck();
+    if (started) this.clock.reset();
+    this.updateProvisionOutput();
+    return started;
+  }
+
   private bindSimulationEvents(): void {
     this.eventUnsubscribers.push(
       this.simulation.events.on("expeditionReturned", ({ supportedTileCount }) => {
@@ -554,12 +582,27 @@ export class TideboundScene extends Phaser.Scene {
         this.showLifecycleCue("EXPEDITION RETURNED\nROUTE NOW SUPPORTED\nPROVISIONS REPLENISHED", "#d9fff5");
         this.log(`Expedition returned: ${supportedTileCount} Personal tiles became Supported.`);
       }),
-      this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
+      this.simulation.events.on("shipWrecked", ({ generation }) => {
+        const holdMs = Math.max(0, this.simulation.config.simulation.wreckPresentationSeconds * 1000 - 480);
         this.showLifecycleCue(
-          `SHIP LOST AT SEA\nWRECK OF GENERATION ${generation} REMAINS\nGENERATION ${nextGeneration} DEPARTS`,
+          `SHIP LOST AT SEA\nWRECK OF GENERATION ${generation} REMAINS`,
+          "#ffd2aa",
+          holdMs,
+        );
+        this.log(
+          `Generation ${generation}'s ship was wrecked; respawn begins in `
+          + `${this.simulation.config.simulation.wreckPresentationSeconds} seconds.`,
+        );
+      }),
+      this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
+        this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
+        this.showLifecycleCue(
+          `GENERATION ${nextGeneration} DEPARTS\nNEW SHIP AT HOME`,
           "#ffd2aa",
         );
-        this.log(`Generation ${generation} was wrecked; ${forgottenTiles} unreturned tiles were forgotten.`);
+        this.log(
+          `Generation ${generation} lost ${forgottenTiles} unreturned tiles; generation ${nextGeneration} departed.`,
+        );
       }),
       this.simulation.events.on("shipReplenished", ({ reason }) => {
         if (reason !== "dock") return;
@@ -572,7 +615,7 @@ export class TideboundScene extends Phaser.Scene {
     );
   }
 
-  private showLifecycleCue(message: string, color: string): void {
+  private showLifecycleCue(message: string, color: string, holdMs = 1_050): void {
     const cue = this.add.text(this.scale.width / 2, Math.max(90, this.scale.height * 0.17), message, {
       align: "center",
       color,
@@ -589,7 +632,7 @@ export class TideboundScene extends Phaser.Scene {
       y: cue.y - 8,
       duration: 240,
       yoyo: true,
-      hold: 1_050,
+      hold: holdMs,
       onComplete: () => cue.destroy(),
     });
   }

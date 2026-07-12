@@ -79,6 +79,13 @@ describe("prototype configuration", () => {
       "world dimensions are too small for the configured scattered islands",
     );
   });
+
+  it("rejects a non-positive wreck presentation duration", () => {
+    expect(() => patchPrototypeConfig({ simulation: { wreckPresentationSeconds: 0 } })).toThrow(
+      "simulation.wreckPresentationSeconds must be positive",
+    );
+    expect(prototypeConfig.simulation.wreckPresentationSeconds).toBe(4);
+  });
 });
 
 describe("world foundations", () => {

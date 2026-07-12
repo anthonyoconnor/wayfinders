@@ -37,7 +37,8 @@ toggle every overlay, change gameplay values live, and use **Inspect next
 island** to cycle through stable island descriptor order from passable
 inspection points. Removing the final bundle directly creates a recoverable
 developer zero-cargo state; use **Force wreck** to exercise failure
-presentation without sailing until natural consumption reaches zero.
+presentation without sailing until natural consumption reaches zero. Forced
+and natural wrecks use the same four-second transition.
 
 ## Scattered-island inspection
 
@@ -74,11 +75,12 @@ advancing the generation.
 ## Wreck test
 
 1. Begin another expedition and intentionally continue until the last bundle is consumed outside Supported water.
-2. Confirm that the wreck resolves immediately rather than leaving a stranded controllable ship.
+2. Confirm that wreck presentation begins immediately at the loss site: the ship becomes a visible wreck, the camera remains there and controls no longer move it.
 3. Confirm that the failed expedition's Personal trail returns to Unknown while Supported routes earned by earlier successful returns remain.
-4. Confirm that one wreck marker remains at the loss location.
-5. Confirm that a new ship appears at the exact home dock with configured starting bundles and the generation advances by one.
-6. Sail back toward the loss location in the later generation and confirm that the wreck marker becomes discoverable when it enters current line of sight.
+4. For approximately four seconds, confirm that no replacement ship appears and the generation does not advance. The status line counts down the remaining hold.
+5. Confirm that one wreck marker remains at the loss location throughout the hold.
+6. At the end of four seconds, confirm that the generation advances exactly once and a new ship appears at the exact home dock with configured starting bundles.
+7. Sail back toward the loss location in the later generation and confirm that the wreck marker becomes discoverable when it enters current line of sight.
 
 If the last bundle is consumed on the same movement step that enters the exact
 home dock, successful return must take precedence and no wreck should be
@@ -99,7 +101,7 @@ them.
 - Is it clear that only the exact home dock completes an expedition?
 - Does converting the Personal route to Supported make the next voyage meaningfully stronger?
 - Does dock replenishment make repeated voyages flow naturally?
-- Is a wreck immediate, understandable and fair?
+- Does the four-second wreck presentation make the loss clear without feeling too slow?
 - Is it clear that the failed Personal trail was lost while earlier Supported routes survived?
 - Does finding an earlier generation's wreck reinforce the inheritance theme?
 - Is it clear that safe return continues the same generation while only wreck advances it?

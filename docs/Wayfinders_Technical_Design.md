@@ -32,7 +32,9 @@ The prototype must prove this loop:
 5. Read forward travel range and return viability directly from world overlays.
 6. Return to the exact home dock before provisions are exhausted, or wreck outside Supported water.
 7. On return, convert only current expedition-stamped Personal knowledge to Supported water and replenish the ship without advancing the generation.
-8. On wreck, discard only the failed expedition's Personal knowledge, retain a discoverable wreck, respawn at the dock and advance the generation.
+8. On wreck, discard only the failed expedition's Personal knowledge, retain
+   and show a discoverable wreck for four seconds, then respawn at the dock
+   and advance the generation.
 9. Use inherited Supported routes to make later voyages easier within the current generated runtime.
 
 Systems outside this loop are excluded until the loop is playable and readable.
@@ -69,6 +71,7 @@ Use the following implementation decisions:
 - Pathfinding: Dijkstra search over the navigation grid
 - Successful-return tile: the exact generated home dock, not any Supported tile
 - Generation advancement: wreck only; successful return continues the same generation
+- Wreck presentation: four simulation seconds at the loss site before generation advancement and dock respawn
 - Milestone 3 persistence: routes, wrecks and generation state survive within the current generated runtime, but regeneration or browser reload resets them
 - Cross-session save format (Milestone 4): versioned JSON plus compact typed-array data
 
@@ -138,7 +141,13 @@ export const PrototypeConfig = {
   movement: {
     shipSpeed: 2.5,
     turnRate: 180,
-  }
+  },
+
+  simulation: {
+    fixedStepMs: 1000 / 30,
+    maxFrameDeltaMs: 100,
+    wreckPresentationSeconds: 4,
+  },
 };
 ```
 
@@ -182,6 +191,7 @@ The following values must never appear as hardcoded literals outside the configu
 - Ship movement speed
 - Overlay opacity
 - Fog parameters
+- Wreck presentation duration
 - Island count, radii, apron, channels, home clearance, edge margin,
   placement attempts, edge noise, safe corridor and kind weights
 
@@ -732,10 +742,10 @@ difference in whole bundles.
 
 After natural travel consumption, record whether provisions crossed from a
 positive bundle count to zero. If that transition occurs outside Supported
-water, resolve a wreck during the same fixed simulation step. Direct developer
-changes to the provision count do not by themselves resolve a wreck. If the
-same movement step enters the exact home dock, dock resolution takes precedence
-over wreck resolution.
+water, begin the wreck transition during the same fixed simulation step.
+Direct developer changes to the provision count do not by themselves begin a
+wreck. If the same movement step enters the exact home dock, dock resolution
+takes precedence over wreck onset.
 
 ---
 
@@ -763,6 +773,14 @@ interface WreckRecord {
   tileY: number;
   heading: number;
   discovered: boolean;
+}
+
+interface PendingRespawnState {
+  expeditionId: number;
+  generation: number;
+  forgottenTiles: number;
+  wreck: WreckRecord;
+  remainingSeconds: number;
 }
 ```
 
@@ -802,23 +820,37 @@ configured starting bundles and clears the accumulator. It does not change the
 expedition ID or generation, and it should not repeatedly emit replenishment
 events while the ship remains full at the dock.
 
-On a wreck:
+On wreck onset:
 
 1. Create one `WreckRecord` at the ship's final pre-respawn position. Its identity, location, expedition and generation are immutable; only `discovered` may change.
 2. Find tiles which are both Personal and stamped with the failed expedition ID.
 3. Convert only those tiles to Unknown and clear their stamps to zero.
 4. Preserve all previously Supported knowledge and earlier wreck records.
-5. Clear current visibility and mark the expedition inactive.
-6. Increment both the expedition ID and generation exactly once.
-7. Respawn a new ship at the exact home dock with configured starting bundles,
-   a zero fractional accumulator, zero speed and dock-centred visibility.
-8. Recalculate all overlays from the dock state.
+5. Mark the expedition inactive, set the lost ship's speed and provisions to
+   zero, and begin `PendingRespawnState` with the configured four-second hold.
+6. Freeze current sight at the loss site, render the wreck marker, keep the old
+   generation authoritative and suppress movement, teleport, provision edits,
+   repeated forced wrecks and visibility refreshes.
+7. Advance the hold using fixed simulation steps rather than wall-clock timers.
 
-A wreck marker is hidden by Unknown fog until a later generation brings it into
-current line of sight. Discovering it changes the marker's `discovered` flag but
-does not restore the failed expedition's Personal knowledge. The discovered
-flag remains set through later runtime voyages and wrecks even when the marker
-leaves current sight.
+When the hold reaches four seconds:
+
+1. Clear loss-site visibility and advance the expedition ID and generation
+   exactly once.
+2. Create a new ship at the exact home dock with configured starting bundles,
+   a zero fractional accumulator, zero speed and dock-centred visibility.
+3. Recalculate all overlays from the dock state and centre the camera on the
+   replacement ship.
+4. Discard timer overshoot and buffered fixed substeps so held input cannot move
+   the new ship during the completion frame.
+
+During the four-second hold, frozen current sight deliberately shows the new
+wreck marker without marking it discovered. Wreck completion clears that
+visibility, so the marker is then hidden by Unknown fog until a later
+generation brings it into current line of sight. Discovering it changes the
+marker's `discovered` flag but does not restore the failed expedition's
+Personal knowledge. The discovered flag remains set through later runtime
+voyages and wrecks even when the marker leaves current sight.
 
 Supported routes and `WreckRecord` objects persist across later expeditions and
 wrecks in the current generated runtime. Regenerating the world or reloading the
@@ -1271,7 +1303,9 @@ expeditionFailed: { expeditionId, generation, forgottenTiles, nextGeneration, wr
 
 When a final bundle is spent on the step which enters the exact home dock,
 emit successful-return and replenishment events, not wreck events. A wreck
-emits `shipWrecked` before `generationAdvanced` and respawn replenishment.
+emits `shipWrecked` at onset. Four simulation seconds later, completion emits
+`generationAdvanced`, respawn replenishment and `expeditionFailed`, in that
+order. No completion event is emitted during the hold.
 
 Renderers respond to events or dirty flags. They must not poll the entire world every frame.
 
@@ -1295,6 +1329,7 @@ The development build must provide toggles for:
 - active expedition ID and generation;
 - island IDs, kinds, sizes, bounds and placement-clearance diagnostics;
 - runtime wreck records and discovered state.
+- wreck-transition phase, remaining hold time, input suppression and pending wreck ID.
 
 Debug visuals may be numeric and tile-based. Release visuals must hide them.
 
@@ -1380,7 +1415,13 @@ Required unit tests:
 - successful return replenishes configured starting bundles, clears the fractional accumulator and keeps the same generation;
 - entering the dock without an active expedition replenishes supplies without changing expedition ID or generation;
 - a final bundle spent on the docking step resolves as success rather than wreck;
-- natural supply exhaustion outside Supported water resolves exactly one immediate wreck;
+- natural supply exhaustion outside Supported water begins exactly one immediate wreck transition;
+- wreck onset keeps the same ship, position, heading and generation authoritative for 3.999 seconds;
+- movement and mutating developer controls cannot alter the wreck hold;
+- the 4.000-second boundary advances generation and respawns exactly once;
+- large timer deltas discard overshoot rather than moving the new dock ship;
+- regeneration cancels a pending respawn without delayed completion events;
+- natural and forced wrecks use the same transition;
 - a wreck reverts only failed-expedition Personal tiles and clears their stamps;
 - previous Supported knowledge and earlier wreck records remain after a later wreck;
 - a wreck marker is recorded at the pre-respawn position and becomes discoverable by later generations;
@@ -1532,10 +1573,11 @@ Completion condition: the player can visually identify both remaining forward re
 - Convert only current expedition-stamped Personal tiles to Supported and clear their stamps.
 - Replenish at the dock while keeping the same generation after success.
 - Replenish on entering the dock without an active expedition.
-- Resolve immediate wreck on natural supply exhaustion outside Supported water.
+- Begin the wreck transition immediately on natural supply exhaustion outside Supported water.
 - Revert only failed-expedition Personal tiles to Unknown while preserving earlier Supported routes.
 - Create a discoverable runtime wreck marker.
-- Respawn a fully supplied ship at the dock and advance generation only after wreck.
+- Hold the visible wreck at the loss site with input suppressed for four seconds.
+- Respawn a fully supplied ship at the dock and advance generation only when the hold completes.
 - Retain routes and wrecks until regeneration or browser reload.
 
 Completion condition: repeated voyages expand the runtime world only after
@@ -1588,24 +1630,25 @@ when all of the following are true:
 17. Successful return converts only current expedition-stamped Personal knowledge to Supported and clears those stamps.
 18. Successful return restores configured starting bundles, clears fractional provision use and keeps the same generation.
 19. Entering the home dock without an active expedition also replenishes supplies without changing generation.
-20. Natural supply exhaustion outside Supported water causes an immediate wreck unless the same step successfully enters the dock.
+20. Natural supply exhaustion outside Supported water immediately begins a wreck transition unless the same step successfully enters the dock.
 21. Wreck removes only failed-expedition Personal knowledge; previous Supported knowledge survives.
 22. Wreck leaves a world marker which a later generation can discover.
-23. Wreck respawns a fully provisioned ship at the dock and advances generation exactly once.
-24. Successful return never advances generation.
-25. Supported routes and wrecks survive later expeditions and wrecks in the same generated runtime.
-26. Regeneration or browser reload resets runtime routes, wrecks and generation before Milestone 4 persistence exists.
-27. Normal exploration contains no numerical resource bar or route forecast.
-28. The prototype maintains the performance targets on desktop and mobile browsers.
-29. The default configuration generates eight non-home islands with stable IDs and descriptors.
-30. Regenerating the same seed reproduces island kind, size, centre, radii, rotation, shape seed, bounds and painted terrain.
-31. High Island, Low Cay, Atoll and Rocky Skerry kinds and small, medium and large sizes all appear in the default set.
-32. Islands respect configured home exclusion, world margins and minimum channel width.
-33. The complete eastbound home-dock corridor remains clear and passable ocean reaches all four world edges.
-34. Fully opaque Unknown fog prevents terrain or decoration from silhouetting before reveal.
-35. Revealed islands use functional developer art and authoritative terrain collision and sight blocking.
-36. Milestone 3 islands have no names, rewards, settlements, resource records or generic discovery records.
-37. Developer tools can inspect the stable descriptor list using **Inspect next island**.
+23. The wreck remains visibly at the loss site with input suppressed and the old generation authoritative for four seconds.
+24. Wreck completion respawns a fully provisioned ship at the dock and advances generation exactly once.
+25. Successful return never advances generation.
+26. Supported routes and wrecks survive later expeditions and wrecks in the same generated runtime.
+27. Regeneration or browser reload resets runtime routes, wrecks and generation before Milestone 4 persistence exists.
+28. Normal exploration contains no numerical resource bar or route forecast.
+29. The prototype maintains the performance targets on desktop and mobile browsers.
+30. The default configuration generates eight non-home islands with stable IDs and descriptors.
+31. Regenerating the same seed reproduces island kind, size, centre, radii, rotation, shape seed, bounds and painted terrain.
+32. High Island, Low Cay, Atoll and Rocky Skerry kinds and small, medium and large sizes all appear in the default set.
+33. Islands respect configured home exclusion, world margins and minimum channel width.
+34. The complete eastbound home-dock corridor remains clear and passable ocean reaches all four world edges.
+35. Fully opaque Unknown fog prevents terrain or decoration from silhouetting before reveal.
+36. Revealed islands use functional developer art and authoritative terrain collision and sight blocking.
+37. Milestone 3 islands have no names, rewards, settlements, resource records or generic discovery records.
+38. Developer tools can inspect the stable descriptor list using **Inspect next island**.
 
 Milestone 4 is complete when save/load preserves Supported routes, wreck
 records, generation state, discovered wreck state and returned generic

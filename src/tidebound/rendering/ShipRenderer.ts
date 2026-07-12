@@ -34,8 +34,9 @@ export class ShipRenderer {
     this.container = scene.add.container(0, 0, [this.wake, this.hull]).setDepth(50);
   }
 
-  sync(state: Readonly<ShipState>): void {
+  sync(state: Readonly<ShipState>, visible = true): void {
     this.container
+      .setVisible(visible)
       .setPosition(state.worldX, state.worldY)
       .setRotation(Phaser.Math.DegToRad(state.heading));
     const moving = Math.abs(state.speed) > prototypeConfig.navigation.tileSize * 0.05;

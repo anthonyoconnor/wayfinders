@@ -55,6 +55,9 @@ export interface SimulationSnapshot {
     successfulReturns: number;
     failures: number;
     atDock: boolean;
+    wreckPresentationActive: boolean;
+    respawnSecondsRemaining: number;
+    pendingWreckId: number | null;
   };
   wrecks: readonly Readonly<ShipwreckState>[];
   debug: Readonly<DebugVisibilityState>;
@@ -67,6 +70,14 @@ const NO_MOVEMENT: MovementResult = {
   segments: [],
   tileChanged: false,
 };
+
+interface PendingRespawnState {
+  expeditionId: number;
+  generation: number;
+  forgottenTiles: number;
+  wreck: ShipwreckState;
+  remainingSeconds: number;
+}
 
 /**
  * Phaser-independent owner of the live prototype state. Presentation adapters
@@ -103,6 +114,7 @@ export class GameSimulation {
   private returnCount = 0;
   private failureCount = 0;
   private readonly shipwrecks: ShipwreckState[] = [];
+  private pendingRespawn?: PendingRespawnState;
 
   constructor(readonly config: PrototypeConfig = prototypeConfig) {
     this.generator = new WorldGenerator(config);
@@ -137,18 +149,32 @@ export class GameSimulation {
     return this.shipwrecks;
   }
 
+  get wreckPresentationActive(): boolean {
+    return this.pendingRespawn !== undefined;
+  }
+
+  get respawnSecondsRemaining(): number {
+    return this.pendingRespawn?.remainingSeconds ?? 0;
+  }
+
+  get pendingWreckId(): number | null {
+    return this.pendingRespawn?.wreck.id ?? null;
+  }
+
   get atDock(): boolean {
     return this.isDockTile(this.ship.currentTileX, this.ship.currentTileY);
   }
 
-  /** Only developer-created zero-cargo states remain stranded; natural exhaustion resolves immediately. */
+  /** Only developer-created zero-cargo states remain stranded outside the timed wreck transition. */
   get stranded(): boolean {
+    if (this.pendingRespawn) return false;
     if (this.ship.provisions > 0 || this.atDock) return false;
     const knowledge = this.world.getKnowledge(this.ship.currentTileX, this.ship.currentTileY);
     return knowledge !== KnowledgeState.Supported || knowledgeTravelCost(knowledge, this.config) > 0;
   }
 
   update(input: MovementInput, deltaSeconds: number): MovementResult {
+    if (this.pendingRespawn) return this.advanceWreckPresentation(deltaSeconds);
     const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     const previousKnowledge = this.world.getKnowledge(previousTile.x, previousTile.y);
     const previousBundles = this.ship.provisions;
@@ -200,7 +226,7 @@ export class GameSimulation {
       }
     }
 
-    if (exhaustedNaturally && !this.isInSupportedWater()) {
+    if (exhaustedNaturally && !this.pendingRespawn && !this.isInSupportedWater()) {
       if (!this.activeExpedition) this.startExpedition();
       knowledgeChanged += this.failExpedition();
       lifecycleChanged = true;
@@ -228,6 +254,7 @@ export class GameSimulation {
     this.returnCount = 0;
     this.failureCount = 0;
     this.shipwrecks.length = 0;
+    this.pendingRespawn = undefined;
     this.ship = createShipStateAtGrid(
       this.generated.landmarks.dock,
       this.config.provisions.startingBundles,
@@ -249,6 +276,7 @@ export class GameSimulation {
   }
 
   teleport(tile: GridPoint): boolean {
+    if (this.pendingRespawn) return false;
     if (!this.world.inBounds(tile.x, tile.y) || this.world.isMovementBlocked(tile.x, tile.y)) return false;
     const targetKnowledge = this.world.getKnowledge(tile.x, tile.y);
     if (!this.activeExpedition && targetKnowledge !== KnowledgeState.Supported) this.startExpedition();
@@ -270,6 +298,7 @@ export class GameSimulation {
   }
 
   refreshVisibility(): void {
+    if (this.pendingRespawn) return;
     const tile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
     const visibility = this.visibility.updateAt(tile);
@@ -281,6 +310,7 @@ export class GameSimulation {
   }
 
   setProvisions(value: number): void {
+    if (this.pendingRespawn) return;
     const previous = this.ship.provisions;
     const current = Math.max(0, Math.floor(Number.isFinite(value) ? value : previous));
     const accumulatorWillReset = current === 0 && this.ship.provisionAccumulator !== 0;
@@ -300,6 +330,7 @@ export class GameSimulation {
 
   /** Deterministic sandbox hook; normal play reaches this outcome through travel consumption. */
   forceWreck(): boolean {
+    if (this.pendingRespawn) return false;
     if (this.isInSupportedWater()) return false;
     if (!this.activeExpedition) this.startExpedition();
     const knowledgeChanged = this.failExpedition();
@@ -359,6 +390,9 @@ export class GameSimulation {
         successfulReturns: this.returnCount,
         failures: this.failureCount,
         atDock: this.atDock,
+        wreckPresentationActive: this.wreckPresentationActive,
+        respawnSecondsRemaining: this.respawnSecondsRemaining,
+        pendingWreckId: this.pendingWreckId,
       },
       wrecks: this.shipwrecks.map((wreck) => ({ ...wreck })),
       debug: { ...this.debug },
@@ -366,7 +400,7 @@ export class GameSimulation {
   }
 
   private startExpedition(): void {
-    if (this.activeExpedition) return;
+    if (this.activeExpedition || this.pendingRespawn) return;
     this.activeExpedition = true;
     this.events.emit("expeditionStarted", {
       expeditionId: this.expeditionId,
@@ -420,7 +454,24 @@ export class GameSimulation {
     };
     this.shipwrecks.push(wreck);
     const reverted = this.knowledge.revertExpedition(expeditionId);
-    this.world.clearVisibility();
+    const previousProvisions = lostShip.provisions;
+    lostShip.provisions = 0;
+    lostShip.provisionAccumulator = 0;
+    lostShip.speed = 0;
+    this.activeExpedition = false;
+    this.failureCount++;
+    this.pendingRespawn = {
+      expeditionId,
+      generation,
+      forgottenTiles: reverted.changedCount,
+      wreck,
+      remainingSeconds: this.config.simulation.wreckPresentationSeconds,
+    };
+    this.lastMovement = NO_MOVEMENT;
+    this.lifecycleResolutionRevision++;
+    if (previousProvisions !== 0) {
+      this.events.emit("provisionsChanged", { previous: previousProvisions, current: 0 });
+    }
     this.events.emit("shipWrecked", {
       wreckId: wreck.id,
       expeditionId,
@@ -430,18 +481,31 @@ export class GameSimulation {
       worldX: wreck.worldX,
       worldY: wreck.worldY,
     });
-    this.activeExpedition = false;
-    this.failureCount++;
+    return reverted.changedCount;
+  }
+
+  private advanceWreckPresentation(deltaSeconds: number): MovementResult {
+    if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) {
+      throw new RangeError("deltaSeconds must be finite and non-negative");
+    }
+    const pending = this.pendingRespawn;
+    if (!pending) return NO_MOVEMENT;
+
+    this.ship.speed = 0;
+    this.lastMovement = NO_MOVEMENT;
+    if (deltaSeconds === 0) return NO_MOVEMENT;
+
+    pending.remainingSeconds = Math.max(0, pending.remainingSeconds - deltaSeconds);
+    if (pending.remainingSeconds <= 1e-9) this.completePendingRespawn(pending);
+    return NO_MOVEMENT;
+  }
+
+  private completePendingRespawn(pending: PendingRespawnState): void {
+    this.pendingRespawn = undefined;
+    this.world.clearVisibility();
     this.currentGeneration++;
-    this.events.emit("generationAdvanced", {
-      previousGeneration: generation,
-      generation: this.currentGeneration,
-      reason: "wreck",
-    });
     this.advanceExpeditionId();
 
-    const previousProvisions = lostShip.provisions;
-    const previousAccumulator = lostShip.provisionAccumulator;
     this.ship = createShipStateAtGrid(
       this.generated.landmarks.homeReturnTile,
       this.config.provisions.startingBundles,
@@ -450,22 +514,28 @@ export class GameSimulation {
     );
     this.visibility.updateAt(this.generated.landmarks.homeReturnTile);
     this.lastMovement = NO_MOVEMENT;
+    this.recalculateRiskOverlays();
+    this.lifecycleResolutionRevision++;
+    this.revision++;
+    this.events.emit("generationAdvanced", {
+      previousGeneration: pending.generation,
+      generation: this.currentGeneration,
+      reason: "wreck",
+    });
     this.emitReplenishment(
-      previousProvisions,
-      previousAccumulator,
+      0,
+      0,
       this.ship.provisions,
       "respawn",
       true,
     );
-    this.lifecycleResolutionRevision++;
     this.events.emit("expeditionFailed", {
-      expeditionId,
-      generation,
-      forgottenTiles: reverted.changedCount,
+      expeditionId: pending.expeditionId,
+      generation: pending.generation,
+      forgottenTiles: pending.forgottenTiles,
       nextGeneration: this.currentGeneration,
-      wreck: { ...wreck },
+      wreck: { ...pending.wreck },
     });
-    return reverted.changedCount;
   }
 
   private replenishCurrentShip(reason: ReplenishmentReason, forceEvent = false): boolean {

@@ -141,13 +141,16 @@ what survives into later voyages and generations.
     successful return
 -   Provision replenishment when the ship enters the home dock without an
     active expedition
--   Immediate wreck when provisions are exhausted outside Supported water
+-   Immediate wreck onset when provisions are exhausted outside Supported
+    water, followed by a four-second uncontrollable presentation at the loss
+    site
 -   Failed-expedition Personal knowledge returns to Unknown while previously
     Supported knowledge survives
 -   A wreck remains in the world as a discoverable marker for later
     generations
--   A wreck respawns a fully provisioned ship at the home dock and advances
-    the generation; successful return does not advance the generation
+-   After the four-second wreck presentation, a fully provisioned ship
+    respawns at the home dock and advances the generation; successful return
+    does not advance the generation
 
 ## Success Criteria
 
@@ -174,11 +177,12 @@ again along the new route.
 Entering the home dock without an active expedition also replenishes the
 configured starting bundles without changing expedition or generation state.
 
-Exhausting provisions outside Supported water immediately causes a wreck.
-The failed expedition's Personal knowledge is lost, earlier Supported routes
-remain, the wreck can be discovered by a later generation, and a fully
-provisioned new ship begins at the home dock with the generation advanced by
-one.
+Exhausting provisions outside Supported water immediately begins a wreck
+transition. The failed expedition's Personal knowledge is lost, earlier
+Supported routes remain, and the wreck is shown at the loss site for four
+seconds while controls are disabled. Only after that presentation does a fully
+provisioned new ship begin at the home dock with the generation advanced by
+one. The wreck remains discoverable by a later generation.
 
 Routes, wrecks and generation state persist for the current generated runtime.
 Regenerating the world or reloading the browser resets them; cross-session
@@ -258,7 +262,8 @@ The purpose of this review is to determine whether the complete runtime loop
 is compelling enough to justify further investment:
 
 Depart -> explore -> judge risk -> return or wreck -> resolve knowledge ->
-replenish or respawn -> continue with the same or next generation.
+show the loss -> replenish or respawn -> continue with the same or next
+generation.
 
 ## Questions to Answer
 
@@ -270,7 +275,8 @@ replenish or respawn -> continue with the same or next generation.
 - Does returning home feel rewarding?
 - Does converting a returned Personal route to Supported water make the next voyage meaningfully stronger?
 - Does replenishment at the home dock make repeated voyages flow naturally?
-- Is a wreck immediate, understandable and fair?
+- Does the immediate wreck onset and four-second loss presentation feel clear,
+  fair and appropriately paced?
 - Is it clear that failed Personal knowledge was lost while earlier Supported routes survived?
 - Does discovering an earlier generation's wreck reinforce the inheritance theme?
 - Is it clear that safe return continues the same generation while only wreck advances it?

@@ -58,6 +58,7 @@ export interface PrototypeConfig {
   simulation: {
     fixedStepMs: number;
     maxFrameDeltaMs: number;
+    wreckPresentationSeconds: number;
   };
 }
 
@@ -140,6 +141,7 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
   simulation: {
     fixedStepMs: 1000 / 30,
     maxFrameDeltaMs: 100,
+    wreckPresentationSeconds: 4,
   },
 });
 
@@ -331,6 +333,7 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
 
   positive(config.simulation.fixedStepMs, "simulation.fixedStepMs");
   positive(config.simulation.maxFrameDeltaMs, "simulation.maxFrameDeltaMs");
+  positive(config.simulation.wreckPresentationSeconds, "simulation.wreckPresentationSeconds");
 
   finite(config.world.seed, "world.seed");
 

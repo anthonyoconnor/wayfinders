@@ -38,6 +38,13 @@ function findRemoteSupportedWater(simulation: GameSimulation): GridPoint {
   return result;
 }
 
+function completeWreckPresentation(simulation: GameSimulation): void {
+  simulation.update(
+    { turn: 0, throttle: 0 },
+    simulation.config.simulation.wreckPresentationSeconds,
+  );
+}
+
 describe("KnowledgeSystem expedition resolution", () => {
   it("commits or reverts only Personal tiles stamped by the resolved expedition", () => {
     const world = new WorldGrid(5, 1, 5);
@@ -138,13 +145,14 @@ describe("GameSimulation expedition lifecycle", () => {
     expect(simulation.forceWreck()).toBe(true);
 
     expect(simulation.world).toBe(world);
-    expect(simulation.ship).not.toBe(lostShip);
-    expect(simulation.atDock).toBe(true);
+    expect(simulation.ship).toBe(lostShip);
+    expect(simulation.wreckPresentationActive).toBe(true);
+    expect(simulation.atDock).toBe(false);
     expect(simulation.expeditionActive).toBe(false);
-    expect(simulation.generation).toBe(2);
+    expect(simulation.generation).toBe(1);
     expect(simulation.failedExpeditions).toBe(1);
-    expect(simulation.currentExpeditionId).toBe(3);
-    expect(simulation.ship.provisions).toBe(simulation.config.provisions.startingBundles);
+    expect(simulation.currentExpeditionId).toBe(2);
+    expect(simulation.ship.provisions).toBe(0);
     expect(simulation.ship.provisionAccumulator).toBe(0);
     expect(simulation.world.getKnowledge(firstTarget.x, firstTarget.y)).toBe(KnowledgeState.Supported);
     expect(simulation.world.getKnowledge(secondTarget.x, secondTarget.y)).toBe(KnowledgeState.Unknown);
@@ -159,6 +167,15 @@ describe("GameSimulation expedition lifecycle", () => {
       tileY: secondTarget.y,
       discovered: false,
     });
+
+    completeWreckPresentation(simulation);
+
+    expect(simulation.ship).not.toBe(lostShip);
+    expect(simulation.wreckPresentationActive).toBe(false);
+    expect(simulation.atDock).toBe(true);
+    expect(simulation.generation).toBe(2);
+    expect(simulation.currentExpeditionId).toBe(3);
+    expect(simulation.ship.provisions).toBe(simulation.config.provisions.startingBundles);
 
     expect(simulation.teleport(secondTarget)).toBe(true);
     expect(simulation.wrecks[0].discovered).toBe(true);
@@ -214,13 +231,27 @@ describe("GameSimulation expedition lifecycle", () => {
     });
     simulation.events.on("expeditionFailed", () => eventOrder.push("failed"));
 
-    for (let step = 0; step < 700 && simulation.generation === 1; step++) {
+    for (let step = 0; step < 700 && !simulation.wreckPresentationActive; step++) {
       simulation.update({ turn: 0, throttle: 1 }, 1 / 30);
     }
 
-    expect(simulation.generation).toBe(2);
+    expect(simulation.wreckPresentationActive).toBe(true);
+    expect(simulation.generation).toBe(1);
     expect(simulation.failedExpeditions).toBe(1);
     expect(simulation.wrecks).toHaveLength(1);
+    expect(simulation.atDock).toBe(false);
+    expect(simulation.ship.provisions).toBe(0);
+    expect(eventOrder).toEqual(["wreck"]);
+
+    simulation.update({ turn: 0, throttle: 1 }, 3.999);
+    expect(simulation.wreckPresentationActive).toBe(true);
+    expect(simulation.generation).toBe(1);
+    expect(eventOrder).toEqual(["wreck"]);
+
+    simulation.update({ turn: 0, throttle: 1 }, 0.001);
+
+    expect(simulation.wreckPresentationActive).toBe(false);
+    expect(simulation.generation).toBe(2);
     expect(simulation.atDock).toBe(true);
     expect(simulation.ship.provisions).toBe(1);
     expect(eventOrder).toEqual(["wreck", "generation", "replenished", "failed"]);
@@ -244,17 +275,43 @@ describe("GameSimulation expedition lifecycle", () => {
     expect(simulation.successfulReturns).toBe(1);
     expect(simulation.failedExpeditions).toBe(0);
     expect(simulation.wrecks).toHaveLength(0);
+    expect(simulation.wreckPresentationActive).toBe(false);
     expect(wreckEvents).toHaveLength(0);
     expect(simulation.ship.provisions).toBe(simulation.config.provisions.startingBundles);
     expect(simulation.ship.provisionAccumulator).toBe(0);
   });
 
+  it("discards wreck-timer overshoot without moving the newly respawned ship", () => {
+    const simulation = new GameSimulation();
+    expect(simulation.teleport(findUnknownWater(simulation))).toBe(true);
+    expect(simulation.forceWreck()).toBe(true);
+
+    simulation.update(
+      { turn: 1, throttle: 1 },
+      simulation.config.simulation.wreckPresentationSeconds + 1,
+    );
+
+    expect(simulation.wreckPresentationActive).toBe(false);
+    expect(simulation.generation).toBe(2);
+    expect(simulation.atDock).toBe(true);
+    expect(simulation.ship.heading).toBe(0);
+    expect(simulation.ship.speed).toBe(0);
+    expect(simulation.lastMovement.movedDistancePixels).toBe(0);
+  });
+
   it("treats regeneration as an explicit reset of routes, wrecks, and generation history", () => {
     const simulation = new GameSimulation();
+    const canceledCompletionEvents: string[] = [];
+    simulation.events.on("generationAdvanced", () => canceledCompletionEvents.push("generation"));
+    simulation.events.on("shipReplenished", ({ reason }) => {
+      if (reason === "respawn") canceledCompletionEvents.push("replenished");
+    });
+    simulation.events.on("expeditionFailed", () => canceledCompletionEvents.push("failed"));
     expect(simulation.teleport(findUnknownWater(simulation))).toBe(true);
     simulation.setProvisions(0);
     expect(simulation.forceWreck()).toBe(true);
-    expect(simulation.generation).toBe(2);
+    expect(simulation.wreckPresentationActive).toBe(true);
+    expect(simulation.generation).toBe(1);
     expect(simulation.wrecks).toHaveLength(1);
 
     simulation.regenerate(simulation.generated.seed);
@@ -264,6 +321,11 @@ describe("GameSimulation expedition lifecycle", () => {
     expect(simulation.successfulReturns).toBe(0);
     expect(simulation.failedExpeditions).toBe(0);
     expect(simulation.wrecks).toHaveLength(0);
+    expect(simulation.wreckPresentationActive).toBe(false);
     expect(simulation.atDock).toBe(true);
+
+    simulation.update({ turn: 0, throttle: 0 }, simulation.config.simulation.wreckPresentationSeconds + 1);
+    expect(canceledCompletionEvents).toEqual([]);
+    expect(simulation.generation).toBe(1);
   });
 });
