@@ -48,22 +48,25 @@ describe("GameSimulation exploration integration", () => {
     expect(simulation.world.getKnowledge(midpoint.x, midpoint.y)).toBe(KnowledgeState.Unknown);
   });
 
-  it("halts an out-of-provisions ship beyond Supported water and resumes after a bundle is added", () => {
+  it("wrecks an out-of-provisions ship and respawns the next generation at the dock", () => {
     const simulation = new GameSimulation();
     expect(simulation.teleport({ x: 4, y: 4 })).toBe(true);
     expect(simulation.world.getKnowledge(4, 4)).toBe(KnowledgeState.Personal);
-    simulation.ship.heading = 0;
+    const lostShip = simulation.ship;
+    const world = simulation.world;
     simulation.setProvisions(0);
-    const before = { x: simulation.ship.worldX, y: simulation.ship.worldY };
-
-    simulation.update({ turn: 0, throttle: 1 }, 1);
     expect(simulation.stranded).toBe(true);
-    expect({ x: simulation.ship.worldX, y: simulation.ship.worldY }).toEqual(before);
+    expect(simulation.forceWreck()).toBe(true);
 
-    simulation.addProvisions(1);
-    simulation.update({ turn: 0, throttle: 1 }, 0.25);
-    expect(simulation.stranded).toBe(false);
-    expect(simulation.ship.worldX).toBeGreaterThan(before.x);
+    expect(simulation.world).toBe(world);
+    expect(simulation.ship).not.toBe(lostShip);
+    expect(simulation.generation).toBe(2);
+    expect(simulation.failedExpeditions).toBe(1);
+    expect(simulation.atDock).toBe(true);
+    expect(simulation.ship.provisions).toBe(simulation.config.provisions.startingBundles);
+    expect(simulation.wrecks).toHaveLength(1);
+    expect(simulation.wrecks[0]).toMatchObject({ generation: 1, tileX: 4, tileY: 4 });
+    expect(simulation.world.getKnowledge(4, 4)).toBe(KnowledgeState.Unknown);
   });
 
   it("charges the outward Unknown leg at roughly twice the Personal return leg", () => {
@@ -95,15 +98,18 @@ describe("GameSimulation exploration integration", () => {
     expect(returnCost).toBeLessThan(outwardCost * 0.7);
   });
 
-  it("honours a live non-zero Supported cost when cargo is empty", () => {
+  it("honours a live non-zero Supported cost when cargo is empty away from the dock", () => {
     patchPrototypeConfig({ provisions: { supportedCost: 1 } });
     const simulation = new GameSimulation();
+    const dock = simulation.generated.landmarks.dock;
+    expect(simulation.teleport({ x: dock.x + 1, y: dock.y })).toBe(true);
     simulation.setProvisions(0);
-    const before = simulation.ship.worldX;
-
+    const before = { x: simulation.ship.worldX, y: simulation.ship.worldY };
     simulation.update({ turn: 0, throttle: 1 }, 0.5);
 
     expect(simulation.stranded).toBe(true);
-    expect(simulation.ship.worldX).toBe(before);
+    expect(simulation.generation).toBe(1);
+    expect(simulation.wrecks).toHaveLength(0);
+    expect({ x: simulation.ship.worldX, y: simulation.ship.worldY }).toEqual(before);
   });
 });

@@ -107,11 +107,12 @@ knowledge while the surrounding unknown remains hidden.
 
 ------------------------------------------------------------------------
 
-# Milestone 3 --- Risk
+# Milestone 3 --- Risk, Return and Inheritance
 
 ## Goal
 
-Distance creates meaningful decisions.
+Distance creates meaningful decisions, and expedition outcomes determine
+what survives into later voyages and generations.
 
 ## Features
 
@@ -119,32 +120,68 @@ Distance creates meaningful decisions.
 -   Different movement costs for Supported, Personal and Unknown water
 -   Forward exploration range overlay
 -   Return viability overlay
+-   Expedition begins when the ship leaves Supported water
+-   Successful expedition return only at the exact home dock
+-   Current expedition-stamped Personal knowledge becomes Supported water
+    on successful return
+-   Consequential, runtime-persistent route creation for later voyages in the
+    current generated runtime
+-   Provision replenishment to the configured starting bundle count after a
+    successful return
+-   Provision replenishment when the ship enters the home dock without an
+    active expedition
+-   Immediate wreck when provisions are exhausted outside Supported water
+-   Failed-expedition Personal knowledge returns to Unknown while previously
+    Supported knowledge survives
+-   A wreck remains in the world as a discoverable marker for later
+    generations
+-   A wreck respawns a fully provisioned ship at the home dock and advances
+    the generation; successful return does not advance the generation
 
 ## Success Criteria
 
 The player can decide whether to continue exploring or return home using
 only information presented in the world, without numerical UI.
 
+A successful expedition ends only at the exact home dock. Only Personal
+tiles stamped for that expedition become Supported, their stamps are
+cleared, provisions are replenished, and the same generation can depart
+again along the new route.
+
+Entering the home dock without an active expedition also replenishes the
+configured starting bundles without changing expedition or generation state.
+
+Exhausting provisions outside Supported water immediately causes a wreck.
+The failed expedition's Personal knowledge is lost, earlier Supported routes
+remain, the wreck can be discovered by a later generation, and a fully
+provisioned new ship begins at the home dock with the generation advanced by
+one.
+
+Routes, wrecks and generation state persist for the current generated runtime.
+Regenerating the world or reloading the browser resets them; cross-session
+persistence belongs to Milestone 4.
+
 ------------------------------------------------------------------------
 
-# Milestone 4 --- Legacy
+# Milestone 4 --- Discoveries and Persistence
 
 ## Goal
 
-Returning safely permanently changes the world.
+The inheritance loop proven in Milestone 3 survives reloads and gains
+meaningful discoveries.
 
 ## Features
 
--   Successful expedition return
--   Personal knowledge becomes Supported water
--   Permanent route creation
 -   Discoveries
 -   Save and load
+-   Cross-session persistence for Supported routes, wrecks, generation state
+    and returned discoveries
 
 ## Success Criteria
 
-Every successful expedition permanently expands the known world and
-makes future expeditions easier.
+Reloading a saved game preserves the routes, wrecks, generation state and
+returned discoveries created by earlier play, while discoveries provide new
+reasons to undertake expeditions.
 
 ------------------------------------------------------------------------
 
@@ -180,18 +217,23 @@ The prototype is considered complete when:
 -   The complete loop is enjoyable enough to justify building larger
     game systems on top of it.
 
-At this point the project is ready to move on to long-term mechanics
-such as generations, trading, settlement growth, reputation, and a
-living economy.
+At this point the project is ready to move on to deeper generational mechanics
+such as named navigators, aging, traits and family lines, as well as trading,
+settlement growth, reputation, and a living economy.
 
 
 ---
 
 # Prototype Review Gate
 
-At the completion of **Milestone 3 (Risk)**, development pauses for an explicit project review.
+At the completion of **Milestone 3 (Risk, Return and Inheritance)**,
+development pauses for an explicit project review.
 
-The purpose of this review is to determine whether the core exploration loop is compelling enough to justify further investment.
+The purpose of this review is to determine whether the complete runtime loop
+is compelling enough to justify further investment:
+
+Depart -> explore -> judge risk -> return or wreck -> resolve knowledge ->
+replenish or respawn -> continue with the same or next generation.
 
 ## Questions to Answer
 
@@ -201,6 +243,12 @@ The purpose of this review is to determine whether the core exploration loop is 
 - Does the player naturally understand when to turn back?
 - Do the overlays communicate enough information without requiring numerical UI?
 - Does returning home feel rewarding?
+- Does converting a returned Personal route to Supported water make the next voyage meaningfully stronger?
+- Does replenishment at the home dock make repeated voyages flow naturally?
+- Is a wreck immediate, understandable and fair?
+- Is it clear that failed Personal knowledge was lost while earlier Supported routes survived?
+- Does discovering an earlier generation's wreck reinforce the inheritance theme?
+- Is it clear that safe return continues the same generation while only wreck advances it?
 - Would repeated expeditions remain engaging?
 
 ## Decision
@@ -209,7 +257,9 @@ A deliberate decision must be made before continuing:
 
 ### Proceed
 
-Continue with Milestones 4 and 5, begin replacing developer art with production-quality assets, and expand the game with permanent discoveries and a living world.
+Continue with Milestones 4 and 5, add discoveries and cross-session
+persistence, begin replacing developer art with production-quality assets,
+and expand the game into a living world.
 
 ### Rework
 

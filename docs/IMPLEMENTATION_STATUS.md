@@ -45,7 +45,7 @@ Status: complete
 
 Verification: TypeScript check, 23 unit tests, production build, and an in-browser voyage from Supported into Unknown water pass. The browser voyage produced 166 Personal tiles while current sight remained bounded to 81 tiles.
 
-## Milestone 3 — Risk
+## Milestone 3 — Risk, Return and Inheritance
 
 Status: complete — stop here for user playtesting
 
@@ -57,12 +57,30 @@ Status: complete — stop here for user playtesting
 - Reusable WebGL-rendered forward and return textures with dotted, diagonal and crosshatched accessibility treatments.
 - World legend uses words and patterns without exposing resource arithmetic.
 - Current sight remains full colour; return risk appears only on Personal water behind the ship.
-- Empty cargo stops propulsion outside Supported water and leaves developer recovery available.
-- Re-entering Supported water gives a brief safe-passage cue without applying Milestone 4 progression.
+- An expedition starts when the ship leaves Supported water and remains active when crossing Supported water away from home.
+- Successful return resolves only on entering the exact generated home dock.
+- Successful return converts only Personal tiles stamped for the current expedition to Supported, clears those stamps, replenishes configured starting bundles, clears fractional provision use and keeps the same generation.
+- Entering the exact dock without an active expedition also replenishes supplies without changing expedition or generation state.
+- Natural supply exhaustion outside Supported water resolves an immediate wreck; exact-dock return takes precedence if both occur on the same movement step.
+- Wreck resolution reverts only failed-expedition Personal knowledge, preserves earlier Supported routes, records a discoverable wreck at the loss location, respawns a fully supplied ship at the dock and advances the generation exactly once.
+- Successful returns never advance the generation.
+- Supported routes, wreck records and generation state persist through later expeditions and wrecks in the current generated runtime.
+- Regeneration or browser reload resets runtime routes, wrecks and generation; save/load and cross-session persistence remain Milestone 4.
 
-Verification: TypeScript check, 33 unit tests, production build, dependency audit and browser playtesting pass. Browser voyages verified bundle consumption, shrinking forward reach, all return-risk states, zero-bundle stranding and a viable return to Supported water. The final natural fixed-step voyage spent 5.25 bundle-units on the outward frontier leg and about 2.74 on its Personal-water retrace.
+Verification: the full `npm.cmd run check` pipeline passes: TypeScript,
+44 automated tests across seven files, and the production Vite build. The
+dependency audit reports zero vulnerabilities. In-app browser playtesting
+verified exact-dock success, 79 stamped Personal tiles converting to Supported,
+12-bundle dock replenishment, same-generation continuation, nonlethal developer
+depletion, forced-wreck rollback, full-cargo generation respawn and a clearly
+labelled wreck becoming visible to the later generation. Automated tests also
+cover natural final-bundle exhaustion, dock-success precedence, lifecycle event
+order, retained prior Supported routes, persistent wreck discovery and
+fixed-step transition suppression.
 
-Development is intentionally paused at the Milestone 3 review gate. Milestones 4 and 5 have not been started.
+Development is intentionally paused at the revised Milestone 3 review gate.
+Generic discoveries, save/load, cross-session persistence and Milestone 5
+living-world work have not been started.
 
 ## Decisions to review at Milestone 3
 
@@ -76,12 +94,15 @@ Development is intentionally paused at the Milestone 3 review gate. Milestones 4
 8. **Visibility shape.** Line of sight is a Euclidean circle on the square grid. Land and rock block cells behind them but remain visible themselves. This matches the five-tile technical radius while giving the exploration trail a broader, softer silhouette than a Manhattan diamond.
 9. **Teleport knowledge.** Developer teleport reveals only the destination sight disc; it does not create a false Personal corridor between origin and destination.
 10. **Fog masks.** Changed chunks are composited into one reusable low-resolution world mask, then bilinearly sampled by Phaser's WebGL renderer. The single display quad avoids camera-scale seams while retaining chunk-scoped data updates. A custom production shader remains unnecessary for developer art at this review gate.
-11. **Voyage scope.** Personal knowledge uses one current expedition stamp and lasts until regeneration. Safe-return conversion and failure rollback are deliberately not implemented because they are Milestone 4 features.
+11. **Expedition ownership.** Normal movement starts an expedition on leaving Supported water. Only Personal tiles carrying that expedition's ID can be committed or reverted, and resolution clears those stamps to zero. Crossing Supported water away from home does not resolve the expedition.
 12. **Provision budget correction.** The technical document prints `bundles + (1 - accumulator)` for overlay reach, which grants a nonexistent extra bundle when the accumulator is zero. The implementation uses `bundles - accumulator`, so physical cargo and overlay distance agree exactly. Tests lock this decision.
-13. **Zero-bundle consequence.** A ship with empty cargo can turn but cannot propel itself outside Supported water. The sandbox's add-bundle, teleport and regenerate controls prevent this playtest consequence from blocking iteration.
+13. **Wreck consequence.** Natural travel consumption crossing from a positive bundle count to zero outside Supported water causes one immediate wreck. The failed stamped Personal route returns to Unknown, earlier Supported routes survive, a wreck record is left at the loss position, and a fully provisioned replacement ship respawns at the dock. Direct developer provision removal does not itself trigger a wreck.
 14. **Physical cargo presentation.** Each bundle is a countable crate in a screen-space “Provisions Aboard” rack, following the supplied overlay concept. A hidden live text equivalent exists for accessibility; normal visual play has no number.
 15. **Risk accessibility.** Comfortable return is neutral, warning uses sparse diagonals, critical uses denser diagonals and impossible return uses a red crosshatch. Current sight is excluded so the colours read as a trail behind the ship rather than a tint over the immediate sailing area.
 16. **Unknown-terrain privacy.** Forward search treats still-Unknown blockers as ordinary Unknown water. Once observed, actual terrain and collision apply. The overlay therefore cannot reveal hidden islands or reefs.
-17. **Return feedback boundary.** Re-entering Supported water gives a temporary “Safe Passage” cue, but Personal knowledge is not converted and nothing is saved. This improves the Milestone 3 review experience without implementing Milestone 4 legacy.
+17. **Exact-dock resolution and replenishment.** Only entering the generated home dock successfully returns an active expedition. It converts matching stamped Personal water to Supported, clears stamps and fractional provision use, restores configured starting bundles and keeps the same generation. Entering the dock without an active expedition also replenishes. If the final bundle is consumed on the docking step, success takes precedence over wreck.
 18. **Dependency advisory.** Runtime dependencies audit clean. Vitest was patched from 3.2.4 to 3.2.7 to remove a development-server advisory before handoff.
 19. **Outward/return asymmetry.** The supplied concept requires the current forward range to cost full bundles and the trail home to cost half. Current sight therefore reveals terrain visually, while broad perpendicular strips centred on navigation tiles the ship has actually left commit passable water to Personal knowledge. The occupied and forward water remains Unknown while advancing, making an outward leg cost twice its Personal retrace without turns pre-charting untouched sea. Visible blocking landmarks are remembered immediately because they cannot discount travel. Stationary developer teleport still reveals its full sight disc for inspection. This intentionally refines the technical document's broader visible-to-Personal rule to preserve its own full-cost-out/half-cost-back requirement.
+20. **Runtime persistence boundary.** Successful routes, wreck records and generation state persist through later voyages and wrecks in the current generated runtime. Regeneration or browser reload resets them. Save/load and cross-session persistence remain Milestone 4 features.
+21. **Generation model.** Expedition ID and generation are separate. Every resolved expedition advances its expedition ID, but only wreck advances the generation. A successful return replenishes the current navigator and allows the same generation to sail again.
+22. **Wreck discovery boundary.** A runtime wreck is an immutable marker hidden by Unknown fog until a later generation sees it. Once discovered, the marker remains identified for later runtime voyages even when it leaves current sight or a later expedition fails; discovering it does not restore failed knowledge. Generic discovery types, returned-discovery progression and cross-session discovery persistence remain Milestone 4.

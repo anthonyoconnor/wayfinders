@@ -30,8 +30,10 @@ The prototype must prove this loop:
 3. Create a broad personal-knowledge corridor.
 4. Consume provisions at different rates by knowledge state.
 5. Read forward travel range and return viability directly from world overlays.
-6. Return to supported water.
-7. Convert successfully returned personal knowledge into permanent supported water.
+6. Return to the exact home dock before provisions are exhausted, or wreck outside Supported water.
+7. On return, convert only current expedition-stamped Personal knowledge to Supported water and replenish the ship without advancing the generation.
+8. On wreck, discard only the failed expedition's Personal knowledge, retain a discoverable wreck, respawn at the dock and advance the generation.
+9. Use inherited Supported routes to make later voyages easier within the current generated runtime.
 
 Systems outside this loop are excluded until the loop is playable and readable.
 
@@ -59,7 +61,10 @@ Use the following implementation decisions:
 - Player movement: continuous visually, grid-sampled logically
 - Fog and overlays: generated from grid masks and rendered through Phaser textures and WebGL shaders
 - Pathfinding: Dijkstra search over the navigation grid
-- Save format: versioned JSON plus compact typed-array data
+- Successful-return tile: the exact generated home dock, not any Supported tile
+- Generation advancement: wreck only; successful return continues the same generation
+- Milestone 3 persistence: routes, wrecks and generation state survive within the current generated runtime, but regeneration or browser reload resets them
+- Cross-session save format (Milestone 4): versioned JSON plus compact typed-array data
 
 
 ---
@@ -252,6 +257,7 @@ src/
       ForwardRangeSystem.ts
       ReturnPathSystem.ts
       ExpeditionSystem.ts
+      WreckSystem.ts
     navigation/
       GridGraph.ts
       Dijkstra.ts
@@ -282,6 +288,7 @@ src/
       provisions.test.ts
       returnPath.test.ts
       expedition.test.ts
+      wreck.test.ts
 ```
 
 Keep existing project conventions where they differ only in naming or folder organization.
@@ -417,7 +424,9 @@ Keep active:
 - chunks touched by the current expedition;
 - chunks needed by the current return calculation.
 
-Unload distant, unchanged generated chunks. Persist modified chunks before unloading.
+Unload distant, unchanged generated chunks. Retain modified chunk data for the
+current generated runtime before unloading. Cross-session persistence is added
+in Milestone 4.
 
 ---
 
@@ -617,6 +626,18 @@ Supported travel does not increase the accumulator.
 
 Entering visible water that was Unknown at the start of the movement segment is charged at Unknown cost. Retracing it later is charged at Personal cost.
 
+Replenishment always sets `ship.provisions` to
+`PrototypeConfig.provisions.startingBundles` and resets
+`ship.provisionAccumulator` to zero. It is not equivalent to adding the
+difference in whole bundles.
+
+After natural travel consumption, record whether provisions crossed from a
+positive bundle count to zero. If that transition occurs outside Supported
+water, resolve a wreck during the same fixed simulation step. Direct developer
+changes to the provision count do not by themselves resolve a wreck. If the
+same movement step enters the exact home dock, dock resolution takes precedence
+over wreck resolution.
+
 ---
 
 ## 15. Expedition State
@@ -625,33 +646,84 @@ Entering visible water that was Unknown at the start of the movement segment is 
 interface ExpeditionState {
   id: number;
   active: boolean;
-  departedHome: boolean;
   personalTileCount: number;
-  discoveries: DiscoveryRecord[];
+}
+
+interface RuntimeInheritanceState {
+  generation: number;
+  wrecks: WreckRecord[];
+}
+
+interface WreckRecord {
+  id: number;
+  expeditionId: number;
+  generation: number;
+  worldX: number;
+  worldY: number;
+  tileX: number;
+  tileY: number;
+  heading: number;
+  discovered: boolean;
 }
 ```
 
-Start an expedition when the ship leaves Supported water.
+Keep expedition ID and generation as separate counters. Increment the
+expedition ID after every successful return or wreck so stamps cannot be reused.
+Increment the generation only after a wreck.
 
-Complete it when the ship re-enters a designated home-return tile or dock.
+Start an expedition when normal movement leaves Supported water. Re-entering
+Supported water anywhere other than the home dock does not complete it.
+
+Successful return occurs only when the ship's logical centre enters the exact
+generated `homeReturnTile` at the home dock. Include crossed/entered tiles in
+the check so a large fixed step cannot skip the dock.
+
+Resolve movement in this order:
+
+1. Apply movement and capture provision cost from pre-observation knowledge.
+2. Apply the provision charge.
+3. Apply visibility and Personal-knowledge updates.
+4. Resolve an active expedition's exact-dock return, if the dock was entered.
+5. Otherwise resolve a natural zero-provision wreck outside Supported water.
+6. Recalculate visibility and risk overlays once from the resolved state.
 
 On successful return:
 
-1. Find all tiles stamped with the current expedition ID.
-2. Convert Personal to Supported.
-3. Clear their expedition stamps.
-4. Commit discoveries.
-5. Increment expedition ID.
-6. Recalculate overlays.
+1. Find tiles which are both Personal and stamped with the current expedition ID.
+2. Convert only those tiles to Supported.
+3. Clear their expedition stamps to zero.
+4. Leave Personal tiles owned by any other expedition unchanged.
+5. Mark the expedition inactive and increment the expedition ID.
+6. Replenish the configured starting bundles and clear the fractional accumulator.
+7. Keep the same generation and ship at the home dock.
+8. Redraw Supported-water presentation and recalculate overlays.
 
-On expedition failure:
+Entering the exact home dock without an active expedition also replenishes the
+configured starting bundles and clears the accumulator. It does not change the
+expedition ID or generation, and it should not repeatedly emit replenishment
+events while the ship remains full at the dock.
 
-1. Find all tiles stamped with the current expedition ID.
-2. Convert Personal to Unknown.
-3. Clear visibility.
-4. Remove unreturned discoveries.
-5. Reset the ship at home.
-6. Increment expedition ID.
+On a wreck:
+
+1. Create one `WreckRecord` at the ship's final pre-respawn position. Its identity, location, expedition and generation are immutable; only `discovered` may change.
+2. Find tiles which are both Personal and stamped with the failed expedition ID.
+3. Convert only those tiles to Unknown and clear their stamps to zero.
+4. Preserve all previously Supported knowledge and earlier wreck records.
+5. Clear current visibility and mark the expedition inactive.
+6. Increment both the expedition ID and generation exactly once.
+7. Respawn a new ship at the exact home dock with configured starting bundles,
+   a zero fractional accumulator, zero speed and dock-centred visibility.
+8. Recalculate all overlays from the dock state.
+
+A wreck marker is hidden by Unknown fog until a later generation brings it into
+current line of sight. Discovering it changes the marker's `discovered` flag but
+does not restore the failed expedition's Personal knowledge. The discovered
+flag remains set through later runtime voyages and wrecks even when the marker
+leaves current sight.
+
+Supported routes and `WreckRecord` objects persist across later expeditions and
+wrecks in the current generated runtime. Regenerating the world or reloading the
+browser resets them in Milestone 3. Milestone 4 adds cross-session persistence.
 
 ---
 
@@ -942,6 +1014,10 @@ This prevents art edits from silently changing navigation rules.
 
 ## 25. Discoveries
 
+Generic discoveries are a Milestone 4 feature. The runtime wreck markers
+created by Milestone 3 use `WreckRecord` and remain separate from this
+provisional-discovery lifecycle.
+
 ```ts
 export const enum DiscoveryType {
   Island,
@@ -949,12 +1025,12 @@ export const enum DiscoveryType {
   FishingGround,
   Anchorage,
   ReefPassage,
-  Wreck,
+  HistoricWreck,
   Resource,
 }
 ```
 
-A discovery is detected when any of its reveal tiles becomes currently visible.
+A generic discovery is detected when any of its reveal tiles becomes currently visible.
 
 Store it as provisional during the expedition.
 
@@ -968,9 +1044,11 @@ interface DiscoveryRecord {
 }
 ```
 
-Only successful return marks it permanent and allows later world effects.
+Only successful return at the exact home dock marks it returned and allows
+later world effects.
 
-For the prototype, discoveries need only a visible world marker and successful-return persistence.
+For Milestone 4, discoveries need only a visible world marker,
+successful-return commitment and cross-session persistence.
 
 ---
 
@@ -992,13 +1070,20 @@ NPC traffic is cosmetic in the first implementation.
 
 ## 27. Save Format
 
+Cross-session persistence is a Milestone 4 feature. Before it is implemented,
+browser reload and world regeneration intentionally reset Supported routes,
+wreck records and generation state to the generated seed defaults.
+
 ```ts
 interface SaveGame {
   schemaVersion: 1;
   worldSeed: number;
   currentExpeditionId: number;
+  generation: number;
+  expedition: ExpeditionState;
   ship: ShipSaveData;
   modifiedChunks: ChunkSaveData[];
+  wrecks: WreckRecord[];
   returnedDiscoveries: DiscoveryRecord[];
 }
 ```
@@ -1011,6 +1096,8 @@ Save:
 - provision state;
 - knowledge states;
 - expedition stamps;
+- generation and current expedition state;
+- runtime-created wreck records and their discovered state;
 - returned discoveries;
 - terrain modifications;
 - persistent objects.
@@ -1036,8 +1123,29 @@ discoveryFound
 expeditionStarted
 expeditionReturned
 expeditionFailed
+shipReplenished
+shipWrecked
+generationAdvanced
+wreckDiscovered
+worldRegenerated
 chunkDirty
 ```
+
+Lifecycle event payloads must include enough immutable context for renderers
+and browser tests:
+
+```ts
+expeditionReturned: { expeditionId, generation, supportedTileCount }
+shipReplenished: { generation, bundles, reason: "return" | "dock" | "respawn" }
+shipWrecked: { wreckId, expeditionId, generation, tileX, tileY, worldX, worldY }
+generationAdvanced: { previousGeneration, generation, reason: "wreck" }
+wreckDiscovered: { wreckId, generation, tileX, tileY }
+expeditionFailed: { expeditionId, generation, forgottenTiles, nextGeneration, wreck }
+```
+
+When a final bundle is spent on the step which enters the exact home dock,
+emit successful-return and replenishment events, not wreck events. A wreck
+emits `shipWrecked` before `generationAdvanced` and respawn replenishment.
 
 Renderers respond to events or dirty flags. They must not poll the entire world every frame.
 
@@ -1057,7 +1165,9 @@ The development build must provide toggles for:
 - return margin;
 - parent directions;
 - active chunks;
-- current expedition stamps.
+- current expedition stamps;
+- active expedition ID and generation;
+- runtime wreck records and discovered state.
 
 Debug visuals may be numeric and tile-based. Release visuals must hide them.
 
@@ -1067,9 +1177,15 @@ Add deterministic controls:
 - add/remove provisions;
 - teleport to tile;
 - force successful return;
-- force failure;
+- force wreck;
+- enter the home dock without an active expedition;
 - reveal hidden discovery;
+- reveal a runtime wreck;
 - regenerate from seed.
+
+Developer provision removal does not automatically trigger a wreck; use the
+force-wreck control when testing failure directly. Regeneration resets runtime
+routes, wreck records, expedition state and generation to seed defaults.
 
 ---
 
@@ -1112,10 +1228,29 @@ Required unit tests:
 
 ### Expedition
 
-- successful return converts current Personal tiles to Supported;
-- failure reverts current-expedition Personal tiles;
-- previous Supported knowledge remains;
-- provisional discoveries are discarded on failure.
+- an expedition starts when normal movement leaves Supported water;
+- Supported water away from home neither completes the expedition nor replenishes provisions;
+- only entering the exact home dock completes an active expedition;
+- successful return converts only Personal tiles carrying the current expedition stamp to Supported and clears those stamps;
+- successful return replenishes configured starting bundles, clears the fractional accumulator and keeps the same generation;
+- entering the dock without an active expedition replenishes supplies without changing expedition ID or generation;
+- a final bundle spent on the docking step resolves as success rather than wreck;
+- natural supply exhaustion outside Supported water resolves exactly one immediate wreck;
+- a wreck reverts only failed-expedition Personal tiles and clears their stamps;
+- previous Supported knowledge and earlier wreck records remain after a later wreck;
+- a wreck marker is recorded at the pre-respawn position and becomes discoverable by later generations;
+- a wreck respawns a fully supplied ship at the dock and advances the generation exactly once;
+- successful return never advances the generation;
+- zero provisions in Supported water do not cause a wreck;
+- runtime routes and wrecks survive later expeditions but reset on regeneration or browser reload in Milestone 3;
+- browser automation receives lifecycle events in the documented order.
+
+### Milestone 4 persistence
+
+- save/load preserves Supported routes, wreck records, generation and discovered wreck state;
+- generic discoveries remain provisional until exact-dock return;
+- returned discoveries survive a browser reload;
+- derived visibility and pathfinding output is rebuilt rather than serialized.
 
 ---
 
@@ -1155,7 +1290,7 @@ Do not begin with a Web Worker.
 - Keep masks and chunk textures below browser texture-size limits.
 - Test Safari on iOS, Chrome on Android and desktop Chromium.
 - Do not rely on filesystem APIs.
-- Persist saves through browser storage.
+- In Milestone 4, persist saves through browser storage. Milestone 3 does not write runtime inheritance state to storage.
 - Provide a WebGL-unavailable error screen rather than a partial Canvas fallback because the prototype depends on overlay shaders.
 
 ---
@@ -1231,22 +1366,40 @@ Completion condition: travelling out and returning through the same corridor con
 
 Completion condition: the player can visually identify both remaining forward reach and whether the known return route remains viable.
 
-### Milestone 6 — Expedition Resolution
+### Milestone 6 — Expedition Resolution (completes roadmap Milestone 3)
 
 - Start expedition on leaving Supported water.
-- Track expedition-stamped tiles and discoveries.
-- Convert Personal to Supported on return.
-- Revert Personal to Unknown on failure.
-- Save and reload the resulting world.
+- Track current expedition-stamped Personal tiles separately from generation.
+- Resolve successful return only at the exact home dock.
+- Convert only current expedition-stamped Personal tiles to Supported and clear their stamps.
+- Replenish at the dock while keeping the same generation after success.
+- Replenish on entering the dock without an active expedition.
+- Resolve immediate wreck on natural supply exhaustion outside Supported water.
+- Revert only failed-expedition Personal tiles to Unknown while preserving earlier Supported routes.
+- Create a discoverable runtime wreck marker.
+- Respawn a fully supplied ship at the dock and advance generation only after wreck.
+- Retain routes and wrecks until regeneration or browser reload.
 
-Completion condition: repeated voyages permanently expand the known world only after safe return.
+Completion condition: repeated voyages expand the runtime world only after
+safe exact-dock return, while wrecks discard unreturned knowledge, leave a
+discoverable marker and advance a fully supplied next generation.
 
-### Milestone 7 — Prototype Content
+### Milestone 7 — Discoveries and Cross-Session Persistence (roadmap Milestone 4)
+
+- Add generic provisional discoveries.
+- Commit discoveries only on exact-dock return.
+- Save and load Supported routes, wrecks, generation state and returned discoveries.
+- Restore the same inherited world after browser reload.
+
+Completion condition: the runtime inheritance state proven in Milestone 6
+survives across browser sessions.
+
+### Milestone 8 — Prototype Content
 
 - Add home island.
 - Add hidden island.
 - Add fishing ground.
-- Add wreck or anchorage.
+- Add an anchorage or authored historic-wreck discovery distinct from runtime player wrecks.
 - Add return presentation.
 - Add basic sound and movement feedback.
 
@@ -1254,9 +1407,10 @@ Completion condition: the full exploration loop can be played repeatedly for eva
 
 ---
 
-## 35. Prototype Acceptance Criteria
+## 35. Prototype Review-Gate Acceptance Criteria
 
-The prototype is complete when all of the following are true:
+The roadmap Milestone 3 playtest build is ready for its explicit review gate
+when all of the following are true:
 
 1. The browser game loads through the existing Phaser project.
 2. The ship is visually smooth but logically occupies one navigation tile.
@@ -1271,11 +1425,25 @@ The prototype is complete when all of the following are true:
 11. The trail overlay communicates return viability.
 12. Yellow, orange and red appear only behind the ship on Personal water.
 13. Red means no known return through the explored network.
-14. Returning converts expedition knowledge into Supported water.
-15. Failure removes unreturned knowledge.
-16. Saving and loading preserve permanent knowledge.
-17. Normal exploration contains no numerical resource bar or route forecast.
-18. The prototype maintains the performance targets on desktop and mobile browsers.
+14. An expedition begins only after leaving Supported water.
+15. Entering Supported water away from home neither completes nor replenishes the expedition.
+16. Entering the exact home dock successfully returns an active expedition.
+17. Successful return converts only current expedition-stamped Personal knowledge to Supported and clears those stamps.
+18. Successful return restores configured starting bundles, clears fractional provision use and keeps the same generation.
+19. Entering the home dock without an active expedition also replenishes supplies without changing generation.
+20. Natural supply exhaustion outside Supported water causes an immediate wreck unless the same step successfully enters the dock.
+21. Wreck removes only failed-expedition Personal knowledge; previous Supported knowledge survives.
+22. Wreck leaves a world marker which a later generation can discover.
+23. Wreck respawns a fully provisioned ship at the dock and advances generation exactly once.
+24. Successful return never advances generation.
+25. Supported routes and wrecks survive later expeditions and wrecks in the same generated runtime.
+26. Regeneration or browser reload resets runtime routes, wrecks and generation before Milestone 4 persistence exists.
+27. Normal exploration contains no numerical resource bar or route forecast.
+28. The prototype maintains the performance targets on desktop and mobile browsers.
+
+Milestone 4 is complete when save/load preserves Supported routes, wreck
+records, generation state, discovered wreck state and returned generic
+discoveries across browser sessions.
 
 ---
 

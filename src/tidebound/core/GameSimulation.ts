@@ -17,8 +17,14 @@ import type { GeneratedWorld } from "../world/WorldGenerator";
 import { WorldGenerator } from "../world/WorldGenerator";
 import type { WorldGrid } from "../world/WorldGrid";
 import { KnowledgeState } from "../world/TileData";
-import { GameEvents } from "./GameEvents";
-import type { GridPoint, MovementInput, MovementResult, ShipState } from "./types";
+import { GameEvents, type ReplenishmentReason } from "./GameEvents";
+import type {
+  GridPoint,
+  MovementInput,
+  MovementResult,
+  ShipState,
+  ShipwreckState,
+} from "./types";
 
 export interface DebugVisibilityState {
   navigationGrid: boolean;
@@ -42,6 +48,15 @@ export interface SimulationSnapshot {
     impossible: number;
     stranded: boolean;
   };
+  expedition: {
+    id: number;
+    active: boolean;
+    generation: number;
+    successfulReturns: number;
+    failures: number;
+    atDock: boolean;
+  };
+  wrecks: readonly Readonly<ShipwreckState>[];
   debug: Readonly<DebugVisibilityState>;
 }
 
@@ -71,6 +86,7 @@ export class GameSimulation {
   lastMovement: MovementResult = NO_MOVEMENT;
   revision = 0;
   overlaysRevision = 0;
+  lifecycleResolutionRevision = 0;
   forwardRange!: ForwardRangeResult;
   returnPaths!: ReturnPathResult;
 
@@ -81,7 +97,12 @@ export class GameSimulation {
   private forwardRanges!: ForwardRangeSystem;
   private returnPathing!: ReturnPathSystem;
   private readonly generator: WorldGenerator;
-  private readonly currentExpeditionId = 1;
+  private expeditionId = 1;
+  private activeExpedition = false;
+  private currentGeneration = 1;
+  private returnCount = 0;
+  private failureCount = 0;
+  private readonly shipwrecks: ShipwreckState[] = [];
 
   constructor(readonly config: PrototypeConfig = prototypeConfig) {
     this.generator = new WorldGenerator(config);
@@ -92,44 +113,106 @@ export class GameSimulation {
     return this.generated.grid;
   }
 
+  get currentExpeditionId(): number {
+    return this.expeditionId;
+  }
+
+  get expeditionActive(): boolean {
+    return this.activeExpedition;
+  }
+
+  get generation(): number {
+    return this.currentGeneration;
+  }
+
+  get successfulReturns(): number {
+    return this.returnCount;
+  }
+
+  get failedExpeditions(): number {
+    return this.failureCount;
+  }
+
+  get wrecks(): readonly Readonly<ShipwreckState>[] {
+    return this.shipwrecks;
+  }
+
+  get atDock(): boolean {
+    return this.isDockTile(this.ship.currentTileX, this.ship.currentTileY);
+  }
+
+  /** Only developer-created zero-cargo states remain stranded; natural exhaustion resolves immediately. */
   get stranded(): boolean {
-    if (this.ship.provisions > 0) return false;
-    const state = this.world.getKnowledge(this.ship.currentTileX, this.ship.currentTileY);
-    return knowledgeTravelCost(state, this.config) > 0;
+    if (this.ship.provisions > 0 || this.atDock) return false;
+    const knowledge = this.world.getKnowledge(this.ship.currentTileX, this.ship.currentTileY);
+    return knowledge !== KnowledgeState.Supported || knowledgeTravelCost(knowledge, this.config) > 0;
   }
 
   update(input: MovementInput, deltaSeconds: number): MovementResult {
     const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
+    const previousKnowledge = this.world.getKnowledge(previousTile.x, previousTile.y);
     const previousBundles = this.ship.provisions;
     const movementInput = this.stranded ? { turn: input.turn, throttle: 0 } : input;
-    this.lastMovement = this.movement.update(this.ship, movementInput, deltaSeconds);
-    const preparedCharge = this.provisions.prepareMovement(this.lastMovement.segments);
+    const movement = this.movement.update(this.ship, movementInput, deltaSeconds);
+    this.lastMovement = movement;
+    const preparedCharge = this.provisions.prepareMovement(movement.segments);
     const charge = this.provisions.applyPreparedMovement(this.ship, preparedCharge, (remaining) => {
       this.events.emit("provisionConsumed", { remaining });
     });
+    const exhaustedNaturally = previousBundles > 0
+      && charge.consumedBundles > 0
+      && this.ship.provisions === 0;
     let knowledgeChanged = 0;
-
-    if (this.lastMovement.tileChanged) {
-      const currentTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
-      const visibility = this.visibility.updateForMovement(previousTile, currentTile);
-      const knowledge = this.knowledge.applyTrailingVisibility(
-        visibility,
-        this.currentExpeditionId,
-      );
-      knowledgeChanged = knowledge.changedCount;
-      this.events.emit("shipEnteredTile", currentTile);
-      if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
-    }
+    let lifecycleChanged = false;
 
     if (charge.consumedBundles > 0) {
       this.events.emit("provisionsChanged", { previous: previousBundles, current: this.ship.provisions });
     }
-    if (this.lastMovement.tileChanged || knowledgeChanged > 0) {
+
+    const crossedDock = movement.enteredTiles.some(({ x, y }) => this.isDockTile(x, y));
+    if (crossedDock) {
+      this.movement.teleport(this.ship, this.generated.landmarks.homeReturnTile);
+      this.lastMovement = NO_MOVEMENT;
+      lifecycleChanged = true;
+    }
+
+    if (movement.tileChanged || crossedDock) {
+      const currentTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
+      const currentKnowledgeBeforeObservation = this.world.getKnowledge(currentTile.x, currentTile.y);
+      if (
+        !this.activeExpedition
+        && previousKnowledge === KnowledgeState.Supported
+        && currentKnowledgeBeforeObservation !== KnowledgeState.Supported
+      ) {
+        this.startExpedition();
+        lifecycleChanged = true;
+      }
+
+      const visibility = this.visibility.updateForMovement(previousTile, currentTile);
+      const knowledge = this.knowledge.applyTrailingVisibility(visibility, this.expeditionId);
+      knowledgeChanged += knowledge.changedCount;
+      this.discoverVisibleWrecks();
+      this.events.emit("shipEnteredTile", currentTile);
+
+      if (this.atDock) {
+        knowledgeChanged += this.resolveDockArrival();
+        lifecycleChanged = true;
+      }
+    }
+
+    if (exhaustedNaturally && !this.isInSupportedWater()) {
+      if (!this.activeExpedition) this.startExpedition();
+      knowledgeChanged += this.failExpedition();
+      lifecycleChanged = true;
+    }
+
+    if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
+    if (movement.tileChanged || knowledgeChanged > 0 || lifecycleChanged) {
       this.recalculateRiskOverlays();
     } else if (preparedCharge.totalCost > 0) {
       this.updateRiskOverlayBudgets();
     }
-    if (this.lastMovement.tileChanged || charge.consumedBundles > 0 || knowledgeChanged > 0) {
+    if (movement.tileChanged || charge.consumedBundles > 0 || knowledgeChanged > 0 || lifecycleChanged) {
       this.revision++;
     }
     return this.lastMovement;
@@ -139,6 +222,12 @@ export class GameSimulation {
     const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
     patchPrototypeConfig({ world: { seed: normalizedSeed } });
     this.generated = this.generator.generate(normalizedSeed);
+    this.expeditionId = 1;
+    this.activeExpedition = false;
+    this.currentGeneration = 1;
+    this.returnCount = 0;
+    this.failureCount = 0;
+    this.shipwrecks.length = 0;
     this.ship = createShipStateAtGrid(
       this.generated.landmarks.dock,
       this.config.provisions.startingBundles,
@@ -151,32 +240,41 @@ export class GameSimulation {
     this.provisions = new ProvisionSystem(this.world, this.config);
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
-    const initialVisibility = this.visibility.updateAt(this.generated.landmarks.dock);
-    this.knowledge.applyVisibility(initialVisibility, this.currentExpeditionId);
+    this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
     this.lastMovement = NO_MOVEMENT;
+    this.lifecycleResolutionRevision++;
     this.revision++;
     this.events.emit("worldRegenerated", { seed: normalizedSeed });
   }
 
   teleport(tile: GridPoint): boolean {
     if (!this.world.inBounds(tile.x, tile.y) || this.world.isMovementBlocked(tile.x, tile.y)) return false;
+    const targetKnowledge = this.world.getKnowledge(tile.x, tile.y);
+    if (!this.activeExpedition && targetKnowledge !== KnowledgeState.Supported) this.startExpedition();
+
     this.movement.teleport(this.ship, tile);
     const visibility = this.visibility.updateAt(tile);
-    const knowledge = this.knowledge.applyVisibility(visibility, this.currentExpeditionId);
-    this.recalculateRiskOverlays();
+    let knowledgeChanged = this.knowledge.applyVisibility(visibility, this.expeditionId).changedCount;
+    this.discoverVisibleWrecks();
     this.lastMovement = NO_MOVEMENT;
-    this.revision++;
     this.events.emit("shipTeleported", tile);
     this.events.emit("shipEnteredTile", tile);
-    if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
+
+    if (this.atDock) knowledgeChanged += this.resolveDockArrival();
+
+    this.recalculateRiskOverlays();
+    this.revision++;
+    if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
     return true;
   }
 
   refreshVisibility(): void {
     const tile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
+    if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
     const visibility = this.visibility.updateAt(tile);
-    const knowledge = this.knowledge.applyVisibility(visibility, this.currentExpeditionId);
+    const knowledge = this.knowledge.applyVisibility(visibility, this.expeditionId);
+    this.discoverVisibleWrecks();
     this.recalculateRiskOverlays();
     this.revision++;
     if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
@@ -185,16 +283,30 @@ export class GameSimulation {
   setProvisions(value: number): void {
     const previous = this.ship.provisions;
     const current = Math.max(0, Math.floor(Number.isFinite(value) ? value : previous));
-    if (current === previous) return;
+    const accumulatorWillReset = current === 0 && this.ship.provisionAccumulator !== 0;
+    if (current === previous && !accumulatorWillReset) return;
+
     this.ship.provisions = current;
     if (current === 0 || previous === 0) this.ship.provisionAccumulator = 0;
+    if (current !== previous) this.events.emit("provisionsChanged", { previous, current });
+
     this.recalculateRiskOverlays();
     this.revision++;
-    this.events.emit("provisionsChanged", { previous, current });
   }
 
   addProvisions(delta: number): void {
     this.setProvisions(this.ship.provisions + Math.trunc(delta));
+  }
+
+  /** Deterministic sandbox hook; normal play reaches this outcome through travel consumption. */
+  forceWreck(): boolean {
+    if (this.isInSupportedWater()) return false;
+    if (!this.activeExpedition) this.startExpedition();
+    const knowledgeChanged = this.failExpedition();
+    if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
+    this.recalculateRiskOverlays();
+    this.revision++;
+    return true;
   }
 
   refreshRiskOverlays(): void {
@@ -240,8 +352,175 @@ export class GameSimulation {
       world: { width: this.world.width, height: this.world.height },
       knowledge,
       risk,
+      expedition: {
+        id: this.expeditionId,
+        active: this.activeExpedition,
+        generation: this.currentGeneration,
+        successfulReturns: this.returnCount,
+        failures: this.failureCount,
+        atDock: this.atDock,
+      },
+      wrecks: this.shipwrecks.map((wreck) => ({ ...wreck })),
       debug: { ...this.debug },
     };
+  }
+
+  private startExpedition(): void {
+    if (this.activeExpedition) return;
+    this.activeExpedition = true;
+    this.events.emit("expeditionStarted", {
+      expeditionId: this.expeditionId,
+      generation: this.currentGeneration,
+    });
+  }
+
+  private resolveDockArrival(): number {
+    this.movement.teleport(this.ship, this.generated.landmarks.homeReturnTile);
+    this.visibility.updateAt(this.generated.landmarks.homeReturnTile);
+    this.lastMovement = NO_MOVEMENT;
+
+    if (this.activeExpedition) return this.completeExpedition();
+
+    this.replenishCurrentShip("dock");
+    this.lifecycleResolutionRevision++;
+    return 0;
+  }
+
+  private completeExpedition(): number {
+    const expeditionId = this.expeditionId;
+    const generation = this.currentGeneration;
+    const committed = this.knowledge.commitExpedition(expeditionId);
+    this.activeExpedition = false;
+    this.returnCount++;
+    this.advanceExpeditionId();
+    this.events.emit("expeditionReturned", {
+      expeditionId,
+      generation,
+      supportedTileCount: committed.changedCount,
+    });
+    this.replenishCurrentShip("return", true);
+    this.lifecycleResolutionRevision++;
+    return committed.changedCount;
+  }
+
+  private failExpedition(): number {
+    const expeditionId = this.expeditionId;
+    const generation = this.currentGeneration;
+    const lostShip = this.ship;
+    const wreck: ShipwreckState = {
+      id: this.shipwrecks.length + 1,
+      generation,
+      expeditionId,
+      worldX: lostShip.worldX,
+      worldY: lostShip.worldY,
+      tileX: lostShip.currentTileX,
+      tileY: lostShip.currentTileY,
+      heading: lostShip.heading,
+      discovered: false,
+    };
+    this.shipwrecks.push(wreck);
+    const reverted = this.knowledge.revertExpedition(expeditionId);
+    this.world.clearVisibility();
+    this.events.emit("shipWrecked", {
+      wreckId: wreck.id,
+      expeditionId,
+      generation,
+      tileX: wreck.tileX,
+      tileY: wreck.tileY,
+      worldX: wreck.worldX,
+      worldY: wreck.worldY,
+    });
+    this.activeExpedition = false;
+    this.failureCount++;
+    this.currentGeneration++;
+    this.events.emit("generationAdvanced", {
+      previousGeneration: generation,
+      generation: this.currentGeneration,
+      reason: "wreck",
+    });
+    this.advanceExpeditionId();
+
+    const previousProvisions = lostShip.provisions;
+    const previousAccumulator = lostShip.provisionAccumulator;
+    this.ship = createShipStateAtGrid(
+      this.generated.landmarks.homeReturnTile,
+      this.config.provisions.startingBundles,
+      0,
+      this.config,
+    );
+    this.visibility.updateAt(this.generated.landmarks.homeReturnTile);
+    this.lastMovement = NO_MOVEMENT;
+    this.emitReplenishment(
+      previousProvisions,
+      previousAccumulator,
+      this.ship.provisions,
+      "respawn",
+      true,
+    );
+    this.lifecycleResolutionRevision++;
+    this.events.emit("expeditionFailed", {
+      expeditionId,
+      generation,
+      forgottenTiles: reverted.changedCount,
+      nextGeneration: this.currentGeneration,
+      wreck: { ...wreck },
+    });
+    return reverted.changedCount;
+  }
+
+  private replenishCurrentShip(reason: ReplenishmentReason, forceEvent = false): boolean {
+    const previous = this.ship.provisions;
+    const previousAccumulator = this.ship.provisionAccumulator;
+    const current = this.config.provisions.startingBundles;
+    this.ship.provisions = current;
+    this.ship.provisionAccumulator = 0;
+    this.ship.speed = 0;
+    return this.emitReplenishment(previous, previousAccumulator, current, reason, forceEvent);
+  }
+
+  private emitReplenishment(
+    previous: number,
+    previousAccumulator: number,
+    current: number,
+    reason: ReplenishmentReason,
+    forceEvent: boolean,
+  ): boolean {
+    const changed = previous !== current || previousAccumulator !== 0;
+    if (previous !== current) this.events.emit("provisionsChanged", { previous, current });
+    if (changed || forceEvent) {
+      this.events.emit("shipReplenished", {
+        generation: this.currentGeneration,
+        bundles: current,
+        reason,
+      });
+    }
+    return changed;
+  }
+
+  private advanceExpeditionId(): void {
+    this.expeditionId = this.expeditionId === 0xffff_ffff ? 1 : this.expeditionId + 1;
+  }
+
+  private isDockTile(x: number, y: number): boolean {
+    const dock = this.generated.landmarks.homeReturnTile;
+    return x === dock.x && y === dock.y;
+  }
+
+  private isInSupportedWater(): boolean {
+    return this.world.getKnowledge(this.ship.currentTileX, this.ship.currentTileY) === KnowledgeState.Supported;
+  }
+
+  private discoverVisibleWrecks(): void {
+    for (const wreck of this.shipwrecks) {
+      if (wreck.discovered || !this.world.isVisibleNow(wreck.tileX, wreck.tileY)) continue;
+      wreck.discovered = true;
+      this.events.emit("wreckDiscovered", {
+        wreckId: wreck.id,
+        generation: wreck.generation,
+        tileX: wreck.tileX,
+        tileY: wreck.tileY,
+      });
+    }
   }
 
   private recalculateRiskOverlays(): void {

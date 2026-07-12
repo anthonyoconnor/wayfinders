@@ -1,11 +1,51 @@
-import type { GridPoint } from "./types";
+import type { GridPoint, ShipwreckState } from "./types";
+
+export type ReplenishmentReason = "dock" | "return" | "respawn";
 
 export interface GameEventMap {
   shipEnteredTile: GridPoint;
   knowledgeChanged: { count: number };
   provisionConsumed: { remaining: number };
   provisionsChanged: { previous: number; current: number };
+  shipReplenished: {
+    generation: number;
+    bundles: number;
+    reason: ReplenishmentReason;
+  };
   returnStateChanged: undefined;
+  expeditionStarted: { expeditionId: number; generation: number };
+  expeditionReturned: {
+    expeditionId: number;
+    generation: number;
+    supportedTileCount: number;
+  };
+  shipWrecked: {
+    wreckId: number;
+    expeditionId: number;
+    generation: number;
+    tileX: number;
+    tileY: number;
+    worldX: number;
+    worldY: number;
+  };
+  generationAdvanced: {
+    previousGeneration: number;
+    generation: number;
+    reason: "wreck";
+  };
+  wreckDiscovered: {
+    wreckId: number;
+    generation: number;
+    tileX: number;
+    tileY: number;
+  };
+  expeditionFailed: {
+    expeditionId: number;
+    generation: number;
+    forgottenTiles: number;
+    nextGeneration: number;
+    wreck: Readonly<ShipwreckState>;
+  };
   worldRegenerated: { seed: number };
   shipTeleported: GridPoint;
 }

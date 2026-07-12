@@ -26,6 +26,19 @@ export interface ShipState {
   provisionAccumulator: number;
 }
 
+/** Immutable record of a ship lost during an expedition. */
+export interface ShipwreckState {
+  id: number;
+  generation: number;
+  expeditionId: number;
+  worldX: number;
+  worldY: number;
+  tileX: number;
+  tileY: number;
+  heading: number;
+  discovered: boolean;
+}
+
 export interface MovementInput {
   /** Normalized steering in the inclusive range -1..1. */
   turn: number;

@@ -14,6 +14,7 @@ import { CargoRenderer } from "./CargoRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
 import { ShipRenderer } from "./ShipRenderer";
+import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
 
 interface MovementKeys {
@@ -33,6 +34,7 @@ interface BrowserDebugApi {
   snapshot: () => ReturnType<GameSimulation["snapshot"]>;
   teleport: (x: number, y: number) => boolean;
   addProvisions: (delta: number) => ReturnType<GameSimulation["snapshot"]>;
+  forceWreck: () => boolean;
   regenerate: (seed?: number) => ReturnType<GameSimulation["snapshot"]>;
   setOverlay: (name: keyof GameSimulation["debug"], visible: boolean) => void;
 }
@@ -58,11 +60,12 @@ export class TideboundScene extends Phaser.Scene {
   private riskOverlay!: RiskOverlayRenderer;
   private cargoRenderer!: CargoRenderer;
   private shipRenderer!: ShipRenderer;
+  private wreckRenderer!: WreckRenderer;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private debugGraphics!: Phaser.GameObjects.Graphics;
   private domAbort?: AbortController;
+  private readonly eventUnsubscribers: Array<() => void> = [];
   private teleportOnClick = false;
-  private wasInSupportedWater = true;
   private lastRenderedRevision = -1;
   private lastReportedOverlayRevision = -1;
 
@@ -72,6 +75,7 @@ export class TideboundScene extends Phaser.Scene {
 
   create(): void {
     this.worldRenderer = new WorldRenderer(this);
+    this.wreckRenderer = new WreckRenderer(this);
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
     this.riskOverlay = new RiskOverlayRenderer(this);
     this.cargoRenderer = new CargoRenderer(this);
@@ -101,6 +105,7 @@ export class TideboundScene extends Phaser.Scene {
     this.renderWorld();
     this.mountDeveloperTools();
     this.installBrowserDebugApi();
+    this.bindSimulationEvents();
     this.syncPresentation(true);
 
     const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
@@ -115,7 +120,13 @@ export class TideboundScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) this.changeZoom(0.1);
     if (Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) this.changeZoom(-0.1);
     const movementInput = this.readMovementInput();
-    this.clock.advance(delta, (deltaSeconds) => this.simulation.update(movementInput, deltaSeconds));
+    let keepAdvancing = true;
+    this.clock.advance(delta, (deltaSeconds) => {
+      const lifecycleRevision = this.simulation.lifecycleResolutionRevision;
+      this.simulation.update(movementInput, deltaSeconds);
+      keepAdvancing = lifecycleRevision === this.simulation.lifecycleResolutionRevision;
+      return keepAdvancing;
+    });
     this.syncPresentation();
   }
 
@@ -174,6 +185,7 @@ export class TideboundScene extends Phaser.Scene {
 
   private syncPresentation(force = false): void {
     this.shipRenderer.sync(this.simulation.ship);
+    this.wreckRenderer.sync(this.simulation.wrecks, this.simulation.world);
     this.knowledgeOverlay.sync(this.simulation.world, this.simulation.generated.seed, force);
     this.riskOverlay.sync(
       this.simulation.world,
@@ -184,7 +196,6 @@ export class TideboundScene extends Phaser.Scene {
       force,
     );
     this.cargoRenderer.sync(this.simulation.ship.provisions);
-    this.updateReturnCue();
     const host = document.querySelector<HTMLElement>("#game-host");
     if (host) {
       host.dataset.seed = String(this.simulation.generated.seed);
@@ -198,6 +209,13 @@ export class TideboundScene extends Phaser.Scene {
       host.dataset.collided = String(this.simulation.lastMovement.collided);
       host.dataset.provisions = String(this.simulation.ship.provisions);
       host.dataset.provisionAccumulator = this.simulation.ship.provisionAccumulator.toFixed(3);
+      host.dataset.expeditionId = String(this.simulation.currentExpeditionId);
+      host.dataset.expeditionActive = String(this.simulation.expeditionActive);
+      host.dataset.generation = String(this.simulation.generation);
+      host.dataset.successfulReturns = String(this.simulation.successfulReturns);
+      host.dataset.failedExpeditions = String(this.simulation.failedExpeditions);
+      host.dataset.atDock = String(this.simulation.atDock);
+      host.dataset.wrecks = String(this.simulation.wrecks.length);
       host.dataset.stranded = String(this.simulation.stranded);
       host.dataset.overlaysRevision = String(this.simulation.overlaysRevision);
       host.dataset.riskBudget = this.simulation.forwardRange.budget.toFixed(3);
@@ -231,7 +249,9 @@ export class TideboundScene extends Phaser.Scene {
     const status = document.querySelector<HTMLElement>("#game-status");
     if (status) {
       const message = this.simulation.stranded
-        ? "Out of provisions — stranded beyond supported water"
+        ? "Developer zero-cargo state · add a bundle or force a wreck"
+        : this.simulation.expeditionActive
+        ? "Expedition underway · return to the home dock to secure the route"
         : "WASD / arrows sail · wheel or Q/E zoom · Developer tools tune";
       if (status.textContent !== message) status.textContent = message;
     }
@@ -285,6 +305,7 @@ export class TideboundScene extends Phaser.Scene {
             <button data-action="provisions-remove" type="button">− bundle</button>
             <output data-output="provisions">${this.simulation.ship.provisions} developer bundles</output>
             <button data-action="provisions-add" type="button">+ bundle</button>
+            <button data-action="force-wreck" type="button">Force wreck</button>
           </div>
         </fieldset>
         <fieldset>
@@ -343,6 +364,10 @@ export class TideboundScene extends Phaser.Scene {
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='provisions-remove']")?.addEventListener("click", () => {
       this.simulation.addProvisions(-1);
+      this.updateProvisionOutput();
+    }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-action='force-wreck']")?.addEventListener("click", () => {
+      if (!this.simulation.forceWreck()) this.log("Move outside Supported water before forcing a wreck.");
       this.updateProvisionOutput();
     }, { signal });
   }
@@ -418,7 +443,6 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private afterWorldChanged(): void {
-    this.wasInSupportedWater = true;
     this.renderWorld();
     this.configureCamera();
     this.lastRenderedRevision = -1;
@@ -434,6 +458,11 @@ export class TideboundScene extends Phaser.Scene {
         this.simulation.addProvisions(delta);
         this.updateProvisionOutput();
         return this.simulation.snapshot();
+      },
+      forceWreck: () => {
+        const resolved = this.simulation.forceWreck();
+        this.updateProvisionOutput();
+        return resolved;
       },
       regenerate: (seed) => {
         this.simulation.regenerate(seed);
@@ -453,40 +482,60 @@ export class TideboundScene extends Phaser.Scene {
     log.scrollTop = log.scrollHeight;
   }
 
-  private updateReturnCue(): void {
-    const inSupportedWater = this.simulation.world.getKnowledge(
-      this.simulation.ship.currentTileX,
-      this.simulation.ship.currentTileY,
-    ) === KnowledgeState.Supported;
-    if (inSupportedWater && !this.wasInSupportedWater) {
-      const cue = this.add.text(this.scale.width / 2, Math.max(80, this.scale.height * 0.15), "SUPPORTED WATERS\nSAFE PASSAGE", {
-        align: "center",
-        color: "#d9fff5",
-        fontFamily: "ui-monospace, monospace",
-        fontSize: "18px",
-        fontStyle: "bold",
-        stroke: "#082d35",
-        strokeThickness: 6,
-      }).setOrigin(0.5).setScrollFactor(0).setDepth(110).setAlpha(0);
-      this.cameras.main.flash(180, 125, 212, 199, false);
-      this.tweens.add({
-        targets: cue,
-        alpha: { from: 0, to: 1 },
-        y: cue.y - 8,
-        duration: 240,
-        yoyo: true,
-        hold: 850,
-        onComplete: () => cue.destroy(),
-      });
-    }
-    this.wasInSupportedWater = inSupportedWater;
+  private bindSimulationEvents(): void {
+    this.eventUnsubscribers.push(
+      this.simulation.events.on("expeditionReturned", ({ supportedTileCount }) => {
+        this.renderWorld();
+        this.showLifecycleCue("EXPEDITION RETURNED\nROUTE NOW SUPPORTED\nPROVISIONS REPLENISHED", "#d9fff5");
+        this.log(`Expedition returned: ${supportedTileCount} Personal tiles became Supported.`);
+      }),
+      this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
+        this.showLifecycleCue(
+          `SHIP LOST AT SEA\nWRECK OF GENERATION ${generation} REMAINS\nGENERATION ${nextGeneration} DEPARTS`,
+          "#ffd2aa",
+        );
+        this.log(`Generation ${generation} was wrecked; ${forgottenTiles} unreturned tiles were forgotten.`);
+      }),
+      this.simulation.events.on("shipReplenished", ({ reason }) => {
+        if (reason !== "dock") return;
+        this.showLifecycleCue("DOCKED\nPROVISIONS REPLENISHED", "#d9fff5");
+        this.log("Dock stores replenished the ship's provisions.");
+      }),
+      this.simulation.events.on("wreckDiscovered", ({ wreckId, generation }) => {
+        this.log(`Found wreck ${wreckId} from generation ${generation}.`);
+      }),
+    );
+  }
+
+  private showLifecycleCue(message: string, color: string): void {
+    const cue = this.add.text(this.scale.width / 2, Math.max(90, this.scale.height * 0.17), message, {
+      align: "center",
+      color,
+      fontFamily: "ui-monospace, monospace",
+      fontSize: "17px",
+      fontStyle: "bold",
+      stroke: "#082d35",
+      strokeThickness: 6,
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(110).setAlpha(0);
+    this.cameras.main.flash(180, 125, 212, 199, false);
+    this.tweens.add({
+      targets: cue,
+      alpha: { from: 0, to: 1 },
+      y: cue.y - 8,
+      duration: 240,
+      yoyo: true,
+      hold: 1_050,
+      onComplete: () => cue.destroy(),
+    });
   }
 
   private destroyBindings(): void {
     this.domAbort?.abort();
+    for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.knowledgeOverlay.destroy();
     this.riskOverlay.destroy();
     this.cargoRenderer.destroy();
+    this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
     if (window.__WAYFINDERS__?.snapshot().seed === this.simulation.generated.seed) delete window.__WAYFINDERS__;

@@ -61,4 +61,32 @@ export class KnowledgeSystem {
     }
     return { changedIndices, changedCount: changedIndices.length };
   }
+
+  commitExpedition(expeditionId: number): KnowledgeUpdate {
+    return this.resolveExpedition(expeditionId, KnowledgeState.Supported);
+  }
+
+  revertExpedition(expeditionId: number): KnowledgeUpdate {
+    return this.resolveExpedition(expeditionId, KnowledgeState.Unknown);
+  }
+
+  private resolveExpedition(
+    expeditionId: number,
+    target: KnowledgeState.Supported | KnowledgeState.Unknown,
+  ): KnowledgeUpdate {
+    if (!Number.isInteger(expeditionId) || expeditionId <= 0 || expeditionId > 0xffff_ffff) {
+      throw new RangeError("expeditionId must be a non-zero unsigned 32-bit integer");
+    }
+
+    const changedIndices: number[] = [];
+    this.world.forEachTile((x, y, index) => {
+      if (
+        this.world.getKnowledge(x, y) !== KnowledgeState.Personal
+        || this.world.getExpeditionStamp(x, y) !== expeditionId
+      ) return;
+      this.world.setKnowledge(x, y, target, 0);
+      changedIndices.push(index);
+    });
+    return { changedIndices, changedCount: changedIndices.length };
+  }
 }

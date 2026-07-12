@@ -6,7 +6,7 @@ export class SimulationClock {
 
   constructor(private readonly config: PrototypeConfig = prototypeConfig) {}
 
-  advance(frameDeltaMs: number, step: (deltaSeconds: number) => void): number {
+  advance(frameDeltaMs: number, step: (deltaSeconds: number) => boolean | void): number {
     if (!Number.isFinite(frameDeltaMs) || frameDeltaMs < 0) return 0;
 
     const fixedStepMs = this.config.simulation.fixedStepMs;
@@ -14,9 +14,13 @@ export class SimulationClock {
 
     let steps = 0;
     while (this.accumulatorMs >= fixedStepMs) {
-      step(fixedStepMs / 1000);
+      const shouldContinue = step(fixedStepMs / 1000);
       this.accumulatorMs -= fixedStepMs;
       steps++;
+      if (shouldContinue === false) {
+        this.accumulatorMs = 0;
+        break;
+      }
     }
     return steps;
   }
