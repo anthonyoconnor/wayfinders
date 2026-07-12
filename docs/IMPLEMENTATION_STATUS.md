@@ -19,7 +19,17 @@ Verification: TypeScript check, 20 unit tests and a production Vite build pass.
 
 ## Milestone 1 — Home Waters
 
-Status: pending
+Status: complete
+
+- Recognisable seeded home island with coastline, huts, harbour flag, dock and labelled home.
+- Visually distinct supported water surrounding the home, including boundary buoys.
+- Continuous WASD/arrow-key ship movement with a readable heading and wake.
+- Terrain-authoritative island, rock and reef collision.
+- Smooth follow camera with wheel or Q/E zoom and bounded world view.
+- Developer-art ocean, shallow water, reefs and wave marks.
+- DOM state markers on the game host for browser-driven verification.
+
+Verification: TypeScript check, 21 unit tests, production build and an in-browser sailing/control check pass.
 
 ## Milestone 2 — Exploration
 
@@ -36,4 +46,5 @@ Status: pending
 3. **Developer UI.** Numerical tuning is confined to the developer drawer. It is not part of the normal play presentation and therefore does not undermine the Milestone 3 no-numerical-player-UI test.
 4. **Live starting provisions.** Changing “starting bundles” also changes the current sandbox cargo immediately. This makes the tuning control observable without requiring regeneration.
 5. **Milestone 0 overlays.** Before their final Milestone 3 grid calculations are connected, the forward and return toggles display provisional range rings. They are development hooks, not the final risk presentation.
-
+6. **Home presentation.** The home, dock, vessel and ocean are drawn with generated Phaser vector shapes. This deliberately follows the developer-art restriction and avoids committing to production silhouettes or an isometric projection before the exploration loop is reviewed.
+7. **Camera input.** Wheel and Q/E share a clamped zoom range; the camera always follows the authoritative ship position. Free camera panning was omitted because it made it easier to lose the ship without helping the Milestone 0–3 loop.

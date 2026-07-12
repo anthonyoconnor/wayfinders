@@ -127,13 +127,18 @@ export class WorldGenerator {
           this.setTerrain(grid, x, y, TerrainType.Land);
           grid.setIslandId(x, y, 0);
         } else if (distance <= shallowRadius + edgeNoise) {
-          this.setTerrain(grid, x, y, TerrainType.ShallowOcean);
+          const protectsHarbourApproach = x >= center.x + landRadius - 1 && Math.abs(y - center.y) <= 1;
+          const reefChance = seededValue(seed + 79, x, y);
+          const terrain = !protectsHarbourApproach && distance > shallowRadius - 1.2 && reefChance > 0.88
+            ? TerrainType.Reef
+            : TerrainType.ShallowOcean;
+          this.setTerrain(grid, x, y, terrain);
         }
       }
     }
 
     // Carve a readable east-facing harbour and a passable dock approach.
-    for (let x = center.x; x <= dock.x; x++) {
+    for (let x = center.x + landRadius - 1; x <= dock.x; x++) {
       this.setTerrain(grid, x, center.y, TerrainType.ShallowOcean);
       grid.setIslandId(x, center.y, -1);
       grid.setKnowledge(x, center.y, KnowledgeState.Supported, 0);

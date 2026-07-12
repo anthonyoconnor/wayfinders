@@ -100,6 +100,25 @@ describe("world foundations", () => {
     expect(world.isMovementBlocked(3, 3)).toBe(true);
     expect(world.isSightBlocked(3, 3)).toBe(true);
   });
+
+  it("creates a passable home dock, protected harbour approach, and supported home waters", () => {
+    const generated = new WorldGenerator().generate(13_371);
+    const { grid, landmarks } = generated;
+
+    expect(grid.getTerrain(landmarks.homeCenter.x, landmarks.homeCenter.y)).toBe(TerrainType.Land);
+    expect(grid.isMovementBlocked(landmarks.homeCenter.x, landmarks.homeCenter.y)).toBe(true);
+    expect(grid.getTerrain(landmarks.dock.x, landmarks.dock.y)).toBe(TerrainType.ShallowOcean);
+    expect(grid.isMovementBlocked(landmarks.dock.x, landmarks.dock.y)).toBe(false);
+    expect(grid.getKnowledge(landmarks.dock.x, landmarks.dock.y)).toBe(KnowledgeState.Supported);
+
+    for (let x = landmarks.harbour.x - 1; x <= landmarks.dock.x; x++) {
+      expect(grid.isMovementBlocked(x, landmarks.harbour.y)).toBe(false);
+    }
+
+    const openHomeWaterX = landmarks.homeCenter.x + 10;
+    expect(grid.getKnowledge(openHomeWaterX, landmarks.homeCenter.y)).toBe(KnowledgeState.Supported);
+    expect(grid.isMovementBlocked(openHomeWaterX, landmarks.homeCenter.y)).toBe(false);
+  });
 });
 
 describe("navigation foundations", () => {

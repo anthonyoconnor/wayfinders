@@ -90,7 +90,7 @@ export function createWayfindersGame(
     callbacks: {
       postBoot: () => {
         rendererStatus.textContent = "WebGL ready";
-        setStatus(scenes.length > 0 ? "Scene ready." : "Renderer ready; awaiting scene binding.");
+        if (scenes.length === 0) setStatus("Renderer ready; awaiting scene binding.");
       },
     },
   });

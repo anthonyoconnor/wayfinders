@@ -9,7 +9,8 @@ import { GameSimulation } from "../core/GameSimulation";
 import { SimulationClock } from "../core/SimulationClock";
 import type { MovementInput } from "../core/types";
 import { worldToGrid } from "../world/CoordinateSystem";
-import { KnowledgeState, TerrainType } from "../world/TileData";
+import { ShipRenderer } from "./ShipRenderer";
+import { WorldRenderer } from "./WorldRenderer";
 
 interface MovementKeys {
   left: Phaser.Input.Keyboard.Key;
@@ -20,6 +21,8 @@ interface MovementKeys {
   alternateRight: Phaser.Input.Keyboard.Key;
   alternateForward: Phaser.Input.Keyboard.Key;
   alternateReverse: Phaser.Input.Keyboard.Key;
+  zoomIn: Phaser.Input.Keyboard.Key;
+  zoomOut: Phaser.Input.Keyboard.Key;
 }
 
 interface BrowserDebugApi {
@@ -37,20 +40,10 @@ declare global {
 }
 
 const PALETTE = {
-  deepOcean: 0x0a3546,
-  supportedOcean: 0x145469,
-  shallowOcean: 0x2b8790,
-  reef: 0x8fb99e,
-  rock: 0x5e6661,
-  land: 0x9b8158,
-  sand: 0xd0b77d,
   grid: 0xa5d5d2,
   sight: 0x78fff0,
   forward: 0xd8e1d6,
   returnRange: 0xf7c653,
-  shipHull: 0x4a2d20,
-  shipTrim: 0xd2a95e,
-  sail: 0xefe0b5,
 } as const;
 
 export class TideboundScene extends Phaser.Scene {
@@ -58,10 +51,10 @@ export class TideboundScene extends Phaser.Scene {
 
   private readonly clock = new SimulationClock();
   private keys!: MovementKeys;
-  private worldGraphics!: Phaser.GameObjects.Graphics;
+  private worldRenderer!: WorldRenderer;
+  private shipRenderer!: ShipRenderer;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private debugGraphics!: Phaser.GameObjects.Graphics;
-  private ship!: Phaser.GameObjects.Container;
   private domAbort?: AbortController;
   private teleportOnClick = false;
   private lastRenderedRevision = -1;
@@ -71,10 +64,10 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.worldGraphics = this.add.graphics().setDepth(0);
+    this.worldRenderer = new WorldRenderer(this);
+    this.shipRenderer = new ShipRenderer(this);
     this.gridGraphics = this.add.graphics().setDepth(20);
     this.debugGraphics = this.add.graphics().setDepth(30);
-    this.ship = this.createShip().setDepth(50);
 
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Keyboard input is unavailable");
@@ -87,10 +80,13 @@ export class TideboundScene extends Phaser.Scene {
       alternateRight: Phaser.Input.Keyboard.KeyCodes.RIGHT,
       alternateForward: Phaser.Input.Keyboard.KeyCodes.UP,
       alternateReverse: Phaser.Input.Keyboard.KeyCodes.DOWN,
+      zoomIn: Phaser.Input.Keyboard.KeyCodes.E,
+      zoomOut: Phaser.Input.Keyboard.KeyCodes.Q,
     }) as MovementKeys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
-    this.cameras.main.startFollow(this.ship, true, 0.08, 0.08);
+    this.input.on(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
+    this.cameras.main.startFollow(this.shipRenderer.container, true, 0.08, 0.08);
     this.configureCamera();
     this.renderWorld();
     this.mountDeveloperTools();
@@ -100,12 +96,14 @@ export class TideboundScene extends Phaser.Scene {
     const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
     if (sceneStatus) sceneStatus.textContent = "Exploration sandbox active";
     const gameStatus = document.querySelector<HTMLElement>("#game-status");
-    if (gameStatus) gameStatus.textContent = "WASD / arrows to sail · open Developer tools to tune";
+    if (gameStatus) gameStatus.textContent = "WASD / arrows sail · wheel or Q/E zoom · Developer tools tune";
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyBindings());
   }
 
   override update(_time: number, delta: number): void {
+    if (Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) this.changeZoom(0.1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) this.changeZoom(-0.1);
     const movementInput = this.readMovementInput();
     this.clock.advance(delta, (deltaSeconds) => this.simulation.update(movementInput, deltaSeconds));
     this.syncPresentation();
@@ -128,20 +126,6 @@ export class TideboundScene extends Phaser.Scene {
     };
   }
 
-  private createShip(): Phaser.GameObjects.Container {
-    const tileSize = prototypeConfig.navigation.tileSize;
-    const art = this.add.graphics();
-    art.fillStyle(PALETTE.shipHull, 1);
-    art.fillTriangle(tileSize * 0.44, 0, -tileSize * 0.35, -tileSize * 0.24, -tileSize * 0.35, tileSize * 0.24);
-    art.lineStyle(2, PALETTE.shipTrim, 1);
-    art.strokeTriangle(tileSize * 0.44, 0, -tileSize * 0.35, -tileSize * 0.24, -tileSize * 0.35, tileSize * 0.24);
-    art.fillStyle(PALETTE.sail, 1);
-    art.fillTriangle(-tileSize * 0.08, -tileSize * 0.08, -tileSize * 0.08, -tileSize * 0.64, tileSize * 0.2, -tileSize * 0.08);
-    art.lineStyle(2, PALETTE.shipTrim, 1);
-    art.lineBetween(-tileSize * 0.08, -tileSize * 0.62, -tileSize * 0.08, tileSize * 0.23);
-    return this.add.container(0, 0, [art]);
-  }
-
   private configureCamera(): void {
     const tileSize = prototypeConfig.navigation.tileSize;
     const worldWidth = this.simulation.world.width * tileSize;
@@ -151,25 +135,7 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private renderWorld(): void {
-    const world = this.simulation.world;
-    const size = prototypeConfig.navigation.tileSize;
-    this.worldGraphics.clear();
-    this.worldGraphics.fillStyle(PALETTE.deepOcean, 1);
-    this.worldGraphics.fillRect(0, 0, world.width * size, world.height * size);
-
-    world.forEachTile((x, y) => {
-      const tile = world.getTile(x, y);
-      let color: number = PALETTE.deepOcean;
-      if (tile.terrain === TerrainType.ShallowOcean) color = PALETTE.shallowOcean;
-      if (tile.terrain === TerrainType.Reef) color = PALETTE.reef;
-      if (tile.terrain === TerrainType.Rock) color = PALETTE.rock;
-      if (tile.terrain === TerrainType.Land) color = PALETTE.land;
-      if (tile.terrain === TerrainType.DeepOcean && tile.knowledge === KnowledgeState.Supported) {
-        color = PALETTE.supportedOcean;
-      }
-      this.worldGraphics.fillStyle(color, 1);
-      this.worldGraphics.fillRect(x * size, y * size, size + 1, size + 1);
-    });
+    this.worldRenderer.render(this.simulation.generated);
   }
 
   private renderDebug(): void {
@@ -213,8 +179,16 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private syncPresentation(force = false): void {
-    const ship = this.simulation.ship;
-    this.ship.setPosition(ship.worldX, ship.worldY).setRotation(Phaser.Math.DegToRad(ship.heading));
+    this.shipRenderer.sync(this.simulation.ship);
+    const host = document.querySelector<HTMLElement>("#game-host");
+    if (host) {
+      host.dataset.seed = String(this.simulation.generated.seed);
+      host.dataset.tileX = String(this.simulation.ship.currentTileX);
+      host.dataset.tileY = String(this.simulation.ship.currentTileY);
+      host.dataset.provisions = String(this.simulation.ship.provisions);
+      host.dataset.simulationRevision = String(this.simulation.revision);
+    }
+    document.documentElement.dataset.wayfindersReady = "true";
     if (force || this.lastRenderedRevision !== this.simulation.revision) {
       this.renderDebug();
       this.lastRenderedRevision = this.simulation.revision;
@@ -231,6 +205,19 @@ export class TideboundScene extends Phaser.Scene {
     } else {
       this.log(`Tile ${tile.x}, ${tile.y} is blocked or outside the world.`);
     }
+  }
+
+  private onPointerWheel(
+    _pointer: Phaser.Input.Pointer,
+    _objects: Phaser.GameObjects.GameObject[],
+    _deltaX: number,
+    deltaY: number,
+  ): void {
+    this.changeZoom(deltaY > 0 ? -0.1 : 0.1);
+  }
+
+  private changeZoom(delta: number): void {
+    this.cameras.main.setZoom(Phaser.Math.Clamp(this.cameras.main.zoom + delta, 0.65, 1.7));
   }
 
   private mountDeveloperTools(): void {
@@ -413,6 +400,7 @@ export class TideboundScene extends Phaser.Scene {
   private destroyBindings(): void {
     this.domAbort?.abort();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
+    this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
     if (window.__WAYFINDERS__?.snapshot().seed === this.simulation.generated.seed) delete window.__WAYFINDERS__;
   }
 }
