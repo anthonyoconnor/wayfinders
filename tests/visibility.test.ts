@@ -184,7 +184,10 @@ it("keeps diagonal Personal strips cardinally connected to Supported water", () 
 
   expect(world.getKnowledge(4, 4)).toBe(KnowledgeState.Personal);
   const returnPathing = new ReturnPathSystem(world, config);
-  const result = returnPathing.calculate(makeShip(6, 0));
+  const ship = makeShip(6, 0);
+  ship.currentTileX = 4;
+  ship.currentTileY = 4;
+  const result = returnPathing.calculate(ship);
   const path = returnPathing.pathToSupported(result, { x: 4, y: 4 });
   expect(path.length).toBeGreaterThan(1);
   expect(path[path.length - 1]).toEqual({ x: 3, y: 3 });

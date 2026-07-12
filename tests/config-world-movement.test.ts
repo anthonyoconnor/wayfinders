@@ -86,6 +86,19 @@ describe("prototype configuration", () => {
     );
     expect(prototypeConfig.simulation.wreckPresentationSeconds).toBe(4);
   });
+
+  it("accepts only non-negative integer overlay focus and route padding", () => {
+    patchPrototypeConfig({ overlays: { forwardFocusPadding: 5, returnPathPadding: 2 } });
+    expect(prototypeConfig.overlays.forwardFocusPadding).toBe(5);
+    expect(prototypeConfig.overlays.returnPathPadding).toBe(2);
+
+    expect(() => patchPrototypeConfig({ overlays: { forwardFocusPadding: 1.5 } })).toThrow(
+      "overlays.forwardFocusPadding must be a non-negative integer",
+    );
+    expect(() => patchPrototypeConfig({ overlays: { returnPathPadding: -1 } })).toThrow(
+      "overlays.returnPathPadding must be a non-negative integer",
+    );
+  });
 });
 
 describe("world foundations", () => {
@@ -200,6 +213,23 @@ describe("navigation foundations", () => {
 
     expect(result.costs[3]).toBe(2.5);
     expect(reconstructDijkstraPath(result, 3)).toEqual([0, 2, 1, 3]);
+  });
+
+  it("can stop after a requested target has its final shortest cost", () => {
+    const result = dijkstra({
+      nodeCount: 6,
+      starts: [0],
+      target: 2,
+      forEachNeighbor: (node, visit) => {
+        if (node > 0) visit(node - 1, 1);
+        if (node + 1 < 6) visit(node + 1, 1);
+      },
+    });
+
+    expect(result.costs[2]).toBe(2);
+    expect(reconstructDijkstraPath(result, 2)).toEqual([0, 1, 2]);
+    expect(result.visited[3]).toBe(0);
+    expect(result.settledCount).toBe(3);
   });
 
   it("reuses numeric heap capacity and exposes sparse settled nodes", () => {

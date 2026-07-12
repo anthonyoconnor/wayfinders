@@ -1,7 +1,7 @@
-# Milestone 3 Risk, Return and Inheritance playtest handoff
+# Milestone 3.1 Risk-overlay readability playtest handoff
 
-Wayfinders is paused at the Risk, Return and Inheritance review gate. This
-build contains Milestones 0–3 only and uses developer art throughout.
+Wayfinders is paused at the revised Risk, Return and Inheritance review gate.
+This build contains Milestones 0–3.1 only and uses developer art throughout.
 
 ## Run locally
 
@@ -38,7 +38,9 @@ island** to cycle through stable island descriptor order from passable
 inspection points. Removing the final bundle directly creates a recoverable
 developer zero-cargo state; use **Force wreck** to exercise failure
 presentation without sailing until natural consumption reaches zero. Forced
-and natural wrecks use the same four-second transition.
+and natural wrecks use the same four-second transition. **Forward focus beyond
+sight** and **Return route padding** tune the Milestone 3.1 presentation
+without changing movement costs.
 
 ## Scattered-island inspection
 
@@ -57,13 +59,23 @@ and natural wrecks use the same four-second transition.
 3. Before an island enters current sight, confirm that fully opaque Unknown fog shows no land, rock, reef or decorative silhouette.
 4. Continue until a non-home island emerges from fog. Its revealed terrain should use authoritative collision and line-of-sight blocking.
 5. Navigate around it and confirm that open channels remain available rather than the ocean becoming sealed.
-6. Read the dotted neutral area as reachable Unknown water. It shrinks as bundles leave the cargo rack without revealing other hidden islands.
-7. Read the Personal trail: neutral is comfortable, yellow/orange is narrowing, and red crosshatch has no known return with current cargo.
-8. Turn back while a route remains. Retracing Personal water is cheaper than the outward Unknown leg.
-9. Cross into Supported water away from home. The expedition should remain active and supplies should not replenish yet.
-10. Enter the exact home dock. Only this tile completes the expedition.
-11. Confirm that the expedition's Personal corridor becomes Supported, its grey risk treatment clears, the cargo rack replenishes to the configured starting bundles, and the same generation continues.
-12. Depart again along the inherited route. Supported travel should cost nothing and permit a farther voyage.
+6. Read the dotted neutral area as a local reachable-Unknown cue around the ship. It should extend only the configured distance beyond current sight, shrink as bundles leave the cargo rack and never fill remote chunks or reveal hidden islands.
+7. Find the single padded route from the ship back to the first Supported water. Unrelated Personal branches remain grey rather than receiving yellow, orange or red blocks.
+8. Confirm the whole route has one coherent state: pale/strong yellow while the return is clear or narrowing, orange when critical, and red crosshatch when the minimum-cost known return exceeds current cargo. The entire route must change together as cargo changes.
+9. Turn back along the indicated route. Retracing Personal water is cheaper than the outward Unknown leg.
+10. Cross into Supported water away from home. The expedition should remain active and supplies should not replenish yet.
+11. Enter the exact home dock. Only this tile completes the expedition.
+12. Confirm that the expedition's Personal corridor becomes Supported, the return route clears, the cargo rack replenishes to the configured starting bundles, and the same generation continues.
+13. Depart again along the inherited route. Supported travel should cost nothing and permit a farther voyage.
+
+## Milestone 3.1 overlay focus check
+
+1. Create a broad or branching Personal area using normal sailing or developer teleport, then return the ship to its connected main trail.
+2. Toggle off Forward exploration range. Confirm return colour appears only on one shortest route and its configured padding, not across every Personal tile.
+3. Remove bundles one at a time. Confirm the route geometry remains stable while the whole corridor changes together through yellow, orange and red states.
+4. Add a bundle back. Confirm the last state transition reverses immediately.
+5. Toggle off Return viability and enable Forward exploration range. Confirm the neutral cue remains centred on the ship and does not extend beyond current sight plus **Forward focus beyond sight**.
+6. Sail across a 32-tile chunk boundary and turn. Confirm old path/focus pixels clear and no seam, duplicated band or stranded colour block remains.
 
 ## Dock replenishment check
 
@@ -96,7 +108,9 @@ them.
 - Does leaving home create anticipation?
 - Is exploring into the unknown satisfying?
 - Is it clear when to turn back without a numerical resource display?
-- Do the dotted, coloured and patterned overlays communicate enough?
+- Does one padded shortest-return corridor communicate the route home without colouring unrelated Personal water?
+- Does the whole return corridor changing colour together make provision risk understandable?
+- Is the ship-local forward cue useful without covering too much of the play area?
 - Does returning to the exact home dock feel rewarding?
 - Is it clear that only the exact home dock completes an expedition?
 - Does converting the Personal route to Supported make the next voyage meaningfully stronger?

@@ -271,10 +271,17 @@ export class TideboundScene extends Phaser.Scene {
         host.dataset.unknownTiles = String(snapshot.knowledge.unknown);
         host.dataset.visibleTiles = String(snapshot.knowledge.visibleNow);
         host.dataset.forwardReachable = String(snapshot.risk.forwardReachable);
+        host.dataset.forwardFocused = String(snapshot.risk.forwardFocused);
         host.dataset.returnComfortable = String(snapshot.risk.comfortable);
         host.dataset.returnWarning = String(snapshot.risk.warning);
         host.dataset.returnCritical = String(snapshot.risk.critical);
         host.dataset.returnImpossible = String(snapshot.risk.impossible);
+        host.dataset.forwardFocusRadius = String(snapshot.risk.forwardFocusRadius);
+        host.dataset.returnPathTiles = String(snapshot.risk.returnPathTiles);
+        host.dataset.returnCorridorTiles = String(snapshot.risk.returnCorridorTiles);
+        host.dataset.returnLevel = String(snapshot.risk.returnLevel);
+        host.dataset.returnCost = snapshot.risk.returnCost?.toFixed(3) ?? "unreachable";
+        host.dataset.returnMargin = snapshot.risk.returnMargin?.toFixed(3) ?? "unreachable";
       }
       this.lastDiagnosticsRevision = this.simulation.revision;
       this.lastDiagnosticsOverlayRevision = this.simulation.overlaysRevision;
@@ -366,6 +373,8 @@ export class TideboundScene extends Phaser.Scene {
           ${this.numberMarkup("risk-comfortable", "Comfortable margin", prototypeConfig.returnRisk.comfortable, 0, 12, 0.5)}
           ${this.numberMarkup("risk-warning", "Warning margin", prototypeConfig.returnRisk.warning, 0, 8, 0.5)}
           ${this.numberMarkup("risk-critical", "Critical margin", prototypeConfig.returnRisk.critical, 0, 4, 0.5)}
+          ${this.numberMarkup("forward-focus-padding", "Forward focus beyond sight", prototypeConfig.overlays.forwardFocusPadding, 0, 12, 1)}
+          ${this.numberMarkup("return-path-padding", "Return route padding", prototypeConfig.overlays.returnPathPadding, 0, 4, 1)}
           ${this.numberMarkup("forward-opacity", "Forward opacity", prototypeConfig.overlays.forwardOverlayOpacity, 0, 1, 0.05)}
           ${this.numberMarkup("return-opacity", "Return opacity", prototypeConfig.overlays.returnOverlayOpacity, 0, 1, 0.05)}
           ${this.numberMarkup("fog-blend", "Fog transition width", prototypeConfig.overlays.fogBlend, 0, 1, 0.02)}
@@ -450,6 +459,8 @@ export class TideboundScene extends Phaser.Scene {
       case "risk-comfortable": patch = { returnRisk: { comfortable: value } }; break;
       case "risk-warning": patch = { returnRisk: { warning: value } }; break;
       case "risk-critical": patch = { returnRisk: { critical: value } }; break;
+      case "forward-focus-padding": patch = { overlays: { forwardFocusPadding: value } }; break;
+      case "return-path-padding": patch = { overlays: { returnPathPadding: value } }; break;
       case "forward-opacity": patch = { overlays: { forwardOverlayOpacity: value } }; break;
       case "return-opacity": patch = { overlays: { returnOverlayOpacity: value } }; break;
       case "fog-blend": patch = { overlays: { fogBlend: value } }; break;
@@ -470,6 +481,8 @@ export class TideboundScene extends Phaser.Scene {
         "risk-comfortable",
         "risk-warning",
         "risk-critical",
+        "forward-focus-padding",
+        "return-path-padding",
       ].includes(id)) this.simulation.refreshRiskOverlays();
       else this.simulation.revision++;
     } catch (error) {

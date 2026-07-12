@@ -136,6 +136,8 @@ export const PrototypeConfig = {
     fogBlend: 0.12,
     forwardOverlayOpacity: 0.18,
     returnOverlayOpacity: 0.35,
+    forwardFocusPadding: 3,
+    returnPathPadding: 1,
   },
 
   movement: {
@@ -860,7 +862,7 @@ browser resets them in Milestone 3. Milestone 4 adds cross-session persistence.
 
 ## 16. Forward Exploration Range
 
-The forward overlay answers:
+The forward calculation answers:
 
 > Which currently unknown cells can the ship reach with the provisions it has now?
 
@@ -879,10 +881,21 @@ Include terrain movement modifiers only when the terrain is currently known. Unk
 Stop expanding when accumulated cost exceeds:
 
 ```ts
-ship.provisions + (1 - ship.provisionAccumulator)
+ship.provisions - ship.provisionAccumulator
 ```
 
-Output one mask value per tile:
+Keep the complete logical result for diagnostics, but derive a separate
+presentation mask. Present only candidates inside a Euclidean focus centred on
+the ship:
+
+```ts
+focusRadius = sightRadius + forwardFocusPadding;
+```
+
+The default padding is three tiles. This produces a local band beyond current
+sight instead of tinting every reachable Unknown cell in the play area.
+
+Output one logical and one presentation mask value per tile:
 
 ```ts
 0 = not displayed
@@ -906,61 +919,70 @@ Recalculate when:
 
 The return calculation answers:
 
-> What is the cheapest currently known cost from each Personal tile to any Supported tile?
+> What is the cheapest currently known route from the ship to Supported water?
 
-Run multi-source Dijkstra:
+Run a targeted multi-source Dijkstra:
 
 1. Add all relevant Supported boundary tiles to the priority queue with cost zero.
-2. Traverse Supported and Personal tiles.
-3. Exclude Unknown tiles.
-4. Store the cheapest return cost for each visited tile.
-5. Store a parent direction for optional path reconstruction.
+2. Traverse passable Personal tiles and passable currently visible Unknown
+   tiles. Current sight is known to the player even though outward water is not
+   committed to Personal until it falls behind the ship.
+3. Exclude unseen Unknown tiles and blocked terrain.
+4. Stop when the ship tile is settled; its cost and parent chain are final.
+5. Reconstruct one deterministic minimum-cost path from the ship to the first
+   Supported root.
 
 Traversal costs:
 
 ```ts
 Supported = 0
 Personal = 0.5
-Unknown = blocked
+currently visible Unknown = configured Unknown cost (default 1)
+unseen Unknown = blocked
 ```
 
-To avoid zero-cost cycles causing unnecessary processing, mark a Supported region as one connected zero-cost component and seed only its boundary cells.
-
-For the prototype, calculate over the connected explored region containing the ship and nearby Supported water.
+Do not flood the interior zero-cost Supported component. Supported boundary
+cells are roots and the route terminates at the first one reached.
 
 ---
 
 ## 18. Return Margin and Colours
 
-For each Personal tile:
+For the ship's selected route:
 
 ```ts
 returnMargin =
-  availableProvisionUnits - returnCost[tile];
+  availableProvisionUnits - returnCost[ship];
 ```
 
 Available provision units:
 
 ```ts
-ship.provisions + (1 - ship.provisionAccumulator)
+ship.provisions - ship.provisionAccumulator
 ```
 
 Use these fixed thresholds:
 
 ```ts
-returnMargin >= 3.0  => gray
+returnMargin >= 3.0  => pale yellow
 returnMargin >= 1.0  => yellow
 returnMargin >= 0.0  => orange
 returnMargin < 0.0   => red
 ```
 
-Red means the tile cannot currently reach Supported water through known water with the remaining provisions.
+Apply the selected state uniformly to the full route. Comfortable and warning
+states share the yellow colour family but use different intensity/pattern
+treatment; critical is orange and impossible is red.
+
+Expand the core path by `returnPathPadding` cardinal steps through passable
+Personal or currently visible water. The default is one tile. Padding cannot
+cross blocked terrain, unseen Unknown water or Supported water. Unrelated
+Personal branches remain uncoloured.
+
+Red means the selected known route cannot currently reach Supported water with
+the remaining provisions.
 
 It does not assert that no undiscovered alternative exists.
-
-Apply these colours only to Personal tiles.
-
-Do not colour Unknown or Supported water.
 
 ---
 
@@ -1004,11 +1026,11 @@ Mask channel values:
 ### Return mask
 
 ```text
-0   none
-64  gray
-128 yellow
-192 orange
-255 red
+0   outside the selected route corridor
+64  comfortable yellow
+128 warning yellow
+192 critical orange
+255 impossible red
 ```
 
 Update only dirty chunks.
@@ -1053,11 +1075,14 @@ The visibility mask removes both Unknown fog and Personal desaturation in the fi
 
 ### Forward range
 
-Render a neutral low-opacity texture over Unknown fog. Do not reveal the base scene.
+Render a neutral low-opacity texture over Unknown fog only inside the
+ship-centred focus. Do not reveal the base scene.
 
 ### Return risk
 
-Tint only Personal water according to the mask.
+Tint only the selected padded route corridor according to the ship's single
+return-risk state. The corridor may cross currently visible Unknown water to
+connect the ship to its Personal trail; it never enters unseen Unknown water.
 
 ---
 
@@ -1395,16 +1420,25 @@ Required unit tests:
 - includes reachable Unknown cells;
 - excludes cells beyond provision budget;
 - does not reveal hidden terrain costs;
-- updates after provision consumption.
+- updates after provision consumption;
+- presents only the subset within `sightRadius + forwardFocusPadding` of the ship;
+- clears the old local focus when the ship changes tile.
 
 ### Return path
 
 - chooses the cheapest known route;
-- excludes Unknown;
+- excludes unseen Unknown;
 - uses Personal at half cost;
 - reaches the nearest Supported region;
-- marks negative-margin cells red;
-- discovers shorter alternate known paths.
+- permits currently visible passable Unknown only as the connection from the
+  ship to its Personal trail;
+- reconstructs one deterministic minimum-cost path;
+- pads only through adjacent passable Personal/currently-visible water;
+- excludes unrelated Personal branches, blocked terrain, unseen Unknown and
+  Supported water from the coloured corridor;
+- gives every corridor tile the same state derived from the ship's margin;
+- changes the whole corridor atomically across yellow, orange and red states;
+- discovers shorter alternate known paths and clears stale route pixels.
 
 ### Expedition
 
@@ -1452,7 +1486,9 @@ Target:
 - no new texture allocation when masks update;
 - no pathfinding on every render frame.
 
-Pathfinding should run only after tile, provision or knowledge changes.
+Pathfinding should run only after tile, knowledge or blocking changes.
+Provision-only changes reclassify cached forward groups and the current return
+corridor without a new search.
 
 The Milestone 3 implementation keeps normal sailing work proportional to the
 local explored area rather than total world area:
@@ -1465,9 +1501,10 @@ local explored area rather than total world area:
 - visibility clearing, diagnostics, knowledge counts, expedition resolution
   and return-boundary discovery use maintained index sets and counters;
 - Dijkstra searches reuse typed cost, parent, visited, settled-node and numeric
-  heap buffers, then post-process only settled or known-water candidates;
-- provision-only changes reclassify cached cost groups without rerunning path
-  searches.
+  heap buffers; return search stops when the ship is settled, then reconstructs
+  and pads only that route;
+- provision-only changes reclassify cached forward cost groups and the sparse
+  return corridor without rerunning path searches.
 
 Scattered-island profile construction, bounded placement, terrain painting and
 four-edge flood validation run only during world generation or regeneration.
@@ -1511,10 +1548,10 @@ The overlay must not rely on hue alone.
 
 Add an accessibility mode using:
 
-- gray: no pattern;
-- yellow: sparse diagonal dashes;
-- orange: denser diagonal dashes;
-- red: crosshatch or pulse.
+- comfortable pale yellow: no pattern;
+- warning yellow: sparse diagonal dashes;
+- critical orange: denser diagonal dashes;
+- impossible red: crosshatch or pulse.
 
 The neutral forward range uses a dotted boundary and no risk pattern.
 
@@ -1571,10 +1608,22 @@ Completion condition: travelling out and returning through the same corridor con
 - Implement forward-range Dijkstra.
 - Implement multi-source return Dijkstra.
 - Generate forward and return mask textures.
-- Add gray, yellow, orange and red trail states.
+- Add yellow-family, orange and red return states.
 - Add accessibility patterns.
 
 Completion condition: the player can visually identify both remaining forward reach and whether the known return route remains viable.
+
+### Milestone 5.1 — Overlay Readability Rework (roadmap Milestone 3.1)
+
+- Restrict forward presentation to a ship-local sight-plus-padding focus while
+  retaining the full logical provision calculation.
+- Reconstruct one minimum-cost ship-to-Supported route.
+- Pad that route through passable known/currently-visible water only.
+- Apply one yellow, orange or red risk family to the complete corridor.
+- Remove coloured risk treatment from unrelated Personal water.
+
+Completion condition: the player sees one coherent route-home decision and a
+local forward cue without map-wide coloured blocks.
 
 ### Milestone 6 — Expedition Resolution (completes roadmap Milestone 3)
 
@@ -1639,10 +1688,10 @@ when all of the following are true:
 7. Physical provisions visibly diminish.
 8. Unknown travel costs twice as much as retracing Personal water.
 9. Supported travel costs nothing.
-10. The neutral overlay shows reachable Unknown water.
-11. The trail overlay communicates return viability.
-12. Yellow, orange and red appear only behind the ship on Personal water.
-13. Red means no known return through the explored network.
+10. The neutral overlay shows reachable Unknown water only in a bounded focus around the ship.
+11. The return overlay communicates viability on one minimum-cost route to Supported water.
+12. Yellow, orange and red appear only on that route and its passable configured padding.
+13. Red means the minimum-cost known return exceeds the remaining provisions.
 14. An expedition begins only after leaving Supported water.
 15. Entering Supported water away from home neither completes nor replenishes the expedition.
 16. Entering the exact home dock successfully returns an active expedition.

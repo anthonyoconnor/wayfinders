@@ -161,7 +161,7 @@ a:focus-visible {
   width: 0.85rem;
   height: 0.85rem;
   border: 1px solid rgba(225, 235, 224, 0.55);
-  background: rgba(164, 174, 163, 0.5);
+  background: rgba(222, 195, 82, 0.68);
 }
 
 .legend-swatch--forward {
@@ -170,7 +170,7 @@ a:focus-visible {
 }
 
 .legend-swatch--warning {
-  background: #d98d26;
+  background: #ee691d;
 }
 
 .legend-swatch--warning::after,

@@ -190,6 +190,44 @@ persistence belongs to Milestone 4.
 
 ------------------------------------------------------------------------
 
+# Milestone 3.1 --- Overlay Readability Rework
+
+## Goal
+
+Make the continue-or-return decision readable without covering the explored
+play area in competing blocks of risk colour.
+
+## Features
+
+- Preserve the complete provision-aware forward calculation, but present only
+  reachable Unknown water inside a ship-centred focus extending three tiles
+  beyond current sight by default.
+- Identify one deterministic minimum-provision-cost route from the ship to the
+  first reachable Supported water tile.
+- Present return risk only on that route and a configurable one-tile passable
+  corridor on either side.
+- Use one risk state for the whole route: yellow-family for a clear/cautionary
+  return, orange for a critical return and red when the known route exceeds
+  the remaining provision budget.
+- Keep unseen Unknown water, blocked terrain, unrelated Personal branches and
+  Supported water outside the coloured return corridor.
+- Expose forward-focus depth and return-route padding in Developer tools for
+  playtest tuning without adding a numerical player HUD.
+
+## Success Criteria
+
+At any point in a connected expedition, the player sees one continuous padded
+route from the ship toward Supported water rather than colours across the full
+Personal region. The route changes colour as one unit when provisions cross a
+risk threshold. Forward reach appears only as a bounded local cue around the
+ship, and moving the ship clears obsolete route and focus pixels without chunk
+seams or hidden-terrain disclosure.
+
+Milestone 3.1 returns to the same Milestone 3 review gate. Milestones 4 and 5
+remain paused until this revised presentation has been user playtested.
+
+------------------------------------------------------------------------
+
 # Milestone 4 --- Discoveries and Persistence
 
 ## Goal
@@ -272,6 +310,9 @@ generation.
 - Is exploring into the unknown satisfying?
 - Does the player naturally understand when to turn back?
 - Do the overlays communicate enough information without requiring numerical UI?
+- Does one padded minimum-cost return route read more clearly than a field of
+  coloured Personal-water blocks?
+- Does the ship-local forward cue stay useful without dominating the play area?
 - Does returning home feel rewarding?
 - Does converting a returned Personal route to Supported water make the next voyage meaningfully stronger?
 - Does replenishment at the home dock make repeated voyages flow naturally?

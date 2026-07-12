@@ -49,6 +49,10 @@ export interface PrototypeConfig {
     fogBlend: number;
     forwardOverlayOpacity: number;
     returnOverlayOpacity: number;
+    /** Extra tiles beyond current sight in which forward reach is presented. */
+    forwardFocusPadding: number;
+    /** Cardinal passable-water padding around the minimum-cost return path. */
+    returnPathPadding: number;
   };
   movement: {
     shipSpeed: number;
@@ -132,6 +136,8 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
     fogBlend: 0.12,
     forwardOverlayOpacity: 0.18,
     returnOverlayOpacity: 0.35,
+    forwardFocusPadding: 3,
+    returnPathPadding: 1,
   },
   movement: {
     shipSpeed: 2.5,
@@ -326,6 +332,8 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   unitInterval(config.overlays.fogBlend, "overlays.fogBlend");
   unitInterval(config.overlays.forwardOverlayOpacity, "overlays.forwardOverlayOpacity");
   unitInterval(config.overlays.returnOverlayOpacity, "overlays.returnOverlayOpacity");
+  nonNegativeInteger(config.overlays.forwardFocusPadding, "overlays.forwardFocusPadding");
+  nonNegativeInteger(config.overlays.returnPathPadding, "overlays.returnPathPadding");
 
   nonNegative(config.movement.shipSpeed, "movement.shipSpeed");
   nonNegative(config.movement.turnRate, "movement.turnRate");

@@ -35,8 +35,8 @@ export class RiskOverlayRenderer {
   private returnPresented = new Uint8Array(0);
   private lastForward?: ForwardRangeResult;
   private lastReturning?: ReturnPathResult;
-  private lastForwardCandidates: readonly number[] = [];
-  private lastReturnPersonal: readonly number[] = [];
+  private lastForwardPresentationCandidates: readonly number[] = [];
+  private lastReturnCorridor: readonly number[] = [];
   private lastVisibleIndices: readonly number[] = [];
   private lastForwardVisible?: boolean;
   private lastReturnVisible?: boolean;
@@ -64,8 +64,8 @@ export class RiskOverlayRenderer {
       this.lastSignature = "";
       this.lastForward = undefined;
       this.lastReturning = undefined;
-      this.lastForwardCandidates = [];
-      this.lastReturnPersonal = [];
+      this.lastForwardPresentationCandidates = [];
+      this.lastReturnCorridor = [];
       this.lastVisibleIndices = [];
       this.lastForwardVisible = undefined;
       this.lastReturnVisible = undefined;
@@ -105,13 +105,13 @@ export class RiskOverlayRenderer {
     const dirtyReturn = new Set<WorldChunk>();
 
     if (force || worldChanged || dataChanged || chunksChanged) {
-      this.updateForwardIndices(world, forward, this.lastForwardCandidates, dirtyForward);
-      this.updateForwardIndices(world, forward, forward.candidateIndices, dirtyForward);
-      this.updateReturnIndices(world, returning, this.lastReturnPersonal, dirtyReturn);
-      this.updateReturnIndices(world, returning, returning.personalIndices, dirtyReturn);
+      this.updateForwardIndices(world, forward, this.lastForwardPresentationCandidates, dirtyForward);
+      this.updateForwardIndices(world, forward, forward.presentationCandidateIndices, dirtyForward);
+      this.updateReturnIndices(world, returning, this.lastReturnCorridor, dirtyReturn);
+      this.updateReturnIndices(world, returning, returning.corridorIndices, dirtyReturn);
     } else if (visibilityChanged) {
-      this.updateBothAtIndices(world, forward, returning, this.lastVisibleIndices, dirtyForward, dirtyReturn);
-      this.updateBothAtIndices(world, forward, returning, world.getVisibleIndices(), dirtyForward, dirtyReturn);
+      this.updateForwardIndices(world, forward, this.lastVisibleIndices, dirtyForward);
+      this.updateForwardIndices(world, forward, world.getVisibleIndices(), dirtyForward);
     }
 
     if (redrawAll) {
@@ -146,8 +146,8 @@ export class RiskOverlayRenderer {
     this.lastSignature = signature;
     this.lastForward = forward;
     this.lastReturning = returning;
-    this.lastForwardCandidates = forward.candidateIndices;
-    this.lastReturnPersonal = returning.personalIndices;
+    this.lastForwardPresentationCandidates = forward.presentationCandidateIndices;
+    this.lastReturnCorridor = returning.corridorIndices;
     this.lastVisibleIndices = [...world.getVisibleIndices()];
     this.lastForwardVisible = debug.forwardRange;
     this.lastReturnVisible = debug.returnViability;
@@ -160,25 +160,11 @@ export class RiskOverlayRenderer {
     this.returnPresented = new Uint8Array(0);
     this.lastForward = undefined;
     this.lastReturning = undefined;
-    this.lastForwardCandidates = [];
-    this.lastReturnPersonal = [];
+    this.lastForwardPresentationCandidates = [];
+    this.lastReturnCorridor = [];
     this.lastVisibleIndices = [];
     this.lastForwardVisible = undefined;
     this.lastReturnVisible = undefined;
-  }
-
-  private updateBothAtIndices(
-    world: WorldGrid,
-    forward: ForwardRangeResult,
-    returning: ReturnPathResult,
-    indices: Iterable<number>,
-    dirtyForward: Set<WorldChunk>,
-    dirtyReturn: Set<WorldChunk>,
-  ): void {
-    for (const index of indices) {
-      this.updateForwardIndex(world, forward, index, dirtyForward);
-      this.updateReturnIndex(world, returning, index, dirtyReturn);
-    }
   }
 
   private updateForwardIndices(
@@ -205,7 +191,7 @@ export class RiskOverlayRenderer {
     index: number,
     dirtyChunks: Set<WorldChunk>,
   ): void {
-    const next = forward.mask[index] !== 0 && !world.isVisibleNowAtIndex(index) ? 1 : 0;
+    const next = forward.presentationMask[index] !== 0 && !world.isVisibleNowAtIndex(index) ? 1 : 0;
     if (this.forwardPresented[index] === next) return;
     this.forwardPresented[index] = next;
     addCardinalChunkDependents(world, index, dirtyChunks);
@@ -217,7 +203,7 @@ export class RiskOverlayRenderer {
     index: number,
     dirtyChunks: Set<WorldChunk>,
   ): void {
-    const next = world.isVisibleNowAtIndex(index) ? ReturnRiskLevel.Hidden : returning.risk[index];
+    const next = returning.risk[index];
     if (this.returnPresented[index] === next) return;
     this.returnPresented[index] = next;
     const x = index % world.width;
@@ -335,7 +321,7 @@ export class RiskOverlayRenderer {
 
   private riskColor(level: ReturnRiskLevel, opacity: number): string {
     switch (level) {
-      case ReturnRiskLevel.Comfortable: return `rgba(164, 174, 163, ${opacity * 0.72})`;
+      case ReturnRiskLevel.Comfortable: return `rgba(222, 195, 82, ${opacity * 0.7})`;
       case ReturnRiskLevel.Warning: return `rgba(238, 188, 62, ${opacity})`;
       case ReturnRiskLevel.Critical: return `rgba(238, 105, 29, ${Math.min(0.9, opacity * 1.25)})`;
       case ReturnRiskLevel.Impossible: return `rgba(196, 38, 36, ${Math.min(0.95, opacity * 1.6)})`;

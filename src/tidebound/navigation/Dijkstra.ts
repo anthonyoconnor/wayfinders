@@ -9,6 +9,8 @@ export interface DijkstraOptions {
   nodeCount: number;
   starts: readonly (DijkstraStart | number)[];
   maxCost?: number;
+  /** Stop once this node is settled; its shortest cost and parent chain are then final. */
+  target?: number;
   forEachNeighbor: (node: number, visit: (neighbor: number, traversalCost: number) => void) => void;
   workspace?: DijkstraWorkspace;
 }
@@ -84,6 +86,12 @@ export class DijkstraWorkspace {
 export function dijkstra(options: DijkstraOptions): DijkstraResult {
   const { nodeCount, starts, forEachNeighbor } = options;
   if (!Number.isInteger(nodeCount) || nodeCount <= 0) throw new RangeError("nodeCount must be a positive integer");
+  if (
+    options.target !== undefined
+    && (!Number.isInteger(options.target) || options.target < 0 || options.target >= nodeCount)
+  ) {
+    throw new RangeError(`Target node ${options.target} is outside graph`);
+  }
 
   const maxCost = options.maxCost ?? Number.POSITIVE_INFINITY;
   const workspace = options.workspace;
@@ -138,6 +146,7 @@ export function dijkstra(options: DijkstraOptions): DijkstraResult {
     if (priority > maxCost) break;
     visited[node] = 1;
     settledIndices[settledCount++] = node;
+    if (node === options.target) break;
 
     activeNode = node;
     activePriority = priority;
@@ -147,7 +156,10 @@ export function dijkstra(options: DijkstraOptions): DijkstraResult {
   return { costs, parents, visited, settledIndices, settledCount };
 }
 
-export function reconstructDijkstraPath(result: DijkstraResult, destination: number): number[] {
+export function reconstructDijkstraPath(
+  result: Pick<DijkstraResult, "visited" | "parents">,
+  destination: number,
+): number[] {
   if (!result.visited[destination]) return [];
   const path: number[] = [];
   const seen = new Set<number>();

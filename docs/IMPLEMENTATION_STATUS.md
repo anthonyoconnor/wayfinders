@@ -1,6 +1,6 @@
 # Wayfinders implementation status
 
-This file is the continuation point for prototype work. The project is intentionally paused after Milestone 3 for the review gate in `Wayfinders_Prototype_Milestones.md`.
+This file is the continuation point for prototype work. The project is intentionally paused after Milestone 3.1 for the revised review gate in `Wayfinders_Prototype_Milestones.md`.
 
 ## Milestone 0 — Developer Sandbox
 
@@ -52,11 +52,14 @@ Status: complete — stop here for user playtesting
 - Physical, countable provision bundles in an on-board cargo rack; no visible numerical resource bar.
 - Distance-based charging captured before the corresponding observation update.
 - Configured Supported / Personal / Unknown costs of 0 / 0.5 / 1 bundle-units per tile.
-- Cost-limited forward Dijkstra mask showing only reachable Unknown water.
-- Known-water, multi-source return Dijkstra with comfortable, warning, critical and impossible margins.
+- Cost-limited forward Dijkstra with a ship-local presentation focus extending
+  three tiles beyond current sight by default.
+- Targeted multi-source return Dijkstra reconstructing one minimum-cost route
+  from the ship to the first Supported water.
 - Reusable chunk-sized WebGL forward and return textures with dotted, diagonal and crosshatched accessibility treatments.
 - World legend uses words and patterns without exposing resource arithmetic.
-- Current sight remains full colour; return risk appears only on Personal water behind the ship.
+- Return risk uses one state across the route and its one-tile passable
+  Personal/current-sight padding; unrelated Personal branches remain grey.
 - The default configuration generates eight non-home islands with stable IDs and descriptors.
 - High Island, Low Cay, Atoll and Rocky Skerry kinds are represented across small, medium and large sizes.
 - Placement uses separate deterministic namespaces for descriptor profile, placement, shape and terrain.
@@ -149,8 +152,10 @@ validate the technical design's mobile performance target and does not assert
 that sailing is enjoyable, that the overlays are intuitively clear, or that
 wreck pacing and repeated expeditions feel satisfying to a player.
 
-Human playtest status: initial feedback reported sluggish sailing and requested
-the performance rework recorded below. Product-owner gate decision: **pending**.
+Human playtest status: the performance rework was accepted as noticeably
+better. The next playtest reported that map-wide coloured risk blocks were
+confusing and requested the Milestone 3.1 overlay rework recorded below.
+Product-owner gate decision: **pending**.
 Do not start production art or roadmap Milestones 4–5 until the tester repeats
 the playtest on the remediated build and the product owner records **Proceed**
 or another **Rework** decision here.
@@ -174,9 +179,10 @@ speed. The remediation keeps normal sailing local or sparse:
   resolves only the owning expedition's indices, and return boundaries derive
   from Personal-water neighbours;
 - Dijkstra reuses cost, parent, visited, settled-node and numeric heap buffers,
-  then post-processes only settled forward candidates or known Personal water;
-- provision-only range/risk changes update cached cost groups without a new
-  path search;
+  then post-processes sparse forward candidates or one reconstructed return
+  corridor;
+- provision-only range/risk changes update cached cost groups or the existing
+  corridor without a new path search;
 - supported-water painting and island flood validation are bounded or
   early-exiting generation-only work.
 
@@ -215,8 +221,60 @@ installed browser-test runner. Its console contained no warnings or errors.
 
 Critical decision: no Web Worker was added. Sparse main-thread work is now
 inside the current budget, while a worker would add state-transfer and
-determinism complexity without evidence that it is needed. Repeat human
-playtesting is the next action; Milestones 4–5 remain out of scope.
+determinism complexity without evidence that it is needed. Milestone 3.1
+overlay playtesting is the next action; Milestones 4–5 remain out of scope.
+
+## Milestone 3.1 overlay readability rework — 2026-07-12
+
+Status: **complete — ready for user playtesting**.
+
+The second human playtest found the broad return-risk field confusing because
+yellow, orange and red blocks covered much of the explored play area. The
+revised presentation separates calculation from display:
+
+- the complete forward-reach calculation remains available to simulation and
+  diagnostics, while only reachable Unknown water within current sight plus a
+  default three-tile focus padding is presented;
+- return search accepts passable current-sight water as the connection from
+  the ship to its Personal trail, stops when the ship's minimum cost is final
+  and reconstructs one route to the first Supported boundary;
+- a cardinal breadth-first expansion adds one configurable passable tile of
+  padding around that route without crossing blocked terrain, unseen Unknown
+  water or Supported water;
+- every route and padding tile receives the same ship-level state: pale or
+  strong yellow, orange, or red. Unrelated Personal branches keep only their
+  normal grey knowledge treatment;
+- the return corridor remains visible through current sight so the route is
+  continuous from the ship, while the neutral forward cue remains suppressed
+  inside sight and reads as a local fringe beyond it;
+- previous and current sparse forward/corridor candidates are diffed so turns,
+  route changes and chunk crossings clear stale pixels.
+
+Developer tools now expose **Forward focus beyond sight** and **Return route
+padding**. Normal play still contains no numerical route or resource HUD.
+
+Final verification:
+
+- the clean `npm.cmd run check` pipeline passed TypeScript, 81 tests across
+  nine files and the production build in 68.2 seconds wall time;
+- Vitest reported 9.45 seconds for the full suite and Vite built in 31.58
+  seconds. The existing bundle-size advisory remains informational;
+- focused overlay, visibility, simulation-integration and configuration runs
+  passed 41 tests before the clean pipeline;
+- browser seed 13371 produced a ten-tile core route with a 28-tile padded
+  corridor inside 126 Personal tiles, confirming unrelated Personal water was
+  not coloured;
+- the same browser state calculated 1,009 logically reachable forward cells
+  but kept only 87 candidates in the radius-eight local focus;
+- cargo changes moved one unchanged corridor through comfortable/warning,
+  critical and impossible yellow/orange/red treatments, and adding cargo
+  reversed the last transition immediately;
+- a branching route switched between core paths and cleared the abandoned
+  corridor. The route crossed the `x = 64` chunk boundary without a gap,
+  duplicate band or colour seam;
+- the final browser console contained no warnings or errors.
+
+Milestone 3.1 now returns to human playtesting at the existing review gate.
 
 ### Reusable Milestone 3 regression checks
 
@@ -236,6 +294,9 @@ For every candidate build at this gate:
 6. Confirm a later generation can discover the wreck and regeneration resets
    routes, wrecks, counters and generation.
 7. Confirm the browser console remains free of warnings and errors.
+8. Confirm return colours occupy only one padded minimum-cost route, change as
+   a single state with cargo, and clear stale pixels; confirm forward reach is
+   presented only in the ship-local sight-plus-padding focus.
 
 Development is intentionally paused at the revised Milestone 3 review gate.
 Generic discoveries, save/load, cross-session persistence and Milestone 5
@@ -257,7 +318,10 @@ living-world work have not been started.
 12. **Provision budget correction.** The technical document prints `bundles + (1 - accumulator)` for overlay reach, which grants a nonexistent extra bundle when the accumulator is zero. The implementation uses `bundles - accumulator`, so physical cargo and overlay distance agree exactly. Tests lock this decision.
 13. **Wreck consequence.** Natural travel consumption crossing from a positive bundle count to zero outside Supported water begins one immediate wreck transition. The failed stamped Personal route returns to Unknown, earlier Supported routes survive and a wreck record is left at the loss position. Direct developer provision removal does not itself trigger a wreck.
 14. **Physical cargo presentation.** Each bundle is a countable crate in a screen-space “Provisions Aboard” rack, following the supplied overlay concept. A hidden live text equivalent exists for accessibility; normal visual play has no number.
-15. **Risk accessibility.** Comfortable return is neutral, warning uses sparse diagonals, critical uses denser diagonals and impossible return uses a red crosshatch. Current sight is excluded so the colours read as a trail behind the ship rather than a tint over the immediate sailing area.
+15. **Risk accessibility.** Milestone 3.1 uses a pale-yellow unpatterned
+    comfortable route, stronger yellow with sparse diagonals for warning,
+    orange with denser diagonals for critical and red crosshatch for impossible.
+    Only one padded minimum-cost route receives those colours.
 16. **Unknown-terrain privacy.** Forward search treats still-Unknown blockers as ordinary Unknown water. Once observed, actual terrain and collision apply. The overlay therefore cannot reveal hidden islands or reefs.
 17. **Exact-dock resolution and replenishment.** Only entering the generated home dock successfully returns an active expedition. It converts matching stamped Personal water to Supported, clears stamps and fractional provision use, restores configured starting bundles and keeps the same generation. Entering the dock without an active expedition also replenishes. If the final bundle is consumed on the docking step, success takes precedence over wreck.
 18. **Dependency advisory.** Runtime dependencies audit clean. Vitest was patched from 3.2.4 to 3.2.7 to remove a development-server advisory before handoff.
@@ -271,3 +335,14 @@ living-world work have not been started.
 26. **Island presentation and concealment.** Each kind uses a distinct generated developer-art palette and minimal terrain marks. Unknown interiors remain fully opaque so island silhouettes cannot leak before reveal. This is functional exploration content, not production island art or Milestone 4 environmental polish.
 27. **Wreck-transition pacing.** Wreck onset and route rollback occur immediately, but generation advancement and dock respawn wait for four simulation seconds. During the hold, current sight remains frozen on a visible wreck marker, the camera stays at the loss site, movement, teleport, cargo editing, live gameplay tuning and repeated forced wrecks are suppressed, and the old generation remains authoritative. Explicit world regeneration remains available as a deterministic cancellation/reset. Completion atomically clears loss-site visibility, advances generation and expedition ID once, creates the fully supplied dock ship, recalculates overlays and discards held-input overshoot.
 28. **Performance scaling.** Normal sailing is kept independent of total world area wherever practical: camera-culled static chunk graphics replace world-wide render command submission; fog and risk uploads are chunk-local; visibility, knowledge, expedition and diagnostic counts use sparse indices or counters; and path searches reuse typed buffers and process settled/known candidates. Doubling both dimensions quadruples generation data, so generation remains area-scaled and off the movement loop. A Web Worker was not added because the optimized `192 x 192` simulation remains within the frame budget; mobile-device validation is still outstanding.
+29. **Milestone 3.1 route semantics.** "Shortest" means minimum configured
+    provision cost, not fewest geometric tiles. The route begins at the ship,
+    may use passable Unknown cells only while they are in current sight, and
+    ends at the first Supported tile. Supported water itself is not coloured.
+    With no connected known/currently-visible route, no false corridor is
+    drawn; the diagnostic state remains impossible.
+30. **Milestone 3.1 locality.** Full forward reach remains the logical result,
+    but presentation is clipped to a Euclidean radius of sight plus three
+    configurable tiles. Return padding uses one configurable cardinal step so
+    it cannot jump across blockers. These values are sandbox tuning controls,
+    not normal-player numeric UI.

@@ -1,13 +1,17 @@
 # Wayfinders browser prototype
 
 Playable Phaser/TypeScript exploration prototype, completed through Milestone
-3 and paused for user playtesting at the Risk, Return and Inheritance review
+3.1 and paused for user playtesting at the Risk, Return and Inheritance review
 gate. Successful expeditions resolve only at the exact home dock, convert the
 current Personal route to Supported water, replenish supplies and continue the
 same generation. Running out of supplies outside Supported water leaves a
 discoverable wreck and discards the failed Personal route. After a four-second
 wreck presentation at the loss site, a fully supplied ship respawns at home
 and the generation advances.
+
+The Milestone 3.1 presentation shows return risk only on one padded
+minimum-cost route from the ship to Supported water. Forward reach is a local
+ship-centred cue rather than a map-wide field.
 
 Every seed also produces a stable set of eight non-home islands in the default
 configuration. High Islands, Low Cays, Atolls and Rocky Skerries appear across

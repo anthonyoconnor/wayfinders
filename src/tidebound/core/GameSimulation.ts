@@ -38,10 +38,17 @@ export interface SimulationSnapshot {
   risk: {
     budget: number;
     forwardReachable: number;
+    forwardFocused: number;
     comfortable: number;
     warning: number;
     critical: number;
     impossible: number;
+    forwardFocusRadius: number;
+    returnPathTiles: number;
+    returnCorridorTiles: number;
+    returnLevel: number;
+    returnCost: number | null;
+    returnMargin: number | null;
     stranded: boolean;
   };
   expedition: {
@@ -357,10 +364,17 @@ export class GameSimulation {
     const risk = {
       budget: this.forwardRange.budget,
       forwardReachable: this.forwardRange.reachableCount,
+      forwardFocused: this.forwardRange.focusCount,
       comfortable: this.returnPaths.riskCounts.comfortable,
       warning: this.returnPaths.riskCounts.warning,
       critical: this.returnPaths.riskCounts.critical,
       impossible: this.returnPaths.riskCounts.impossible,
+      forwardFocusRadius: this.forwardRange.focusRadius,
+      returnPathTiles: this.returnPaths.pathIndices.length,
+      returnCorridorTiles: this.returnPaths.corridorIndices.length,
+      returnLevel: this.returnPaths.riskLevel,
+      returnCost: Number.isFinite(this.returnPaths.returnCost) ? this.returnPaths.returnCost : null,
+      returnMargin: Number.isFinite(this.returnPaths.returnMargin) ? this.returnPaths.returnMargin : null,
       stranded: this.stranded,
     };
     return {

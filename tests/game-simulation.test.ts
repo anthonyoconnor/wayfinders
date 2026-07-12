@@ -36,6 +36,49 @@ describe("GameSimulation exploration integration", () => {
     expect(trailColumn.every((state) => state === KnowledgeState.Personal)).toBe(true);
   });
 
+  it("presents one local forward focus and one padded return route that clears at the dock", () => {
+    const simulation = new GameSimulation();
+    const centerY = simulation.generated.landmarks.homeCenter.y;
+    let firstUnknownX = simulation.generated.landmarks.dock.x;
+    while (
+      firstUnknownX < simulation.world.width - 1
+      && simulation.world.getKnowledge(firstUnknownX, centerY) === KnowledgeState.Supported
+    ) firstUnknownX++;
+    expect(simulation.teleport({ x: firstUnknownX - 1, y: centerY })).toBe(true);
+    simulation.ship.heading = 0;
+
+    for (let step = 0; step < 110; step++) simulation.update({ turn: 0, throttle: 1 }, 1 / 30);
+
+    const outbound = simulation.snapshot();
+    const corridorRiskCount = outbound.risk.comfortable
+      + outbound.risk.warning
+      + outbound.risk.critical
+      + outbound.risk.impossible;
+    expect(outbound.risk.returnPathTiles).toBeGreaterThan(1);
+    expect(outbound.risk.returnCorridorTiles).toBeGreaterThan(0);
+    expect(outbound.risk.returnCorridorTiles).toBeLessThan(outbound.knowledge.personal);
+    expect(corridorRiskCount).toBe(outbound.risk.returnCorridorTiles);
+    expect(simulation.returnPaths.pathIndices[0]).toBe(
+      simulation.world.index(simulation.ship.currentTileX, simulation.ship.currentTileY),
+    );
+    expect(simulation.world.getKnowledgeAtIndex(
+      simulation.returnPaths.pathIndices[simulation.returnPaths.pathIndices.length - 1],
+    )).toBe(KnowledgeState.Supported);
+    expect(simulation.forwardRange.presentationCandidateIndices.every((index) => {
+      const x = index % simulation.world.width;
+      const y = Math.floor(index / simulation.world.width);
+      const dx = x - simulation.ship.currentTileX;
+      const dy = y - simulation.ship.currentTileY;
+      return dx * dx + dy * dy <= simulation.forwardRange.focusRadius ** 2;
+    })).toBe(true);
+
+    expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
+    const returned = simulation.snapshot();
+    expect(returned.risk.returnPathTiles).toBe(1);
+    expect(returned.risk.returnCorridorTiles).toBe(0);
+    expect(returned.risk.returnLevel).toBe(0);
+  });
+
   it("teleports without revealing a connecting line between distant tiles", () => {
     const simulation = new GameSimulation();
     const target = { x: 4, y: 4 };
