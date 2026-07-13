@@ -5,11 +5,16 @@ import {
   type PrototypeConfig,
 } from "../config/prototypeConfig";
 import type { ShipState, ShipwreckState } from "../core/types";
+import {
+  FISHING_SHOAL_CONTENT_VERSION,
+  isCurrentFishingShoalId,
+  type FishingShoalSightedSaveRecordV1,
+} from "../exploration/FishingShoalContracts";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
 export const ACCEPTED_BASELINE_SAVE_SCHEMA_VERSION = 1 as const;
-export const SAVE_SCHEMA_VERSION = 1 as const;
+export const SAVE_SCHEMA_VERSION = 2 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -93,7 +98,20 @@ export interface SaveGameV1<TDiscovery extends DiscoverySaveRecord = DiscoverySa
   terrainPatches: [];
 }
 
-export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV1<TDiscovery>;
+export type SaveGameV2<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
+  Omit<SaveGameV1<TDiscovery>, "schemaVersion" | "world"> & {
+    schemaVersion: 2;
+    world: SaveGameV1<TDiscovery>["world"] & {
+      contentVersions: {
+        fishingShoals: typeof FISHING_SHOAL_CONTENT_VERSION;
+      };
+    };
+    fishingShoals: {
+      provisional: FishingShoalSightedSaveRecordV1[];
+    };
+  };
+
+export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV2<TDiscovery>;
 
 type SaveMigration = (value: unknown) => unknown;
 
@@ -101,7 +119,9 @@ type SaveMigration = (value: unknown) => unknown;
  * Adjacent schema migrations keyed by their source version. New authoritative
  * state adds one real step here; missing steps fail closed instead of guessing.
  */
-const SAVE_MIGRATIONS: ReadonlyMap<number, SaveMigration> = new Map();
+const SAVE_MIGRATIONS: ReadonlyMap<number, SaveMigration> = new Map([
+  [1, migrateSaveGameV1ToV2],
+]);
 
 export interface KnowledgeCell {
   state: KnowledgeState;
@@ -134,6 +154,13 @@ export class UnsupportedWorldGeneratorVersionError extends Error {
   constructor(readonly version: number) {
     super(`Unsupported world generator version ${version}`);
     this.name = "UnsupportedWorldGeneratorVersionError";
+  }
+}
+
+export class UnsupportedFishingShoalContentVersionError extends Error {
+  constructor(readonly version: number) {
+    super(`Unsupported fishing-shoal content version ${version}`);
+    this.name = "UnsupportedFishingShoalContentVersionError";
   }
 }
 
@@ -350,7 +377,7 @@ export function migrateSaveGame(value: unknown): SaveGame {
     schemaVersion = migratedVersion;
   }
 
-  return parseSaveGameV1(current);
+  return parseSaveGameV2(current);
 }
 
 /** Main load entrypoint; retained under the established API name. */
@@ -431,7 +458,41 @@ export function parseSaveGameV1(value: unknown): SaveGameV1 {
   return value as SaveGameV1;
 }
 
-export function isSaveGame(value: unknown): value is SaveGameV1 {
+/** Validates the GP-1.1 schema after the migration chain reaches version two. */
+export function parseSaveGameV2(value: unknown): SaveGameV2 {
+  const root = record(value, "save");
+  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
+  if (schemaVersion !== 2) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+
+  const world = record(root.world, "save.world");
+  const contentVersions = record(world.contentVersions, "save.world.contentVersions");
+  const fishingShoalContentVersion = integer(
+    contentVersions.fishingShoals,
+    "save.world.contentVersions.fishingShoals",
+  );
+  if (fishingShoalContentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
+    throw new UnsupportedFishingShoalContentVersionError(fishingShoalContentVersion);
+  }
+
+  const { contentVersions: _contentVersions, ...baselineWorld } = world;
+  parseSaveGameV1({ ...root, schemaVersion: 1, world: baselineWorld });
+
+  const generation = positiveSafeInteger(root.generation, "save.generation");
+  const expedition = record(root.expedition, "save.expedition");
+  const expeditionId = unsigned32(expedition.id, "save.expedition.id", false);
+  const expeditionActive = boolean(expedition.active, "save.expedition.active");
+  const fishingShoals = record(root.fishingShoals, "save.fishingShoals");
+  validateFishingShoalSightings(
+    fishingShoals.provisional,
+    expeditionId,
+    generation,
+    expeditionActive,
+  );
+
+  return value as SaveGameV2;
+}
+
+export function isSaveGame(value: unknown): boolean {
   try {
     parseSaveGame(value);
     return true;
@@ -452,7 +513,48 @@ export function classifySaveGame(value: unknown): SaveGameCompatibility {
       error instanceof UnsupportedSaveSchemaVersionError
       && error.version > SAVE_SCHEMA_VERSION
     ) return "unsupported-newer";
+    if (
+      error instanceof UnsupportedFishingShoalContentVersionError
+      && error.version > FISHING_SHOAL_CONTENT_VERSION
+    ) return "unsupported-newer";
     return "invalid";
+  }
+}
+
+function migrateSaveGameV1ToV2(value: unknown): SaveGameV2 {
+  const baseline = structuredClone(parseSaveGameV1(value));
+  return {
+    ...baseline,
+    schemaVersion: 2,
+    world: {
+      ...baseline.world,
+      contentVersions: { fishingShoals: FISHING_SHOAL_CONTENT_VERSION },
+    },
+    fishingShoals: { provisional: [] },
+  };
+}
+
+function validateFishingShoalSightings(
+  value: unknown,
+  expeditionId: number,
+  generation: number,
+  expeditionActive: boolean,
+): asserts value is FishingShoalSightedSaveRecordV1[] {
+  if (!Array.isArray(value)) fail("must be an array", "save.fishingShoals.provisional");
+  let previousId = "";
+  for (let index = 0; index < value.length; index++) {
+    const path = `save.fishingShoals.provisional[${index}]`;
+    const item = record(value[index], path);
+    const id = requiredString(item.id, `${path}.id`);
+    if (!isCurrentFishingShoalId(id)) fail("has an invalid or unsupported fishing-shoal ID", `${path}.id`);
+    if (id <= previousId) fail("must be uniquely sorted by fishing-shoal ID", `${path}.id`);
+    previousId = id;
+    if (item.state !== "sighted") fail("must be sighted in schema version 2", `${path}.state`);
+    const recordExpeditionId = unsigned32(item.expeditionId, `${path}.expeditionId`, false);
+    const recordGeneration = positiveSafeInteger(item.generation, `${path}.generation`);
+    if (!expeditionActive) fail("requires an active expedition", path);
+    if (recordExpeditionId !== expeditionId) fail("must belong to the active expedition", `${path}.expeditionId`);
+    if (recordGeneration !== generation) fail("must belong to the current generation", `${path}.generation`);
   }
 }
 

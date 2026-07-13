@@ -5,6 +5,14 @@ import {
 } from "../config/prototypeConfig";
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import {
+  FISHING_SHOAL_CONTENT_VERSION,
+  type FishingShoalDefinition,
+  type FishingShoalProvisionalRecordV1,
+  type FishingShoalReadModel,
+} from "../exploration/FishingShoalContracts";
+import { generateFishingShoalCatalog } from "../exploration/FishingShoalCatalog";
+import { FishingShoalSystem } from "../exploration/FishingShoalSystem";
+import {
   DiscoverySystem,
   type DiscoveryDefinition,
   type DiscoveryRecord,
@@ -86,6 +94,11 @@ export interface SimulationSnapshot {
     returned: number;
     records: readonly Readonly<DiscoveryRecord>[];
   };
+  fishingShoals: {
+    available: number;
+    provisional: number;
+    records: readonly Readonly<FishingShoalReadModel>[];
+  };
   debug: Readonly<DebugVisibilityState>;
 }
 
@@ -152,6 +165,7 @@ export class GameSimulation {
   private forwardRanges!: ForwardRangeSystem;
   private returnPathing!: ReturnPathSystem;
   private discoverySystem!: DiscoverySystem;
+  private fishingShoalSystem!: FishingShoalSystem;
   private readonly generator: WorldGenerator;
   private expeditionId = 1;
   private activeExpedition = false;
@@ -214,6 +228,22 @@ export class GameSimulation {
 
   get discoveryRecordsRevision(): number {
     return this.discoverySystem.recordsRevision;
+  }
+
+  get fishingShoalDefinitions(): readonly Readonly<FishingShoalDefinition>[] {
+    return this.fishingShoalSystem.definitions;
+  }
+
+  get provisionalFishingShoals(): readonly Readonly<FishingShoalProvisionalRecordV1>[] {
+    return this.fishingShoalSystem.provisional;
+  }
+
+  get fishingShoalReadModels(): readonly Readonly<FishingShoalReadModel>[] {
+    return this.fishingShoalSystem.readModels();
+  }
+
+  get fishingShoalRecordsRevision(): number {
+    return this.fishingShoalSystem.recordsRevision;
   }
 
   get wreckPresentationActive(): boolean {
@@ -288,6 +318,7 @@ export class GameSimulation {
       const knowledge = this.knowledge.applyTrailingVisibility(visibility, this.expeditionId);
       knowledgeChanged += knowledge.changedCount;
       this.observeDiscoveries();
+      if (this.observeFishingShoals() > 0) lifecycleChanged = true;
       this.discoverVisibleWrecks();
       this.events.emit("shipEnteredTile", currentTile);
 
@@ -348,6 +379,14 @@ export class GameSimulation {
       this.generated.seed,
       this.generated.islands,
     );
+    this.fishingShoalSystem = new FishingShoalSystem(
+      this.world,
+      generateFishingShoalCatalog(
+        this.world,
+        this.generated.seed,
+        this.generated.landmarks.homeReturnTile,
+      ),
+    );
     this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
     this.lastMovement = NO_MOVEMENT;
@@ -367,6 +406,7 @@ export class GameSimulation {
     const visibility = this.visibility.updateAt(tile);
     let knowledgeChanged = this.knowledge.applyVisibility(visibility, this.expeditionId).changedCount;
     this.observeDiscoveries();
+    this.observeFishingShoals();
     this.discoverVisibleWrecks();
     this.lastMovement = NO_MOVEMENT;
     this.events.emit("shipTeleported", tile);
@@ -389,12 +429,14 @@ export class GameSimulation {
     const visibility = this.visibility.updateAt(tile);
     const knowledge = this.knowledge.applyVisibility(visibility, this.expeditionId);
     const discoveriesChanged = this.observeDiscoveries() > 0;
+    const fishingShoalsChanged = this.observeFishingShoals() > 0;
     const wrecksChanged = this.discoverVisibleWrecks() > 0;
     this.recalculateRiskOverlays();
     this.revision++;
     if (
       knowledge.changedCount > 0
       || discoveriesChanged
+      || fishingShoalsChanged
       || wrecksChanged
       || wasActiveExpedition !== this.activeExpedition
     ) this.saveRevision++;
@@ -453,6 +495,7 @@ export class GameSimulation {
         seed: this.generated.seed,
         generatorVersion: WORLD_GENERATOR_VERSION,
         generationConfig: captureGenerationConfig(this.config),
+        contentVersions: { fishingShoals: FISHING_SHOAL_CONTENT_VERSION },
       },
       generation: this.currentGeneration,
       expedition: {
@@ -479,6 +522,9 @@ export class GameSimulation {
       discoveries: {
         provisional: this.provisionalDiscoveries.map((discovery) => ({ ...discovery })),
         returned: this.returnedDiscoveries.map((discovery) => ({ ...discovery })),
+      },
+      fishingShoals: {
+        provisional: this.provisionalFishingShoals.map((record) => ({ ...record, state: "sighted" as const })),
       },
       terrainPatches: [],
     };
@@ -516,6 +562,20 @@ export class GameSimulation {
     } catch (error) {
       throw new SaveRestoreError(error instanceof Error ? error.message : "Saved discoveries are invalid");
     }
+    const restoredFishingShoals = new FishingShoalSystem(
+      generated.grid,
+      generateFishingShoalCatalog(
+        generated.grid,
+        generated.seed,
+        generated.landmarks.homeReturnTile,
+        parsed.world.contentVersions.fishingShoals,
+      ),
+    );
+    try {
+      restoredFishingShoals.restore(parsed.fishingShoals.provisional);
+    } catch (error) {
+      throw new SaveRestoreError(error instanceof Error ? error.message : "Saved fishing-shoal records are invalid");
+    }
 
     const restoredWrecks = parsed.wrecks.map((wreck) => ({ ...wreck }));
     let pendingRespawn: PendingRespawnState | undefined;
@@ -552,6 +612,7 @@ export class GameSimulation {
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
     this.riskResultsInitialized = false;
     this.discoverySystem = restoredDiscoveries;
+    this.fishingShoalSystem = restoredFishingShoals;
     this.visibility.updateAt({ x: this.ship.currentTileX, y: this.ship.currentTileY });
     this.lastMovement = NO_MOVEMENT;
     this.recalculateRiskOverlays();
@@ -610,6 +671,15 @@ export class GameSimulation {
         returned: this.returnedDiscoveries.length,
         records: this.discoveries.map((discovery) => ({ ...discovery })),
       },
+      fishingShoals: {
+        available: this.fishingShoalDefinitions.length,
+        provisional: this.provisionalFishingShoals.length,
+        records: this.fishingShoalReadModels.map((model) => ({
+          ...model,
+          tile: { ...model.tile },
+          clue: { ...model.clue },
+        })),
+      },
       debug: { ...this.debug },
     };
   }
@@ -640,6 +710,7 @@ export class GameSimulation {
     const generation = this.currentGeneration;
     const committed = this.knowledge.commitExpedition(expeditionId);
     const returnedDiscoveries = this.discoverySystem.commitExpedition(expeditionId);
+    this.fishingShoalSystem.revertExpedition(expeditionId);
     this.activeExpedition = false;
     this.returnCount++;
     this.advanceExpeditionId();
@@ -682,6 +753,7 @@ export class GameSimulation {
     this.wrecksRevision++;
     const reverted = this.knowledge.revertExpedition(expeditionId);
     const lostDiscoveries = this.discoverySystem.revertExpedition(expeditionId);
+    this.fishingShoalSystem.revertExpedition(expeditionId);
     const previousProvisions = lostShip.provisions;
     lostShip.provisions = 0;
     lostShip.provisionAccumulator = 0;
@@ -840,6 +912,24 @@ export class GameSimulation {
       this.currentGeneration,
     );
     for (const discovery of observation.found) this.events.emit("discoveryFound", discovery);
+    return observation.found.length;
+  }
+
+  private observeFishingShoals(): number {
+    if (!this.activeExpedition || this.pendingRespawn) return 0;
+    const observation = this.fishingShoalSystem.observeCurrentSight(
+      this.expeditionId,
+      this.currentGeneration,
+    );
+    for (const record of observation.found) {
+      const definition = this.fishingShoalSystem.definitionFor(record.id);
+      if (!definition) continue;
+      this.events.emit("fishingShoalSighted", {
+        id: definition.id,
+        tile: definition.tile,
+        clue: definition.clue,
+      });
+    }
     return observation.found.length;
   }
 

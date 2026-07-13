@@ -1,5 +1,9 @@
 import type { GridPoint, ShipwreckState } from "./types";
 import type { DiscoveryRecord } from "../exploration/DiscoverySystem";
+import type {
+  FishingShoalClue,
+  FishingShoalId,
+} from "../exploration/FishingShoalContracts";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
 
@@ -44,6 +48,11 @@ export interface GameEventMap {
     tileY: number;
   };
   discoveryFound: Readonly<DiscoveryRecord>;
+  fishingShoalSighted: {
+    id: FishingShoalId;
+    tile: Readonly<GridPoint>;
+    clue: Readonly<FishingShoalClue>;
+  };
   discoveriesReturned: {
     expeditionId: number;
     generation: number;

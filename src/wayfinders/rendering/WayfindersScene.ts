@@ -17,6 +17,7 @@ import type { GeneratedIsland } from "../world/IslandGenerator";
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
 import { DiscoveryRenderer } from "./DiscoveryRenderer";
+import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
 import { ShipRenderer } from "./ShipRenderer";
@@ -83,6 +84,7 @@ export class WayfindersScene extends Phaser.Scene {
   private riskOverlay!: RiskOverlayRenderer;
   private cargoRenderer!: CargoRenderer;
   private discoveryRenderer!: DiscoveryRenderer;
+  private fishingShoalRenderer!: FishingShoalRenderer;
   private shipRenderer!: ShipRenderer;
   private wreckRenderer!: WreckRenderer;
   private gridGraphics!: Phaser.GameObjects.Graphics;
@@ -106,6 +108,9 @@ export class WayfindersScene extends Phaser.Scene {
   private lastWrecksRevision = -1;
   private lastWreckVisibilityVersion = -1;
   private lastDiscoveryRecordsRevision = -1;
+  private lastFishingShoalRecordsRevision = -1;
+  private lastFishingShoalVisibilityVersion = -1;
+  private lastFishingShoalKnowledgeVersion = -1;
   private persistenceEnabled: boolean;
   private autosaveProtected: boolean;
   private persistenceStatus: PersistenceBootState["status"];
@@ -149,6 +154,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.riskOverlay = new RiskOverlayRenderer(this);
     this.cargoRenderer = new CargoRenderer(this);
     this.discoveryRenderer = new DiscoveryRenderer(this);
+    this.fishingShoalRenderer = new FishingShoalRenderer(this);
     this.shipRenderer = new ShipRenderer(this);
     this.resetShipPresentation(true);
     this.gridGraphics = this.add.graphics().setDepth(70);
@@ -288,8 +294,20 @@ export class WayfindersScene extends Phaser.Scene {
       this.discoveryRenderer.sync(this.simulation.discoveries);
       this.lastDiscoveryRecordsRevision = this.simulation.discoveryRecordsRevision;
     }
+    if (
+      force
+      || this.lastFishingShoalRecordsRevision !== this.simulation.fishingShoalRecordsRevision
+      || this.lastFishingShoalVisibilityVersion !== this.simulation.world.visibilityVersion
+      || this.lastFishingShoalKnowledgeVersion !== this.simulation.world.knowledgeVersion
+    ) {
+      this.fishingShoalRenderer.sync(this.simulation.fishingShoalReadModels);
+      this.lastFishingShoalRecordsRevision = this.simulation.fishingShoalRecordsRevision;
+      this.lastFishingShoalVisibilityVersion = this.simulation.world.visibilityVersion;
+      this.lastFishingShoalKnowledgeVersion = this.simulation.world.knowledgeVersion;
+    }
     this.wreckRenderer.updateViewport(this.cameras.main);
     this.discoveryRenderer.updateViewport(this.cameras.main);
+    this.fishingShoalRenderer.updateViewport(this.cameras.main);
     this.knowledgeOverlay.sync(this.simulation.world, this.simulation.generated.seed, force);
     this.riskOverlay.sync(
       this.simulation.world,
@@ -338,6 +356,9 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.wrecks = String(this.simulation.wrecks.length);
       host.dataset.discoveryProvisional = String(this.simulation.provisionalDiscoveries.length);
       host.dataset.discoveryReturned = String(this.simulation.returnedDiscoveries.length);
+      host.dataset.fishingShoalAvailable = String(this.simulation.fishingShoalDefinitions.length);
+      host.dataset.fishingShoalProvisional = String(this.simulation.provisionalFishingShoals.length);
+      host.dataset.fishingShoalVisible = String(this.simulation.fishingShoalReadModels.length);
       host.dataset.persistenceStatus = this.persistenceStatus;
       host.dataset.wreckPresentation = String(this.simulation.wreckPresentationActive);
       host.dataset.respawnSeconds = this.simulation.respawnSecondsRemaining.toFixed(3);
@@ -1012,6 +1033,16 @@ export class WayfindersScene extends Phaser.Scene {
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
+      this.simulation.events.on("fishingShoalSighted", ({ clue }) => {
+        this.showLifecycleCue(
+          `FISHING SIGN SIGHTED\n${clue.label.toUpperCase()}\nRETURN HOME TO RECORD IT`,
+          "#a9f7fb",
+          5_000,
+        );
+        this.log(`Provisional fishing-shoal sighting: ${clue.label}.`);
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
       this.simulation.events.on("discoveriesReturned", ({ discoveries }) => {
         const names = discoveries.map(({ name }) => name).join(", ");
         this.pendingReturnedDiscoveryNames.push(...discoveries.map(({ name }) => name));
@@ -1118,6 +1149,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.riskOverlay.destroy();
     this.cargoRenderer.destroy();
     this.discoveryRenderer.destroy();
+    this.fishingShoalRenderer.destroy();
     this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);

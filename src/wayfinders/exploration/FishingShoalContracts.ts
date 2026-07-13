@@ -72,6 +72,10 @@ export interface FishingShoalProvisionalRecordV1 {
   generation: number;
 }
 
+export interface FishingShoalSightedSaveRecordV1 extends FishingShoalProvisionalRecordV1 {
+  state: "sighted";
+}
+
 /** Mutable authoritative state owned only by the fishing-shoal system. */
 export interface FishingShoalReturnedRecordV1 {
   id: FishingShoalId;

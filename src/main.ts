@@ -10,6 +10,7 @@ import {
   applyGenerationConfig,
   parseSaveGame,
   SaveValidationError,
+  UnsupportedFishingShoalContentVersionError,
   UnsupportedSaveSchemaVersionError,
   UnsupportedWorldGeneratorVersionError,
 } from "./wayfinders/persistence/SaveGame";
@@ -157,6 +158,7 @@ try {
     if (
       error instanceof UnsupportedSaveSchemaVersionError
       || error instanceof UnsupportedWorldGeneratorVersionError
+      || error instanceof UnsupportedFishingShoalContentVersionError
     ) {
       persistenceBoot = {
         status: "incompatible",

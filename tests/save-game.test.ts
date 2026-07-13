@@ -1,26 +1,29 @@
 import { describe, expect, it, vi } from "vitest";
 import { makeConfig } from "./helpers.ts";
 import { IndexedDbSaveStore } from "../src/wayfinders/persistence/IndexedDbSaveStore.ts";
+import { createFishingShoalId } from "../src/wayfinders/exploration/FishingShoalContracts.ts";
 import {
   SAVE_SCHEMA_VERSION,
   WORLD_GENERATOR_VERSION,
   SaveValidationError,
+  UnsupportedFishingShoalContentVersionError,
   UnsupportedSaveSchemaVersionError,
   UnsupportedWorldGeneratorVersionError,
   applyGenerationConfig,
   captureGenerationConfig,
+  classifySaveGame,
   decodeKnowledgeRuns,
   encodeKnowledgeRuns,
   encodeWorldKnowledgeRuns,
   isSaveGame,
   parseSaveGame,
   validateKnowledgeRuns,
-  type SaveGameV1,
+  type SaveGame,
 } from "../src/wayfinders/persistence/SaveGame.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 
-function makeValidSave(): SaveGameV1 {
+function makeValidSave(): SaveGame {
   const config = makeConfig();
   const tileX = 53;
   const tileY = 48;
@@ -31,6 +34,7 @@ function makeValidSave(): SaveGameV1 {
       seed: config.world.seed,
       generatorVersion: WORLD_GENERATOR_VERSION,
       generationConfig: captureGenerationConfig(config),
+      contentVersions: { fishingShoals: 1 },
     },
     generation: 2,
     expedition: {
@@ -82,6 +86,7 @@ function makeValidSave(): SaveGameV1 {
         detail: "A newly named island.",
       }],
     },
+    fishingShoals: { provisional: [] },
     terrainPatches: [],
   };
 }
@@ -177,7 +182,7 @@ describe("knowledge save encoding", () => {
 });
 
 describe("save-game validation", () => {
-  it("accepts a complete version-one save and reconstructs its generation config", () => {
+  it("accepts a complete current-schema save and reconstructs its generation config", () => {
     const save = makeValidSave();
     expect(parseSaveGame(save)).toBe(save);
     expect(isSaveGame(save)).toBe(true);
@@ -210,6 +215,32 @@ describe("save-game validation", () => {
     expect(parseSaveGame(save)).toBe(save);
   });
 
+  it("validates schema-two fishing-shoal sightings against the active expedition", () => {
+    const save = makeValidSave();
+    save.expedition.active = true;
+    save.fishingShoals.provisional.push({
+      id: createFishingShoalId(0),
+      state: "sighted",
+      expeditionId: save.expedition.id,
+      generation: save.generation,
+    });
+    expect(parseSaveGame(save)).toBe(save);
+
+    const inactive = structuredClone(save);
+    inactive.expedition.active = false;
+    expect(() => parseSaveGame(inactive)).toThrow(/requires an active expedition/);
+
+    const stale = structuredClone(save);
+    stale.fishingShoals.provisional[0].expeditionId++;
+    expect(() => parseSaveGame(stale)).toThrow(/active expedition/);
+
+    const wrongState = structuredClone(save) as unknown as {
+      fishingShoals: { provisional: Array<{ state: string }> };
+    };
+    wrongState.fishingShoals.provisional[0].state = "surveyed";
+    expect(() => parseSaveGame(wrongState)).toThrow(/sighted in schema version 2/);
+  });
+
   it("accepts a coherent pending-wreck hold", () => {
     const save = makeValidSave();
     const wreck = save.wrecks[0];
@@ -234,7 +265,7 @@ describe("save-game validation", () => {
   });
 
   it("rejects moving or partially charged ships during a wreck hold", () => {
-    const makePendingSave = (): SaveGameV1 => {
+    const makePendingSave = (): SaveGame => {
       const save = makeValidSave();
       const wreck = save.wrecks[0];
       save.generation = wreck.generation;
@@ -268,13 +299,20 @@ describe("save-game validation", () => {
   });
 
   it("distinguishes unsupported schema and generator versions from corrupt data", () => {
-    const futureSchema = makeValidSave() as SaveGameV1 & { schemaVersion: number };
+    const futureSchema = makeValidSave() as SaveGame & { schemaVersion: number };
     futureSchema.schemaVersion = SAVE_SCHEMA_VERSION + 1;
     expect(() => parseSaveGame(futureSchema)).toThrow(UnsupportedSaveSchemaVersionError);
 
-    const futureGenerator = makeValidSave() as SaveGameV1 & { world: { generatorVersion: number } };
+    const futureGenerator = makeValidSave() as SaveGame & { world: { generatorVersion: number } };
     futureGenerator.world.generatorVersion = 2;
     expect(() => parseSaveGame(futureGenerator)).toThrow(UnsupportedWorldGeneratorVersionError);
+
+    const futureContent = makeValidSave() as unknown as {
+      world: { contentVersions: { fishingShoals: number } };
+    };
+    futureContent.world.contentVersions.fishingShoals = 2;
+    expect(() => parseSaveGame(futureContent)).toThrow(UnsupportedFishingShoalContentVersionError);
+    expect(classifySaveGame(futureContent)).toBe("unsupported-newer");
 
     const corrupt = makeValidSave();
     corrupt.ship.currentTileX = -1;
@@ -297,11 +335,11 @@ describe("save-game validation", () => {
     duplicateDiscovery.expedition.active = true;
     expect(() => parseSaveGame(duplicateDiscovery)).toThrow(/duplicate discovery id/);
 
-    const terrainMutation = makeValidSave() as SaveGameV1 & { terrainPatches: unknown[] };
+    const terrainMutation = makeValidSave() as SaveGame & { terrainPatches: unknown[] };
     terrainMutation.terrainPatches.push({ tileX: 1 });
     expect(() => parseSaveGame(terrainMutation)).toThrow(/empty array/);
 
-    const incompleteDiscovery = structuredClone(makeValidSave()) as SaveGameV1 & {
+    const incompleteDiscovery = structuredClone(makeValidSave()) as SaveGame & {
       discoveries: { returned: Array<Record<string, unknown>> };
     };
     delete incompleteDiscovery.discoveries.returned[0].expeditionId;

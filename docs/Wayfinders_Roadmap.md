@@ -1,7 +1,9 @@
 # Wayfinders development roadmap
 
-Status: proposed. The current implementation is the accepted baseline; no
-forward roadmap minor has been authorized, started or accepted.
+Status: active. The current implementation is the accepted baseline. The
+ordered `GP-0.1` through `GP-1.4` batch is authorized; `GP-0.1`, `GP-0.2` and
+`GP-1.1` are accepted, and the remaining batch minors proceed in dependency
+order without renewed permission pauses.
 
 ## Roadmap model
 
@@ -148,7 +150,21 @@ choice, return and inherited-result loop using developer graphics.
 
 #### GP-1.1 — Deterministic fishing shoals
 
-Status: proposed.
+Status: accepted.
+
+Acceptance evidence (2026-07-12): fishing content version one derives four
+sparse, immutable shoal definitions from the saved seed and generation config,
+with stable namespaced IDs, locations, service anchors, clues and hidden
+quality outcomes. The catalog is generated off-loop and does not mutate
+terrain, collision, island/resource identity or the accepted discovery
+catalog. Current-sight observation is idempotent; fog-filtered read models hide
+quality and never create terrain knowledge. Schema V2 adds only content-version
+identity and sorted active-expedition sighting records through the adjacent
+V1-to-V2 migration. Autosave/checkpoint load paths protect future schema and
+content versions. Developer markers are revision-driven, pooled and viewport
+culled. The full pipeline passes 159 tests across 18 files plus typecheck and
+production build; normal movement checks only the four definitions and performs
+no world-area scan or default visible-set copy.
 
 - Add sparse, seed-derived shoal IDs, locations, qualities and environmental
   clues in a namespace that cannot move islands or alter terrain.
@@ -723,21 +739,22 @@ each minor is planned; they are not permanent product rules.
   gameplay/platform input minor; graphics validation alone cannot supply it.
 - Cloud sync, server saves and multiplayer.
 
-## Decisions awaiting confirmation
+## Confirmed immediate decisions
 
-Immediate product decisions required before GP-0/GP-1 may be authorized,
-individually or as an ordered batch:
+The following GP-0/GP-1 decisions are confirmed and are the basis of the
+authorized ordered batch:
 
-1. Accept the Baseline plus `GP-*`/`GR-*` major-and-minor roadmap model.
-2. Choose whether the storage architecture remains one active lineage plus a
-   checkpoint (recommended first scope) or must support multiple named games.
-3. GP-1 begins with fishing shoals, one fixed survey case per new expedition
-   allocation and developer art.
+1. The Baseline plus `GP-*`/`GR-*` major-and-minor roadmap model is accepted.
+2. Storage remains one active lineage with a rolling autosave and one
+   overwriteable checkpoint; there is no named-game registry in this batch.
+3. GP-1 uses fishing shoals, one non-stacking fixed survey case per new
+   expedition allocation and developer art.
 4. A safely returned but unsurveyed sighting becomes an inactive persistent
    lead that can be surveyed later. A wreck loses only the current expedition's
    provisional state and preserves any earlier returned lead.
-5. GR-1 may start only after GP-3.2 proves survey → return → visible tribe
-   benefit using developer graphics.
+5. GR-1 remains deferred until GP-3.2 proves survey → return → visible tribe
+   benefit with developer graphics, unless that start gate is explicitly
+   reapproved.
 
 Later product approvals are recorded now but do not block GP-0/GP-1:
 
