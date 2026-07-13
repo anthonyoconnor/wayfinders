@@ -561,6 +561,11 @@ Developer UI capabilities:
 - toggle navigation grid, current sight, forward reach and return viability;
 - tune supported live configuration values.
 
+The developer drawer is non-modal and does not pause sailing merely by being
+open. WASD remains available while a numeric tuning field has focus; arrow keys
+remain native to that field until focus returns to the canvas or another
+non-editing control. Lifecycle holds still suppress navigation.
+
 The browser automation interface exposes snapshot, teleport, provision,
 wreck, regeneration, overlay, checkpoint and performance operations. Canvas
 data attributes provide stable diagnostic values for browser checks, including
@@ -607,7 +612,8 @@ return presentation, fourth-return automatic succession, fatal-wreck mourning
 and succession, committed-achievement and fatal-voyage generation summaries,
 unidentified wreck survey and exact-dock reporting, rolling reload, stable
 manual checkpoints, exact ship/camera restoration, pending wreck reload, save
-clearing and console health.
+clearing, live sailing and speed tuning with the developer drawer open, and
+console health.
 
 Desktop keyboard/pointer play is the validated target. Responsive resize is
 implemented. Touch-first sailing is not implemented and requires a separately

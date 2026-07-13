@@ -30,6 +30,11 @@ import { DiscoveryRenderer } from "./DiscoveryRenderer";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
+import {
+  isSceneMovementInputSuppressed,
+  resolveSceneMovementInput,
+  type SceneMovementInputContext,
+} from "./SceneMovementInput";
 import { ShipRenderer } from "./ShipRenderer";
 import type { ShipRenderPose } from "./ShipPose";
 import { WreckRenderer } from "./WreckRenderer";
@@ -158,6 +163,7 @@ export class WayfindersScene extends Phaser.Scene {
   private lastDiagnosticsOverlayRevision = -1;
   private lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
   private lastDiagnosticsDeveloperToolsOpen = false;
+  private lastDiagnosticsInputSuppressed = false;
   private lastWrecksRevision = -1;
   private lastWreckVisibilityVersion = -1;
   private lastDiscoveryRecordsRevision = -1;
@@ -230,7 +236,7 @@ export class WayfindersScene extends Phaser.Scene {
       zoomOut: Phaser.Input.Keyboard.KeyCodes.Q,
       survey: Phaser.Input.Keyboard.KeyCodes.F,
       leave: Phaser.Input.Keyboard.KeyCodes.ESC,
-    }) as MovementKeys;
+    }, false) as MovementKeys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.on(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
@@ -263,9 +269,7 @@ export class WayfindersScene extends Phaser.Scene {
   override update(time: number, delta: number): void {
     const activeElement = document.activeElement;
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
-    const textInputFocused = activeElement instanceof HTMLInputElement
-      || activeElement instanceof HTMLSelectElement
-      || activeElement instanceof HTMLTextAreaElement;
+    const textInputFocused = this.isTextEntryElement(activeElement);
     if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) {
       this.changeZoom(0.1);
     }
@@ -295,28 +299,54 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private readMovementInput(): MovementInput {
-    const active = document.activeElement;
-    if (
-      this.simulation.generationHandoverActive
-      ||
-      this.time.now < this.surveyActionUntil
-      || document.documentElement.dataset.developerTools === "open"
-      || active instanceof HTMLInputElement
-      || active instanceof HTMLSelectElement
-      || active instanceof HTMLTextAreaElement
-    ) {
-      return { turn: 0, throttle: 0 };
-    }
+    return resolveSceneMovementInput({
+      left: this.keys.left.isDown,
+      right: this.keys.right.isDown,
+      forward: this.keys.forward.isDown,
+      reverse: this.keys.reverse.isDown,
+      alternateLeft: this.keys.alternateLeft.isDown,
+      alternateRight: this.keys.alternateRight.isDown,
+      alternateForward: this.keys.alternateForward.isDown,
+      alternateReverse: this.keys.alternateReverse.isDown,
+    }, this.sceneMovementInputContext());
+  }
 
-    const pressed = (primary: Phaser.Input.Keyboard.Key, alternate: Phaser.Input.Keyboard.Key): number =>
-      primary.isDown || alternate.isDown ? 1 : 0;
-
+  private sceneMovementInputContext(): SceneMovementInputContext {
+    const activeElement = document.activeElement;
     return {
-      turn: pressed(this.keys.right, this.keys.alternateRight) - pressed(this.keys.left, this.keys.alternateLeft),
-      throttle:
-        pressed(this.keys.forward, this.keys.alternateForward) -
-        pressed(this.keys.reverse, this.keys.alternateReverse),
+      developerToolsOpen: document.documentElement.dataset.developerTools === "open",
+      developerNumberFocused: this.isDeveloperNumberInput(activeElement),
+      textEntryFocused: this.isTextEntryElement(activeElement),
+      generationHandoverActive: this.simulation.generationHandoverActive,
+      surveyActionActive: this.time.now < this.surveyActionUntil,
     };
+  }
+
+  private isDeveloperNumberInput(element: Element | null): boolean {
+    return element instanceof HTMLInputElement
+      && (element.type === "number" || element.type === "range")
+      && element.closest("#developer-tools-panel") !== null;
+  }
+
+  private isTextEntryElement(element: Element | null): boolean {
+    if (element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement) return true;
+    if (element instanceof HTMLElement && element.isContentEditable) return true;
+    if (!(element instanceof HTMLInputElement)) return false;
+    return [
+      "date",
+      "datetime-local",
+      "email",
+      "month",
+      "number",
+      "password",
+      "range",
+      "search",
+      "tel",
+      "text",
+      "time",
+      "url",
+      "week",
+    ].includes(element.type);
   }
 
   private configureCamera(): void {
@@ -404,9 +434,12 @@ export class WayfindersScene extends Phaser.Scene {
     this.cargoRenderer.sync(this.simulation.ship.provisions);
     this.syncSurveyRibbon();
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
+    const inputSuppressed = this.simulation.wreckPresentationActive
+      || isSceneMovementInputSuppressed(this.sceneMovementInputContext());
     const diagnosticsDirty = this.lastDiagnosticsRevision !== this.simulation.revision
       || this.lastDiagnosticsOverlayRevision !== this.simulation.overlaysRevision
-      || this.lastDiagnosticsDeveloperToolsOpen !== developerToolsOpen;
+      || this.lastDiagnosticsDeveloperToolsOpen !== developerToolsOpen
+      || this.lastDiagnosticsInputSuppressed !== inputSuppressed;
     const diagnosticsDue = force || (
       this.time.now - this.lastDiagnosticsAt >= 100
       && (
@@ -469,11 +502,7 @@ export class WayfindersScene extends Phaser.Scene {
         : this.simulation.wreckPresentationActive
           ? "wreck-hold"
           : "active";
-      host.dataset.inputSuppressed = String(
-        this.simulation.wreckPresentationActive
-        || this.simulation.generationHandoverActive
-        || developerToolsOpen,
-      );
+      host.dataset.inputSuppressed = String(inputSuppressed);
       host.dataset.pendingWreckId = String(this.simulation.pendingWreckId ?? "");
       host.dataset.stranded = String(this.simulation.stranded);
       host.dataset.overlaysRevision = String(this.simulation.overlaysRevision);
@@ -534,6 +563,7 @@ export class WayfindersScene extends Phaser.Scene {
       this.lastDiagnosticsRevision = this.simulation.revision;
       this.lastDiagnosticsOverlayRevision = this.simulation.overlaysRevision;
       this.lastDiagnosticsDeveloperToolsOpen = developerToolsOpen;
+      this.lastDiagnosticsInputSuppressed = inputSuppressed;
       this.lastDiagnosticsAt = this.time.now;
     }
     if (diagnosticsDue && this.gameStatus) {
@@ -649,6 +679,7 @@ export class WayfindersScene extends Phaser.Scene {
         <details class="tool-disclosure" data-tool-group="tuning" ${this.developerDisclosureState.get("tuning") ? "open" : ""}>
           <summary>Session-only tuning</summary>
           <div class="tool-disclosure__body">
+            <p class="tool-live-note">Tune while sailing: WASD stays active when a number has focus; arrows edit that number.</p>
             ${this.numberMarkup("sight-radius", "Sight radius", prototypeConfig.navigation.sightRadius, 1, 14, 1)}
             ${this.numberMarkup("starting-bundles", "Default voyage bundles", prototypeConfig.provisions.startingBundles, 1, 24, 1)}
             ${this.numberMarkup("supported-cost", "Supported cost", prototypeConfig.provisions.supportedCost, 0, 3, 0.1)}

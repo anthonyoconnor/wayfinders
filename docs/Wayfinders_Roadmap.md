@@ -91,7 +91,7 @@ preserved. A rejected autosave starts fresh; a rejected checkpoint becomes
 unavailable without replacing the running world. Current docked-return,
 active-expedition, pending-wreck and unacknowledged generation-handover states
 still round-trip through the two atomic IndexedDB records. The full pipeline
-passes 212 tests across 22 files plus typecheck and production build;
+passes 215 tests across 23 files plus typecheck and production build;
 validation runs only at load boundaries
 and adds no movement-loop work.
 
@@ -364,8 +364,8 @@ identify it provisionally, and commit that identity/fate report only by
 returning to the exact home dock. Retirement actions and their dock ribbon are
 absent. The full verification pipeline and browser acceptance cover the voyage
 status, both succession summaries, fatal-wreck transition, wreck-survey commit
-and rollback, and a clean warning/error console. The full pipeline passes 212
-tests across 22 files plus typecheck and production build.
+and rollback, and a clean warning/error console. The full pipeline passes 215
+tests across 23 files plus typecheck and production build.
 
 - Complete one numbered voyage only on an active expedition's successful
   exact-home-dock return, after its discoveries, surveys and knowledge commit.

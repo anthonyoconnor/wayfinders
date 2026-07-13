@@ -38,7 +38,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 212 automated tests pass across 22 files.
+- 215 automated tests pass across 23 files.
 - The production Vite build passes.
 - Browser tests cover discovery and fishing return, returned-lead upgrade,
   autosave reload, manual checkpoint restore, exact ship/camera restoration,
@@ -222,6 +222,9 @@ Current verification baseline:
   event logging; autosave status and checkpoint controls. Lifecycle-mutating
   controls are disabled during wreck and generation-handover presentations,
   while persistence controls remain available for transition reload testing.
+  The drawer is non-modal: sailing continues while it remains open, and a
+  focused numeric tuning field keeps WASD live while reserving arrow keys for
+  native number editing.
 - Browser diagnostics are exposed through canvas data attributes and the
   developer automation API, including rolling frame percentiles, long-frame
   counts, dropped simulation time and save-serialization timing.
