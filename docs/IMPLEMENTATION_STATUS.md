@@ -12,8 +12,8 @@ persistence and the performance foundation.
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
 `Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-1.4` batch is in
-progress. `GP-0.1`, `GP-0.2`, `GP-1.1` and `GP-1.2` are accepted; later batch
-minors are not yet accepted.
+progress. `GP-0.1` through `GP-1.3` are accepted; `GP-1.4` is the remaining
+authorized minor.
 
 ## Run and verify
 
@@ -35,7 +35,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 162 automated tests pass across 18 files.
+- 166 automated tests pass across 18 files.
 - The production Vite build passes.
 - Browser tests cover discovery return, autosave reload, manual checkpoint
   restore, exact ship/camera restoration, wreck-hold reload, generation
@@ -116,8 +116,13 @@ Current verification baseline:
 - Four sparse fishing shoals are derived deterministically from the world seed
   in a separate content namespace. Current-sight clues create provisional
   sightings without revealing hidden quality or mutating terrain, islands,
-  discovery identity or fog knowledge. GP-1.1 sightings round-trip mid-voyage
-  and are discarded on dock/wreck until GP-1.3 adds returned lifecycle state.
+  discovery identity or fog knowledge. An unsurveyed exact-dock return commits
+  an inherited inactive lead; surveying that lead on a later expedition creates
+  a provisional upgrade, and a wreck discards only the upgrade. Exact-dock
+  return commits a terminal returned survey with stable quality. Returned
+  surveys remain idempotent through revisit, repeat input, dock, wreck,
+  autosave and checkpoint reload and are the sole later-activation eligible
+  state.
 - A temporary proximity ribbon presents clue text, the current one-case
   allocation and explicit Survey / Leave buttons. `F` surveys, `Escape` leaves,
   and ordinary pointer/contextual-touch activation uses the same authoritative
@@ -197,9 +202,9 @@ Current verification baseline:
 ## Known limits
 
 - Gameplay track: discovery rewards, settlements and resources are records
-  only; fishing shoals currently stop at provisional sightings/surveys.
-  Returned fishing records, tribe economics, explorer aging, lineage
-  achievements and idols are not yet implemented.
+  only. Fishing shoals now reach terminal returned leads/surveys; the derived
+  Supported-water home-connection cue remains for `GP-1.4`. Tribe economics,
+  explorer aging, lineage achievements and idols are not yet implemented.
 - Gameplay track: the current generation is a wreck-driven counter rather than
   a complete navigator/aging/succession model.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
@@ -223,16 +228,12 @@ expanded scope or authority, or an unresolved external blocker.
 
 The proposed sequence begins with:
 
-1. `GP-0.1` — establish baseline-save fixtures and an explicit migration chain;
-2. `GP-0.2` — freeze only GP-1 opportunity identity, survey commands/results,
-   persistence ownership, renderer read models and single-owner integration
-   boundaries; and
-3. `GP-1.1` — accepted: deterministic fishing-shoal definitions and clues
-   using developer graphics; and
+1. `GP-0.1` — accepted: baseline-save fixtures and an explicit migration chain;
+2. `GP-0.2` — accepted: versioned GP-1 integration boundaries;
+3. `GP-1.1` — accepted: deterministic fishing-shoal definitions and clues;
 4. `GP-1.2` — accepted: the one-case Survey / Leave action and interaction cue;
-   and
-5. `GP-1.3` — commit provisional sightings/surveys into returned leads/surveys
-   with exact-dock and wreck rollback semantics.
+5. `GP-1.3` — accepted: exact-dock returned leads/surveys and wreck rollback;
+6. `GP-1.4` — add the derived Supported-water home-connection cue.
 
 Navigator and general route contracts remain deferred to their owning minors.
 

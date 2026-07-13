@@ -28,7 +28,7 @@ function currentSaveAtTimestamp(simulation: GameSimulation, savedAt: number): Re
 }
 
 describe("save migration chain", () => {
-  it("migrates the GP-1.1 V2 shape into the GP-1.2 survey-capable schema", () => {
+  it("migrates the GP-1.1 V2 shape through the current returned-record schema", () => {
     const baseline = structuredClone(baselineFixtures.activeProvisional) as Record<string, unknown>;
     const world = baseline.world as Record<string, unknown>;
     const versionTwo = {
@@ -39,9 +39,25 @@ describe("save migration chain", () => {
     };
 
     const migrated = migrateSaveGame(versionTwo);
-    expect(migrated.schemaVersion).toBe(3);
-    expect(migrated.fishingShoals).toEqual({ provisional: [] });
+    expect(migrated.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
+    expect(migrated.fishingShoals).toEqual({ provisional: [], returned: [] });
     expect(versionTwo.schemaVersion).toBe(2);
+  });
+
+  it("adds an empty returned collection in the adjacent V3-to-V4 migration", () => {
+    const baseline = structuredClone(baselineFixtures.activeProvisional) as Record<string, unknown>;
+    const world = baseline.world as Record<string, unknown>;
+    const versionThree = {
+      ...baseline,
+      schemaVersion: 3,
+      world: { ...world, contentVersions: { fishingShoals: 1 } },
+      fishingShoals: { provisional: [] },
+    };
+
+    const migrated = migrateSaveGame(versionThree);
+    expect(migrated.schemaVersion).toBe(4);
+    expect(migrated.fishingShoals).toEqual({ provisional: [], returned: [] });
+    expect(versionThree).not.toHaveProperty("fishingShoals.returned");
   });
 
   it.each(Object.entries(baselineFixtures))(

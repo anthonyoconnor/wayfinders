@@ -31,25 +31,25 @@ const MARKER_STYLES: Readonly<Record<FishingShoalState, Readonly<MarkerStyle>>> 
     badge: "F!",
     color: 0x83fff0,
     labelColor: "#c5fff8",
-    alpha: 1,
+    alpha: 0.72,
   },
   "returned-lead": {
     badge: "FL",
     color: 0xe8cb72,
     labelColor: "#f7e7ad",
-    alpha: 0.9,
+    alpha: 0.65,
   },
   surveyed: {
     badge: "FS",
     color: 0xffb45f,
     labelColor: "#ffe1b6",
-    alpha: 1,
+    alpha: 0.78,
   },
   "returned-survey": {
     badge: "FR",
     color: 0xb3ef86,
     labelColor: "#d9ffc0",
-    alpha: 0.92,
+    alpha: 0.95,
   },
 };
 
@@ -172,7 +172,7 @@ export class FishingShoalRenderer {
       case "surveyed":
         return `SURVEYED - ${record.quality.toUpperCase()}\n${record.clue.label}`;
       case "returned-survey":
-        return `${record.homeConnected ? "HOME-LINKED" : "UNCONNECTED"} - ${record.quality.toUpperCase()}\n${record.clue.label}`;
+        return `RETURNED SURVEY - ${record.quality.toUpperCase()}\n${record.clue.label}`;
     }
   }
 }

@@ -13,6 +13,7 @@ import {
   type FishingShoalInteractionResultV1,
   type FishingShoalProvisionalRecordV1,
   type FishingShoalReadModel,
+  type FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
 import { generateFishingShoalCatalog } from "../exploration/FishingShoalCatalog";
 import { FishingShoalSystem } from "../exploration/FishingShoalSystem";
@@ -101,6 +102,8 @@ export interface SimulationSnapshot {
   fishingShoals: {
     available: number;
     provisional: number;
+    returned: number;
+    activationEligible: number;
     surveyCasesRemaining: 0 | 1;
     interaction?: Readonly<FishingShoalInteractionReadModel>;
     records: readonly Readonly<FishingShoalReadModel>[];
@@ -242,6 +245,14 @@ export class GameSimulation {
 
   get provisionalFishingShoals(): readonly Readonly<FishingShoalProvisionalRecordV1>[] {
     return this.fishingShoalSystem.provisional;
+  }
+
+  get returnedFishingShoals(): readonly Readonly<FishingShoalReturnedRecordV1>[] {
+    return this.fishingShoalSystem.returned;
+  }
+
+  get activationEligibleFishingShoals(): readonly Readonly<FishingShoalReturnedRecordV1>[] {
+    return this.fishingShoalSystem.activationEligible;
   }
 
   get fishingShoalReadModels(): readonly Readonly<FishingShoalReadModel>[] {
@@ -492,10 +503,18 @@ export class GameSimulation {
         reason: "wreck-hold",
       };
     }
+    const interaction = this.fishingShoalInteraction;
+    if (
+      command.type === "survey"
+      && !this.activeExpedition
+      && this.surveyCasesRemaining === 1
+      && interaction?.id === command.id
+      && interaction.state === "returned-lead"
+    ) this.startExpedition();
     const result = this.fishingShoalSystem.applyInteraction(command, {
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
-    });
+    }, this.expeditionId, this.currentGeneration);
     if (result.status !== "surveyed") return result;
 
     const definition = this.fishingShoalSystem.definitionFor(result.id);
@@ -571,6 +590,7 @@ export class GameSimulation {
       },
       fishingShoals: {
         provisional: this.provisionalFishingShoals.map((record) => ({ ...record })),
+        returned: this.returnedFishingShoals.map((record) => ({ ...record })),
       },
       terrainPatches: [],
     };
@@ -618,7 +638,10 @@ export class GameSimulation {
       ),
     );
     try {
-      restoredFishingShoals.restore(parsed.fishingShoals.provisional);
+      restoredFishingShoals.restore(
+        parsed.fishingShoals.provisional,
+        parsed.fishingShoals.returned,
+      );
     } catch (error) {
       throw new SaveRestoreError(error instanceof Error ? error.message : "Saved fishing-shoal records are invalid");
     }
@@ -720,6 +743,8 @@ export class GameSimulation {
       fishingShoals: {
         available: this.fishingShoalDefinitions.length,
         provisional: this.provisionalFishingShoals.length,
+        returned: this.returnedFishingShoals.length,
+        activationEligible: this.activationEligibleFishingShoals.length,
         surveyCasesRemaining: this.surveyCasesRemaining,
         interaction: this.fishingShoalInteraction
           ? { ...this.fishingShoalInteraction, tile: { ...this.fishingShoalInteraction.tile } }
@@ -760,7 +785,7 @@ export class GameSimulation {
     const generation = this.currentGeneration;
     const committed = this.knowledge.commitExpedition(expeditionId);
     const returnedDiscoveries = this.discoverySystem.commitExpedition(expeditionId);
-    this.fishingShoalSystem.revertExpedition(expeditionId);
+    const returnedFishingShoals = this.fishingShoalSystem.commitExpedition(expeditionId);
     this.activeExpedition = false;
     this.returnCount++;
     this.advanceExpeditionId();
@@ -775,6 +800,14 @@ export class GameSimulation {
         expeditionId,
         generation,
         discoveries: returnedDiscoveries,
+      });
+    }
+    if (returnedFishingShoals.leads.length > 0 || returnedFishingShoals.surveys.length > 0) {
+      this.events.emit("fishingShoalsReturned", {
+        expeditionId,
+        generation,
+        leads: returnedFishingShoals.leads,
+        surveys: returnedFishingShoals.surveys,
       });
     }
     this.replenishCurrentShip("return", true);
@@ -803,7 +836,7 @@ export class GameSimulation {
     this.wrecksRevision++;
     const reverted = this.knowledge.revertExpedition(expeditionId);
     const lostDiscoveries = this.discoverySystem.revertExpedition(expeditionId);
-    this.fishingShoalSystem.revertExpedition(expeditionId);
+    const lostFishingShoals = this.fishingShoalSystem.revertExpedition(expeditionId);
     const previousProvisions = lostShip.provisions;
     lostShip.provisions = 0;
     lostShip.provisionAccumulator = 0;
@@ -836,6 +869,13 @@ export class GameSimulation {
         expeditionId,
         generation,
         discoveries: lostDiscoveries,
+      });
+    }
+    if (lostFishingShoals.length > 0) {
+      this.events.emit("fishingShoalsLost", {
+        expeditionId,
+        generation,
+        records: lostFishingShoals,
       });
     }
     return reverted.changedCount;

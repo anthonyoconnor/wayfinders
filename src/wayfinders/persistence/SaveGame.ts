@@ -9,13 +9,14 @@ import {
   FISHING_SHOAL_CONTENT_VERSION,
   isCurrentFishingShoalId,
   type FishingShoalProvisionalRecordV1,
+  type FishingShoalReturnedRecordV1,
   type FishingShoalSightedSaveRecordV1,
 } from "../exploration/FishingShoalContracts";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
 export const ACCEPTED_BASELINE_SAVE_SCHEMA_VERSION = 1 as const;
-export const SAVE_SCHEMA_VERSION = 3 as const;
+export const SAVE_SCHEMA_VERSION = 4 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -120,7 +121,16 @@ export type SaveGameV3<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRec
     };
   };
 
-export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV3<TDiscovery>;
+export type SaveGameV4<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
+  Omit<SaveGameV3<TDiscovery>, "schemaVersion" | "fishingShoals"> & {
+    schemaVersion: 4;
+    fishingShoals: {
+      provisional: FishingShoalProvisionalRecordV1[];
+      returned: FishingShoalReturnedRecordV1[];
+    };
+  };
+
+export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV4<TDiscovery>;
 
 type SaveMigration = (value: unknown) => unknown;
 
@@ -131,6 +141,7 @@ type SaveMigration = (value: unknown) => unknown;
 const SAVE_MIGRATIONS: ReadonlyMap<number, SaveMigration> = new Map<number, SaveMigration>([
   [1, migrateSaveGameV1ToV2],
   [2, migrateSaveGameV2ToV3],
+  [3, migrateSaveGameV3ToV4],
 ]);
 
 export interface KnowledgeCell {
@@ -387,7 +398,7 @@ export function migrateSaveGame(value: unknown): SaveGame {
     schemaVersion = migratedVersion;
   }
 
-  return parseSaveGameV3(current);
+  return parseSaveGameV4(current);
 }
 
 /** Main load entrypoint; retained under the established API name. */
@@ -538,6 +549,53 @@ export function parseSaveGameV3(value: unknown): SaveGameV3 {
   return value as SaveGameV3;
 }
 
+/** Validates the GP-1.3 schema with provisional and safely returned records. */
+export function parseSaveGameV4(value: unknown): SaveGameV4 {
+  const root = record(value, "save");
+  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
+  if (schemaVersion !== 4) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+
+  const world = record(root.world, "save.world");
+  const contentVersions = record(world.contentVersions, "save.world.contentVersions");
+  const fishingShoalContentVersion = integer(
+    contentVersions.fishingShoals,
+    "save.world.contentVersions.fishingShoals",
+  );
+  if (fishingShoalContentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
+    throw new UnsupportedFishingShoalContentVersionError(fishingShoalContentVersion);
+  }
+
+  const { contentVersions: _contentVersions, ...baselineWorld } = world;
+  parseSaveGameV1({ ...root, schemaVersion: 1, world: baselineWorld });
+
+  const generation = positiveSafeInteger(root.generation, "save.generation");
+  const expedition = record(root.expedition, "save.expedition");
+  const expeditionId = unsigned32(expedition.id, "save.expedition.id", false);
+  const expeditionActive = boolean(expedition.active, "save.expedition.active");
+  const fishingShoals = record(root.fishingShoals, "save.fishingShoals");
+  const provisional = validateFishingShoalProvisional(
+    fishingShoals.provisional,
+    expeditionId,
+    generation,
+    expeditionActive,
+    true,
+  );
+  const returned = validateFishingShoalReturned(fishingShoals.returned, generation);
+  const returnedById = new Map(returned.map((item) => [item.id, item]));
+  for (let index = 0; index < provisional.length; index++) {
+    const item = provisional[index];
+    const prior = returnedById.get(item.id);
+    if (prior && !(prior.state === "lead" && item.state === "surveyed")) {
+      fail(
+        "may overlap returned state only for a returned lead with a provisional survey upgrade",
+        `save.fishingShoals.provisional[${index}].id`,
+      );
+    }
+  }
+
+  return value as SaveGameV4;
+}
+
 export function isSaveGame(value: unknown): boolean {
   try {
     parseSaveGame(value);
@@ -585,13 +643,25 @@ function migrateSaveGameV2ToV3(value: unknown): SaveGameV3 {
   return { ...previous, schemaVersion: 3 };
 }
 
+function migrateSaveGameV3ToV4(value: unknown): SaveGameV4 {
+  const previous = structuredClone(parseSaveGameV3(value));
+  return {
+    ...previous,
+    schemaVersion: 4,
+    fishingShoals: {
+      provisional: previous.fishingShoals.provisional,
+      returned: [],
+    },
+  };
+}
+
 function validateFishingShoalProvisional(
   value: unknown,
   expeditionId: number,
   generation: number,
   expeditionActive: boolean,
   allowSurveyed: boolean,
-): void {
+): FishingShoalProvisionalRecordV1[] {
   if (!Array.isArray(value)) fail("must be an array", "save.fishingShoals.provisional");
   let previousId = "";
   let surveyedCount = 0;
@@ -617,6 +687,30 @@ function validateFishingShoalProvisional(
     if (recordExpeditionId !== expeditionId) fail("must belong to the active expedition", `${path}.expeditionId`);
     if (recordGeneration !== generation) fail("must belong to the current generation", `${path}.generation`);
   }
+  return value as FishingShoalProvisionalRecordV1[];
+}
+
+function validateFishingShoalReturned(
+  value: unknown,
+  generation: number,
+): FishingShoalReturnedRecordV1[] {
+  if (!Array.isArray(value)) fail("must be an array", "save.fishingShoals.returned");
+  let previousId = "";
+  for (let index = 0; index < value.length; index++) {
+    const path = `save.fishingShoals.returned[${index}]`;
+    const item = record(value[index], path);
+    const id = requiredString(item.id, `${path}.id`);
+    if (!isCurrentFishingShoalId(id)) fail("has an invalid or unsupported fishing-shoal ID", `${path}.id`);
+    if (id <= previousId) fail("must be uniquely sorted by fishing-shoal ID", `${path}.id`);
+    previousId = id;
+    if (item.state !== "lead" && item.state !== "survey") {
+      fail("must be a returned lead or survey", `${path}.state`);
+    }
+    unsigned32(item.expeditionId, `${path}.expeditionId`, false);
+    const recordGeneration = positiveSafeInteger(item.generation, `${path}.generation`);
+    if (recordGeneration > generation) fail("cannot be later than the current generation", `${path}.generation`);
+  }
+  return value as FishingShoalReturnedRecordV1[];
 }
 
 function readSaveSchemaVersion(value: unknown): number {

@@ -12,6 +12,8 @@ import {
   type FishingShoalInteractionResultV1,
   type FishingShoalProvisionalRecordV1,
   type FishingShoalReadModel,
+  type FishingShoalReturnedRecordV1,
+  type FishingShoalReturnedSurveyReadModel,
   type FishingShoalSurveyedReadModel,
 } from "./FishingShoalContracts";
 
@@ -19,11 +21,18 @@ export interface FishingShoalObservation {
   found: readonly Readonly<FishingShoalProvisionalRecordV1>[];
 }
 
+export interface FishingShoalCommitResult {
+  leads: readonly Readonly<FishingShoalReturnedRecordV1>[];
+  surveys: readonly Readonly<FishingShoalReturnedRecordV1>[];
+}
+
 /** Owns mutable shoal knowledge while definitions remain seed-derived. */
 export class FishingShoalSystem {
   private readonly definitionById = new Map<string, Readonly<FishingShoalDefinition>>();
   private readonly provisionalById = new Map<string, FishingShoalProvisionalRecordV1>();
+  private readonly returnedById = new Map<string, FishingShoalReturnedRecordV1>();
   private provisionalCache: ReadonlyArray<Readonly<FishingShoalProvisionalRecordV1>> = Object.freeze([]);
+  private returnedCache: ReadonlyArray<Readonly<FishingShoalReturnedRecordV1>> = Object.freeze([]);
   private recordsDirty = false;
   private recordsRevisionValue = 0;
 
@@ -38,12 +47,17 @@ export class FishingShoalSystem {
   }
 
   get provisional(): readonly Readonly<FishingShoalProvisionalRecordV1>[] {
-    if (this.recordsDirty) {
-      this.provisionalCache = Object.freeze([...this.provisionalById.values()]
-        .sort((left, right) => left.id.localeCompare(right.id)));
-      this.recordsDirty = false;
-    }
+    this.refreshRecordCaches();
     return this.provisionalCache;
+  }
+
+  get returned(): readonly Readonly<FishingShoalReturnedRecordV1>[] {
+    this.refreshRecordCaches();
+    return this.returnedCache;
+  }
+
+  get activationEligible(): readonly Readonly<FishingShoalReturnedRecordV1>[] {
+    return this.returned.filter(({ state }) => state === "survey");
   }
 
   get recordsRevision(): number {
@@ -63,24 +77,34 @@ export class FishingShoalSystem {
   }
 
   interactionNear(tile: Readonly<{ x: number; y: number }>): FishingShoalInteractionReadModel | undefined {
-    let closest: { definition: Readonly<FishingShoalDefinition>; distance: number } | undefined;
+    let closest: {
+      definition: Readonly<FishingShoalDefinition>;
+      distance: number;
+      state: FishingShoalInteractionReadModel["state"];
+    } | undefined;
     for (const definition of this.definitions) {
-      const record = this.provisionalById.get(definition.id);
-      if (record?.state !== "sighted") continue;
+      const provisional = this.provisionalById.get(definition.id);
+      const returned = this.returnedById.get(definition.id);
+      const state = provisional?.state === "sighted"
+        ? "sighted"
+        : !provisional && returned?.state === "lead"
+          ? "returned-lead"
+          : undefined;
+      if (!state) continue;
       const distance = Math.hypot(definition.tile.x - tile.x, definition.tile.y - tile.y);
       if (distance > FISHING_SHOAL_INTERACTION_RANGE_TILES) continue;
       if (
         closest
         && (distance > closest.distance || (distance === closest.distance && definition.id > closest.definition.id))
       ) continue;
-      closest = { definition, distance };
+      closest = { definition, distance, state };
     }
     if (!closest) return undefined;
     return {
       contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
       id: closest.definition.id,
       tile: closest.definition.tile,
-      state: "sighted",
+      state: closest.state,
       clueLabel: closest.definition.clue.label,
       surveyCasesRemaining: this.surveyCasesRemaining,
     };
@@ -89,6 +113,8 @@ export class FishingShoalSystem {
   applyInteraction(
     command: Readonly<FishingShoalInteractionCommandV1>,
     shipTile: Readonly<{ x: number; y: number }>,
+    expeditionId: number,
+    generation: number,
   ): FishingShoalInteractionResultV1 {
     const definition = this.definitionById.get(command.id);
     if (!definition) return this.reject(command.id, "unknown-opportunity");
@@ -97,9 +123,12 @@ export class FishingShoalSystem {
       > FISHING_SHOAL_INTERACTION_RANGE_TILES
     ) return this.reject(command.id, "out-of-range");
 
-    const record = this.provisionalById.get(command.id);
+    const provisional = this.provisionalById.get(command.id);
+    const returned = this.returnedById.get(command.id);
     if (command.type === "leave") {
-      if (record?.state !== "sighted") return this.reject(command.id, "not-sighted");
+      if (provisional?.state !== "sighted" && (!returned || returned.state !== "lead")) {
+        return this.reject(command.id, returned?.state === "survey" ? "already-surveyed" : "not-sighted");
+      }
       return {
         contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
         status: "left",
@@ -107,11 +136,24 @@ export class FishingShoalSystem {
       };
     }
 
-    if (record?.state === "surveyed") return this.reject(command.id, "already-surveyed");
-    if (record?.state !== "sighted") return this.reject(command.id, "not-sighted");
+    if (returned?.state === "survey" || provisional?.state === "surveyed") {
+      return this.reject(command.id, "already-surveyed");
+    }
+    if (provisional?.state !== "sighted" && returned?.state !== "lead") {
+      return this.reject(command.id, "not-sighted");
+    }
     if (this.surveyCasesRemaining === 0) return this.reject(command.id, "no-survey-case");
 
-    record.state = "surveyed";
+    if (provisional) {
+      provisional.state = "surveyed";
+    } else {
+      this.provisionalById.set(command.id, {
+        id: command.id,
+        state: "surveyed",
+        expeditionId,
+        generation,
+      });
+    }
     this.markRecordsChanged();
     return {
       contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
@@ -133,7 +175,7 @@ export class FishingShoalSystem {
       : new Set(visibleIndices);
     const found: FishingShoalProvisionalRecordV1[] = [];
     for (const definition of this.definitions) {
-      if (this.provisionalById.has(definition.id)) continue;
+      if (this.provisionalById.has(definition.id) || this.returnedById.has(definition.id)) continue;
       if (!visible.has(this.world.index(definition.tile.x, definition.tile.y))) continue;
       const record: FishingShoalProvisionalRecordV1 = {
         id: definition.id,
@@ -148,6 +190,44 @@ export class FishingShoalSystem {
     return { found: Object.freeze(found) };
   }
 
+  commitExpedition(expeditionId: number): FishingShoalCommitResult {
+    const leads: FishingShoalReturnedRecordV1[] = [];
+    const surveys: FishingShoalReturnedRecordV1[] = [];
+    let changed = false;
+    for (const [id, provisional] of this.provisionalById) {
+      if (provisional.expeditionId !== expeditionId) continue;
+      const previousReturned = this.returnedById.get(id);
+      const nextState = provisional.state === "surveyed" ? "survey" : "lead";
+      if (previousReturned?.state === "survey") {
+        this.provisionalById.delete(id);
+        changed = true;
+        continue;
+      }
+      if (previousReturned?.state === "lead" && nextState === "lead") {
+        this.provisionalById.delete(id);
+        changed = true;
+        continue;
+      }
+      const committed: FishingShoalReturnedRecordV1 = {
+        id: provisional.id,
+        state: nextState,
+        expeditionId: provisional.expeditionId,
+        generation: provisional.generation,
+      };
+      this.returnedById.set(id, committed);
+      this.provisionalById.delete(id);
+      changed = true;
+      (nextState === "survey" ? surveys : leads).push(committed);
+    }
+    leads.sort((left, right) => left.id.localeCompare(right.id));
+    surveys.sort((left, right) => left.id.localeCompare(right.id));
+    if (changed) this.markRecordsChanged();
+    return {
+      leads: Object.freeze(leads),
+      surveys: Object.freeze(surveys),
+    };
+  }
+
   revertExpedition(expeditionId: number): readonly Readonly<FishingShoalProvisionalRecordV1>[] {
     const lost: FishingShoalProvisionalRecordV1[] = [];
     for (const [id, record] of this.provisionalById) {
@@ -160,16 +240,37 @@ export class FishingShoalSystem {
     return Object.freeze(lost);
   }
 
-  restore(records: readonly FishingShoalProvisionalRecordV1[]): void {
+  restore(
+    provisionalRecords: readonly FishingShoalProvisionalRecordV1[],
+    returnedRecords: readonly FishingShoalReturnedRecordV1[] = [],
+  ): void {
     this.provisionalById.clear();
+    this.returnedById.clear();
+    for (const saved of returnedRecords) {
+      if (!isCurrentFishingShoalId(saved.id) || !this.definitionById.has(saved.id)) {
+        throw new RangeError(`Fishing shoal ${saved.id} does not match the regenerated catalog`);
+      }
+      if (saved.state !== "lead" && saved.state !== "survey") {
+        throw new RangeError(`Fishing shoal ${saved.id} has an invalid returned state`);
+      }
+      if (this.returnedById.has(saved.id)) throw new RangeError(`Returned fishing shoal ${saved.id} is duplicated`);
+      this.returnedById.set(saved.id, { ...saved });
+    }
     let surveyedCount = 0;
-    for (const saved of records) {
+    for (const saved of provisionalRecords) {
       if (!isCurrentFishingShoalId(saved.id) || !this.definitionById.has(saved.id)) {
         throw new RangeError(`Fishing shoal ${saved.id} does not match the regenerated catalog`);
       }
       if (this.provisionalById.has(saved.id)) throw new RangeError(`Fishing shoal ${saved.id} is duplicated`);
+      if (saved.state !== "sighted" && saved.state !== "surveyed") {
+        throw new RangeError(`Fishing shoal ${saved.id} has an invalid provisional state`);
+      }
       if (saved.state === "surveyed" && ++surveyedCount > 1) {
         throw new RangeError("Only one fishing shoal may consume the fixed survey-case allocation");
+      }
+      const returned = this.returnedById.get(saved.id);
+      if (returned && !(returned.state === "lead" && saved.state === "surveyed")) {
+        throw new RangeError(`Fishing shoal ${saved.id} has an invalid provisional/returned overlap`);
       }
       this.provisionalById.set(saved.id, { ...saved });
     }
@@ -180,11 +281,22 @@ export class FishingShoalSystem {
     const models: FishingShoalReadModel[] = [];
     for (const definition of this.definitions) {
       const visible = this.world.isVisibleNow(definition.tile.x, definition.tile.y);
-      const record = this.provisionalById.get(definition.id);
-      if (!visible && (!record || this.world.getKnowledge(definition.tile.x, definition.tile.y) === KnowledgeState.Unknown)) {
+      const provisional = this.provisionalById.get(definition.id);
+      const returned = this.returnedById.get(definition.id);
+      if (returned?.state === "survey") {
+        const model: FishingShoalReturnedSurveyReadModel = {
+          contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+          id: definition.id,
+          tile: definition.tile,
+          clue: definition.clue,
+          state: "returned-survey",
+          quality: definition.quality,
+          homeConnected: false,
+        };
+        models.push(model);
         continue;
       }
-      if (record?.state === "surveyed") {
+      if (provisional?.state === "surveyed") {
         const model: FishingShoalSurveyedReadModel = {
           contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
           id: definition.id,
@@ -194,16 +306,31 @@ export class FishingShoalSystem {
           quality: definition.quality,
         };
         models.push(model);
-      } else {
+        continue;
+      }
+      if (returned?.state === "lead") {
         const model: FishingShoalHiddenReadModel = {
           contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
           id: definition.id,
           tile: definition.tile,
           clue: definition.clue,
-          state: record ? "sighted" : "clue",
+          state: "returned-lead",
         };
         models.push(model);
+        continue;
       }
+      if (
+        !visible
+        && (!provisional || this.world.getKnowledge(definition.tile.x, definition.tile.y) === KnowledgeState.Unknown)
+      ) continue;
+      const model: FishingShoalHiddenReadModel = {
+        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+        id: definition.id,
+        tile: definition.tile,
+        clue: definition.clue,
+        state: provisional ? "sighted" : "clue",
+      };
+      models.push(model);
     }
     return Object.freeze(models);
   }
@@ -211,6 +338,15 @@ export class FishingShoalSystem {
   private markRecordsChanged(): void {
     this.recordsDirty = true;
     this.recordsRevisionValue++;
+  }
+
+  private refreshRecordCaches(): void {
+    if (!this.recordsDirty) return;
+    this.provisionalCache = Object.freeze([...this.provisionalById.values()]
+      .sort((left, right) => left.id.localeCompare(right.id)));
+    this.returnedCache = Object.freeze([...this.returnedById.values()]
+      .sort((left, right) => left.id.localeCompare(right.id)));
+    this.recordsDirty = false;
   }
 
   private reject(

@@ -1,9 +1,9 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-1.4` batch is authorized; `GP-0.1`, `GP-0.2`,
-`GP-1.1` and `GP-1.2` are accepted, and the remaining batch minors proceed in
-dependency order without renewed permission pauses.
+ordered `GP-0.1` through `GP-1.4` batch is authorized; `GP-0.1` through
+`GP-1.3` are accepted, and the remaining batch minor proceeds in dependency
+order without a renewed permission pause.
 
 ## Roadmap model
 
@@ -213,7 +213,23 @@ approved contextual touch input work.
 
 #### GP-1.3 — Provisional, returned and lost surveys
 
-Status: proposed.
+Status: accepted.
+
+Acceptance evidence (2026-07-12): authoritative returned records are separate
+from active-expedition provisional records, with exactly one legal overlap: a
+returned lead plus its provisional surveyed upgrade. Exact-dock return commits
+sightings as inherited inactive leads and surveys as terminal returned surveys;
+wreck rollback removes only provisional state, so an earlier lead survives an
+unsuccessful upgrade voyage. Returned surveys are the sole later-activation
+eligible state and remain idempotent across revisit, repeat input, dock, wreck,
+autosave and checkpoint round trips. Schema V4 adds sorted returned records
+through the adjacent V3-to-V4 migration while preserving prior fixtures and
+future-version protection. Faint provisional/lead marks and the automatic dock
+report remain revision-driven, pooled, viewport-culled and coalesced with the
+existing return cue. The full pipeline passes 166 tests across 18 files plus
+typecheck and production build. Browser validation covers lead return, a later
+Supported-water survey upgrade, exact-dock commit, terminal revisit and manual
+checkpoint reload with the expected authoritative state throughout.
 
 - Complete the branching lifecycle:
   - latent → sighted/provisional → returned lead when reported safely without

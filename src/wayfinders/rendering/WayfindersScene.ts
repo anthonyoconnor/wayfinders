@@ -106,6 +106,7 @@ export class WayfindersScene extends Phaser.Scene {
   private persistenceOutput?: HTMLOutputElement;
   private discoveryOutput?: HTMLOutputElement;
   private surveyRibbon?: HTMLElement;
+  private surveyRibbonTitle?: HTMLElement;
   private surveyRibbonClue?: HTMLElement;
   private surveyRibbonCase?: HTMLElement;
   private surveyButton?: HTMLButtonElement;
@@ -143,6 +144,8 @@ export class WayfindersScene extends Phaser.Scene {
   private returnCueScheduled = false;
   private returnCuePending = false;
   private pendingReturnedDiscoveryNames: string[] = [];
+  private pendingReturnedFishingLeadCount = 0;
+  private pendingReturnedFishingSurveyQualities: string[] = [];
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
   private lastSaveSerializationMs = 0;
@@ -390,6 +393,8 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.discoveryReturned = String(this.simulation.returnedDiscoveries.length);
       host.dataset.fishingShoalAvailable = String(this.simulation.fishingShoalDefinitions.length);
       host.dataset.fishingShoalProvisional = String(this.simulation.provisionalFishingShoals.length);
+      host.dataset.fishingShoalReturned = String(this.simulation.returnedFishingShoals.length);
+      host.dataset.fishingShoalActivationEligible = String(this.simulation.activationEligibleFishingShoals.length);
       host.dataset.fishingShoalVisible = String(this.simulation.fishingShoalReadModels.length);
       host.dataset.surveyCases = String(this.simulation.surveyCasesRemaining);
       host.dataset.fishingShoalInteraction = this.simulation.fishingShoalInteraction?.id ?? "";
@@ -637,7 +642,7 @@ export class WayfindersScene extends Phaser.Scene {
     ribbon.setAttribute("aria-label", "Fishing-shoal survey decision");
     ribbon.innerHTML = `
       <div>
-        <strong>Fishing sign nearby</strong>
+        <strong data-survey-title>Fishing sign nearby</strong>
         <span data-survey-clue></span>
         <span data-survey-case></span>
       </div>
@@ -647,6 +652,7 @@ export class WayfindersScene extends Phaser.Scene {
       </div>`;
     host.append(ribbon);
     this.surveyRibbon = ribbon;
+    this.surveyRibbonTitle = ribbon.querySelector<HTMLElement>("[data-survey-title]") ?? undefined;
     this.surveyRibbonClue = ribbon.querySelector<HTMLElement>("[data-survey-clue]") ?? undefined;
     this.surveyRibbonCase = ribbon.querySelector<HTMLElement>("[data-survey-case]") ?? undefined;
     this.surveyButton = ribbon.querySelector<HTMLButtonElement>("[data-survey-action='survey']") ?? undefined;
@@ -672,6 +678,11 @@ export class WayfindersScene extends Phaser.Scene {
       return;
     }
 
+    if (this.surveyRibbonTitle) {
+      this.surveyRibbonTitle.textContent = interaction.state === "returned-lead"
+        ? "Returned fishing lead"
+        : "Fishing sign nearby";
+    }
     if (this.surveyRibbonClue) this.surveyRibbonClue.textContent = interaction.clueLabel;
     if (this.surveyRibbonCase) {
       this.surveyRibbonCase.textContent = interaction.surveyCasesRemaining === 1
@@ -819,6 +830,7 @@ export class WayfindersScene extends Phaser.Scene {
     return `Discoveries: ${this.simulation.provisionalDiscoveries.length} provisional · `
       + `${this.simulation.returnedDiscoveries.length} returned · Fishing signs: `
       + `${this.simulation.provisionalFishingShoals.length} provisional · `
+      + `${this.simulation.returnedFishingShoals.length} returned · `
       + `${this.simulation.surveyCasesRemaining} survey case`;
   }
 
@@ -1217,6 +1229,35 @@ export class WayfindersScene extends Phaser.Scene {
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
+      this.simulation.events.on("fishingShoalsReturned", ({ leads, surveys }) => {
+        this.pendingReturnedFishingLeadCount += leads.length;
+        const returnedQualities: string[] = [];
+        for (const survey of surveys) {
+          const quality = this.simulation.fishingShoalDefinitions
+            .find(({ id }) => id === survey.id)?.quality;
+          if (!quality) continue;
+          returnedQualities.push(quality);
+          this.pendingReturnedFishingSurveyQualities.push(quality);
+        }
+        this.scheduleReturnCue();
+        const leadReport = leads.length > 0 ? `${leads.length} inactive lead${leads.length === 1 ? "" : "s"}` : "";
+        const surveyReport = returnedQualities.length > 0
+          ? `${returnedQualities.join(", ")} returned survey`
+          : "";
+        this.log(`Fishing report secured: ${[leadReport, surveyReport].filter(Boolean).join("; ")}.`);
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("fishingShoalsLost", ({ records }) => {
+        const surveys = records.filter(({ state }) => state === "surveyed").length;
+        const sightings = records.length - surveys;
+        this.log(
+          `Unreturned fishing work lost with the ship: ${sightings} sighting${sightings === 1 ? "" : "s"}, `
+          + `${surveys} survey${surveys === 1 ? "" : "s"}. Earlier returned leads remain inherited.`,
+        );
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
       this.simulation.events.on("discoveriesReturned", ({ discoveries }) => {
         const names = discoveries.map(({ name }) => name).join(", ");
         this.pendingReturnedDiscoveryNames.push(...discoveries.map(({ name }) => name));
@@ -1245,16 +1286,29 @@ export class WayfindersScene extends Phaser.Scene {
     queueMicrotask(() => {
       this.returnCueScheduled = false;
       const names = this.pendingReturnedDiscoveryNames.splice(0);
+      const fishingLeadCount = this.pendingReturnedFishingLeadCount;
+      this.pendingReturnedFishingLeadCount = 0;
+      const fishingSurveyQualities = this.pendingReturnedFishingSurveyQualities.splice(0);
       const returned = this.returnCuePending;
       this.returnCuePending = false;
-      if (!returned && names.length === 0) return;
+      if (!returned && names.length === 0 && fishingLeadCount === 0 && fishingSurveyQualities.length === 0) return;
 
-      if (names.length > 0) {
+      if (names.length > 0 || fishingLeadCount > 0 || fishingSurveyQualities.length > 0) {
         const discoveryLine = names.length === 1
           ? names[0].toUpperCase()
-          : `${names.length} DISCOVERIES RETURNED`;
+          : names.length > 1
+            ? `${names.length} DISCOVERIES RETURNED`
+            : "";
+        const fishingLine = fishingSurveyQualities.length > 0 && fishingLeadCount > 0
+          ? `${fishingSurveyQualities.length} FISHING SURVEY + ${fishingLeadCount} LEAD${fishingLeadCount === 1 ? "" : "S"} RETURNED`
+          : fishingSurveyQualities.length > 0
+            ? `FISHING SURVEY RETURNED · ${fishingSurveyQualities[0].toUpperCase()} QUALITY`
+            : fishingLeadCount > 0
+              ? `${fishingLeadCount} FISHING LEAD${fishingLeadCount === 1 ? "" : "S"} RECORDED`
+              : "";
+        const findings = [discoveryLine, fishingLine].filter(Boolean).join("\n");
         this.showLifecycleCue(
-          `EXPEDITION RETURNED\n${discoveryLine}\nADDED TO THE INHERITED CHART\nROUTE SUPPORTED · PROVISIONS REPLENISHED`,
+          `EXPEDITION RETURNED\n${findings}\nADDED TO THE INHERITED CHART\nROUTE SUPPORTED · PROVISIONS REPLENISHED`,
           "#eadb9f",
           5_000,
         );
@@ -1320,6 +1374,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.discoveryOutput = undefined;
     this.surveyRibbon?.remove();
     this.surveyRibbon = undefined;
+    this.surveyRibbonTitle = undefined;
     this.surveyRibbonClue = undefined;
     this.surveyRibbonCase = undefined;
     this.surveyButton = undefined;

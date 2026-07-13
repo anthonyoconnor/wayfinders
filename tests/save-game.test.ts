@@ -86,7 +86,7 @@ function makeValidSave(): SaveGame {
         detail: "A newly named island.",
       }],
     },
-    fishingShoals: { provisional: [] },
+    fishingShoals: { provisional: [], returned: [] },
     terrainPatches: [],
   };
 }
@@ -250,6 +250,46 @@ describe("save-game validation", () => {
     };
     wrongState.fishingShoals.provisional[0].state = "returned";
     expect(() => parseSaveGame(wrongState)).toThrow(/sighted or surveyed/);
+  });
+
+  it("permits only the returned-lead plus provisional-survey upgrade overlap", () => {
+    const returned = makeValidSave();
+    returned.fishingShoals.returned.push({
+      id: createFishingShoalId(0),
+      state: "lead",
+      expeditionId: 2,
+      generation: 1,
+    });
+    expect(parseSaveGame(returned)).toBe(returned);
+    const terminal = structuredClone(returned);
+    terminal.fishingShoals.returned[0].state = "survey";
+    expect(parseSaveGame(terminal)).toBe(terminal);
+
+    const upgrade = structuredClone(returned);
+    upgrade.expedition.active = true;
+    upgrade.fishingShoals.provisional.push({
+      id: createFishingShoalId(0),
+      state: "surveyed",
+      expeditionId: upgrade.expedition.id,
+      generation: upgrade.generation,
+    });
+    expect(parseSaveGame(upgrade)).toBe(upgrade);
+
+    const terminalOverlap = structuredClone(upgrade);
+    terminalOverlap.fishingShoals.returned[0].state = "survey";
+    expect(() => parseSaveGame(terminalOverlap)).toThrow(/returned lead with a provisional survey/);
+
+    const sightedOverlap = structuredClone(upgrade);
+    sightedOverlap.fishingShoals.provisional[0].state = "sighted";
+    expect(() => parseSaveGame(sightedOverlap)).toThrow(/returned lead with a provisional survey/);
+
+    const futureReturn = structuredClone(returned);
+    futureReturn.fishingShoals.returned[0].generation = futureReturn.generation + 1;
+    expect(() => parseSaveGame(futureReturn)).toThrow(/later than the current generation/);
+
+    const duplicateReturn = structuredClone(returned);
+    duplicateReturn.fishingShoals.returned.push({ ...duplicateReturn.fishingShoals.returned[0] });
+    expect(() => parseSaveGame(duplicateReturn)).toThrow(/uniquely sorted/);
   });
 
   it("accepts a coherent pending-wreck hold", () => {

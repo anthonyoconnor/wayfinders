@@ -4,6 +4,8 @@ import type {
   FishingShoalClue,
   FishingShoalId,
   FishingShoalSurveyedResultV1,
+  FishingShoalProvisionalRecordV1,
+  FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
@@ -56,6 +58,17 @@ export interface GameEventMap {
   };
   fishingShoalSurveyed: Readonly<FishingShoalSurveyedResultV1> & {
     tile: Readonly<GridPoint>;
+  };
+  fishingShoalsReturned: {
+    expeditionId: number;
+    generation: number;
+    leads: readonly Readonly<FishingShoalReturnedRecordV1>[];
+    surveys: readonly Readonly<FishingShoalReturnedRecordV1>[];
+  };
+  fishingShoalsLost: {
+    expeditionId: number;
+    generation: number;
+    records: readonly Readonly<FishingShoalProvisionalRecordV1>[];
   };
   discoveriesReturned: {
     expeditionId: number;
