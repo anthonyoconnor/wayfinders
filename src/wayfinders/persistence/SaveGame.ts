@@ -13,6 +13,7 @@ import {
   type FishingShoalSightedSaveRecordV1,
 } from "../exploration/FishingShoalContracts";
 import {
+  NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS,
   NavigatorLineageValidationError,
   migrateBaselineNavigatorLineageV1,
   migrateNavigatorLineageV1ToV2,
@@ -680,14 +681,37 @@ export function parseSaveGameV6(value: unknown): SaveGameV6 {
     ...(record(root.navigatorLineage, "save.navigatorLineage")),
     contractVersion: 1,
   });
-  parseSaveGameV5({ ...previous, schemaVersion: 5, navigatorLineage: lineageV1 });
+  const previousSave = parseSaveGameV5({
+    ...previous,
+    schemaVersion: 5,
+    navigatorLineage: lineageV1,
+  });
+  let navigatorLineage: NavigatorLineageSnapshotV2;
   try {
-    parseNavigatorLineageSnapshotV2(root.navigatorLineage);
+    navigatorLineage = parseNavigatorLineageSnapshotV2(root.navigatorLineage);
   } catch (error) {
     if (error instanceof NavigatorLineageValidationError) {
       fail(error.message, `save.${error.path}`);
     }
     throw error;
+  }
+  const navigator = navigatorLineage.navigators[navigatorLineage.navigators.length - 1];
+  const unresolvedRetirementChoice = navigator.state === "active"
+    && navigator.ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
+    && !navigator.finalVoyageDeclared;
+  if (unresolvedRetirementChoice) {
+    if (previousSave.expedition.active) {
+      fail("must be inactive while a retirement choice is unresolved", "save.expedition.active");
+    }
+    const world = previousSave.world.generationConfig.world;
+    const dockX = Math.floor(world.width / 2) + world.homeIslandRadius + 1;
+    const dockY = Math.floor(world.height / 2);
+    if (
+      previousSave.ship.currentTileX !== dockX
+      || previousSave.ship.currentTileY !== dockY
+    ) {
+      fail("must be at the exact home dock while a retirement choice is unresolved", "save.ship");
+    }
   }
   return value as SaveGameV6;
 }

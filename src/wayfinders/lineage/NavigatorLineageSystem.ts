@@ -801,10 +801,7 @@ function validateAgingCombination(
     }
     return;
   }
-  if (state === "active" && (
-    ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
-    || ageYears === NAVIGATOR_RETIREMENT_AGE_YEARS
-  )) return;
+  if (state === "active" && ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS) return;
   if (state === "retired" && ageYears === NAVIGATOR_RETIREMENT_AGE_YEARS) return;
   if (state === "lost" && ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS) return;
   fail("is inconsistent with navigator age and lifecycle state", `${path}.finalVoyageDeclared`);

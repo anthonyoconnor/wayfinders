@@ -343,7 +343,7 @@ uses the unchanged four-second wreck presentation and succession path. Idle
 time, reload, inactive docking, travel time and distance never age the
 navigator. Schema V6 adds the V2 lineage age/final-voyage contract and migrates
 V5 lineage V1 records. The accessible retirement ribbon appears only at the
-dock; sailing has no permanent age HUD. The full pipeline passes 190 tests
+dock; sailing has no permanent age HUD. The full pipeline passes 192 tests
 across 21 files plus typecheck and production build. Browser acceptance covers
 the age-50 choice, immediate retirement, checkpoint restoration, the declared
 final-voyage safe return and a clean warning/error console.

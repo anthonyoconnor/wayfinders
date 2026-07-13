@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation.ts";
 import type { GridPoint } from "../src/wayfinders/core/types.ts";
+import { parseSaveGame } from "../src/wayfinders/persistence/SaveGame.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
 
 function findUnknownWater(simulation: GameSimulation): GridPoint {
@@ -118,5 +119,47 @@ describe("navigator aging and safe retirement", () => {
     expect(restored.navigatorLineage).toHaveLength(2);
     expect(restored.navigatorLineage[0]).toMatchObject({ state: "lost", ageYears: 50 });
     expect(restored.currentNavigator).toMatchObject({ state: "active", ageYears: 30 });
+  });
+
+  it("rejects an impossible persisted active navigator at the age-55 retirement boundary", () => {
+    const simulation = new GameSimulation();
+    reachRetirementChoice(simulation);
+    expect(simulation.declareFinalVoyage()).toBe(true);
+    const save = structuredClone(simulation.createSave());
+    const navigator = save.navigatorLineage.navigators[0] as {
+      ageYears: number;
+      finalVoyageDeclared: boolean;
+    };
+    navigator.ageYears = 55;
+    navigator.finalVoyageDeclared = true;
+
+    expect(() => parseSaveGame(save)).toThrow(/inconsistent with navigator age/);
+  });
+
+  it("rejects an unresolved retirement choice away from an inactive exact-dock state", () => {
+    const simulation = new GameSimulation();
+    reachRetirementChoice(simulation);
+    const dock = simulation.generated.landmarks.homeReturnTile;
+    let supportedAwayFromDock: GridPoint | undefined;
+    simulation.world.forEachTile((x, y) => {
+      if (supportedAwayFromDock || (x === dock.x && y === dock.y)) return;
+      if (simulation.world.isMovementBlocked(x, y)) return;
+      if (simulation.world.getKnowledge(x, y) !== KnowledgeState.Supported) return;
+      supportedAwayFromDock = { x, y };
+    });
+    if (!supportedAwayFromDock) throw new Error("Expected Supported water away from the dock");
+
+    const offDock = structuredClone(simulation.createSave());
+    Object.assign(offDock.ship, {
+      currentTileX: supportedAwayFromDock.x,
+      currentTileY: supportedAwayFromDock.y,
+      worldX: (supportedAwayFromDock.x + 0.5) * simulation.config.navigation.tileSize,
+      worldY: (supportedAwayFromDock.y + 0.5) * simulation.config.navigation.tileSize,
+    });
+    expect(() => parseSaveGame(offDock)).toThrow(/exact home dock/);
+
+    const activeExpedition = structuredClone(simulation.createSave());
+    activeExpedition.expedition.active = true;
+    expect(() => parseSaveGame(activeExpedition)).toThrow(/inactive while a retirement choice/);
   });
 });

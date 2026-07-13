@@ -36,7 +36,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 190 automated tests pass across 21 files.
+- 192 automated tests pass across 21 files.
 - The production Vite build passes.
 - Browser tests cover discovery and fishing return, returned-lead upgrade,
   autosave reload, manual checkpoint restore, exact ship/camera restoration,
