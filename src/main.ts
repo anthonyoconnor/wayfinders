@@ -1,5 +1,10 @@
 import Phaser from "phaser";
 import {
+  appendDeveloperLog,
+  clearDeveloperLog,
+  developerLogText,
+} from "./developerLog";
+import {
   patchPrototypeConfig,
   prototypeConfig,
   resetPrototypeConfig,
@@ -38,8 +43,12 @@ const toolsClose = requireElement<HTMLButtonElement>("#developer-tools-close");
 const developerToolsRoot = requireElement<HTMLDivElement>("#developer-tools-root");
 const sceneToolsSlot = requireElement<HTMLDivElement>("#scene-tools-slot");
 const developerLog = requireElement<HTMLDivElement>("#developer-log");
+const developerLogCopy = requireElement<HTMLButtonElement>("#developer-log-copy");
+const developerLogClear = requireElement<HTMLButtonElement>("#developer-log-clear");
+const developerLogFeedback = requireElement<HTMLOutputElement>("#developer-log-feedback");
 const rendererStatus = requireElement<HTMLElement>("#renderer-status");
 const phaserVersion = requireElement<HTMLElement>("#phaser-version");
+let suppressEscapeUntilKeyUp = false;
 
 function setDeveloperToolsOpen(open: boolean): void {
   toolsPanel.hidden = !open;
@@ -56,10 +65,7 @@ function setStatus(message: string, state: ShellState = "ready"): void {
 }
 
 function log(message: string): void {
-  const entry = document.createElement("p");
-  entry.textContent = message;
-  developerLog.append(entry);
-  developerLog.scrollTop = developerLog.scrollHeight;
+  appendDeveloperLog(developerLog, message);
 }
 
 export const wayfindersShell: WayfindersShell = {
@@ -109,11 +115,50 @@ export function createWayfindersGame(
 
 toolsToggle.addEventListener("click", () => setDeveloperToolsOpen(toolsPanel.hidden));
 toolsClose.addEventListener("click", () => setDeveloperToolsOpen(false));
+developerLogClear.addEventListener("click", () => {
+  clearDeveloperLog(developerLog);
+  developerLogFeedback.value = "Event log cleared.";
+});
+developerLogCopy.addEventListener("click", () => {
+  const text = developerLogText(developerLog);
+  const copiedEntryCount = developerLog.childElementCount;
+  if (text.length === 0) {
+    developerLogFeedback.value = "Event log is empty.";
+    return;
+  }
+  if (!navigator.clipboard?.writeText) {
+    developerLogFeedback.value = "Clipboard access is unavailable in this browser.";
+    return;
+  }
+  void navigator.clipboard.writeText(text).then(
+    () => {
+      developerLogFeedback.value = `Copied ${copiedEntryCount} event log entries.`;
+    },
+    () => {
+      developerLogFeedback.value = "The browser could not copy the event log.";
+    },
+  );
+});
 gameHost.addEventListener("pointerdown", () => gameHost.focus({ preventScroll: true }));
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && !toolsPanel.hidden) setDeveloperToolsOpen(false);
+  if (event.key !== "Escape") return;
+  if (!toolsPanel.hidden) {
+    suppressEscapeUntilKeyUp = true;
+    setDeveloperToolsOpen(false);
+  } else if (!suppressEscapeUntilKeyUp) {
+    return;
+  }
+  event.preventDefault();
+  event.stopImmediatePropagation();
 });
+window.addEventListener("keyup", (event) => {
+  if (event.key !== "Escape" || !suppressEscapeUntilKeyUp) return;
+  suppressEscapeUntilKeyUp = false;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+});
+window.addEventListener("blur", () => { suppressEscapeUntilKeyUp = false; });
 
 phaserVersion.textContent = Phaser.VERSION;
 document.documentElement.dataset.appReady = "true";

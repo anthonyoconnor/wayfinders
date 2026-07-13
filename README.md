@@ -34,7 +34,7 @@ npm.cmd install
 npm.cmd run dev
 ```
 
-Open `http://127.0.0.1:5173/`. Use WASD or the arrow keys to sail, the mouse wheel or Q/E to zoom, and the on-screen developer tools to inspect or regenerate the deterministic world.
+Open `http://127.0.0.1:5173/`. Use WASD or the arrow keys to sail, the mouse wheel or Q/E to zoom, and the on-screen developer tools to inspect deterministic islands, fishing signs and navigator wrecks, return through the exact dock flow, or reset the world from a seed.
 
 To run another instance on a different port, pass the port after `--`:
 

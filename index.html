@@ -48,10 +48,10 @@
 
       <aside id="risk-legend" class="risk-legend" aria-label="World overlay legend">
         <p>Voyage sense</p>
-        <span><i class="legend-swatch legend-swatch--forward" aria-hidden="true"></i>Forward reach limit</span>
-        <span><i class="legend-swatch legend-swatch--safe" aria-hidden="true"></i>Return route clear</span>
-        <span><i class="legend-swatch legend-swatch--warning" aria-hidden="true"></i>Return route tight</span>
-        <span><i class="legend-swatch legend-swatch--danger" aria-hidden="true"></i>No known return</span>
+        <span data-overlay-legend="forwardRange"><i class="legend-swatch legend-swatch--forward" aria-hidden="true"></i>Forward reach limit</span>
+        <span data-overlay-legend="returnViability"><i class="legend-swatch legend-swatch--safe" aria-hidden="true"></i>Return route clear</span>
+        <span data-overlay-legend="returnViability"><i class="legend-swatch legend-swatch--warning" aria-hidden="true"></i>Return route tight</span>
+        <span data-overlay-legend="returnViability"><i class="legend-swatch legend-swatch--danger" aria-hidden="true"></i>No known return</span>
       </aside>
 
       <aside
@@ -70,10 +70,14 @@
           </button>
         </header>
 
-        <div id="developer-tools-root" class="developer-tools__content" data-developer-tools-root>
-          <section class="tool-section" aria-labelledby="runtime-title">
-            <h3 id="runtime-title">Runtime</h3>
-            <dl class="runtime-summary">
+        <div id="developer-tools-root" class="developer-tools__content">
+          <div id="scene-tools-slot" class="tool-slot">
+            <p>World, voyage, overlay, and tuning controls will appear here when the exploration scene connects.</p>
+          </div>
+
+          <details class="tool-section tool-disclosure tool-disclosure--runtime">
+            <summary>Runtime details</summary>
+            <dl class="runtime-summary tool-disclosure__body">
               <div>
                 <dt>Renderer</dt>
                 <dd id="renderer-status">Booting WebGL</dd>
@@ -87,28 +91,26 @@
                 <dd id="scene-status">Awaiting scene binding</dd>
               </div>
             </dl>
-          </section>
+          </details>
 
-          <section class="tool-section" aria-labelledby="scene-tools-title">
-            <h3 id="scene-tools-title">Scene tools</h3>
-            <div id="scene-tools-slot" class="tool-slot" data-scene-tools-slot>
-              <p>Teleport, overlay, world, and tuning controls will appear here when the exploration scene connects.</p>
-            </div>
-          </section>
-
-          <section class="tool-section tool-section--log" aria-labelledby="diagnostics-title">
-            <h3 id="diagnostics-title">Diagnostics</h3>
+          <section class="tool-section" aria-labelledby="diagnostics-title">
+            <header class="tool-section__heading">
+              <h3 id="diagnostics-title">Event log</h3>
+              <div class="tool-actions" role="group" aria-label="Event log actions">
+                <button id="developer-log-copy" type="button">Copy</button>
+                <button id="developer-log-clear" type="button">Clear</button>
+              </div>
+            </header>
             <div
               id="developer-log"
               class="developer-log"
-              data-developer-log
               role="log"
+              aria-labelledby="diagnostics-title"
               aria-live="polite"
               aria-relevant="additions"
               tabindex="0"
-            >
-              <p>Application shell initialized.</p>
-            </div>
+            ></div>
+            <output id="developer-log-feedback" class="developer-log-feedback" aria-live="polite"></output>
           </section>
         </div>
       </aside>

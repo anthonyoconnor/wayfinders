@@ -211,9 +211,13 @@ Current verification baseline:
 - Discovered, unreported runtime wrecks use an unidentified marker and a
   contextual **Survey wreck / Leave** action. The aboard result names the lost
   navigator provisionally; exact-dock return makes the report permanent.
-- Developer tools provide seed regeneration, island inspection, water-tile
-  teleport, provision/wreck controls, overlay toggles, live configuration,
-  autosave status and checkpoint controls.
+- Developer tools provide compact generation, navigator, voyage, lifecycle and
+  wreck-report diagnostics; exact-dock return; island, fishing-sign and
+  earlier-generation wreck inspection; water-tile teleport; provision/wreck
+  controls; synchronized overlay toggles; session-only configuration; bounded
+  event logging; autosave status and checkpoint controls. Lifecycle-mutating
+  controls are disabled during wreck and generation-handover presentations,
+  while persistence controls remain available for transition reload testing.
 - Browser diagnostics are exposed through canvas data attributes and the
   developer automation API, including rolling frame percentiles, long-frame
   counts, dropped simulation time and save-serialization timing.

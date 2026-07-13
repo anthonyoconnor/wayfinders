@@ -443,8 +443,8 @@ accidental overwrite.
 
 **Load checkpoint** waits for an in-flight autosave, restores the checkpoint,
 snaps the smoothed camera to the restored ship and writes that state as the new
-autosave baseline. **Clear saves** removes both records without mutating the
-currently running simulation.
+autosave baseline. **Clear stored saves** removes both records without mutating
+the currently running simulation.
 
 Any readable autosave or checkpoint that is malformed or has an older/newer
 schema, generator, content or serialized-format version is deleted and cannot

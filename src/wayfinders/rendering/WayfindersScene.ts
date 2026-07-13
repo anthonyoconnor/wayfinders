@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { appendDeveloperLog } from "../../developerLog";
 import {
   onPrototypeConfigChanged,
   patchPrototypeConfig,
@@ -9,7 +10,7 @@ import {
 import { GameSimulation } from "../core/GameSimulation";
 import { FrameTimingMonitor } from "../core/FrameTimingMonitor";
 import { SimulationClock } from "../core/SimulationClock";
-import type { MovementInput } from "../core/types";
+import type { GridPoint, MovementInput } from "../core/types";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
   type FishingShoalInteractionResultV1,
@@ -62,6 +63,8 @@ interface BrowserDebugApi {
   saveNow: () => Promise<boolean>;
   loadSave: () => Promise<boolean>;
   clearSave: () => Promise<boolean>;
+  returnToDock: () => boolean;
+  navigatorWreckTargets: () => ReadonlyArray<{ id: number; generation: number; x: number; y: number }>;
   performance: () => ReturnType<FrameTimingMonitor["snapshot"]> & { lastSaveSerializationMs: number };
   fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
   surveyFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
@@ -116,7 +119,13 @@ export class WayfindersScene extends Phaser.Scene {
   private gameStatus?: HTMLElement;
   private provisionOutput?: HTMLOutputElement;
   private persistenceOutput?: HTMLOutputElement;
-  private discoveryOutput?: HTMLOutputElement;
+  private recordsOutput?: HTMLOutputElement;
+  private readonly developerStateOutputs = new Map<string, HTMLElement>();
+  private readonly developerDisclosureState = new Map<string, boolean>([
+    ["overlays", true],
+    ["tuning", true],
+    ["advanced", false],
+  ]);
   private surveyRibbon?: HTMLElement;
   private surveyRibbonTitle?: HTMLElement;
   private surveyRibbonClue?: HTMLElement;
@@ -137,6 +146,7 @@ export class WayfindersScene extends Phaser.Scene {
   private teleportOnClick = false;
   private islandInspectionIndex = 0;
   private fishingShoalInspectionIndex = 0;
+  private lastInspectedWreckId = 0;
   private datasetGenerated?: GameSimulation["generated"];
   private lastDebugRevision = -1;
   private lastDebugOverlayRevision = -1;
@@ -144,6 +154,7 @@ export class WayfindersScene extends Phaser.Scene {
   private lastDiagnosticsRevision = -1;
   private lastDiagnosticsOverlayRevision = -1;
   private lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
+  private lastDiagnosticsDeveloperToolsOpen = false;
   private lastWrecksRevision = -1;
   private lastWreckVisibilityVersion = -1;
   private lastDiscoveryRecordsRevision = -1;
@@ -253,19 +264,20 @@ export class WayfindersScene extends Phaser.Scene {
 
   override update(time: number, delta: number): void {
     const activeElement = document.activeElement;
+    const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const textInputFocused = activeElement instanceof HTMLInputElement
       || activeElement instanceof HTMLSelectElement
       || activeElement instanceof HTMLTextAreaElement;
-    if (!textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) {
+    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) {
       this.changeZoom(0.1);
     }
-    if (!textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) {
+    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) {
       this.changeZoom(-0.1);
     }
-    if (!textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.survey)) {
+    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.survey)) {
       this.performSurveyAction();
     }
-    if (!textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.leave)) {
+    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.leave)) {
       this.performSurveyLeave();
     }
     const movementInput = this.readMovementInput();
@@ -290,6 +302,7 @@ export class WayfindersScene extends Phaser.Scene {
       this.simulation.generationHandoverActive
       ||
       this.time.now < this.surveyActionUntil
+      || document.documentElement.dataset.developerTools === "open"
       || active instanceof HTMLInputElement
       || active instanceof HTMLSelectElement
       || active instanceof HTMLTextAreaElement
@@ -392,8 +405,10 @@ export class WayfindersScene extends Phaser.Scene {
     );
     this.cargoRenderer.sync(this.simulation.ship.provisions);
     this.syncSurveyRibbon();
+    const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const diagnosticsDirty = this.lastDiagnosticsRevision !== this.simulation.revision
-      || this.lastDiagnosticsOverlayRevision !== this.simulation.overlaysRevision;
+      || this.lastDiagnosticsOverlayRevision !== this.simulation.overlaysRevision
+      || this.lastDiagnosticsDeveloperToolsOpen !== developerToolsOpen;
     const diagnosticsDue = force || (
       this.time.now - this.lastDiagnosticsAt >= 100
       && (
@@ -457,7 +472,9 @@ export class WayfindersScene extends Phaser.Scene {
           ? "wreck-hold"
           : "active";
       host.dataset.inputSuppressed = String(
-        this.simulation.wreckPresentationActive || this.simulation.generationHandoverActive,
+        this.simulation.wreckPresentationActive
+        || this.simulation.generationHandoverActive
+        || developerToolsOpen,
       );
       host.dataset.pendingWreckId = String(this.simulation.pendingWreckId ?? "");
       host.dataset.stranded = String(this.simulation.stranded);
@@ -491,6 +508,7 @@ export class WayfindersScene extends Phaser.Scene {
       this.lastDebugRevision = this.simulation.revision;
       this.lastDebugOverlayRevision = this.simulation.overlaysRevision;
       this.lastDebugVisible = debugVisible;
+      this.syncRiskLegend();
     }
 
     if (diagnosticsDue) {
@@ -517,6 +535,7 @@ export class WayfindersScene extends Phaser.Scene {
       }
       this.lastDiagnosticsRevision = this.simulation.revision;
       this.lastDiagnosticsOverlayRevision = this.simulation.overlaysRevision;
+      this.lastDiagnosticsDeveloperToolsOpen = developerToolsOpen;
       this.lastDiagnosticsAt = this.time.now;
     }
     if (diagnosticsDue && this.gameStatus) {
@@ -528,7 +547,7 @@ export class WayfindersScene extends Phaser.Scene {
         : this.simulation.stranded
         ? "Developer zero-cargo state · add a bundle or force a wreck"
         : this.simulation.expeditionActive
-        ? `${voyage} underway · return to the home dock to secure the route`
+        ? `${voyage} underway · return to the home dock to secure findings`
         : `${voyage} ready · WASD / arrows sail · wheel or Q/E zoom`;
       if (this.gameStatus.textContent !== message) this.gameStatus.textContent = message;
     }
@@ -536,21 +555,10 @@ export class WayfindersScene extends Phaser.Scene {
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.teleportOnClick) return;
-    if (this.simulation.generationHandoverActive) {
-      this.log("Teleport is unavailable during the generation transition.");
-      return;
-    }
-    if (this.simulation.wreckPresentationActive) {
-      this.log("Teleport is unavailable during the wreck presentation.");
-      return;
-    }
     const tile = worldToGrid(pointer.worldX, pointer.worldY);
-    if (this.simulation.teleport(tile)) {
+    if (this.teleportForDeveloper(tile, `Teleported to ${tile.x}, ${tile.y}.`)) {
       this.teleportOnClick = false;
       this.updateTeleportButton();
-      this.log(`Teleported to ${tile.x}, ${tile.y}.`);
-    } else {
-      this.log(`Tile ${tile.x}, ${tile.y} is blocked or outside the world.`);
     }
   }
 
@@ -573,84 +581,142 @@ export class WayfindersScene extends Phaser.Scene {
     this.developerToolsAbort?.abort();
     this.developerToolsAbort = new AbortController();
     const signal = this.developerToolsAbort.signal;
+    slot.classList.add("tool-slot--connected");
 
     slot.innerHTML = `
       <div class="sandbox-tools">
-        <fieldset>
-          <legend>World and ship</legend>
-          <label>Seed <input data-field="seed" type="number" step="1" value="${this.simulation.generated.seed}"></label>
-          <button data-action="regenerate" type="button">Regenerate current seed</button>
-          <button data-action="inspect-island" type="button">Inspect next island</button>
-          <button data-action="inspect-fishing-shoal" type="button">Inspect next fishing sign</button>
-          <div class="tool-row">
+        <section class="tool-card tool-card--status" aria-labelledby="current-expedition-title">
+          <h3 id="current-expedition-title">Current expedition</h3>
+          <dl class="tool-facts">
+            <div><dt>Generation</dt><dd data-state="generation"></dd></div>
+            <div><dt>Navigator</dt><dd data-state="navigator"></dd></div>
+            <div><dt>Voyage</dt><dd data-state="voyage"></dd></div>
+            <div><dt>Lifecycle</dt><dd data-state="lifecycle"></dd></div>
+            <div><dt>Lineage</dt><dd data-state="lineage"></dd></div>
+            <div><dt>Wreck reports</dt><dd data-state="wreck-reports"></dd></div>
+            <div><dt>Survey cases</dt><dd data-state="survey-cases"></dd></div>
+          </dl>
+          <p class="tool-lock-message" data-output="lock-reason" role="status" hidden></p>
+        </section>
+
+        <fieldset class="tool-card">
+          <legend>World and travel</legend>
+          <label class="tool-number tool-number--seed"><span>Seed</span><input data-field="seed" type="number" step="1" value="${this.simulation.generated.seed}"></label>
+          <div class="tool-button-grid">
+            <button class="tool-button--wide" data-action="regenerate" type="button">Reset world from entered seed</button>
+            <button class="tool-button--wide" data-action="return-dock" type="button">Return to home dock (complete voyage)</button>
+            <button data-action="inspect-island" type="button">Inspect next island</button>
+            <button data-action="inspect-fishing-shoal" type="button">Inspect next fishing sign</button>
+            <button data-action="inspect-wreck" type="button">Inspect next navigator wreck</button>
             <button data-action="teleport-click" type="button" aria-pressed="false">Teleport by clicking</button>
+          </div>
+          <div class="tool-row">
             <label>X <input data-field="teleport-x" type="number" step="1" value="${this.simulation.ship.currentTileX}"></label>
             <label>Y <input data-field="teleport-y" type="number" step="1" value="${this.simulation.ship.currentTileY}"></label>
             <button data-action="teleport-coordinates" type="button">Go</button>
           </div>
+        </fieldset>
+
+        <fieldset class="tool-card">
+          <legend>Ship and failure</legend>
           <div class="tool-row tool-row--buttons">
             <button data-action="provisions-remove" type="button">− bundle</button>
-            <output data-output="provisions">${this.simulation.ship.provisions} developer bundles</output>
+            <output data-output="provisions">${this.simulation.ship.provisions} bundles aboard</output>
             <button data-action="provisions-add" type="button">+ bundle</button>
             <button data-action="force-wreck" type="button">Force wreck</button>
           </div>
         </fieldset>
-        <fieldset>
-          <legend>Save and discoveries</legend>
+
+        <fieldset class="tool-card">
+          <legend>Persistence and expedition records</legend>
           <div class="tool-row tool-row--buttons">
             <button data-action="save-checkpoint" type="button">Save checkpoint</button>
             <button data-action="load-checkpoint" type="button">Load checkpoint</button>
-            <button data-action="clear-save" type="button">Clear saves</button>
+            <button data-action="clear-save" type="button">Clear stored saves</button>
           </div>
           <output data-output="persistence">${this.persistenceSummary()}</output>
-          <output data-output="discoveries">${this.discoverySummary()}</output>
+          <output data-output="records">${this.expeditionRecordsSummary()}</output>
         </fieldset>
-        <fieldset>
-          <legend>Debug views</legend>
-          ${this.toggleMarkup("navigationGrid", "Navigation grid")}
-          ${this.toggleMarkup("currentSight", "Current line of sight")}
-          ${this.toggleMarkup("forwardRange", "Forward exploration range")}
-          ${this.toggleMarkup("returnViability", "Return viability")}
-        </fieldset>
-        <fieldset>
-          <legend>Live gameplay tuning</legend>
-          ${this.numberMarkup("sight-radius", "Sight radius", prototypeConfig.navigation.sightRadius, 1, 14, 1)}
-          ${this.numberMarkup("starting-bundles", "Starting bundles", prototypeConfig.provisions.startingBundles, 1, 24, 1)}
-          ${this.numberMarkup("supported-cost", "Supported cost", prototypeConfig.provisions.supportedCost, 0, 3, 0.1)}
-          ${this.numberMarkup("personal-cost", "Personal cost", prototypeConfig.provisions.personalCost, 0, 3, 0.1)}
-          ${this.numberMarkup("unknown-cost", "Unknown cost", prototypeConfig.provisions.unknownCost, 0.1, 4, 0.1)}
-          ${this.numberMarkup("ship-speed", "Ship speed (tiles/s)", prototypeConfig.movement.shipSpeed, 0.5, 8, 0.1)}
-          ${this.numberMarkup("risk-comfortable", "Comfortable margin", prototypeConfig.returnRisk.comfortable, 0, 12, 0.5)}
-          ${this.numberMarkup("risk-warning", "Warning margin", prototypeConfig.returnRisk.warning, 0, 8, 0.5)}
-          ${this.numberMarkup("risk-critical", "Critical margin", prototypeConfig.returnRisk.critical, 0, 4, 0.5)}
-          ${this.numberMarkup("forward-cone-half-angle", "Forward cone half-angle", prototypeConfig.overlays.forwardConeHalfAngleDegrees, 1, 180, 5)}
-          ${this.numberMarkup("unknown-cleanup-limit", "Returned Unknown cleanup", prototypeConfig.world.maxEnclosedUnknownTiles, 0, 8, 1)}
-          ${this.numberMarkup("return-path-padding", "Return route padding", prototypeConfig.overlays.returnPathPadding, 0, 4, 1)}
-          ${this.numberMarkup("forward-opacity", "Forward opacity", prototypeConfig.overlays.forwardOverlayOpacity, 0, 1, 0.05)}
-          ${this.numberMarkup("return-opacity", "Return opacity", prototypeConfig.overlays.returnOverlayOpacity, 0, 1, 0.05)}
-          ${this.numberMarkup("fog-blend", "Fog transition width", prototypeConfig.overlays.fogBlend, 0, 1, 0.02)}
-          ${this.numberMarkup("fog-noise", "Fog noise strength", prototypeConfig.overlays.fogNoise, 0, 1, 0.02)}
-        </fieldset>
+
+        <details class="tool-disclosure" data-tool-group="overlays" ${this.developerDisclosureState.get("overlays") ? "open" : ""}>
+          <summary>Overlay visibility</summary>
+          <div class="tool-disclosure__body">
+            ${this.toggleMarkup("navigationGrid", "Navigation grid")}
+            ${this.toggleMarkup("currentSight", "Current line of sight")}
+            ${this.toggleMarkup("forwardRange", "Forward reach limit")}
+            ${this.toggleMarkup("returnViability", "Return route viability")}
+          </div>
+        </details>
+
+        <details class="tool-disclosure" data-tool-group="tuning" ${this.developerDisclosureState.get("tuning") ? "open" : ""}>
+          <summary>Session-only tuning</summary>
+          <div class="tool-disclosure__body">
+            ${this.numberMarkup("sight-radius", "Sight radius", prototypeConfig.navigation.sightRadius, 1, 14, 1)}
+            ${this.numberMarkup("starting-bundles", "Default voyage bundles", prototypeConfig.provisions.startingBundles, 1, 24, 1)}
+            ${this.numberMarkup("supported-cost", "Supported cost", prototypeConfig.provisions.supportedCost, 0, 3, 0.1)}
+            ${this.numberMarkup("personal-cost", "Personal cost", prototypeConfig.provisions.personalCost, 0, 3, 0.1)}
+            ${this.numberMarkup("unknown-cost", "Unknown cost", prototypeConfig.provisions.unknownCost, 0.1, 4, 0.1)}
+            ${this.numberMarkup("ship-speed", "Ship speed (tiles/s)", prototypeConfig.movement.shipSpeed, 0.5, 8, 0.1)}
+            ${this.numberMarkup("risk-comfortable", "Comfortable margin", prototypeConfig.returnRisk.comfortable, 0, 12, 0.5)}
+            ${this.numberMarkup("risk-warning", "Warning margin", prototypeConfig.returnRisk.warning, 0, 8, 0.5)}
+            ${this.numberMarkup("risk-critical", "Critical margin", prototypeConfig.returnRisk.critical, 0, 4, 0.5)}
+          </div>
+        </details>
+
+        <details class="tool-disclosure" data-tool-group="advanced" ${this.developerDisclosureState.get("advanced") ? "open" : ""}>
+          <summary>Advanced navigation and presentation</summary>
+          <div class="tool-disclosure__body">
+            ${this.numberMarkup("forward-cone-half-angle", "Forward cone half-angle", prototypeConfig.overlays.forwardConeHalfAngleDegrees, 1, 180, 5)}
+            ${this.numberMarkup("unknown-cleanup-limit", "Returned Unknown cleanup limit", prototypeConfig.world.maxEnclosedUnknownTiles, 0, 8, 1)}
+            ${this.numberMarkup("return-path-padding", "Return route padding", prototypeConfig.overlays.returnPathPadding, 0, 4, 1)}
+            ${this.numberMarkup("forward-opacity", "Forward opacity", prototypeConfig.overlays.forwardOverlayOpacity, 0, 1, 0.05)}
+            ${this.numberMarkup("return-opacity", "Return opacity", prototypeConfig.overlays.returnOverlayOpacity, 0, 1, 0.05)}
+            ${this.numberMarkup("fog-blend", "Fog transition width", prototypeConfig.overlays.fogBlend, 0, 1, 0.02)}
+            ${this.numberMarkup("fog-noise", "Fog noise strength", prototypeConfig.overlays.fogNoise, 0, 1, 0.02)}
+          </div>
+        </details>
       </div>`;
 
     this.provisionOutput = slot.querySelector<HTMLOutputElement>("[data-output='provisions']") ?? undefined;
     this.persistenceOutput = slot.querySelector<HTMLOutputElement>("[data-output='persistence']") ?? undefined;
-    this.discoveryOutput = slot.querySelector<HTMLOutputElement>("[data-output='discoveries']") ?? undefined;
+    this.recordsOutput = slot.querySelector<HTMLOutputElement>("[data-output='records']") ?? undefined;
+    this.developerStateOutputs.clear();
+    slot.querySelectorAll<HTMLElement>("[data-state]").forEach((output) => {
+      if (output.dataset.state) this.developerStateOutputs.set(output.dataset.state, output);
+    });
+
+    slot.querySelectorAll<HTMLDetailsElement>("details[data-tool-group]").forEach((details) => {
+      details.addEventListener("toggle", () => {
+        if (details.dataset.toolGroup) this.developerDisclosureState.set(details.dataset.toolGroup, details.open);
+      }, { signal });
+    });
 
     slot.querySelectorAll<HTMLInputElement>("input[data-overlay]").forEach((input) => {
       input.addEventListener("change", () => {
         const name = input.dataset.overlay as keyof GameSimulation["debug"];
         this.simulation.setDebugVisibility(name, input.checked);
+        this.syncRiskLegend();
       }, { signal });
     });
     slot.querySelectorAll<HTMLInputElement>("input[data-config]").forEach((input) => {
-      input.addEventListener("input", () => this.applyLiveConfig(input.dataset.config ?? "", input.valueAsNumber), { signal });
+      input.addEventListener("change", () => {
+        const id = input.dataset.config ?? "";
+        if (!input.checkValidity()) {
+          this.log(`${input.labels?.[0]?.textContent?.trim() ?? "Configuration value"} is outside its allowed range.`);
+        } else {
+          this.applyLiveConfig(id, input.valueAsNumber);
+        }
+        input.value = String(this.liveConfigValue(id));
+      }, { signal });
     });
     slot.querySelector<HTMLButtonElement>("[data-action='regenerate']")?.addEventListener("click", () => {
       const seed = this.field("seed").valueAsNumber;
       this.simulation.regenerate(seed);
       this.afterWorldChanged();
       this.log(`Regenerated deterministic world from seed ${this.simulation.generated.seed}.`);
+    }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-action='return-dock']")?.addEventListener("click", () => {
+      this.returnToDockForTesting();
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='teleport-click']")?.addEventListener("click", () => {
       this.teleportOnClick = !this.teleportOnClick;
@@ -662,15 +728,13 @@ export class WayfindersScene extends Phaser.Scene {
     slot.querySelector<HTMLButtonElement>("[data-action='inspect-fishing-shoal']")?.addEventListener("click", () => {
       this.inspectNextFishingShoal();
     }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-action='inspect-wreck']")?.addEventListener("click", () => {
+      this.inspectNextNavigatorWreck();
+    }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='teleport-coordinates']")?.addEventListener("click", () => {
-      if (this.simulation.wreckPresentationActive) {
-        this.log("Teleport is unavailable during the wreck presentation.");
-        return;
-      }
       const x = Math.trunc(this.field("teleport-x").valueAsNumber);
       const y = Math.trunc(this.field("teleport-y").valueAsNumber);
-      if (!this.simulation.teleport({ x, y })) this.log(`Tile ${x}, ${y} is blocked or outside the world.`);
-      else this.log(`Teleported to ${x}, ${y}.`);
+      this.teleportForDeveloper({ x, y }, `Teleported to ${x}, ${y}.`);
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='provisions-add']")?.addEventListener("click", () => {
       this.simulation.addProvisions(1);
@@ -681,8 +745,9 @@ export class WayfindersScene extends Phaser.Scene {
       this.updateProvisionOutput();
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='force-wreck']")?.addEventListener("click", () => {
-      if (this.simulation.wreckPresentationActive) this.log("The wreck presentation is already in progress.");
-      else if (!this.forceWreckForTesting()) this.log("Move outside Supported water before forcing a wreck.");
+      const lockReason = this.developerActionLockReason();
+      if (lockReason) this.log(lockReason);
+      else if (!this.forceWreckForTesting()) this.log("Force wreck requires an active ship outside Supported water.");
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='save-checkpoint']")?.addEventListener("click", () => {
       void this.saveCheckpoint();
@@ -693,6 +758,9 @@ export class WayfindersScene extends Phaser.Scene {
     slot.querySelector<HTMLButtonElement>("[data-action='clear-save']")?.addEventListener("click", () => {
       void this.clearSaveFromStore();
     }, { signal });
+    this.updateDeveloperStateOutputs();
+    this.syncDeveloperToolAvailability();
+    this.syncRiskLegend();
   }
 
   private mountSurveyRibbon(): void {
@@ -954,8 +1022,12 @@ export class WayfindersScene extends Phaser.Scene {
     dialog.dataset.generation = String(summary.generation);
     dialog.dataset.nextGeneration = String(summary.nextGeneration);
     this.generationSummaryVisible = true;
-    if (typeof dialog.showModal === "function") dialog.showModal();
-    else dialog.setAttribute("open", "");
+    // Keep the developer drawer reachable for checkpoint testing while the
+    // simulation's handover state remains the authoritative gameplay gate.
+    if (!dialog.open) {
+      if (typeof dialog.show === "function") dialog.show();
+      else dialog.setAttribute("open", "");
+    }
     this.lastDiagnosticsRevision = -1;
     this.syncSurveyRibbon();
     this.generationSummaryContinue?.focus();
@@ -977,6 +1049,10 @@ export class WayfindersScene extends Phaser.Scene {
     if (!this.simulation.acknowledgeGenerationHandover()) return false;
     this.closeGenerationSummaryPresentation();
     this.requestLifecycleSave();
+    const focusTarget = document.documentElement.dataset.developerTools === "open"
+      ? document.querySelector<HTMLElement>("#developer-tools-close")
+      : this.gameHost;
+    focusTarget?.focus({ preventScroll: true });
     return true;
   }
 
@@ -1000,11 +1076,191 @@ export class WayfindersScene extends Phaser.Scene {
     return `<label class="tool-number"><span>${label}</span><input data-config="${id}" type="number" value="${value}" min="${min}" max="${max}" step="${step}"></label>`;
   }
 
-  private applyLiveConfig(id: string, value: number): void {
-    if (!Number.isFinite(value)) return;
+  private developerActionLockReason(): string | undefined {
+    if (this.simulation.wreckPresentationActive) return "Controls are paused while the navigator's loss is presented.";
+    if (this.simulation.generationHandoverActive) return "Controls are paused until the next generation begins.";
+    return undefined;
+  }
+
+  private teleportForDeveloper(tile: GridPoint, successMessage: string): boolean {
+    const lockReason = this.developerActionLockReason();
+    if (lockReason) {
+      this.log(lockReason);
+      return false;
+    }
+    if (!this.simulation.teleport(tile)) {
+      this.log(`Tile ${tile.x}, ${tile.y} is blocked or outside the world.`);
+      return false;
+    }
+    this.log(successMessage);
+    return true;
+  }
+
+  private returnToDockForTesting(): boolean {
+    if (this.simulation.atDock) {
+      this.log("The ship is already at the exact home dock.");
+      return false;
+    }
+    const dock = this.simulation.generated.landmarks.homeReturnTile;
+    return this.teleportForDeveloper(
+      dock,
+      `Returned to the exact home dock at ${dock.x}, ${dock.y}; normal dock-arrival rules resolved.`,
+    );
+  }
+
+  private navigatorWreckTargets(): ReadonlyArray<{ id: number; generation: number; x: number; y: number }> {
+    return this.simulation.wrecks
+      .filter(({ generation, survey }) => generation < this.simulation.generation && survey.state === "unexamined")
+      .sort((left, right) => left.id - right.id)
+      .map(({ id, generation, tileX, tileY }) => ({ id, generation, x: tileX, y: tileY }));
+  }
+
+  private updateDeveloperStateOutputs(): void {
+    const set = (name: string, value: string): void => {
+      const output = this.developerStateOutputs.get(name);
+      if (output && output.textContent !== value) output.textContent = value;
+    };
+    const navigator = this.simulation.currentNavigator;
+    const handover = this.simulation.pendingGenerationHandover;
+
     if (this.simulation.wreckPresentationActive) {
-      this.log("Live gameplay tuning is paused during the wreck presentation.");
-      return;
+      set("generation", String(navigator.generation));
+      set("navigator", `${navigator.id} · lost`);
+      set("voyage", `Ended during voyage ${Math.min(navigator.completedVoyages + 1, 4)}`);
+      set(
+        "lifecycle",
+        `Wreck #${this.simulation.pendingWreckId ?? "?"} · succession in ${this.simulation.respawnSecondsRemaining.toFixed(1)}s`,
+      );
+    } else if (handover) {
+      set("generation", `${handover.fromGeneration} → ${handover.nextGeneration}`);
+      set("navigator", `${handover.nextNavigatorId} · awaiting helm`);
+      set("voyage", "Next voyage not begun");
+      set("lifecycle", `${handover.reason === "wreck" ? "Loss at sea" : "Four returns"} · awaiting Continue`);
+    } else {
+      set("generation", String(this.simulation.generation));
+      set("navigator", `${navigator.id} · ${navigator.state}`);
+      set(
+        "voyage",
+        `${this.simulation.navigatorVoyageNumber} of 4 · ${this.simulation.navigatorVoyagesRemaining} remain`,
+      );
+      set(
+        "lifecycle",
+        this.simulation.expeditionActive
+          ? `Expedition #${this.simulation.currentExpeditionId} underway`
+          : this.simulation.atDock
+            ? "Ready at home dock"
+            : "Ready in home waters",
+      );
+    }
+    set("lineage", `${this.simulation.navigatorLineage.length} navigator${this.simulation.navigatorLineage.length === 1 ? "" : "s"}`);
+    set(
+      "wreck-reports",
+      `${this.simulation.provisionalWreckSurveys.length} provisional · ${this.simulation.returnedWreckSurveys.length} returned`,
+    );
+    set("survey-cases", `${this.simulation.surveyCasesRemaining} remaining`);
+  }
+
+  private syncDeveloperToolAvailability(): void {
+    const slot = document.querySelector<HTMLDivElement>("#scene-tools-slot");
+    if (!slot) return;
+    const lockReason = this.developerActionLockReason();
+    const locked = lockReason !== undefined;
+    const setAction = (action: string, disabled: boolean, title = ""): void => {
+      const button = slot.querySelector<HTMLButtonElement>(`[data-action='${action}']`);
+      if (!button) return;
+      button.disabled = disabled;
+      if (title) button.title = title;
+      else button.removeAttribute("title");
+    };
+
+    for (const action of [
+      "inspect-island",
+      "inspect-fishing-shoal",
+      "teleport-click",
+      "teleport-coordinates",
+      "provisions-add",
+    ]) setAction(action, locked, lockReason);
+    setAction("return-dock", locked || this.simulation.atDock, lockReason ?? (this.simulation.atDock ? "The ship is already at the exact home dock." : ""));
+    setAction(
+      "inspect-wreck",
+      locked || this.navigatorWreckTargets().length === 0,
+      lockReason ?? (this.navigatorWreckTargets().length === 0 ? "No unexamined earlier-generation navigator wrecks exist yet." : ""),
+    );
+    setAction(
+      "provisions-remove",
+      locked || this.simulation.ship.provisions === 0,
+      lockReason ?? (this.simulation.ship.provisions === 0 ? "No provision bundles remain to remove." : ""),
+    );
+    const supported = this.simulation.world.getKnowledge(
+      this.simulation.ship.currentTileX,
+      this.simulation.ship.currentTileY,
+    ) === KnowledgeState.Supported;
+    setAction(
+      "force-wreck",
+      locked || supported,
+      lockReason ?? (supported ? "Move outside Supported water before forcing a wreck." : ""),
+    );
+
+    slot.querySelectorAll<HTMLInputElement>("input[data-config], input[data-field='teleport-x'], input[data-field='teleport-y']")
+      .forEach((input) => { input.disabled = locked; });
+    const lockOutput = slot.querySelector<HTMLElement>("[data-output='lock-reason']");
+    if (lockOutput) {
+      lockOutput.hidden = !locked;
+      lockOutput.textContent = lockReason ?? "";
+    }
+    if (locked && this.teleportOnClick) {
+      this.teleportOnClick = false;
+      this.updateTeleportButton();
+    }
+  }
+
+  private syncRiskLegend(): void {
+    document.querySelectorAll<HTMLInputElement>("#scene-tools-slot input[data-overlay]").forEach((input) => {
+      const name = input.dataset.overlay as keyof GameSimulation["debug"];
+      input.checked = this.simulation.debug[name];
+    });
+    const legend = document.querySelector<HTMLElement>("#risk-legend");
+    if (!legend) return;
+    const visibility = {
+      forwardRange: this.simulation.debug.forwardRange,
+      returnViability: this.simulation.debug.returnViability,
+    };
+    legend.querySelectorAll<HTMLElement>("[data-overlay-legend]").forEach((entry) => {
+      const name = entry.dataset.overlayLegend as keyof typeof visibility;
+      entry.hidden = !visibility[name];
+    });
+    legend.hidden = this.simulation.generationHandoverActive
+      || (!visibility.forwardRange && !visibility.returnViability);
+  }
+
+  private liveConfigValue(id: string): number {
+    switch (id) {
+      case "sight-radius": return prototypeConfig.navigation.sightRadius;
+      case "starting-bundles": return prototypeConfig.provisions.startingBundles;
+      case "supported-cost": return prototypeConfig.provisions.supportedCost;
+      case "personal-cost": return prototypeConfig.provisions.personalCost;
+      case "unknown-cost": return prototypeConfig.provisions.unknownCost;
+      case "ship-speed": return prototypeConfig.movement.shipSpeed;
+      case "risk-comfortable": return prototypeConfig.returnRisk.comfortable;
+      case "risk-warning": return prototypeConfig.returnRisk.warning;
+      case "risk-critical": return prototypeConfig.returnRisk.critical;
+      case "forward-cone-half-angle": return prototypeConfig.overlays.forwardConeHalfAngleDegrees;
+      case "unknown-cleanup-limit": return prototypeConfig.world.maxEnclosedUnknownTiles;
+      case "return-path-padding": return prototypeConfig.overlays.returnPathPadding;
+      case "forward-opacity": return prototypeConfig.overlays.forwardOverlayOpacity;
+      case "return-opacity": return prototypeConfig.overlays.returnOverlayOpacity;
+      case "fog-blend": return prototypeConfig.overlays.fogBlend;
+      case "fog-noise": return prototypeConfig.overlays.fogNoise;
+      default: throw new RangeError(`Unknown live configuration field: ${id}`);
+    }
+  }
+
+  private applyLiveConfig(id: string, value: number): boolean {
+    if (!Number.isFinite(value)) return false;
+    const lockReason = this.developerActionLockReason();
+    if (lockReason) {
+      this.log(lockReason);
+      return false;
     }
     let patch: DeepPartial<PrototypeConfig> | undefined;
     switch (id) {
@@ -1029,14 +1285,10 @@ export class WayfindersScene extends Phaser.Scene {
       case "fog-blend": patch = { overlays: { fogBlend: value } }; break;
       case "fog-noise": patch = { overlays: { fogNoise: value } }; break;
     }
-    if (!patch) return;
+    if (!patch) return false;
     try {
       patchPrototypeConfig(patch);
       if (id === "sight-radius") this.simulation.refreshVisibility();
-      else if (id === "starting-bundles") {
-        this.simulation.setProvisions(value);
-        this.updateProvisionOutput();
-      }
       else if ([
         "supported-cost",
         "personal-cost",
@@ -1045,9 +1297,13 @@ export class WayfindersScene extends Phaser.Scene {
         "risk-warning",
         "risk-critical",
       ].includes(id)) this.simulation.refreshRiskOverlays();
-      else this.simulation.revision++;
+      else if (!["forward-cone-half-angle", "return-path-padding", "forward-opacity", "return-opacity", "fog-blend", "fog-noise"].includes(id)) {
+        this.simulation.revision++;
+      }
+      return true;
     } catch (error) {
       this.log(error instanceof Error ? error.message : "Configuration value was rejected.");
+      return false;
     }
   }
 
@@ -1066,9 +1322,10 @@ export class WayfindersScene extends Phaser.Scene {
 
   private updateProvisionOutput(): void {
     if (this.provisionOutput) {
-      this.provisionOutput.value = `${this.simulation.ship.provisions} developer bundles`;
+      this.provisionOutput.value = `${this.simulation.ship.provisions} bundles aboard`;
     }
     this.updatePersistenceOutputs();
+    this.syncDeveloperToolAvailability();
   }
 
   private persistenceSummary(): string {
@@ -1086,17 +1343,20 @@ export class WayfindersScene extends Phaser.Scene {
       + `· Manual checkpoint: ${checkpoint}`;
   }
 
-  private discoverySummary(): string {
+  private expeditionRecordsSummary(): string {
     return `Discoveries: ${this.simulation.provisionalDiscoveries.length} provisional · `
-      + `${this.simulation.returnedDiscoveries.length} returned · Fishing signs: `
+      + `${this.simulation.returnedDiscoveries.length} returned · Fishing reports: `
       + `${this.simulation.provisionalFishingShoals.length} provisional · `
-      + `${this.simulation.returnedFishingShoals.length} returned · `
-      + `${this.simulation.surveyCasesRemaining} survey case`;
+      + `${this.simulation.returnedFishingShoals.length} returned · Wreck reports: `
+      + `${this.simulation.provisionalWreckSurveys.length} provisional · `
+      + `${this.simulation.returnedWreckSurveys.length} returned · `
+      + `${this.simulation.surveyCasesRemaining} survey case${this.simulation.surveyCasesRemaining === 1 ? "" : "s"}`;
   }
 
   private updatePersistenceOutputs(): void {
     if (this.persistenceOutput) this.persistenceOutput.value = this.persistenceSummary();
-    if (this.discoveryOutput) this.discoveryOutput.value = this.discoverySummary();
+    if (this.recordsOutput) this.recordsOutput.value = this.expeditionRecordsSummary();
+    this.updateDeveloperStateOutputs();
   }
 
   private maybeAutosave(time: number): void {
@@ -1302,6 +1562,7 @@ export class WayfindersScene extends Phaser.Scene {
   private afterWorldChanged(): void {
     this.islandInspectionIndex = 0;
     this.fishingShoalInspectionIndex = 0;
+    this.lastInspectedWreckId = 0;
     this.renderWorld();
     this.configureCamera();
     this.lastDebugRevision = -1;
@@ -1325,8 +1586,9 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private inspectNextIsland(): void {
-    if (this.simulation.wreckPresentationActive) {
-      this.log("Island inspection is unavailable during the wreck presentation.");
+    const lockReason = this.developerActionLockReason();
+    if (lockReason) {
+      this.log(lockReason);
       return;
     }
     const islands = this.simulation.generated.islands;
@@ -1337,16 +1599,20 @@ export class WayfindersScene extends Phaser.Scene {
     const island = islands[this.islandInspectionIndex % islands.length];
     this.islandInspectionIndex++;
     const tile = this.findIslandInspectionTile(island);
-    if (!tile || !this.simulation.teleport(tile)) {
+    if (!tile) {
       this.log(`Could not find a passable inspection point for island ${island.id}.`);
       return;
     }
-    this.log(`Inspecting ${island.size} ${island.kind} ${island.id} from ${tile.x}, ${tile.y}.`);
+    this.teleportForDeveloper(
+      tile,
+      `Inspecting ${island.size} ${island.kind} ${island.id} from ${tile.x}, ${tile.y}.`,
+    );
   }
 
   private inspectNextFishingShoal(): void {
-    if (this.simulation.wreckPresentationActive) {
-      this.log("Fishing-sign inspection is unavailable during the wreck presentation.");
+    const lockReason = this.developerActionLockReason();
+    if (lockReason) {
+      this.log(lockReason);
       return;
     }
     const definitions = this.simulation.fishingShoalDefinitions;
@@ -1356,11 +1622,34 @@ export class WayfindersScene extends Phaser.Scene {
     }
     const definition = definitions[this.fishingShoalInspectionIndex % definitions.length];
     this.fishingShoalInspectionIndex++;
-    if (!this.simulation.teleport(definition.tile)) {
-      this.log(`Could not inspect fishing sign ${definition.id}.`);
-      return;
+    this.dismissedFishingShoalId = undefined;
+    this.surveyActionUntil = Number.NEGATIVE_INFINITY;
+    this.teleportForDeveloper(
+      definition.tile,
+      `Inspecting fishing sign ${definition.id} at ${definition.tile.x}, ${definition.tile.y}.`,
+    );
+  }
+
+  private inspectNextNavigatorWreck(): boolean {
+    const lockReason = this.developerActionLockReason();
+    if (lockReason) {
+      this.log(lockReason);
+      return false;
     }
-    this.log(`Inspecting fishing sign ${definition.id} at ${definition.tile.x}, ${definition.tile.y}.`);
+    const targets = this.navigatorWreckTargets();
+    if (targets.length === 0) {
+      this.log("No unexamined earlier-generation navigator wrecks exist yet.");
+      return false;
+    }
+    const target = targets.find(({ id }) => id > this.lastInspectedWreckId) ?? targets[0];
+    this.dismissedWreckId = undefined;
+    this.surveyActionUntil = Number.NEGATIVE_INFINITY;
+    const inspected = this.teleportForDeveloper(
+      { x: target.x, y: target.y },
+      `Inspecting navigator wreck ${target.id} from generation ${target.generation} at ${target.x}, ${target.y}.`,
+    );
+    if (inspected) this.lastInspectedWreckId = target.id;
+    return inspected;
   }
 
   private findIslandInspectionTile(island: GeneratedIsland): { x: number; y: number } | undefined {
@@ -1419,6 +1708,8 @@ export class WayfindersScene extends Phaser.Scene {
       saveNow: () => this.saveCheckpoint(),
       loadSave: () => this.loadCheckpointFromStore(),
       clearSave: () => this.clearSaveFromStore(),
+      returnToDock: () => this.returnToDockForTesting(),
+      navigatorWreckTargets: () => this.navigatorWreckTargets(),
       performance: () => ({
         ...this.frameTiming.snapshot(),
         lastSaveSerializationMs: this.lastSaveSerializationMs,
@@ -1439,12 +1730,7 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private log(message: string): void {
-    const log = document.querySelector<HTMLDivElement>("#developer-log");
-    if (!log) return;
-    const entry = document.createElement("p");
-    entry.textContent = message;
-    log.append(entry);
-    log.scrollTop = log.scrollHeight;
+    appendDeveloperLog(document.querySelector<HTMLDivElement>("#developer-log"), message);
   }
 
   private forceWreckForTesting(): boolean {
@@ -1758,7 +2044,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.gameStatus = undefined;
     this.provisionOutput = undefined;
     this.persistenceOutput = undefined;
-    this.discoveryOutput = undefined;
+    this.recordsOutput = undefined;
+    this.developerStateOutputs.clear();
     this.surveyRibbon?.remove();
     this.surveyRibbon = undefined;
     this.surveyRibbonTitle = undefined;
