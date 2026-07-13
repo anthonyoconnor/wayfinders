@@ -153,6 +153,82 @@ a:focus-visible {
   gap: 0.4rem;
 }
 
+.survey-ribbon {
+  position: fixed;
+  z-index: 19;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  display: flex;
+  width: min(38rem, calc(100vw - 2rem));
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(131, 255, 240, 0.52);
+  border-radius: 0.65rem;
+  color: var(--shell-ink);
+  background: rgba(3, 24, 31, 0.94);
+  box-shadow: 0 0.8rem 2.4rem rgba(0, 0, 0, 0.42);
+  transform: translateX(-50%);
+  touch-action: manipulation;
+}
+
+.survey-ribbon[hidden] {
+  display: none;
+}
+
+.survey-ribbon > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.survey-ribbon strong {
+  color: #c5fff8;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.survey-ribbon span {
+  color: var(--shell-muted);
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+
+.survey-ribbon__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.5rem;
+}
+
+.survey-ribbon button {
+  min-height: 2.55rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid rgba(141, 216, 207, 0.46);
+  border-radius: 0.4rem;
+  color: var(--shell-ink);
+  background: rgba(11, 52, 61, 0.96);
+  cursor: pointer;
+}
+
+.survey-ribbon button:hover:not(:disabled) {
+  border-color: var(--shell-accent-strong);
+  background: rgba(18, 76, 82, 0.98);
+}
+
+.survey-ribbon button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.survey-ribbon kbd {
+  margin-left: 0.25rem;
+  color: var(--shell-muted);
+  font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.65rem;
+}
+
 .legend-swatch {
   position: relative;
   display: inline-block;
@@ -515,6 +591,19 @@ a:focus-visible {
   .risk-legend {
     max-width: 9.5rem;
     font-size: 0.6rem;
+  }
+
+  .survey-ribbon {
+    right: 0.5rem;
+    bottom: max(0.5rem, env(safe-area-inset-bottom));
+    width: calc(100vw - 1rem);
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .survey-ribbon__actions button {
+    flex: 1 1 0;
   }
 }
 

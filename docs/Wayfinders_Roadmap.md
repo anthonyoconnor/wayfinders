@@ -1,9 +1,9 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-1.4` batch is authorized; `GP-0.1`, `GP-0.2` and
-`GP-1.1` are accepted, and the remaining batch minors proceed in dependency
-order without renewed permission pauses.
+ordered `GP-0.1` through `GP-1.4` batch is authorized; `GP-0.1`, `GP-0.2`,
+`GP-1.1` and `GP-1.2` are accepted, and the remaining batch minors proceed in
+dependency order without renewed permission pauses.
 
 ## Roadmap model
 
@@ -179,7 +179,23 @@ identities do not change.
 
 #### GP-1.2 — Survey action and limited capacity
 
-Status: proposed.
+Status: accepted.
+
+Acceptance evidence (2026-07-12): the headless fishing owner exposes one
+non-stacking survey case, derived exhaustively from the current allocation's
+authoritative provisional state. Initial play and completed dock/respawn
+allocations have one case; a survey atomically changes one sighted record to
+surveyed and leaves zero, while Leave and every rejected command are
+mutation-free. Wreck holds are non-interactive and reload preserves spent
+capacity. Schema V3 admits at most one surveyed provisional record through an
+adjacent V2-to-V3 migration. A temporary clue-and-case ribbon supplies real
+Survey/Leave buttons, `F`/`Escape` keyboard controls and contextual pointer or
+touch activation; Leave stays dismissed until the player exits, and the
+1.2-second survey cue is presentation-only. Browser acceptance exercised both
+buttons and the keyboard survey path with no console warnings/errors. The full
+pipeline passes 162 tests across 18 files plus typecheck and production build;
+proximity work remains bounded to four definitions and adds no world scan or
+permanent sailing HUD.
 
 - Add a proximity **Survey / Leave** decision.
 - Begin with one fixed survey case for each new expedition allocation;

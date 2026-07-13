@@ -3,6 +3,10 @@ import { resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import { generateDiscoveryDefinitions } from "../src/wayfinders/exploration/DiscoverySystem";
 import { generateFishingShoalCatalog } from "../src/wayfinders/exploration/FishingShoalCatalog";
+import {
+  FISHING_SHOAL_CONTRACT_VERSION,
+  createFishingShoalId,
+} from "../src/wayfinders/exploration/FishingShoalContracts";
 import { FishingShoalSystem } from "../src/wayfinders/exploration/FishingShoalSystem";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
@@ -156,5 +160,149 @@ describe("fishing-shoal sighting lifecycle", () => {
     expect(wrecked.teleport(wrecked.fishingShoalDefinitions[0].tile)).toBe(true);
     expect(wrecked.forceWreck()).toBe(true);
     expect(wrecked.provisionalFishingShoals).toHaveLength(0);
+  });
+});
+
+describe("one-case fishing-shoal survey action", () => {
+  it("leaves without mutation and surveys once through the authoritative system", () => {
+    const generated = new WorldGenerator().generate(44_321);
+    const definitions = generateFishingShoalCatalog(
+      generated.grid,
+      generated.seed,
+      generated.landmarks.homeReturnTile,
+    );
+    const system = new FishingShoalSystem(generated.grid, definitions);
+    const first = definitions[0];
+    const second = definitions[1];
+    system.observeCurrentSight(8, 3, [
+      generated.grid.index(first.tile.x, first.tile.y),
+      generated.grid.index(second.tile.x, second.tile.y),
+    ]);
+
+    const interaction = system.interactionNear(first.tile);
+    expect(interaction).toMatchObject({
+      id: first.id,
+      state: "sighted",
+      surveyCasesRemaining: 1,
+      clueLabel: first.clue.label,
+    });
+    expect(interaction).not.toHaveProperty("quality");
+
+    expect(system.applyInteraction({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: createFishingShoalId(99),
+    }, first.tile)).toMatchObject({ status: "rejected", reason: "unknown-opportunity" });
+    expect(system.applyInteraction({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: second.id,
+    }, first.tile)).toMatchObject({ status: "rejected", reason: "out-of-range" });
+    expect(system.applyInteraction({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: definitions[2].id,
+    }, definitions[2].tile)).toMatchObject({ status: "rejected", reason: "not-sighted" });
+
+    const beforeLeave = system.provisional.map((record) => ({ ...record }));
+    const revisionBeforeLeave = system.recordsRevision;
+    expect(system.applyInteraction({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "leave",
+      id: first.id,
+    }, first.tile)).toEqual({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      status: "left",
+      id: first.id,
+    });
+    expect(system.provisional).toEqual(beforeLeave);
+    expect(system.recordsRevision).toBe(revisionBeforeLeave);
+    expect(system.surveyCasesRemaining).toBe(1);
+
+    const surveyed = system.applyInteraction({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: first.id,
+    }, first.tile);
+    expect(surveyed).toMatchObject({
+      status: "surveyed",
+      id: first.id,
+      quality: first.quality,
+      casesRemaining: 0,
+      presentationMs: 1_200,
+    });
+    expect(system.provisional.find(({ id }) => id === first.id)?.state).toBe("surveyed");
+    expect(system.surveyCasesRemaining).toBe(0);
+
+    const revisionAfterSurvey = system.recordsRevision;
+    expect(system.applyInteraction({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: first.id,
+    }, first.tile)).toMatchObject({ status: "rejected", reason: "already-surveyed" });
+    expect(system.recordsRevision).toBe(revisionAfterSurvey);
+
+    expect(system.applyInteraction({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: second.id,
+    }, second.tile)).toMatchObject({ status: "rejected", reason: "no-survey-case" });
+    expect(system.provisional.find(({ id }) => id === second.id)?.state).toBe("sighted");
+  });
+
+  it("persists used capacity and intentionally replenishes on dock or post-wreck respawn", () => {
+    const original = new GameSimulation();
+    const first = original.fishingShoalDefinitions[0];
+    expect(original.surveyCasesRemaining).toBe(1);
+    expect(original.teleport(first.tile)).toBe(true);
+    expect(original.fishingShoalInteraction).toMatchObject({ id: first.id, surveyCasesRemaining: 1 });
+
+    const saveRevisionBeforeLeave = original.saveRevision;
+    expect(original.interactWithFishingShoal({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "leave",
+      id: first.id,
+    })).toMatchObject({ status: "left" });
+    expect(original.saveRevision).toBe(saveRevisionBeforeLeave);
+
+    expect(original.interactWithFishingShoal({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: first.id,
+    })).toMatchObject({ status: "surveyed", quality: first.quality, casesRemaining: 0 });
+    expect(original.surveyCasesRemaining).toBe(0);
+    expect(original.provisionalFishingShoals).toContainEqual(expect.objectContaining({
+      id: first.id,
+      state: "surveyed",
+    }));
+
+    const save = original.createSave();
+    const restored = new GameSimulation();
+    restored.restoreSave(save);
+    expect(restored.surveyCasesRemaining).toBe(0);
+    expect(restored.provisionalFishingShoals).toEqual(original.provisionalFishingShoals);
+    expect(restored.createSave().fishingShoals).toEqual(save.fishingShoals);
+
+    expect(restored.teleport(restored.generated.landmarks.homeReturnTile)).toBe(true);
+    expect(restored.provisionalFishingShoals).toHaveLength(0);
+    expect(restored.surveyCasesRemaining).toBe(1);
+
+    const wrecked = new GameSimulation();
+    const target = wrecked.fishingShoalDefinitions[0];
+    expect(wrecked.teleport(target.tile)).toBe(true);
+    expect(wrecked.interactWithFishingShoal({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: target.id,
+    }).status).toBe("surveyed");
+    expect(wrecked.forceWreck()).toBe(true);
+    expect(wrecked.surveyCasesRemaining).toBe(0);
+    expect(wrecked.interactWithFishingShoal({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: target.id,
+    })).toMatchObject({ status: "rejected", reason: "wreck-hold" });
+    wrecked.update({ turn: 0, throttle: 0 }, wrecked.config.simulation.wreckPresentationSeconds);
+    expect(wrecked.surveyCasesRemaining).toBe(1);
   });
 });

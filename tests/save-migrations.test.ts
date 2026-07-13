@@ -28,6 +28,22 @@ function currentSaveAtTimestamp(simulation: GameSimulation, savedAt: number): Re
 }
 
 describe("save migration chain", () => {
+  it("migrates the GP-1.1 V2 shape into the GP-1.2 survey-capable schema", () => {
+    const baseline = structuredClone(baselineFixtures.activeProvisional) as Record<string, unknown>;
+    const world = baseline.world as Record<string, unknown>;
+    const versionTwo = {
+      ...baseline,
+      schemaVersion: 2,
+      world: { ...world, contentVersions: { fishingShoals: 1 } },
+      fishingShoals: { provisional: [] },
+    };
+
+    const migrated = migrateSaveGame(versionTwo);
+    expect(migrated.schemaVersion).toBe(3);
+    expect(migrated.fishingShoals).toEqual({ provisional: [] });
+    expect(versionTwo.schemaVersion).toBe(2);
+  });
+
   it.each(Object.entries(baselineFixtures))(
     "loads, restores and round-trips the immutable V1 %s fixture",
     (_name, fixture) => {

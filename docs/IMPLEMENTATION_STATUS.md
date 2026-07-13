@@ -12,8 +12,8 @@ persistence and the performance foundation.
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
 `Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-1.4` batch is in
-progress. `GP-0.1`, `GP-0.2` and `GP-1.1` are accepted; later batch minors are
-not yet accepted.
+progress. `GP-0.1`, `GP-0.2`, `GP-1.1` and `GP-1.2` are accepted; later batch
+minors are not yet accepted.
 
 ## Run and verify
 
@@ -35,7 +35,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 159 automated tests pass across 18 files.
+- 162 automated tests pass across 18 files.
 - The production Vite build passes.
 - Browser tests cover discovery return, autosave reload, manual checkpoint
   restore, exact ship/camera restoration, wreck-hold reload, generation
@@ -118,6 +118,12 @@ Current verification baseline:
   sightings without revealing hidden quality or mutating terrain, islands,
   discovery identity or fog knowledge. GP-1.1 sightings round-trip mid-voyage
   and are discarded on dock/wreck until GP-1.3 adds returned lifecycle state.
+- A temporary proximity ribbon presents clue text, the current one-case
+  allocation and explicit Survey / Leave buttons. `F` surveys, `Escape` leaves,
+  and ordinary pointer/contextual-touch activation uses the same authoritative
+  commands. Surveying reveals deterministic quality, spends the case, survives
+  reload and intentionally replenishes only on the next dock or respawn
+  allocation; unused cases never stack.
 - Schema-versioned saves persist the authoritative ship, provisions,
   expedition/generation state, knowledge and stamps, runtime wrecks, pending
   wreck holds, and provisional/returned discoveries.
@@ -191,9 +197,9 @@ Current verification baseline:
 ## Known limits
 
 - Gameplay track: discovery rewards, settlements and resources are records
-  only; fishing shoals currently stop at deterministic clues and provisional
-  sightings. Survey actions, returned fishing records, tribe economics,
-  explorer aging, lineage achievements and idols are not yet implemented.
+  only; fishing shoals currently stop at provisional sightings/surveys.
+  Returned fishing records, tribe economics, explorer aging, lineage
+  achievements and idols are not yet implemented.
 - Gameplay track: the current generation is a wreck-driven counter rather than
   a complete navigator/aging/succession model.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
@@ -223,7 +229,10 @@ The proposed sequence begins with:
    boundaries; and
 3. `GP-1.1` — accepted: deterministic fishing-shoal definitions and clues
    using developer graphics; and
-4. `GP-1.2` — add the one-case Survey / Leave action and interaction cue.
+4. `GP-1.2` — accepted: the one-case Survey / Leave action and interaction cue;
+   and
+5. `GP-1.3` — commit provisional sightings/surveys into returned leads/surveys
+   with exact-dock and wreck rollback semantics.
 
 Navigator and general route contracts remain deferred to their owning minors.
 

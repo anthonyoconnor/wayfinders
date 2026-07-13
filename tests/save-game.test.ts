@@ -215,7 +215,7 @@ describe("save-game validation", () => {
     expect(parseSaveGame(save)).toBe(save);
   });
 
-  it("validates schema-two fishing-shoal sightings against the active expedition", () => {
+  it("validates current fishing-shoal records against the one-case active expedition", () => {
     const save = makeValidSave();
     save.expedition.active = true;
     save.fishingShoals.provisional.push({
@@ -234,11 +234,22 @@ describe("save-game validation", () => {
     stale.fishingShoals.provisional[0].expeditionId++;
     expect(() => parseSaveGame(stale)).toThrow(/active expedition/);
 
+    const surveyed = structuredClone(save);
+    surveyed.fishingShoals.provisional[0].state = "surveyed";
+    expect(parseSaveGame(surveyed)).toBe(surveyed);
+
+    const duplicateCaseUse = structuredClone(surveyed);
+    duplicateCaseUse.fishingShoals.provisional.push({
+      ...duplicateCaseUse.fishingShoals.provisional[0],
+      id: createFishingShoalId(1),
+    });
+    expect(() => parseSaveGame(duplicateCaseUse)).toThrow(/one-case allocation/);
+
     const wrongState = structuredClone(save) as unknown as {
       fishingShoals: { provisional: Array<{ state: string }> };
     };
-    wrongState.fishingShoals.provisional[0].state = "surveyed";
-    expect(() => parseSaveGame(wrongState)).toThrow(/sighted in schema version 2/);
+    wrongState.fishingShoals.provisional[0].state = "returned";
+    expect(() => parseSaveGame(wrongState)).toThrow(/sighted or surveyed/);
   });
 
   it("accepts a coherent pending-wreck hold", () => {

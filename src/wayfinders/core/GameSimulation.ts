@@ -6,7 +6,11 @@ import {
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import {
   FISHING_SHOAL_CONTENT_VERSION,
+  FISHING_SHOAL_CONTRACT_VERSION,
   type FishingShoalDefinition,
+  type FishingShoalInteractionCommandV1,
+  type FishingShoalInteractionReadModel,
+  type FishingShoalInteractionResultV1,
   type FishingShoalProvisionalRecordV1,
   type FishingShoalReadModel,
 } from "../exploration/FishingShoalContracts";
@@ -97,6 +101,8 @@ export interface SimulationSnapshot {
   fishingShoals: {
     available: number;
     provisional: number;
+    surveyCasesRemaining: 0 | 1;
+    interaction?: Readonly<FishingShoalInteractionReadModel>;
     records: readonly Readonly<FishingShoalReadModel>[];
   };
   debug: Readonly<DebugVisibilityState>;
@@ -244,6 +250,18 @@ export class GameSimulation {
 
   get fishingShoalRecordsRevision(): number {
     return this.fishingShoalSystem.recordsRevision;
+  }
+
+  get surveyCasesRemaining(): 0 | 1 {
+    return this.pendingRespawn ? 0 : this.fishingShoalSystem.surveyCasesRemaining;
+  }
+
+  get fishingShoalInteraction(): Readonly<FishingShoalInteractionReadModel> | undefined {
+    if (this.pendingRespawn) return undefined;
+    return this.fishingShoalSystem.interactionNear({
+      x: this.ship.currentTileX,
+      y: this.ship.currentTileY,
+    });
   }
 
   get wreckPresentationActive(): boolean {
@@ -463,6 +481,34 @@ export class GameSimulation {
     this.setProvisions(this.ship.provisions + Math.trunc(delta));
   }
 
+  interactWithFishingShoal(
+    command: Readonly<FishingShoalInteractionCommandV1>,
+  ): FishingShoalInteractionResultV1 {
+    if (this.pendingRespawn) {
+      return {
+        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+        status: "rejected",
+        id: command.id,
+        reason: "wreck-hold",
+      };
+    }
+    const result = this.fishingShoalSystem.applyInteraction(command, {
+      x: this.ship.currentTileX,
+      y: this.ship.currentTileY,
+    });
+    if (result.status !== "surveyed") return result;
+
+    const definition = this.fishingShoalSystem.definitionFor(result.id);
+    if (!definition) throw new Error(`Surveyed fishing shoal ${result.id} has no definition`);
+    this.revision++;
+    this.saveRevision++;
+    this.events.emit("fishingShoalSurveyed", {
+      ...result,
+      tile: definition.tile,
+    });
+    return result;
+  }
+
   /** Deterministic sandbox hook; normal play reaches this outcome through travel consumption. */
   forceWreck(): boolean {
     if (this.pendingRespawn) return false;
@@ -524,7 +570,7 @@ export class GameSimulation {
         returned: this.returnedDiscoveries.map((discovery) => ({ ...discovery })),
       },
       fishingShoals: {
-        provisional: this.provisionalFishingShoals.map((record) => ({ ...record, state: "sighted" as const })),
+        provisional: this.provisionalFishingShoals.map((record) => ({ ...record })),
       },
       terrainPatches: [],
     };
@@ -674,6 +720,10 @@ export class GameSimulation {
       fishingShoals: {
         available: this.fishingShoalDefinitions.length,
         provisional: this.provisionalFishingShoals.length,
+        surveyCasesRemaining: this.surveyCasesRemaining,
+        interaction: this.fishingShoalInteraction
+          ? { ...this.fishingShoalInteraction, tile: { ...this.fishingShoalInteraction.tile } }
+          : undefined,
         records: this.fishingShoalReadModels.map((model) => ({
           ...model,
           tile: { ...model.tile },

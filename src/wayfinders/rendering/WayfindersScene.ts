@@ -10,6 +10,10 @@ import { GameSimulation } from "../core/GameSimulation";
 import { FrameTimingMonitor } from "../core/FrameTimingMonitor";
 import { SimulationClock } from "../core/SimulationClock";
 import type { MovementInput } from "../core/types";
+import {
+  FISHING_SHOAL_CONTRACT_VERSION,
+  type FishingShoalInteractionResultV1,
+} from "../exploration/FishingShoalContracts";
 import type { SaveStore } from "../persistence/IndexedDbSaveStore";
 import { classifySaveGame } from "../persistence/SaveGame";
 import { worldToGrid } from "../world/CoordinateSystem";
@@ -36,6 +40,8 @@ interface MovementKeys {
   alternateReverse: Phaser.Input.Keyboard.Key;
   zoomIn: Phaser.Input.Keyboard.Key;
   zoomOut: Phaser.Input.Keyboard.Key;
+  survey: Phaser.Input.Keyboard.Key;
+  leave: Phaser.Input.Keyboard.Key;
 }
 
 interface BrowserDebugApi {
@@ -49,6 +55,9 @@ interface BrowserDebugApi {
   loadSave: () => Promise<boolean>;
   clearSave: () => Promise<boolean>;
   performance: () => ReturnType<FrameTimingMonitor["snapshot"]> & { lastSaveSerializationMs: number };
+  fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
+  surveyFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
+  leaveFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
 }
 
 export interface PersistenceBootState {
@@ -96,8 +105,16 @@ export class WayfindersScene extends Phaser.Scene {
   private provisionOutput?: HTMLOutputElement;
   private persistenceOutput?: HTMLOutputElement;
   private discoveryOutput?: HTMLOutputElement;
+  private surveyRibbon?: HTMLElement;
+  private surveyRibbonClue?: HTMLElement;
+  private surveyRibbonCase?: HTMLElement;
+  private surveyButton?: HTMLButtonElement;
+  private leaveButton?: HTMLButtonElement;
+  private dismissedFishingShoalId?: string;
+  private surveyActionUntil = Number.NEGATIVE_INFINITY;
   private teleportOnClick = false;
   private islandInspectionIndex = 0;
+  private fishingShoalInspectionIndex = 0;
   private datasetGenerated?: GameSimulation["generated"];
   private lastDebugRevision = -1;
   private lastDebugOverlayRevision = -1;
@@ -175,6 +192,8 @@ export class WayfindersScene extends Phaser.Scene {
       alternateReverse: Phaser.Input.Keyboard.KeyCodes.DOWN,
       zoomIn: Phaser.Input.Keyboard.KeyCodes.E,
       zoomOut: Phaser.Input.Keyboard.KeyCodes.Q,
+      survey: Phaser.Input.Keyboard.KeyCodes.F,
+      leave: Phaser.Input.Keyboard.KeyCodes.ESC,
     }) as MovementKeys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
@@ -186,6 +205,7 @@ export class WayfindersScene extends Phaser.Scene {
       if (sections.has("overlays")) this.simulation.refreshRiskOverlays();
     }));
     this.mountDeveloperTools();
+    this.mountSurveyRibbon();
     this.installBrowserDebugApi();
     this.bindSimulationEvents();
     this.syncPresentation(true);
@@ -202,8 +222,14 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   override update(time: number, delta: number): void {
-    if (Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) this.changeZoom(0.1);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) this.changeZoom(-0.1);
+    const activeElement = document.activeElement;
+    const textInputFocused = activeElement instanceof HTMLInputElement
+      || activeElement instanceof HTMLSelectElement
+      || activeElement instanceof HTMLTextAreaElement;
+    if (!textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) this.changeZoom(0.1);
+    if (!textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) this.changeZoom(-0.1);
+    if (!textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.survey)) this.performFishingShoalSurvey();
+    if (!textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.leave)) this.performFishingShoalLeave();
     const movementInput = this.readMovementInput();
     let keepAdvancing = true;
     this.clock.advance(delta, (deltaSeconds) => {
@@ -222,7 +248,12 @@ export class WayfindersScene extends Phaser.Scene {
 
   private readMovementInput(): MovementInput {
     const active = document.activeElement;
-    if (active instanceof HTMLInputElement || active instanceof HTMLSelectElement || active instanceof HTMLTextAreaElement) {
+    if (
+      this.time.now < this.surveyActionUntil
+      || active instanceof HTMLInputElement
+      || active instanceof HTMLSelectElement
+      || active instanceof HTMLTextAreaElement
+    ) {
       return { turn: 0, throttle: 0 };
     }
 
@@ -318,6 +349,7 @@ export class WayfindersScene extends Phaser.Scene {
       force,
     );
     this.cargoRenderer.sync(this.simulation.ship.provisions);
+    this.syncSurveyRibbon();
     const diagnosticsDirty = this.lastDiagnosticsRevision !== this.simulation.revision
       || this.lastDiagnosticsOverlayRevision !== this.simulation.overlaysRevision;
     const diagnosticsDue = force || (
@@ -359,6 +391,8 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.fishingShoalAvailable = String(this.simulation.fishingShoalDefinitions.length);
       host.dataset.fishingShoalProvisional = String(this.simulation.provisionalFishingShoals.length);
       host.dataset.fishingShoalVisible = String(this.simulation.fishingShoalReadModels.length);
+      host.dataset.surveyCases = String(this.simulation.surveyCasesRemaining);
+      host.dataset.fishingShoalInteraction = this.simulation.fishingShoalInteraction?.id ?? "";
       host.dataset.persistenceStatus = this.persistenceStatus;
       host.dataset.wreckPresentation = String(this.simulation.wreckPresentationActive);
       host.dataset.respawnSeconds = this.simulation.respawnSecondsRemaining.toFixed(3);
@@ -478,6 +512,7 @@ export class WayfindersScene extends Phaser.Scene {
           <label>Seed <input data-field="seed" type="number" step="1" value="${this.simulation.generated.seed}"></label>
           <button data-action="regenerate" type="button">Regenerate current seed</button>
           <button data-action="inspect-island" type="button">Inspect next island</button>
+          <button data-action="inspect-fishing-shoal" type="button">Inspect next fishing sign</button>
           <div class="tool-row">
             <button data-action="teleport-click" type="button" aria-pressed="false">Teleport by clicking</button>
             <label>X <input data-field="teleport-x" type="number" step="1" value="${this.simulation.ship.currentTileX}"></label>
@@ -555,6 +590,9 @@ export class WayfindersScene extends Phaser.Scene {
     slot.querySelector<HTMLButtonElement>("[data-action='inspect-island']")?.addEventListener("click", () => {
       this.inspectNextIsland();
     }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-action='inspect-fishing-shoal']")?.addEventListener("click", () => {
+      this.inspectNextFishingShoal();
+    }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='teleport-coordinates']")?.addEventListener("click", () => {
       if (this.simulation.wreckPresentationActive) {
         this.log("Teleport is unavailable during the wreck presentation.");
@@ -586,6 +624,101 @@ export class WayfindersScene extends Phaser.Scene {
     slot.querySelector<HTMLButtonElement>("[data-action='clear-save']")?.addEventListener("click", () => {
       void this.clearSaveFromStore();
     }, { signal });
+  }
+
+  private mountSurveyRibbon(): void {
+    const host = this.gameHost;
+    const signal = this.domAbort?.signal;
+    if (!host || !signal) return;
+
+    const ribbon = document.createElement("section");
+    ribbon.className = "survey-ribbon";
+    ribbon.hidden = true;
+    ribbon.setAttribute("aria-label", "Fishing-shoal survey decision");
+    ribbon.innerHTML = `
+      <div>
+        <strong>Fishing sign nearby</strong>
+        <span data-survey-clue></span>
+        <span data-survey-case></span>
+      </div>
+      <div class="survey-ribbon__actions">
+        <button data-survey-action="survey" type="button">Survey <kbd>F</kbd></button>
+        <button data-survey-action="leave" type="button">Leave <kbd>Esc</kbd></button>
+      </div>`;
+    host.append(ribbon);
+    this.surveyRibbon = ribbon;
+    this.surveyRibbonClue = ribbon.querySelector<HTMLElement>("[data-survey-clue]") ?? undefined;
+    this.surveyRibbonCase = ribbon.querySelector<HTMLElement>("[data-survey-case]") ?? undefined;
+    this.surveyButton = ribbon.querySelector<HTMLButtonElement>("[data-survey-action='survey']") ?? undefined;
+    this.leaveButton = ribbon.querySelector<HTMLButtonElement>("[data-survey-action='leave']") ?? undefined;
+    this.surveyButton?.addEventListener("click", () => this.performFishingShoalSurvey(), { signal });
+    this.leaveButton?.addEventListener("click", () => this.performFishingShoalLeave(), { signal });
+  }
+
+  private syncSurveyRibbon(): void {
+    const ribbon = this.surveyRibbon;
+    if (!ribbon) return;
+    const interaction = this.simulation.fishingShoalInteraction;
+    if (!interaction) {
+      ribbon.hidden = true;
+      this.dismissedFishingShoalId = undefined;
+      return;
+    }
+    if (this.dismissedFishingShoalId && this.dismissedFishingShoalId !== interaction.id) {
+      this.dismissedFishingShoalId = undefined;
+    }
+    if (this.dismissedFishingShoalId === interaction.id || this.time.now < this.surveyActionUntil) {
+      ribbon.hidden = true;
+      return;
+    }
+
+    if (this.surveyRibbonClue) this.surveyRibbonClue.textContent = interaction.clueLabel;
+    if (this.surveyRibbonCase) {
+      this.surveyRibbonCase.textContent = interaction.surveyCasesRemaining === 1
+        ? "Survey case ready — surveying spends it for this voyage."
+        : "No survey case remains on this voyage.";
+    }
+    if (this.surveyButton) this.surveyButton.disabled = interaction.surveyCasesRemaining === 0;
+    ribbon.dataset.shoalId = interaction.id;
+    ribbon.hidden = false;
+  }
+
+  private performFishingShoalSurvey(): FishingShoalInteractionResultV1 | undefined {
+    const interaction = this.simulation.fishingShoalInteraction;
+    if (!interaction || this.time.now < this.surveyActionUntil) return undefined;
+    const result = this.simulation.interactWithFishingShoal({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "survey",
+      id: interaction.id,
+    });
+    if (result.status === "surveyed") {
+      this.surveyActionUntil = this.time.now + result.presentationMs;
+      this.dismissedFishingShoalId = interaction.id;
+      this.updatePersistenceOutputs();
+      this.requestLifecycleSave();
+    } else if (result.status === "rejected") {
+      this.log(`Fishing-shoal survey was not started: ${result.reason}.`);
+    }
+    this.syncSurveyRibbon();
+    return result;
+  }
+
+  private performFishingShoalLeave(): FishingShoalInteractionResultV1 | undefined {
+    const interaction = this.simulation.fishingShoalInteraction;
+    if (!interaction || this.time.now < this.surveyActionUntil) return undefined;
+    const result = this.simulation.interactWithFishingShoal({
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      type: "leave",
+      id: interaction.id,
+    });
+    if (result.status === "left") {
+      this.dismissedFishingShoalId = interaction.id;
+      this.log("Left the fishing sign unexamined; the survey case was preserved.");
+    } else if (result.status === "rejected") {
+      this.log(`Could not leave the fishing-shoal prompt: ${result.reason}.`);
+    }
+    this.syncSurveyRibbon();
+    return result;
   }
 
   private toggleMarkup(name: keyof GameSimulation["debug"], label: string): string {
@@ -684,7 +817,9 @@ export class WayfindersScene extends Phaser.Scene {
 
   private discoverySummary(): string {
     return `Discoveries: ${this.simulation.provisionalDiscoveries.length} provisional · `
-      + `${this.simulation.returnedDiscoveries.length} returned`;
+      + `${this.simulation.returnedDiscoveries.length} returned · Fishing signs: `
+      + `${this.simulation.provisionalFishingShoals.length} provisional · `
+      + `${this.simulation.surveyCasesRemaining} survey case`;
   }
 
   private updatePersistenceOutputs(): void {
@@ -861,6 +996,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   private afterWorldChanged(): void {
     this.islandInspectionIndex = 0;
+    this.fishingShoalInspectionIndex = 0;
     this.renderWorld();
     this.configureCamera();
     this.lastDebugRevision = -1;
@@ -868,6 +1004,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.lastDiagnosticsRevision = -1;
     this.lastDiagnosticsOverlayRevision = -1;
     this.lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
+    this.dismissedFishingShoalId = undefined;
+    this.surveyActionUntil = Number.NEGATIVE_INFINITY;
     this.resetShipPresentation(true);
     this.updateProvisionOutput();
     this.syncPresentation(true);
@@ -895,6 +1033,25 @@ export class WayfindersScene extends Phaser.Scene {
       return;
     }
     this.log(`Inspecting ${island.size} ${island.kind} ${island.id} from ${tile.x}, ${tile.y}.`);
+  }
+
+  private inspectNextFishingShoal(): void {
+    if (this.simulation.wreckPresentationActive) {
+      this.log("Fishing-sign inspection is unavailable during the wreck presentation.");
+      return;
+    }
+    const definitions = this.simulation.fishingShoalDefinitions;
+    if (definitions.length === 0) {
+      this.log("This seed contains no eligible fishing signs.");
+      return;
+    }
+    const definition = definitions[this.fishingShoalInspectionIndex % definitions.length];
+    this.fishingShoalInspectionIndex++;
+    if (!this.simulation.teleport(definition.tile)) {
+      this.log(`Could not inspect fishing sign ${definition.id}.`);
+      return;
+    }
+    this.log(`Inspecting fishing sign ${definition.id} at ${definition.tile.x}, ${definition.tile.y}.`);
   }
 
   private findIslandInspectionTile(island: GeneratedIsland): { x: number; y: number } | undefined {
@@ -957,6 +1114,13 @@ export class WayfindersScene extends Phaser.Scene {
         ...this.frameTiming.snapshot(),
         lastSaveSerializationMs: this.lastSaveSerializationMs,
       }),
+      fishingShoalTargets: () => this.simulation.fishingShoalDefinitions.map(({ id, tile }) => ({
+        id,
+        x: tile.x,
+        y: tile.y,
+      })),
+      surveyFishingShoal: () => this.performFishingShoalSurvey(),
+      leaveFishingShoal: () => this.performFishingShoalLeave(),
     };
     this.browserDebugApi = api;
     window.__WAYFINDERS__ = api;
@@ -1040,6 +1204,16 @@ export class WayfindersScene extends Phaser.Scene {
           5_000,
         );
         this.log(`Provisional fishing-shoal sighting: ${clue.label}.`);
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("fishingShoalSurveyed", ({ quality, presentationMs }) => {
+        this.showLifecycleCue(
+          `FISHING GROUND SURVEYED\n${quality.toUpperCase()} QUALITY\nRETURN HOME TO REPORT IT`,
+          "#ffe1b6",
+          presentationMs,
+        );
+        this.log(`Fishing ground surveyed: ${quality} quality. The voyage's survey case was spent.`);
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
@@ -1144,6 +1318,12 @@ export class WayfindersScene extends Phaser.Scene {
     this.provisionOutput = undefined;
     this.persistenceOutput = undefined;
     this.discoveryOutput = undefined;
+    this.surveyRibbon?.remove();
+    this.surveyRibbon = undefined;
+    this.surveyRibbonClue = undefined;
+    this.surveyRibbonCase = undefined;
+    this.surveyButton = undefined;
+    this.leaveButton = undefined;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.knowledgeOverlay.destroy();
     this.riskOverlay.destroy();

@@ -3,6 +3,7 @@ import type { DiscoveryRecord } from "../exploration/DiscoverySystem";
 import type {
   FishingShoalClue,
   FishingShoalId,
+  FishingShoalSurveyedResultV1,
 } from "../exploration/FishingShoalContracts";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
@@ -52,6 +53,9 @@ export interface GameEventMap {
     id: FishingShoalId;
     tile: Readonly<GridPoint>;
     clue: Readonly<FishingShoalClue>;
+  };
+  fishingShoalSurveyed: Readonly<FishingShoalSurveyedResultV1> & {
+    tile: Readonly<GridPoint>;
   };
   discoveriesReturned: {
     expeditionId: number;

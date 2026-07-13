@@ -4,6 +4,7 @@ export const FISHING_SHOAL_CONTRACT_VERSION = 1 as const;
 export const FISHING_SHOAL_CONTENT_VERSION = 1 as const;
 export const FISHING_SHOAL_PERSISTENCE_OWNER = "fishing-shoals" as const;
 export const FISHING_SHOAL_SURVEY_PRESENTATION_MS = 1_200 as const;
+export const FISHING_SHOAL_INTERACTION_RANGE_TILES = 1.5 as const;
 
 const FISHING_SHOAL_ID_PREFIX = `fishing-shoal:v${FISHING_SHOAL_CONTENT_VERSION}:`;
 const FISHING_SHOAL_ID_PATTERN = /^fishing-shoal:v([1-9]\d*):(\d{4})$/;

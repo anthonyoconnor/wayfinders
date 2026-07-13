@@ -2,9 +2,14 @@ import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
+  FISHING_SHOAL_INTERACTION_RANGE_TILES,
+  FISHING_SHOAL_SURVEY_PRESENTATION_MS,
   isCurrentFishingShoalId,
   type FishingShoalDefinition,
   type FishingShoalHiddenReadModel,
+  type FishingShoalInteractionCommandV1,
+  type FishingShoalInteractionReadModel,
+  type FishingShoalInteractionResultV1,
   type FishingShoalProvisionalRecordV1,
   type FishingShoalReadModel,
   type FishingShoalSurveyedReadModel,
@@ -45,8 +50,77 @@ export class FishingShoalSystem {
     return this.recordsRevisionValue;
   }
 
+  /** One non-stacking case is available unless this allocation already surveyed a shoal. */
+  get surveyCasesRemaining(): 0 | 1 {
+    for (const record of this.provisionalById.values()) {
+      if (record.state === "surveyed") return 0;
+    }
+    return 1;
+  }
+
   definitionFor(id: string): Readonly<FishingShoalDefinition> | undefined {
     return this.definitionById.get(id);
+  }
+
+  interactionNear(tile: Readonly<{ x: number; y: number }>): FishingShoalInteractionReadModel | undefined {
+    let closest: { definition: Readonly<FishingShoalDefinition>; distance: number } | undefined;
+    for (const definition of this.definitions) {
+      const record = this.provisionalById.get(definition.id);
+      if (record?.state !== "sighted") continue;
+      const distance = Math.hypot(definition.tile.x - tile.x, definition.tile.y - tile.y);
+      if (distance > FISHING_SHOAL_INTERACTION_RANGE_TILES) continue;
+      if (
+        closest
+        && (distance > closest.distance || (distance === closest.distance && definition.id > closest.definition.id))
+      ) continue;
+      closest = { definition, distance };
+    }
+    if (!closest) return undefined;
+    return {
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      id: closest.definition.id,
+      tile: closest.definition.tile,
+      state: "sighted",
+      clueLabel: closest.definition.clue.label,
+      surveyCasesRemaining: this.surveyCasesRemaining,
+    };
+  }
+
+  applyInteraction(
+    command: Readonly<FishingShoalInteractionCommandV1>,
+    shipTile: Readonly<{ x: number; y: number }>,
+  ): FishingShoalInteractionResultV1 {
+    const definition = this.definitionById.get(command.id);
+    if (!definition) return this.reject(command.id, "unknown-opportunity");
+    if (
+      Math.hypot(definition.tile.x - shipTile.x, definition.tile.y - shipTile.y)
+      > FISHING_SHOAL_INTERACTION_RANGE_TILES
+    ) return this.reject(command.id, "out-of-range");
+
+    const record = this.provisionalById.get(command.id);
+    if (command.type === "leave") {
+      if (record?.state !== "sighted") return this.reject(command.id, "not-sighted");
+      return {
+        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+        status: "left",
+        id: command.id,
+      };
+    }
+
+    if (record?.state === "surveyed") return this.reject(command.id, "already-surveyed");
+    if (record?.state !== "sighted") return this.reject(command.id, "not-sighted");
+    if (this.surveyCasesRemaining === 0) return this.reject(command.id, "no-survey-case");
+
+    record.state = "surveyed";
+    this.markRecordsChanged();
+    return {
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      status: "surveyed",
+      id: command.id,
+      quality: definition.quality,
+      casesRemaining: 0,
+      presentationMs: FISHING_SHOAL_SURVEY_PRESENTATION_MS,
+    };
   }
 
   observeCurrentSight(
@@ -88,11 +162,15 @@ export class FishingShoalSystem {
 
   restore(records: readonly FishingShoalProvisionalRecordV1[]): void {
     this.provisionalById.clear();
+    let surveyedCount = 0;
     for (const saved of records) {
       if (!isCurrentFishingShoalId(saved.id) || !this.definitionById.has(saved.id)) {
         throw new RangeError(`Fishing shoal ${saved.id} does not match the regenerated catalog`);
       }
       if (this.provisionalById.has(saved.id)) throw new RangeError(`Fishing shoal ${saved.id} is duplicated`);
+      if (saved.state === "surveyed" && ++surveyedCount > 1) {
+        throw new RangeError("Only one fishing shoal may consume the fixed survey-case allocation");
+      }
       this.provisionalById.set(saved.id, { ...saved });
     }
     this.markRecordsChanged();
@@ -133,5 +211,17 @@ export class FishingShoalSystem {
   private markRecordsChanged(): void {
     this.recordsDirty = true;
     this.recordsRevisionValue++;
+  }
+
+  private reject(
+    id: FishingShoalProvisionalRecordV1["id"],
+    reason: Extract<FishingShoalInteractionResultV1, { status: "rejected" }>["reason"],
+  ): Extract<FishingShoalInteractionResultV1, { status: "rejected" }> {
+    return {
+      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+      status: "rejected",
+      id,
+      reason,
+    };
   }
 }
