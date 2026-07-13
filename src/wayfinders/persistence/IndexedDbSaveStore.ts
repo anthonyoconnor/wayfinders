@@ -1,4 +1,15 @@
-export interface SaveStore<T = unknown> {
+export type ValidatedSlotLoadResult<T> =
+  | { status: "empty" }
+  | { status: "loaded"; value: T }
+  | { status: "discarded"; error: unknown; removed: boolean; removalError?: unknown };
+
+export interface ValidatedSlotStore<T = unknown> {
+  loadAndDeleteRejected<TResult>(
+    validate: (value: T) => TResult,
+  ): Promise<ValidatedSlotLoadResult<TResult>>;
+}
+
+export interface SaveStore<T = unknown> extends ValidatedSlotStore<T> {
   load(): Promise<T | undefined>;
   save(value: T): Promise<void>;
   clear(): Promise<void>;
@@ -48,6 +59,52 @@ export class IndexedDbSaveStore<T = unknown> implements SaveStore<T> {
     const result = await requestResult<T | undefined>(request);
     await transactionCompletion(transaction);
     return result;
+  }
+
+  /** Validates and, when rejected, deletes one slot in the same transaction. */
+  async loadAndDeleteRejected<TResult>(
+    validate: (value: T) => TResult,
+  ): Promise<ValidatedSlotLoadResult<TResult>> {
+    const database = await this.open();
+    const transaction = database.transaction(this.objectStoreName, "readwrite");
+    const completion = transactionCompletion(transaction);
+    const objectStore = transaction.objectStore(this.objectStoreName);
+    let value: T;
+    try {
+      const count = await requestResult(objectStore.count(this.saveKey));
+      if (count === 0) {
+        await completion;
+        return { status: "empty" };
+      }
+      value = await requestResult<T>(objectStore.get(this.saveKey));
+    } catch (error) {
+      try {
+        await completion;
+      } catch {
+        // The read error remains the useful failure for the caller.
+      }
+      throw error;
+    }
+    let accepted: TResult;
+    try {
+      accepted = validate(value);
+    } catch (error) {
+      try {
+        objectStore.delete(this.saveKey);
+        await completion;
+        return { status: "discarded", error, removed: true };
+      } catch (removalError) {
+        try {
+          await completion;
+        } catch (transactionError) {
+          removalError = transactionError;
+        }
+        return { status: "discarded", error, removed: false, removalError };
+      }
+    }
+
+    await completion;
+    return { status: "loaded", value: accepted };
   }
 
   async save(value: T): Promise<void> {

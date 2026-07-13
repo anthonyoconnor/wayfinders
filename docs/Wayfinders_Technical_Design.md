@@ -336,31 +336,34 @@ to the runtime player-wreck collection and use a distinct marker.
 
 Current discovery rewards are descriptive records only. Economy, settlement,
 survey and activation effects are absent from the baseline and require an
-approved gameplay minor plus save migration.
+approved gameplay minor plus a save-schema version decision.
 
 ## 12. Persistence
 
-### Save boundary
+### Exact-version save boundary
 
-Schema version 1 stores:
+Current schema version 6 stores:
 
-- save and world-generator versions;
+- save, world-generator, content and serialized-format versions;
 - seed and generation-affecting configuration;
 - ship position, heading, provisions and accumulator;
 - expedition ID, active state, generation and counters;
 - optional pending wreck hold;
+- navigator lineage, age and final-voyage choice;
 - all non-Unknown knowledge as canonical run-length encoded state/stamp runs;
 - runtime wrecks and discovered flags;
 - provisional and returned discovery records;
+- provisional and returned fishing-shoal records;
 - an empty reserved terrain-patch list.
 
 The save does not contain base terrain, generated island descriptors,
 visibility, range masks, return paths, renderer state or caches.
 
-Restore validates structure before mutating the running simulation, regenerates
-the deterministic base world, applies authoritative mutable state, rebuilds
-knowledge indices, recalculates visibility and paths, and restores the exact
-ship position.
+Restore requires exact equality for every schema, generator, content and
+serialized-format version, then validates structure before mutating the running
+simulation. It regenerates the deterministic base world, applies authoritative
+mutable state, rebuilds knowledge indices, recalculates visibility and paths,
+and restores the exact ship position. There is no cross-version migration path.
 
 ### Browser storage
 
@@ -382,10 +385,11 @@ snaps the smoothed camera to the restored ship and writes that state as the new
 autosave baseline. **Clear saves** removes both records without mutating the
 currently running simulation.
 
-Malformed current-schema autosaves are cleared and recover to a fresh world.
-Unsupported newer schema/generator versions are preserved with autosave
-disabled. Unexpected load failures also preserve stored data. Storage failure
-does not prevent unsaved play.
+Any readable autosave or checkpoint that is malformed or has an older/newer
+schema, generator, content or serialized-format version is deleted and cannot
+load. Startup recovers to a fresh world; a rejected checkpoint becomes
+unavailable. If browser storage cannot be read or a rejected record cannot be
+deleted, saving is disabled but unsaved play remains available.
 
 Explicit seed regeneration is not load; it intentionally resets runtime
 inheritance and writes a new autosave after state changes.
@@ -506,20 +510,21 @@ approved gameplay/platform input minor. Contextual actions receive input checks
 with their gameplay minor; representative mobile rendering, loading and
 performance validation belongs to later graphics/platform hardening.
 
-## 17. Baseline extension and compatibility boundary
+## 17. Baseline extension and exact-version boundary
 
-The forward roadmap may add opportunity surveying, tribe economics, navigator
-aging, lineage records, idols, save/load experience, Supported-route activity,
-production assets and environmental polish. These are proposed extensions, not
-implemented baseline behavior.
+The accepted baseline includes fishing surveys, navigator lineage and aging.
+The forward roadmap may add chronicles, tribe economics, idols, the full
+save/load experience, production assets and environmental polish. These are
+proposed extensions, not implemented baseline behavior.
 
 Presentation-only extensions may preserve the current save shape when they add
 no authoritative state. Gameplay extensions must define deterministic identity,
-event ordering, persistence ownership, migration and recovery behavior before
-integration.
+event ordering, persistence ownership, version invalidation and fresh-start
+recovery behavior before integration.
 
 No roadmap work may change these foundation contracts without an explicit
-design decision and, where authoritative state is affected, a save migration:
+design decision and, where authoritative state is affected, a schema/content/
+format version bump that invalidates prior records:
 
 - deterministic world and stable island/discovery IDs;
 - terrain-authoritative movement and sight;
@@ -532,5 +537,5 @@ design decision and, where authoritative state is affected, a save migration:
 
 Central integration files are serialized merge gates. New pure systems,
 renderers and tests may be developed in parallel against frozen contracts, but
-one integration owner must wire simulation lifecycle, events, save migration,
-scene input and autosave behavior at each acceptance gate.
+one integration owner must wire simulation lifecycle, events, exact-version
+validation, scene input and autosave behavior at each acceptance gate.

@@ -415,7 +415,11 @@ export class GameSimulation {
 
   regenerate(seed = this.config.world.seed): void {
     const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
-    patchPrototypeConfig({ world: { seed: normalizedSeed } });
+    if (this.config === prototypeConfig) {
+      patchPrototypeConfig({ world: { seed: normalizedSeed } });
+    } else {
+      this.config.world.seed = normalizedSeed;
+    }
     this.generated = this.generator.generate(normalizedSeed);
     this.expeditionId = 1;
     this.activeExpedition = false;

@@ -8,6 +8,7 @@ import {
   resetPrototypeConfig,
   validatePrototypeConfig,
 } from "../src/wayfinders/config/prototypeConfig";
+import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import { dijkstra, DijkstraWorkspace, reconstructDijkstraPath } from "../src/wayfinders/navigation/Dijkstra";
 import { createShipStateAtGrid, MovementSystem } from "../src/wayfinders/navigation/MovementSystem";
 import { gridToArt, gridToWorld, worldToGrid } from "../src/wayfinders/world/CoordinateSystem";
@@ -20,6 +21,18 @@ beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
 
 describe("prototype configuration", () => {
+  it("keeps detached simulation regeneration isolated from the live config", () => {
+    const liveSeed = prototypeConfig.world.seed;
+    const detached = makeConfig();
+    detached.world.seed = liveSeed + 1;
+    const simulation = new GameSimulation(detached);
+
+    expect(prototypeConfig.world.seed).toBe(liveSeed);
+    simulation.regenerate(liveSeed + 2);
+    expect(detached.world.seed).toBe(liveSeed + 2);
+    expect(prototypeConfig.world.seed).toBe(liveSeed);
+  });
+
   it("keeps defaults deeply frozen and resets the mutable live copy", () => {
     expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG)).toBe(true);
     expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG.navigation)).toBe(true);

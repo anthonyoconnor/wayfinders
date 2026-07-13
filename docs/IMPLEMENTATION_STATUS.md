@@ -36,7 +36,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 192 automated tests pass across 21 files.
+- 188 automated tests pass across 20 files.
 - The production Vite build passes.
 - Browser tests cover discovery and fishing return, returned-lead upgrade,
   autosave reload, manual checkpoint restore, exact ship/camera restoration,
@@ -155,7 +155,8 @@ Current verification baseline:
   expedition/generation state, navigator lineage, age and final-voyage choice,
   knowledge and stamps, runtime wrecks, pending wreck holds,
   provisional/returned discoveries and provisional/returned fishing records.
-  Schema V6 owns lineage contract V2 and migrates V5 lineage V1 records.
+  Schema V6 requires lineage contract V2; non-current schemas and lineage
+  contracts are not migrated.
   Fishing connectivity and its path are derived after load, never serialized.
 - Base terrain and island descriptors regenerate from the saved seed and world
   configuration. Visibility, forward range and return paths rebuild on load.
@@ -164,8 +165,11 @@ Current verification baseline:
   restores the exact ship position, snaps the camera there and makes that state
   the new autosave baseline.
 - Explicit world regeneration remains a deliberate fresh-world reset.
-- Invalid current-schema autosaves recover to a fresh world. Unsupported newer
-  schemas are preserved with autosave disabled rather than overwritten.
+- Schema, generator, content and serialized-format versions are exact equality
+  guards. Any malformed, older or newer autosave/checkpoint is deleted. A
+  rejected autosave starts a fresh world; a rejected checkpoint becomes
+  unavailable without replacing the running world. Development saves are never
+  migrated or preserved across incompatible versions.
 
 ### Presentation and tools
 
@@ -215,7 +219,8 @@ Current verification baseline:
 1. The headless simulation owns authoritative gameplay state. Phaser presents
    it and forwards input; renderers do not mutate world rules.
 2. The deterministic seed, generation configuration and stable island IDs are
-   save compatibility boundaries.
+   exact save-acceptance boundaries; incompatible changes bump a version and
+   invalidate prior records.
 3. Current sight is a visual reveal, not a knowledge-cost discount. Personal
    water is created behind actual travel to preserve full-cost outward and
    half-cost retrace behavior.
@@ -259,7 +264,8 @@ before `GP-2.3`; neither `GP-2.3` nor `GP-3.1` has active authorization.
 
 The completed milestones are:
 
-1. `GP-0.1` — accepted: baseline-save fixtures and an explicit migration chain;
+1. `GP-0.1` — accepted: exact-version validation, incompatible-record deletion
+   and current-version round trips;
 2. `GP-0.2` — accepted: versioned GP-1 integration boundaries;
 3. `GP-1.1` — accepted: deterministic fishing-shoal definitions and clues;
 4. `GP-1.2` — accepted: the one-case Survey / Leave action and interaction cue;

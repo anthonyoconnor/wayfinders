@@ -76,38 +76,42 @@ player-facing game-management flow.
 
 ### GP-0 — Gameplay integration foundation
 
-#### GP-0.1 — Save evolution and migration
+#### GP-0.1 — Exact-version save validation
 
 Status: accepted.
 
-Acceptance evidence (2026-07-12): immutable raw accepted-baseline V1 fixtures
-cover docked return, active expedition and pending-wreck states. All load paths
-use one fail-closed adjacent-version migration dispatcher; migration and restore
-are input-preserving and idempotent, unsupported newer records remain protected,
-and autosave/checkpoint storage remains one lineage with two atomic records. The
-full pipeline passes 149 tests across 16 files plus typecheck and production
-build. Migration runs only at load boundaries and adds no movement-loop work.
+Acceptance evidence (updated 2026-07-13): autosave and checkpoint records pass
+through one fail-closed parser for the exact current save schema, world
+generator, content versions and serialized sub-format versions. Any readable
+record that is malformed, older or newer is deleted instead of migrated or
+preserved. A rejected autosave starts fresh; a rejected checkpoint becomes
+unavailable without replacing the running world. Current docked-return,
+active-expedition and pending-wreck states still round-trip through the two
+atomic IndexedDB records. The full pipeline passes 188 tests across 20 files
+plus typecheck and production build; validation runs only at load boundaries
+and adds no movement-loop work.
 
 Before new authoritative gameplay state is integrated:
 
-- add accepted-baseline save fixtures and a version-to-version migration
-  chain;
 - decide whether storage remains one active lineage plus a checkpoint or must
-  support multiple named saved games before fixing registry/migration shape;
-- establish how each owning gameplay minor adds its authoritative state without
-  pre-allocating empty future fields;
+  support multiple named saved games before fixing registry shape;
+- establish how each owning gameplay minor adds its authoritative state and
+  bumps every affected schema, content or serialized-format version;
 - keep derived paths, traffic transforms and renderer state out of saves;
-- preserve unsupported newer saves rather than overwriting them; and
-- require autosave and manual-checkpoint round trips in every later GP minor.
+- treat every version field as an exact equality guard, never a migration
+  selector; and
+- require current-version autosave and manual-checkpoint round trips in every
+  later GP minor.
 
 Acceptance gate:
 
-- accepted-baseline saves load with safe defaults;
-- migration and restore are idempotent; feature-specific settlement
-  idempotency is proven at its owning minor;
+- exact current-version saves restore deterministically;
+- every mismatched or malformed autosave/checkpoint is deleted and cannot
+  disable or overwrite fresh play;
+- feature-specific settlement idempotency is proven at its owning minor;
 - existing wreck-hold and exact ship/camera restoration behavior survives;
-- no later GP minor can be accepted without its own migration and persistence
-  coverage.
+- no later GP minor can be accepted without explicit version invalidation and
+  current-version persistence coverage.
 
 Persistence is not postponed to the later save/load milestone. GP-5 adds
 player-facing game management after every preceding gameplay system already
@@ -128,7 +132,7 @@ module adds no runtime loop work.
 Establish only the boundaries needed by GP-1; authorization of later minors in
 the same batch does not widen this gate:
 
-- ownership of stable ID namespaces, content versions and migrations;
+- ownership of stable ID namespaces, content versions and invalidation rules;
 - authoritative-versus-derived state rules;
 - versioned interfaces and read models for independently owned modules;
 - survey command and interaction result types;
@@ -161,13 +165,14 @@ with stable namespaced IDs, locations, service anchors, clues and hidden
 quality outcomes. The catalog is generated off-loop and does not mutate
 terrain, collision, island/resource identity or the accepted discovery
 catalog. Current-sight observation is idempotent; fog-filtered read models hide
-quality and never create terrain knowledge. Schema V2 adds only content-version
-identity and sorted active-expedition sighting records through the adjacent
-V1-to-V2 migration. Autosave/checkpoint load paths protect future schema and
-content versions. Developer markers are revision-driven, pooled and viewport
-culled. The full pipeline passes 159 tests across 18 files plus typecheck and
-production build; normal movement checks only the four definitions and performs
-no world-area scan or default visible-set copy.
+quality and never create terrain knowledge. Schema V2 added content-version
+identity and sorted active-expedition sighting records; earlier schema or
+content versions became incompatible. Autosave/checkpoint load paths accept
+only exact current versions and delete rejected records. Developer markers are
+revision-driven, pooled and viewport-culled. The full pipeline passes 159 tests
+across 18 files plus typecheck and production build; normal movement checks
+only the four definitions and performs no world-area scan or default visible-set
+copy.
 
 - Add sparse, seed-derived shoal IDs, locations, qualities and environmental
   clues in a namespace that cannot move islands or alter terrain.
@@ -190,10 +195,10 @@ authoritative provisional state. Initial play and completed dock/respawn
 allocations have one case; a survey atomically changes one sighted record to
 surveyed and leaves zero, while Leave and every rejected command are
 mutation-free. Wreck holds are non-interactive and reload preserves spent
-capacity. Schema V3 admits at most one surveyed provisional record through an
-adjacent V2-to-V3 migration. A temporary clue-and-case ribbon supplies real
-Survey/Leave buttons, `F`/`Escape` keyboard controls and contextual pointer or
-touch activation; Leave stays dismissed until the player exits, and the
+capacity. Schema V3 admits at most one surveyed provisional record; every
+other schema version is incompatible with that build. A temporary clue-and-case
+ribbon supplies real Survey/Leave buttons, `F`/`Escape` keyboard controls and
+contextual pointer or touch activation; Leave stays dismissed until the player exits, and the
 1.2-second survey cue is presentation-only. Browser acceptance exercised both
 buttons and the keyboard survey path with no console warnings/errors. The full
 pipeline passes 162 tests across 18 files plus typecheck and production build;
@@ -225,11 +230,10 @@ sightings as inherited inactive leads and surveys as terminal returned surveys;
 wreck rollback removes only provisional state, so an earlier lead survives an
 unsuccessful upgrade voyage. Returned surveys are the sole later-activation
 eligible state and remain idempotent across revisit, repeat input, dock, wreck,
-autosave and checkpoint round trips. Schema V4 adds sorted returned records
-through the adjacent V3-to-V4 migration while preserving prior fixtures and
-future-version protection. Faint provisional/lead marks and the automatic dock
-report remain revision-driven, pooled, viewport-culled and coalesced with the
-existing return cue. The full pipeline passes 166 tests across 18 files plus
+autosave and checkpoint round trips. Schema V4 adds sorted returned records;
+other schema versions are rejected and removed. Faint provisional/lead marks
+and the automatic dock report remain revision-driven, pooled, viewport-culled
+and coalesced with the existing return cue. The full pipeline passes 166 tests across 18 files plus
 typecheck and production build. Browser validation covers lead return, a later
 Supported-water survey upgrade, exact-dock commit, terminal revisit and manual
 checkpoint reload with the expected authoritative state throughout.
@@ -312,10 +316,11 @@ Acceptance evidence (2026-07-13): a dedicated lineage authority owns stable
 versioned navigator IDs, `active` / `retired` / `lost` lifecycle records and
 deterministic wreck/retirement succession keys. Wreck rollback now terminalizes
 the outgoing navigator before the unchanged four-second presentation, while
-completion creates exactly one successor. Schema V5 migrates every supported
-legacy save into a valid lineage, including a pending wreck transition; a
-mid-hold save/reload finishes the same key once without duplicating or skipping
-a generation. The simulation snapshot and browser diagnostics expose navigator
+completion creates exactly one successor. Schema V5 requires a current lineage
+fragment, including a coherent pending wreck transition; incompatible saves are
+removed rather than upgraded. A mid-hold save/reload finishes the same key once
+without duplicating or skipping a generation. The simulation snapshot and
+browser diagnostics expose navigator
 identity without moving authority into presentation. All inherited Supported
 water, returned content and persistent wrecks retain their prior behavior. The
 full pipeline passes 182 tests across 20 files plus typecheck and production
@@ -326,8 +331,8 @@ build.
 - Preserve the four-second wreck sequence and inherited world state.
 
 Acceptance gate: every succession creates exactly one navigator/generation;
-reload during transition cannot skip or duplicate it; accepted baseline saves
-migrate into a valid first navigator.
+reload during a current-version transition cannot skip or duplicate it;
+non-current lineage contracts are rejected and removed.
 
 #### GP-2.2 — Explorer aging and safe retirement
 
@@ -341,12 +346,12 @@ one age-30 successor; a safe fifth return reaches age 55, commits the voyage
 and then creates one age-30 successor. A final-voyage wreck wins at age 50 and
 uses the unchanged four-second wreck presentation and succession path. Idle
 time, reload, inactive docking, travel time and distance never age the
-navigator. Schema V6 adds the V2 lineage age/final-voyage contract and migrates
-V5 lineage V1 records. The accessible retirement ribbon appears only at the
-dock; sailing has no permanent age HUD. The full pipeline passes 192 tests
-across 21 files plus typecheck and production build. Browser acceptance covers
-the age-50 choice, immediate retirement, checkpoint restoration, the declared
-final-voyage safe return and a clean warning/error console.
+navigator. Schema V6 requires the V2 lineage age/final-voyage contract; V5 and
+lineage V1 records are incompatible and removed. The accessible retirement
+ribbon appears only at the dock; sailing has no permanent age HUD. The full
+pipeline passes 188 tests across 20 files plus typecheck and production build.
+Browser acceptance covers the age-50 choice, immediate retirement, checkpoint
+restoration, the declared final-voyage safe return and a clean warning/error console.
 
 - Advance age only on an active expedition's exact-dock successful return:
   start at 30 and add five years per return.
@@ -400,8 +405,8 @@ Status: proposed.
 
 Acceptance gate: the player can always begin a meaningful voyage; clock
 manipulation gives no advantage; the minimum state vocabulary and settlement
-events are approved; tribe state is deterministic and migration-safe; replay
-or reload cannot settle one outcome twice.
+events are approved; tribe state is deterministic and exact-version replay-safe;
+replay or reload cannot settle one outcome twice.
 
 #### GP-3.2 — Tribe activation, fishing output and route activity
 
@@ -535,7 +540,7 @@ game lifecycle once the authoritative gameplay shape is stable.
 
 Status: proposed.
 
-- Apply the storage-model decision made before GP-0.1 migration architecture:
+- Apply the storage-model decision made before GP-0.1 persistence architecture:
   one active lineage plus checkpoints or, if explicitly approved, multiple
   named saved games.
 - Define displayed metadata such as seed, navigator, generation, voyage state,
@@ -561,9 +566,10 @@ unrelated saved lineage or checkpoint.
 
 Status: proposed.
 
-- Test migrations and repeated save/load across aging, succession, economy,
+- Test repeated current-version save/load across aging, succession, economy,
   idol loss/recovery and optional completion.
-- Preserve unsupported newer data and provide legible recovery behavior.
+- Delete malformed or version-mismatched records and provide legible fresh-start
+  recovery behavior.
 
 Acceptance gate: long multi-generation histories remain deterministic and no
 settlement, achievement, generation or completion event can be duplicated by
@@ -718,7 +724,7 @@ safe-parallel-work limits below.
 
 ```mermaid
 flowchart LR
-    B["Accepted baseline"] --> GP0["GP-0 migration and first contracts"]
+    B["Accepted baseline"] --> GP0["GP-0 exact save boundary and first contracts"]
     GP0 --> GP1["GP-1 fishing and surveying"]
     GP0 --> GP21["GP-2.1 navigator and succession"]
     GP21 --> GP22["GP-2.2 aging and retirement"]
@@ -775,7 +781,7 @@ accepted:
 | Supported-only route selection | New read-only navigation/activity module wrapping existing graph/path primitives | Economy activation and simulation wiring are serialized |
 | Economy settlement reducer | New pure reducer after settlement-key/outcome contracts are approved | Atomic return/wreck mutation and persistence are serialized |
 | Placeholder opportunity and traffic renderers | New renderer classes against a frozen read model | Scene construction, input and lifecycle wiring are serialized |
-| Save migration fixtures/version dispatch | One persistence owner can work beside pure modules after the current state shape is approved | Parser/store/startup and shared round-trip tests remain one integration gate |
+| Save version validation/invalidation | One persistence owner can work beside pure modules after the current state shape is approved | Parser/store/startup and shared exact-version round-trip tests remain one integration gate |
 | Idol catalog and lore/visual shell | Pure catalog plus non-authoritative archive shell after opportunity and navigator IDs freeze | The authoritative archive read model waits for GP-4.2's returned-idol/credit contract |
 | Asset manifest and resolver | New asset-runtime directory after the GP-3.2 start gate | Runtime renderer replacement waits for accepted GR-1 interfaces |
 | Isolated asset viewer/intake tools | New tooling directory after the relevant GR-1 runtime interfaces are accepted | Game integration and production passes wait for GR-2 acceptance |
@@ -784,8 +790,8 @@ Central integration files are single-owner merge gates and should not be edited
 concurrently by feature agents:
 
 - `src/wayfinders/core/GameSimulation.ts`, `GameEvents.ts` and shared core types;
-- `src/wayfinders/persistence/SaveGame.ts`, `IndexedDbSaveStore.ts` and the
-  migration chain;
+- `src/wayfinders/persistence/SaveGame.ts`, `IndexedDbSaveStore.ts` and exact
+  version-validation policy;
 - `src/wayfinders/rendering/WayfindersScene.ts`, `CargoRenderer.ts`, action
   input and autosave wiring;
 - `src/wayfinders/config/prototypeConfig.ts` and `src/main.ts`;
@@ -828,12 +834,15 @@ authorized ordered batch:
 1. The Baseline plus `GP-*`/`GR-*` major-and-minor roadmap model is accepted.
 2. Storage remains one active lineage with a rolling autosave and one
    overwriteable checkpoint; there is no named-game registry in this batch.
-3. GP-1 uses fishing shoals, one non-stacking fixed survey case per new
+3. Saves load only when schema, generator, content and serialized-format
+   versions exactly match the running build. Rejected records are deleted;
+   development builds do not migrate or preserve older/newer saves.
+4. GP-1 uses fishing shoals, one non-stacking fixed survey case per new
    expedition allocation and developer art.
-4. A safely returned but unsurveyed sighting becomes an inactive persistent
+5. A safely returned but unsurveyed sighting becomes an inactive persistent
    lead that can be surveyed later. A wreck loses only the current expedition's
    provisional state and preserves any earlier returned lead.
-5. GR-1 remains deferred until GP-3.2 proves survey → return → visible tribe
+6. GR-1 remains deferred until GP-3.2 proves survey → return → visible tribe
    benefit with developer graphics, unless that start gate is explicitly
    reapproved.
 

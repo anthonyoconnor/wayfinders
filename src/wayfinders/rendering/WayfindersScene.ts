@@ -15,7 +15,7 @@ import {
   type FishingShoalInteractionResultV1,
 } from "../exploration/FishingShoalContracts";
 import type { SaveStore } from "../persistence/IndexedDbSaveStore";
-import { classifySaveGame } from "../persistence/SaveGame";
+import { loadExactSaveSlot } from "../persistence/SaveGame";
 import { worldToGrid } from "../world/CoordinateSystem";
 import type { GeneratedIsland } from "../world/IslandGenerator";
 import { KnowledgeState } from "../world/TileData";
@@ -63,7 +63,7 @@ interface BrowserDebugApi {
 }
 
 export interface PersistenceBootState {
-  status: "new" | "loaded" | "recovered" | "unavailable" | "incompatible";
+  status: "new" | "loaded" | "recovered" | "unavailable";
   message: string;
   autosave: boolean;
 }
@@ -138,7 +138,6 @@ export class WayfindersScene extends Phaser.Scene {
   private lastFishingShoalKnowledgeVersion = -1;
   private lastFishingShoalSupportedTopologyVersion = -1;
   private persistenceEnabled: boolean;
-  private autosaveProtected: boolean;
   private persistenceStatus: PersistenceBootState["status"];
   private lastSavedSaveRevision = -1;
   private lastSaveAt = Number.NEGATIVE_INFINITY;
@@ -171,7 +170,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.checkpointStore = checkpointStore;
     this.persistenceBoot = persistenceBoot;
     this.persistenceEnabled = persistenceBoot.autosave;
-    this.autosaveProtected = persistenceBoot.status === "incompatible";
     this.persistenceStatus = persistenceBoot.status;
     if (persistenceBoot.status === "loaded") this.lastSavedSaveRevision = simulation.saveRevision;
   }
@@ -985,7 +983,23 @@ export class WayfindersScene extends Phaser.Scene {
 
   private async refreshCheckpointAvailability(): Promise<void> {
     try {
-      this.checkpointAvailable = await this.checkpointStore.load() !== undefined;
+      const slot = await loadExactSaveSlot(
+        this.checkpointStore,
+        (save) => new GameSimulation(structuredClone(prototypeConfig)).restoreSave(save),
+      );
+      this.checkpointAvailable = slot.status === "loaded";
+      if (slot.status === "discarded") {
+        if (slot.removed) {
+          this.log(
+            `Removed an incompatible manual checkpoint: ${slot.error instanceof Error ? slot.error.message : "invalid save"}.`,
+          );
+        } else {
+          this.log(
+            `The manual checkpoint is incompatible and could not be removed: `
+            + `${slot.removalError instanceof Error ? slot.removalError.message : "storage error"}.`,
+          );
+        }
+      }
     } catch {
       this.checkpointAvailable = false;
     }
@@ -994,13 +1008,6 @@ export class WayfindersScene extends Phaser.Scene {
 
   private async saveCheckpoint(): Promise<boolean> {
     try {
-      const existing = await this.checkpointStore.load();
-      if (existing !== undefined && classifySaveGame(existing) === "unsupported-newer") {
-        this.checkpointAvailable = true;
-        this.updatePersistenceOutputs();
-        this.log("The manual checkpoint uses a newer save schema and was preserved. Clear saves before replacing it.");
-        return false;
-      }
       const tile = this.simulation.snapshot().tile;
       await this.checkpointStore.save(this.simulation.createSave());
       this.checkpointAvailable = true;
@@ -1019,24 +1026,49 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private async loadCheckpointFromStore(): Promise<boolean> {
+    let slot: Awaited<ReturnType<typeof loadExactSaveSlot>>;
     try {
-      const value = await this.checkpointStore.load();
-      if (value === undefined) {
-        this.checkpointAvailable = false;
-        this.updatePersistenceOutputs();
-        this.log("No manual checkpoint exists yet. Use Save checkpoint first.");
-        return false;
-      }
-      if (this.saveInFlight) await this.saveInFlight;
-      this.simulation.restoreSave(value);
+      slot = await loadExactSaveSlot(
+        this.checkpointStore,
+        (save) => new GameSimulation(structuredClone(prototypeConfig)).restoreSave(save),
+      );
+    } catch (error) {
+      this.log(`Checkpoint load failed: ${error instanceof Error ? error.message : "storage error"}`);
+      return false;
+    }
+    if (slot.status === "empty") {
+      this.checkpointAvailable = false;
+      this.updatePersistenceOutputs();
+      this.log("No manual checkpoint exists yet. Use Save checkpoint first.");
+      return false;
+    }
+    if (slot.status === "discarded") {
+      this.checkpointAvailable = false;
+      this.updatePersistenceOutputs();
+      this.log(
+        `The manual checkpoint is incompatible with this build${slot.removed ? " and was removed" : ""}: `
+        + `${slot.removed
+          ? (slot.error instanceof Error ? slot.error.message : "invalid save")
+          : (slot.removalError instanceof Error ? slot.removalError.message : "storage error")}.`,
+      );
+      return false;
+    }
+    if (this.saveInFlight) await this.saveInFlight;
+    try {
+      this.simulation.restoreSave(slot.save);
+    } catch (error) {
+      this.checkpointAvailable = false;
+      this.updatePersistenceOutputs();
+      this.log(`Checkpoint restoration failed after validation: ${error instanceof Error ? error.message : "invalid save"}.`);
+      return false;
+    }
+    try {
       this.checkpointAvailable = true;
-      if (!this.autosaveProtected) {
-        this.persistenceEnabled = true;
-        this.persistenceStatus = "loaded";
-        // The loaded checkpoint becomes the new rolling autosave baseline so
-        // a subsequent page reload resumes from the restored state.
-        this.lastSavedSaveRevision = -1;
-      }
+      this.persistenceEnabled = true;
+      this.persistenceStatus = "loaded";
+      // The loaded checkpoint becomes the new rolling autosave baseline so
+      // a subsequent page reload resumes from the restored state.
+      this.lastSavedSaveRevision = -1;
       this.mountDeveloperTools();
       this.afterWorldChanged();
       const tile = this.simulation.snapshot().tile;
@@ -1049,7 +1081,7 @@ export class WayfindersScene extends Phaser.Scene {
         `Loaded the manual checkpoint, restored the ship to ${tile.x}, ${tile.y}, `
         + "and rebuilt sight and route calculations.",
       );
-      if (!this.autosaveProtected) await this.saveNow(false);
+      await this.saveNow(false);
       return true;
     } catch (error) {
       this.log(`Load failed without changing the running world: ${error instanceof Error ? error.message : "invalid save"}`);
@@ -1073,7 +1105,6 @@ export class WayfindersScene extends Phaser.Scene {
       if (this.saveInFlight) await this.saveInFlight;
       await Promise.all([this.saveStore.clear(), this.checkpointStore.clear()]);
       this.persistenceEnabled = true;
-      this.autosaveProtected = false;
       this.persistenceStatus = "new";
       this.checkpointAvailable = false;
       this.lastSavedSaveRevision = saveRevisionAtRequest;

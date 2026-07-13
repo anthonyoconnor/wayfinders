@@ -37,7 +37,7 @@ Asset work must preserve:
 - current fog and overlay readability;
 - ship origin/heading behavior;
 - runtime wreck and discovery marker distinction;
-- save compatibility;
+- exact save/content-version validation and invalidation;
 - camera-culling and dirty-chunk performance.
 
 Rendered pixels are never read back to determine collision, navigation,
@@ -75,7 +75,7 @@ Use four explicit states:
 - `developer`: current functional placeholder;
 - `candidate`: production-intent art under in-game review;
 - `approved`: accepted for the active theme and scale;
-- `deprecated`: retained only while references or migrations still require it.
+- `deprecated`: retained only while current-version references still require it.
 
 The first implementation may use a hand-authored JSON manifest. Typed ID
 generation, atlas packing and a dedicated workshop should be added only when
@@ -151,7 +151,8 @@ world seed + island ID + tile + object type + variation slot
 
 Adding or replacing a visual variant must not change terrain topology,
 discovery identity or navigation. Resolver changes that would reshuffle an
-existing saved world's visuals require an explicit content-version decision.
+existing saved world's visuals require an explicit content-version bump; the
+older save is then incompatible and removed rather than migrated.
 
 ## First implementation slice
 

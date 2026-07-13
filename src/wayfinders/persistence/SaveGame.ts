@@ -5,27 +5,22 @@ import {
   type PrototypeConfig,
 } from "../config/prototypeConfig";
 import type { ShipState, ShipwreckState } from "../core/types";
+import type { ValidatedSlotStore } from "./IndexedDbSaveStore";
 import {
   FISHING_SHOAL_CONTENT_VERSION,
   isCurrentFishingShoalId,
   type FishingShoalProvisionalRecordV1,
   type FishingShoalReturnedRecordV1,
-  type FishingShoalSightedSaveRecordV1,
 } from "../exploration/FishingShoalContracts";
 import {
   NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS,
   NavigatorLineageValidationError,
-  migrateBaselineNavigatorLineageV1,
-  migrateNavigatorLineageV1ToV2,
-  parseNavigatorLineageSnapshotV1,
-  parseNavigatorLineageSnapshotV2,
-  type NavigatorLineageSnapshotV1,
+  parseNavigatorLineageSnapshot,
   type NavigatorLineageSnapshotV2,
 } from "../lineage/NavigatorLineageSystem";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
-export const ACCEPTED_BASELINE_SAVE_SCHEMA_VERSION = 1 as const;
 export const SAVE_SCHEMA_VERSION = 6 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
@@ -76,14 +71,16 @@ export interface PendingRespawnSaveState {
   remainingSeconds: number;
 }
 
-export interface SaveGameV1<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> {
-  /** Historical discriminator: never tie a frozen schema type to the latest version constant. */
-  schemaVersion: 1;
+export interface SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> {
+  schemaVersion: typeof SAVE_SCHEMA_VERSION;
   savedAt: number;
   world: {
     seed: number;
-    generatorVersion: 1;
+    generatorVersion: typeof WORLD_GENERATOR_VERSION;
     generationConfig: GenerationConfigV1;
+    contentVersions: {
+      fishingShoals: typeof FISHING_SHOAL_CONTENT_VERSION;
+    };
   };
   generation: number;
   expedition: {
@@ -103,70 +100,13 @@ export interface SaveGameV1<TDiscovery extends DiscoverySaveRecord = DiscoverySa
     provisional: TDiscovery[];
     returned: TDiscovery[];
   };
-  /**
-   * Reserved for a later schema; the accepted baseline has no runtime terrain
-   * edits.
-   */
+  fishingShoals: {
+    provisional: FishingShoalProvisionalRecordV1[];
+    returned: FishingShoalReturnedRecordV1[];
+  };
+  navigatorLineage: NavigatorLineageSnapshotV2;
   terrainPatches: [];
 }
-
-export type SaveGameV2<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
-  Omit<SaveGameV1<TDiscovery>, "schemaVersion" | "world"> & {
-    schemaVersion: 2;
-    world: SaveGameV1<TDiscovery>["world"] & {
-      contentVersions: {
-        fishingShoals: typeof FISHING_SHOAL_CONTENT_VERSION;
-      };
-    };
-    fishingShoals: {
-      provisional: FishingShoalSightedSaveRecordV1[];
-    };
-  };
-
-export type SaveGameV3<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
-  Omit<SaveGameV2<TDiscovery>, "schemaVersion" | "fishingShoals"> & {
-    schemaVersion: 3;
-    fishingShoals: {
-      provisional: FishingShoalProvisionalRecordV1[];
-    };
-  };
-
-export type SaveGameV4<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
-  Omit<SaveGameV3<TDiscovery>, "schemaVersion" | "fishingShoals"> & {
-    schemaVersion: 4;
-    fishingShoals: {
-      provisional: FishingShoalProvisionalRecordV1[];
-      returned: FishingShoalReturnedRecordV1[];
-    };
-  };
-
-export type SaveGameV5<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
-  Omit<SaveGameV4<TDiscovery>, "schemaVersion"> & {
-    schemaVersion: 5;
-    navigatorLineage: NavigatorLineageSnapshotV1;
-  };
-
-export type SaveGameV6<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
-  Omit<SaveGameV5<TDiscovery>, "schemaVersion" | "navigatorLineage"> & {
-    schemaVersion: 6;
-    navigatorLineage: NavigatorLineageSnapshotV2;
-  };
-
-export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV6<TDiscovery>;
-
-type SaveMigration = (value: unknown) => unknown;
-
-/**
- * Adjacent schema migrations keyed by their source version. New authoritative
- * state adds one real step here; missing steps fail closed instead of guessing.
- */
-const SAVE_MIGRATIONS: ReadonlyMap<number, SaveMigration> = new Map<number, SaveMigration>([
-  [1, migrateSaveGameV1ToV2],
-  [2, migrateSaveGameV2ToV3],
-  [3, migrateSaveGameV3ToV4],
-  [4, migrateSaveGameV4ToV5],
-  [5, migrateSaveGameV5ToV6],
-]);
 
 export interface KnowledgeCell {
   state: KnowledgeState;
@@ -177,6 +117,11 @@ export interface DecodedKnowledge {
   knowledge: Uint8Array;
   expeditionStamps: Uint32Array;
 }
+
+export type ExactSaveSlotLoadResult =
+  | { status: "empty" }
+  | { status: "loaded"; save: SaveGame }
+  | { status: "discarded"; error: unknown; removed: boolean; removalError?: unknown };
 
 export class SaveValidationError extends Error {
   constructor(
@@ -394,54 +339,28 @@ export function validateKnowledgeRuns(tileCount: number, value: unknown): assert
   }
 }
 
-/**
- * Loads any supported historical schema through explicit adjacent migrations,
- * then validates the canonical current schema. Migration steps must be pure;
- * callers may retain the original record when preserving browser storage.
- */
-export function migrateSaveGame(value: unknown): SaveGame {
-  let current = value;
-  let schemaVersion = readSaveSchemaVersion(current);
-  if (
-    schemaVersion < ACCEPTED_BASELINE_SAVE_SCHEMA_VERSION
-    || schemaVersion > SAVE_SCHEMA_VERSION
-  ) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
-
-  while (schemaVersion < SAVE_SCHEMA_VERSION) {
-    const migration = SAVE_MIGRATIONS.get(schemaVersion);
-    if (!migration) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
-    const migrated = migration(current);
-    const migratedVersion = readSaveSchemaVersion(migrated);
-    if (migratedVersion !== schemaVersion + 1) {
-      fail(
-        `migration from version ${schemaVersion} must produce version ${schemaVersion + 1}`,
-        "save.schemaVersion",
-      );
-    }
-    current = migrated;
-    schemaVersion = migratedVersion;
-  }
-
-  return parseSaveGameV6(current);
-}
-
-/** Main load entrypoint; retained under the established API name. */
+/** Validates only the exact schema and format versions supported by this build. */
 export function parseSaveGame(value: unknown): SaveGame {
-  return migrateSaveGame(value);
-}
-
-/** Validates the immutable accepted-baseline schema without migrating it. */
-export function parseSaveGameV1(value: unknown): SaveGameV1 {
   const root = record(value, "save");
   const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
-  if (schemaVersion !== 1) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+  if (schemaVersion !== SAVE_SCHEMA_VERSION) {
+    throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+  }
 
   nonNegativeFinite(root.savedAt, "save.savedAt");
   const world = record(root.world, "save.world");
   const seed = safeInteger(world.seed, "save.world.seed");
   const generatorVersion = integer(world.generatorVersion, "save.world.generatorVersion");
-  if (generatorVersion !== 1) {
+  if (generatorVersion !== WORLD_GENERATOR_VERSION) {
     throw new UnsupportedWorldGeneratorVersionError(generatorVersion);
+  }
+  const contentVersions = record(world.contentVersions, "save.world.contentVersions");
+  const fishingShoalContentVersion = integer(
+    contentVersions.fishingShoals,
+    "save.world.contentVersions.fishingShoals",
+  );
+  if (fishingShoalContentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
+    throw new UnsupportedFishingShoalContentVersionError(fishingShoalContentVersion);
   }
   const generationConfig = validateGenerationConfig(world.generationConfig, seed);
   const tileCount = generationConfig.world.width * generationConfig.world.height;
@@ -471,7 +390,7 @@ export function parseSaveGameV1(value: unknown): SaveGameV1 {
   if (pendingRespawn) validatePendingWreck(pendingRespawn, wrecks, ship);
 
   const discoveries = record(root.discoveries, "save.discoveries");
-  const provisional = validateDiscoveries(
+  const provisionalDiscoveries = validateDiscoveries(
     discoveries.provisional,
     false,
     generationConfig,
@@ -479,7 +398,7 @@ export function parseSaveGameV1(value: unknown): SaveGameV1 {
     generation,
     "save.discoveries.provisional",
   );
-  const returned = validateDiscoveries(
+  const returnedDiscoveries = validateDiscoveries(
     discoveries.returned,
     true,
     generationConfig,
@@ -487,127 +406,29 @@ export function parseSaveGameV1(value: unknown): SaveGameV1 {
     generation,
     "save.discoveries.returned",
   );
-  if (provisional.length > 0 && !expeditionActive) {
+  if (provisionalDiscoveries.length > 0 && !expeditionActive) {
     fail("requires an active expedition", "save.discoveries.provisional");
   }
   const discoveryIds = new Set<number>();
-  for (const discovery of [...provisional, ...returned]) {
+  for (const discovery of [...provisionalDiscoveries, ...returnedDiscoveries]) {
     if (discoveryIds.has(discovery.id)) fail(`contains duplicate discovery id ${discovery.id}`, "save.discoveries");
     discoveryIds.add(discovery.id);
   }
 
   if (!Array.isArray(root.terrainPatches) || root.terrainPatches.length !== 0) {
-    fail("must be an empty array in schema version 1", "save.terrainPatches");
+    fail("must be an empty array in the current schema", "save.terrainPatches");
   }
-
-  return value as SaveGameV1;
-}
-
-/** Validates the GP-1.1 schema after the migration chain reaches version two. */
-export function parseSaveGameV2(value: unknown): SaveGameV2 {
-  const root = record(value, "save");
-  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
-  if (schemaVersion !== 2) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
-
-  const world = record(root.world, "save.world");
-  const contentVersions = record(world.contentVersions, "save.world.contentVersions");
-  const fishingShoalContentVersion = integer(
-    contentVersions.fishingShoals,
-    "save.world.contentVersions.fishingShoals",
-  );
-  if (fishingShoalContentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
-    throw new UnsupportedFishingShoalContentVersionError(fishingShoalContentVersion);
-  }
-
-  const { contentVersions: _contentVersions, ...baselineWorld } = world;
-  parseSaveGameV1({ ...root, schemaVersion: 1, world: baselineWorld });
-
-  const generation = positiveSafeInteger(root.generation, "save.generation");
-  const expedition = record(root.expedition, "save.expedition");
-  const expeditionId = unsigned32(expedition.id, "save.expedition.id", false);
-  const expeditionActive = boolean(expedition.active, "save.expedition.active");
   const fishingShoals = record(root.fishingShoals, "save.fishingShoals");
-  validateFishingShoalProvisional(
+  const provisionalFishingShoals = validateFishingShoalProvisional(
     fishingShoals.provisional,
     expeditionId,
     generation,
     expeditionActive,
-    false,
   );
-
-  return value as SaveGameV2;
-}
-
-/** Validates the GP-1.2 schema, which admits one surveyed provisional record. */
-export function parseSaveGameV3(value: unknown): SaveGameV3 {
-  const root = record(value, "save");
-  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
-  if (schemaVersion !== 3) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
-
-  const world = record(root.world, "save.world");
-  const contentVersions = record(world.contentVersions, "save.world.contentVersions");
-  const fishingShoalContentVersion = integer(
-    contentVersions.fishingShoals,
-    "save.world.contentVersions.fishingShoals",
-  );
-  if (fishingShoalContentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
-    throw new UnsupportedFishingShoalContentVersionError(fishingShoalContentVersion);
-  }
-
-  const { contentVersions: _contentVersions, ...baselineWorld } = world;
-  parseSaveGameV1({ ...root, schemaVersion: 1, world: baselineWorld });
-
-  const generation = positiveSafeInteger(root.generation, "save.generation");
-  const expedition = record(root.expedition, "save.expedition");
-  const expeditionId = unsigned32(expedition.id, "save.expedition.id", false);
-  const expeditionActive = boolean(expedition.active, "save.expedition.active");
-  const fishingShoals = record(root.fishingShoals, "save.fishingShoals");
-  validateFishingShoalProvisional(
-    fishingShoals.provisional,
-    expeditionId,
-    generation,
-    expeditionActive,
-    true,
-  );
-
-  return value as SaveGameV3;
-}
-
-/** Validates the GP-1.3 schema with provisional and safely returned records. */
-export function parseSaveGameV4(value: unknown): SaveGameV4 {
-  const root = record(value, "save");
-  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
-  if (schemaVersion !== 4) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
-
-  const world = record(root.world, "save.world");
-  const contentVersions = record(world.contentVersions, "save.world.contentVersions");
-  const fishingShoalContentVersion = integer(
-    contentVersions.fishingShoals,
-    "save.world.contentVersions.fishingShoals",
-  );
-  if (fishingShoalContentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
-    throw new UnsupportedFishingShoalContentVersionError(fishingShoalContentVersion);
-  }
-
-  const { contentVersions: _contentVersions, ...baselineWorld } = world;
-  parseSaveGameV1({ ...root, schemaVersion: 1, world: baselineWorld });
-
-  const generation = positiveSafeInteger(root.generation, "save.generation");
-  const expedition = record(root.expedition, "save.expedition");
-  const expeditionId = unsigned32(expedition.id, "save.expedition.id", false);
-  const expeditionActive = boolean(expedition.active, "save.expedition.active");
-  const fishingShoals = record(root.fishingShoals, "save.fishingShoals");
-  const provisional = validateFishingShoalProvisional(
-    fishingShoals.provisional,
-    expeditionId,
-    generation,
-    expeditionActive,
-    true,
-  );
-  const returned = validateFishingShoalReturned(fishingShoals.returned, generation);
-  const returnedById = new Map(returned.map((item) => [item.id, item]));
-  for (let index = 0; index < provisional.length; index++) {
-    const item = provisional[index];
+  const returnedFishingShoals = validateFishingShoalReturned(fishingShoals.returned, generation);
+  const returnedById = new Map(returnedFishingShoals.map((item) => [item.id, item]));
+  for (let index = 0; index < provisionalFishingShoals.length; index++) {
+    const item = provisionalFishingShoals[index];
     const prior = returnedById.get(item.id);
     if (prior && !(prior.state === "lead" && item.state === "surveyed")) {
       fail(
@@ -616,37 +437,18 @@ export function parseSaveGameV4(value: unknown): SaveGameV4 {
       );
     }
   }
-
-  return value as SaveGameV4;
-}
-
-/** Validates the GP-2.1 schema with an authoritative navigator lineage. */
-export function parseSaveGameV5(value: unknown): SaveGameV5 {
-  const root = record(value, "save");
-  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
-  if (schemaVersion !== 5) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
-
-  const { navigatorLineage: _navigatorLineage, ...previous } = root;
-  parseSaveGameV4({ ...previous, schemaVersion: 4 });
-
-  let navigatorLineage: NavigatorLineageSnapshotV1;
+  let navigatorLineage: NavigatorLineageSnapshotV2;
   try {
-    navigatorLineage = parseNavigatorLineageSnapshotV1(root.navigatorLineage);
+    navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
   } catch (error) {
     if (error instanceof NavigatorLineageValidationError) {
       fail(error.message, `save.${error.path}`);
     }
     throw error;
   }
-
-  const generation = positiveSafeInteger(root.generation, "save.generation");
   if (navigatorLineage.navigators.at(-1)?.generation !== generation) {
     fail("latest navigator generation must match the saved generation", "save.navigatorLineage.navigators");
   }
-  const expedition = record(root.expedition, "save.expedition");
-  const pendingRespawn = expedition.pendingRespawn === null
-    ? null
-    : record(expedition.pendingRespawn, "save.expedition.pendingRespawn");
   const pendingSuccession = navigatorLineage.pendingSuccession;
   if (pendingRespawn === null && pendingSuccession !== null) {
     fail("cannot be pending without a wreck hold", "save.navigatorLineage.pendingSuccession");
@@ -655,65 +457,32 @@ export function parseSaveGameV5(value: unknown): SaveGameV5 {
     if (pendingSuccession?.reason !== "wreck") {
       fail("must contain the pending wreck succession", "save.navigatorLineage.pendingSuccession");
     }
-    const wreckId = positiveSafeInteger(
-      pendingRespawn.wreckId,
-      "save.expedition.pendingRespawn.wreckId",
-    );
     if (
-      pendingSuccession.resolutionId !== wreckId
+      pendingSuccession.resolutionId !== pendingRespawn.wreckId
       || pendingSuccession.fromGeneration !== generation
     ) {
       fail("must match the pending wreck hold", "save.navigatorLineage.pendingSuccession");
     }
-  }
-
-  return value as SaveGameV5;
-}
-
-/** Validates the GP-2.2 schema with voyage-event aging fields. */
-export function parseSaveGameV6(value: unknown): SaveGameV6 {
-  const root = record(value, "save");
-  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
-  if (schemaVersion !== 6) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
-
-  const { navigatorLineage: _navigatorLineage, ...previous } = root;
-  const lineageV1 = parseNavigatorLineageSnapshotV1({
-    ...(record(root.navigatorLineage, "save.navigatorLineage")),
-    contractVersion: 1,
-  });
-  const previousSave = parseSaveGameV5({
-    ...previous,
-    schemaVersion: 5,
-    navigatorLineage: lineageV1,
-  });
-  let navigatorLineage: NavigatorLineageSnapshotV2;
-  try {
-    navigatorLineage = parseNavigatorLineageSnapshotV2(root.navigatorLineage);
-  } catch (error) {
-    if (error instanceof NavigatorLineageValidationError) {
-      fail(error.message, `save.${error.path}`);
-    }
-    throw error;
   }
   const navigator = navigatorLineage.navigators[navigatorLineage.navigators.length - 1];
   const unresolvedRetirementChoice = navigator.state === "active"
     && navigator.ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
     && !navigator.finalVoyageDeclared;
   if (unresolvedRetirementChoice) {
-    if (previousSave.expedition.active) {
+    if (expeditionActive) {
       fail("must be inactive while a retirement choice is unresolved", "save.expedition.active");
     }
-    const world = previousSave.world.generationConfig.world;
-    const dockX = Math.floor(world.width / 2) + world.homeIslandRadius + 1;
-    const dockY = Math.floor(world.height / 2);
+    const dockX = Math.floor(generationConfig.world.width / 2)
+      + generationConfig.world.homeIslandRadius + 1;
+    const dockY = Math.floor(generationConfig.world.height / 2);
     if (
-      previousSave.ship.currentTileX !== dockX
-      || previousSave.ship.currentTileY !== dockY
+      ship.currentTileX !== dockX
+      || ship.currentTileY !== dockY
     ) {
       fail("must be at the exact home dock while a retirement choice is unresolved", "save.ship");
     }
   }
-  return value as SaveGameV6;
+  return value as SaveGame;
 }
 
 export function isSaveGame(value: unknown): boolean {
@@ -725,75 +494,18 @@ export function isSaveGame(value: unknown): boolean {
   }
 }
 
-export type SaveGameCompatibility = "loadable" | "unsupported-newer" | "invalid";
-
-/** Classifies a stored slot without mutating or replacing it. */
-export function classifySaveGame(value: unknown): SaveGameCompatibility {
-  try {
-    migrateSaveGame(value);
-    return "loadable";
-  } catch (error) {
-    if (
-      error instanceof UnsupportedSaveSchemaVersionError
-      && error.version > SAVE_SCHEMA_VERSION
-    ) return "unsupported-newer";
-    if (
-      error instanceof UnsupportedFishingShoalContentVersionError
-      && error.version > FISHING_SHOAL_CONTENT_VERSION
-    ) return "unsupported-newer";
-    return "invalid";
-  }
-}
-
-function migrateSaveGameV1ToV2(value: unknown): SaveGameV2 {
-  const baseline = structuredClone(parseSaveGameV1(value));
-  return {
-    ...baseline,
-    schemaVersion: 2,
-    world: {
-      ...baseline.world,
-      contentVersions: { fishingShoals: FISHING_SHOAL_CONTENT_VERSION },
-    },
-    fishingShoals: { provisional: [] },
-  };
-}
-
-function migrateSaveGameV2ToV3(value: unknown): SaveGameV3 {
-  const previous = structuredClone(parseSaveGameV2(value));
-  return { ...previous, schemaVersion: 3 };
-}
-
-function migrateSaveGameV3ToV4(value: unknown): SaveGameV4 {
-  const previous = structuredClone(parseSaveGameV3(value));
-  return {
-    ...previous,
-    schemaVersion: 4,
-    fishingShoals: {
-      provisional: previous.fishingShoals.provisional,
-      returned: [],
-    },
-  };
-}
-
-function migrateSaveGameV4ToV5(value: unknown): SaveGameV5 {
-  const previous = structuredClone(parseSaveGameV4(value));
-  return {
-    ...previous,
-    schemaVersion: 5,
-    navigatorLineage: migrateBaselineNavigatorLineageV1(
-      previous.generation,
-      previous.expedition.pendingRespawn?.wreckId ?? null,
-    ),
-  };
-}
-
-function migrateSaveGameV5ToV6(value: unknown): SaveGameV6 {
-  const previous = structuredClone(parseSaveGameV5(value));
-  return {
-    ...previous,
-    schemaVersion: 6,
-    navigatorLineage: migrateNavigatorLineageV1ToV2(previous.navigatorLineage),
-  };
+/** Loads one exact current-version slot and atomically deletes any rejected record. */
+export async function loadExactSaveSlot(
+  store: ValidatedSlotStore<unknown>,
+  validateRestoration?: (save: SaveGame) => void,
+): Promise<ExactSaveSlotLoadResult> {
+  const result = await store.loadAndDeleteRejected((value) => {
+    const save = parseSaveGame(value);
+    validateRestoration?.(save);
+    return save;
+  });
+  if (result.status === "loaded") return { status: "loaded", save: result.value };
+  return result;
 }
 
 function validateFishingShoalProvisional(
@@ -801,7 +513,6 @@ function validateFishingShoalProvisional(
   expeditionId: number,
   generation: number,
   expeditionActive: boolean,
-  allowSurveyed: boolean,
 ): FishingShoalProvisionalRecordV1[] {
   if (!Array.isArray(value)) fail("must be an array", "save.fishingShoals.provisional");
   let previousId = "";
@@ -813,11 +524,8 @@ function validateFishingShoalProvisional(
     if (!isCurrentFishingShoalId(id)) fail("has an invalid or unsupported fishing-shoal ID", `${path}.id`);
     if (id <= previousId) fail("must be uniquely sorted by fishing-shoal ID", `${path}.id`);
     previousId = id;
-    if (item.state !== "sighted" && (!allowSurveyed || item.state !== "surveyed")) {
-      fail(
-        allowSurveyed ? "must be sighted or surveyed" : "must be sighted in schema version 2",
-        `${path}.state`,
-      );
+    if (item.state !== "sighted" && item.state !== "surveyed") {
+      fail("must be sighted or surveyed", `${path}.state`);
     }
     if (item.state === "surveyed" && ++surveyedCount > 1) {
       fail("cannot consume more than the one-case allocation", `${path}.state`);
@@ -852,10 +560,6 @@ function validateFishingShoalReturned(
     if (recordGeneration > generation) fail("cannot be later than the current generation", `${path}.generation`);
   }
   return value as FishingShoalReturnedRecordV1[];
-}
-
-function readSaveSchemaVersion(value: unknown): number {
-  return integer(record(value, "save").schemaVersion, "save.schemaVersion");
 }
 
 function validateGenerationConfig(value: unknown, seed: number): GenerationConfigV1 {

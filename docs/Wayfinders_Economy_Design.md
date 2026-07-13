@@ -182,7 +182,7 @@ The first player-facing version should use a few readable commitments rather tha
 | Deep-water | Greater range and more survey or salvage capacity | Draws on reserve, delays some growth or reduces visible activity |
 | Recovery | Smaller but practical allocation after a major loss | The community is rebuilding after a failed investment |
 
-The exact numbers are tuning values, not normal-play UI. The accepted baseline currently uses physical provision bundles and a fixed resupply model. A future gameplay minor may introduce different allocations only after save compatibility, balance and playtest plans are approved.
+The exact numbers are tuning values, not normal-play UI. The accepted baseline currently uses physical provision bundles and a fixed resupply model. A future gameplay minor may introduce different allocations only after its save-version invalidation, balance and playtest plans are approved.
 
 ### 6.3 Capacity trade-offs
 
@@ -371,7 +371,7 @@ Add the deterministic idol registry, clue and survey state, salvage/cargo rules,
 
 ### GP-5 and the cross-cutting persistence gate
 
-Every gameplay minor includes save migration and deterministic round-trip tests. GP-5 later turns the working autosave/checkpoint foundation into the confirmed player-facing new/save/load experience and hardens long multi-generation continuity.
+Every gameplay minor that changes authoritative persisted state bumps the affected schema/content/format version, invalidates earlier saves and includes deterministic current-version round-trip tests. Cross-version migration is intentionally out of scope during development. GP-5 later turns the working autosave/checkpoint foundation into the confirmed player-facing new/save/load experience and hardens long multi-generation continuity within a supported version.
 
 ### Graphics track
 

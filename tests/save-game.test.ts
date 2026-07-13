@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { makeConfig } from "./helpers.ts";
 import { IndexedDbSaveStore } from "../src/wayfinders/persistence/IndexedDbSaveStore.ts";
 import { createFishingShoalId } from "../src/wayfinders/exploration/FishingShoalContracts.ts";
-import { migrateBaselineNavigatorLineage } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
+import { NavigatorLineageSystem } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 import {
   SAVE_SCHEMA_VERSION,
   WORLD_GENERATOR_VERSION,
@@ -12,17 +12,23 @@ import {
   UnsupportedWorldGeneratorVersionError,
   applyGenerationConfig,
   captureGenerationConfig,
-  classifySaveGame,
   decodeKnowledgeRuns,
   encodeKnowledgeRuns,
   encodeWorldKnowledgeRuns,
   isSaveGame,
+  loadExactSaveSlot,
   parseSaveGame,
   validateKnowledgeRuns,
   type SaveGame,
 } from "../src/wayfinders/persistence/SaveGame.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+
+function makeLineage(generation: number, pendingWreckId?: number) {
+  const lineage = new NavigatorLineageSystem(generation);
+  if (pendingWreckId !== undefined) lineage.beginSuccession("wreck", pendingWreckId);
+  return lineage.snapshot();
+}
 
 function makeValidSave(): SaveGame {
   const config = makeConfig();
@@ -88,8 +94,37 @@ function makeValidSave(): SaveGame {
       }],
     },
     fishingShoals: { provisional: [], returned: [] },
-    navigatorLineage: migrateBaselineNavigatorLineage(2),
+    navigatorLineage: makeLineage(2),
     terrainPatches: [],
+  };
+}
+
+function makeValidatedSlotStore(value: unknown, removalError?: unknown) {
+  const remove = vi.fn(async () => {
+    if (removalError !== undefined) throw removalError;
+  });
+  return {
+    remove,
+    store: {
+      async loadAndDeleteRejected<TResult>(validate: (stored: unknown) => TResult) {
+        if (value === undefined) return { status: "empty" as const };
+        try {
+          return { status: "loaded" as const, value: validate(value) };
+        } catch (error) {
+          try {
+            await remove();
+            return { status: "discarded" as const, error, removed: true };
+          } catch (caughtRemovalError) {
+            return {
+              status: "discarded" as const,
+              error,
+              removed: false,
+              removalError: caughtRemovalError,
+            };
+          }
+        }
+      },
+    },
   };
 }
 
@@ -306,7 +341,7 @@ describe("save-game validation", () => {
       wreckId: wreck.id,
       remainingSeconds: 3.999,
     };
-    save.navigatorLineage = migrateBaselineNavigatorLineage(wreck.generation, wreck.id);
+    save.navigatorLineage = makeLineage(wreck.generation, wreck.id);
     Object.assign(save.ship, {
       worldX: wreck.worldX,
       worldY: wreck.worldY,
@@ -331,7 +366,7 @@ describe("save-game validation", () => {
         wreckId: wreck.id,
         remainingSeconds: 2,
       };
-      save.navigatorLineage = migrateBaselineNavigatorLineage(wreck.generation, wreck.id);
+      save.navigatorLineage = makeLineage(wreck.generation, wreck.id);
       Object.assign(save.ship, {
         worldX: wreck.worldX,
         worldY: wreck.worldY,
@@ -353,10 +388,13 @@ describe("save-game validation", () => {
     expect(() => parseSaveGame(partiallyCharged)).toThrow(/fractional provision/);
   });
 
-  it("distinguishes unsupported schema and generator versions from corrupt data", () => {
-    const futureSchema = makeValidSave() as SaveGame & { schemaVersion: number };
-    futureSchema.schemaVersion = SAVE_SCHEMA_VERSION + 1;
-    expect(() => parseSaveGame(futureSchema)).toThrow(UnsupportedSaveSchemaVersionError);
+  it("requires exact schema and format versions and rejects corrupt current data", () => {
+    for (const version of [SAVE_SCHEMA_VERSION - 1, SAVE_SCHEMA_VERSION + 1]) {
+      const mismatchedSchema = makeValidSave() as SaveGame & { schemaVersion: number };
+      mismatchedSchema.schemaVersion = version;
+      expect(() => parseSaveGame(mismatchedSchema)).toThrow(UnsupportedSaveSchemaVersionError);
+      expect(isSaveGame(mismatchedSchema)).toBe(false);
+    }
 
     const futureGenerator = makeValidSave() as SaveGame & { world: { generatorVersion: number } };
     futureGenerator.world.generatorVersion = 2;
@@ -367,12 +405,49 @@ describe("save-game validation", () => {
     };
     futureContent.world.contentVersions.fishingShoals = 2;
     expect(() => parseSaveGame(futureContent)).toThrow(UnsupportedFishingShoalContentVersionError);
-    expect(classifySaveGame(futureContent)).toBe("unsupported-newer");
+
+    const oldLineageContract = structuredClone(makeValidSave()) as unknown as {
+      navigatorLineage: { contractVersion: number };
+    };
+    oldLineageContract.navigatorLineage.contractVersion = 1;
+    expect(() => parseSaveGame(oldLineageContract)).toThrow(SaveValidationError);
 
     const corrupt = makeValidSave();
     corrupt.ship.currentTileX = -1;
     expect(() => parseSaveGame(corrupt)).toThrow(SaveValidationError);
     expect(isSaveGame(corrupt)).toBe(false);
+  });
+
+  it("loads only an exact current save and deletes every rejected slot", async () => {
+    const currentSave = makeValidSave();
+    const currentSlot = makeValidatedSlotStore(currentSave);
+    await expect(loadExactSaveSlot(currentSlot.store)).resolves.toEqual({
+      status: "loaded",
+      save: currentSave,
+    });
+    expect(currentSlot.remove).not.toHaveBeenCalled();
+
+    const oldSave = makeValidSave() as SaveGame & { schemaVersion: number };
+    oldSave.schemaVersion = SAVE_SCHEMA_VERSION - 1;
+    const oldSlot = makeValidatedSlotStore(oldSave);
+    const result = await loadExactSaveSlot(oldSlot.store);
+    expect(result).toMatchObject({ status: "discarded", removed: true });
+    expect(oldSlot.remove).toHaveBeenCalledOnce();
+  });
+
+  it("reports when a rejected slot cannot be removed", async () => {
+    const corrupt = makeValidSave();
+    corrupt.ship.currentTileX = -1;
+    const removalError = new Error("storage failed");
+    const slot = makeValidatedSlotStore(corrupt, removalError);
+
+    const result = await loadExactSaveSlot(slot.store);
+    expect(result).toMatchObject({
+      status: "discarded",
+      removed: false,
+      removalError,
+    });
+    expect(slot.remove).toHaveBeenCalledOnce();
   });
 
   it("rejects lifecycle, discovery, and terrain-patch inconsistencies", () => {
@@ -407,6 +482,47 @@ describe("save-game validation", () => {
 });
 
 describe("IndexedDbSaveStore", () => {
+  it("validates and deletes even a stored undefined slot in one readwrite transaction", async () => {
+    const countRequest = { result: 1 } as IDBRequest<number>;
+    const getRequest = { result: undefined } as IDBRequest<unknown>;
+    const objectStore = {
+      count: vi.fn(() => countRequest),
+      get: vi.fn(() => getRequest),
+      delete: vi.fn(() => ({} as IDBRequest<undefined>)),
+    } as unknown as IDBObjectStore;
+    const transaction = {
+      objectStore: vi.fn(() => objectStore),
+    } as unknown as IDBTransaction;
+    const database = {
+      close: vi.fn(),
+      objectStoreNames: { contains: () => true },
+      transaction: vi.fn(() => transaction),
+    } as unknown as IDBDatabase;
+    const openRequest = { result: database } as IDBOpenDBRequest;
+    const indexedDB = { open: vi.fn(() => openRequest) } as unknown as IDBFactory;
+    const store = new IndexedDbSaveStore({ indexedDB });
+    const rejection = new Error("wrong version");
+
+    const operation = store.loadAndDeleteRejected(() => {
+      throw rejection;
+    });
+    openRequest.onsuccess?.call(openRequest, {} as Event);
+    await Promise.resolve();
+    expect(database.transaction).toHaveBeenCalledWith("saveGames", "readwrite");
+    countRequest.onsuccess?.call(countRequest, {} as Event);
+    await Promise.resolve();
+    getRequest.onsuccess?.call(getRequest, {} as Event);
+    await Promise.resolve();
+    expect(objectStore.delete).toHaveBeenCalledWith("autosave");
+    transaction.oncomplete?.call(transaction, {} as Event);
+
+    await expect(operation).resolves.toEqual({
+      status: "discarded",
+      error: rejection,
+      removed: true,
+    });
+  });
+
   it("reports unavailable browser storage without failing synchronously", async () => {
     const store = new IndexedDbSaveStore({ indexedDB: undefined });
     await expect(store.load()).rejects.toThrow(/IndexedDB is unavailable/);

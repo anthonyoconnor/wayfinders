@@ -4,15 +4,11 @@ import {
   prototypeConfig,
   resetPrototypeConfig,
 } from "./wayfinders/config/prototypeConfig";
-import { GameSimulation, SaveRestoreError } from "./wayfinders/core/GameSimulation";
+import { GameSimulation } from "./wayfinders/core/GameSimulation";
 import { IndexedDbSaveStore } from "./wayfinders/persistence/IndexedDbSaveStore";
 import {
   applyGenerationConfig,
-  parseSaveGame,
-  SaveValidationError,
-  UnsupportedFishingShoalContentVersionError,
-  UnsupportedSaveSchemaVersionError,
-  UnsupportedWorldGeneratorVersionError,
+  loadExactSaveSlot,
 } from "./wayfinders/persistence/SaveGame";
 import { WayfindersScene, type PersistenceBootState } from "./wayfinders/rendering/WayfindersScene";
 import "./styles.css";
@@ -129,23 +125,35 @@ try {
   const checkpointStore = new IndexedDbSaveStore<unknown>({ saveKey: "checkpoint" });
   let simulation: GameSimulation;
   let persistenceBoot: PersistenceBootState;
-  let storedValue: unknown;
-
   try {
-    storedValue = await saveStore.load();
-    if (storedValue === undefined) {
+    const slot = await loadExactSaveSlot(saveStore, (save) => {
+      const config = applyGenerationConfig(save.world.generationConfig, save.world.seed);
+      new GameSimulation(config).restoreSave(save);
+    });
+    if (slot.status === "empty") {
       simulation = new GameSimulation();
       persistenceBoot = {
         status: "new",
         message: "No inherited browser save was found; a new chart has begun.",
         autosave: true,
       };
+    } else if (slot.status === "discarded") {
+      simulation = new GameSimulation();
+      persistenceBoot = {
+        status: slot.removed ? "recovered" : "unavailable",
+        message: slot.removed
+          ? "The browser save was incompatible with this build and was removed; a fresh chart has begun."
+          : `The browser save was incompatible but could not be removed; browser saving is disabled: ${slot.removalError instanceof Error ? slot.removalError.message : "storage error"}.`,
+        autosave: slot.removed,
+      };
     } else {
-      const save = parseSaveGame(storedValue);
-      const restoredConfig = applyGenerationConfig(save.world.generationConfig, save.world.seed);
+      const restoredConfig = applyGenerationConfig(
+        slot.save.world.generationConfig,
+        slot.save.world.seed,
+      );
       patchPrototypeConfig(restoredConfig);
       simulation = new GameSimulation(prototypeConfig);
-      simulation.restoreSave(save);
+      simulation.restoreSave(slot.save);
       persistenceBoot = {
         status: "loaded",
         message: `Loaded generation ${simulation.generation} and its inherited chart from browser storage.`,
@@ -155,44 +163,11 @@ try {
   } catch (error) {
     resetPrototypeConfig();
     simulation = new GameSimulation();
-    if (
-      error instanceof UnsupportedSaveSchemaVersionError
-      || error instanceof UnsupportedWorldGeneratorVersionError
-      || error instanceof UnsupportedFishingShoalContentVersionError
-    ) {
-      persistenceBoot = {
-        status: "incompatible",
-        message: `${error.message}. The stored data was preserved and autosave is disabled.`,
-        autosave: false,
-      };
-    } else if (
-      storedValue !== undefined
-      && (error instanceof SaveValidationError || error instanceof SaveRestoreError)
-    ) {
-      let cleared = true;
-      try {
-        await saveStore.clear();
-      } catch {
-        cleared = false;
-      }
-      persistenceBoot = {
-        status: "recovered",
-        message: `The browser save was invalid; a fresh chart was opened${cleared ? " and the corrupt save was removed" : ""}.`,
-        autosave: cleared,
-      };
-    } else if (storedValue !== undefined) {
-      persistenceBoot = {
-        status: "incompatible",
-        message: `The browser save could not be loaded safely and was preserved. Autosave is disabled: ${error instanceof Error ? error.message : "unexpected load error"}.`,
-        autosave: false,
-      };
-    } else {
-      persistenceBoot = {
-        status: "unavailable",
-        message: `Browser storage is unavailable: ${error instanceof Error ? error.message : "unknown storage error"}.`,
-        autosave: false,
-      };
-    }
+    persistenceBoot = {
+      status: "unavailable",
+      message: `Browser storage is unavailable: ${error instanceof Error ? error.message : "unknown storage error"}.`,
+      autosave: false,
+    };
   }
 
   wayfindersGame = createWayfindersGame([

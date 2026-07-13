@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   NAVIGATOR_LINEAGE_CONTRACT_VERSION,
-  NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1,
   NAVIGATOR_RETIREMENT_AGE_YEARS,
   NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS,
   NAVIGATOR_STARTING_AGE_YEARS,
@@ -12,12 +11,8 @@ import {
   createNavigatorSuccessionKey,
   isCurrentNavigatorId,
   isCurrentNavigatorSuccessionKey,
-  migrateBaselineNavigatorLineage,
-  migrateBaselineNavigatorLineageV1,
-  migrateNavigatorLineageV1ToV2,
   parseNavigatorId,
   parseNavigatorLineageSnapshot,
-  parseNavigatorLineageSnapshotV1,
   parseNavigatorSuccessionKey,
   type NavigatorLineageSnapshotV2,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
@@ -43,10 +38,10 @@ describe("NavigatorLineageSystem", () => {
     expect(parseNavigatorSuccessionKey("navigator-succession:v1:wreck:07")).toBeUndefined();
   });
 
-  it("migrates a baseline generation into one valid active navigator", () => {
-    const migrated = migrateBaselineNavigatorLineage(4);
+  it("creates one valid current-contract navigator for a requested generation", () => {
+    const snapshot = new NavigatorLineageSystem(4).snapshot();
 
-    expect(migrated).toEqual({
+    expect(snapshot).toEqual({
       contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION,
       navigators: [{
         id: "navigator:v1:g4",
@@ -58,27 +53,9 @@ describe("NavigatorLineageSystem", () => {
       }],
       pendingSuccession: null,
     });
-    expect(NavigatorLineageSystem.fromSnapshot(jsonClone(migrated)).currentNavigator).toEqual(
-      migrated.navigators[0],
+    expect(NavigatorLineageSystem.fromSnapshot(jsonClone(snapshot)).currentNavigator).toEqual(
+      snapshot.navigators[0],
     );
-  });
-
-  it("keeps the V1 contract strict and migrates it into deterministic age defaults", () => {
-    const v1 = migrateBaselineNavigatorLineageV1(4);
-
-    expect(v1.contractVersion).toBe(NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1);
-    expect(v1.navigators[0]).not.toHaveProperty("ageYears");
-    expect(parseNavigatorLineageSnapshotV1(jsonClone(v1))).toEqual(v1);
-
-    const v2 = migrateNavigatorLineageV1ToV2(v1);
-    expect(v2).toMatchObject({
-      contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION,
-      navigators: [{
-        ageYears: NAVIGATOR_STARTING_AGE_YEARS,
-        finalVoyageDeclared: false,
-      }],
-    });
-    expect(() => parseNavigatorLineageSnapshotV1(v2)).toThrow(/contract version 1/);
   });
 
   it("advances only successful-return calls and exposes the warning and final thresholds", () => {
@@ -142,15 +119,17 @@ describe("NavigatorLineageSystem", () => {
       finalVoyageDeclared: true,
     });
 
-    const invalid = jsonClone(migrateBaselineNavigatorLineage(1));
+    const invalid = jsonClone(new NavigatorLineageSystem(1).snapshot());
     (invalid.navigators[0] as { ageYears: number }).ageYears = 55;
     expect(() => parseNavigatorLineageSnapshot(invalid)).toThrow(/declared final voyage/);
   });
 
-  it("migrates a baseline wreck hold without prematurely creating the next navigator", () => {
-    const migrated = migrateBaselineNavigatorLineage(4, 12);
+  it("serializes a wreck hold without prematurely creating the next navigator", () => {
+    const lineage = new NavigatorLineageSystem(4);
+    lineage.beginSuccession("wreck", 12);
+    const snapshot = lineage.snapshot();
 
-    expect(migrated.navigators).toEqual([{
+    expect(snapshot.navigators).toEqual([{
       id: "navigator:v1:g4",
       generation: 4,
       state: "lost",
@@ -160,7 +139,7 @@ describe("NavigatorLineageSystem", () => {
       ageYears: 30,
       finalVoyageDeclared: false,
     }]);
-    expect(migrated.pendingSuccession).toEqual({
+    expect(snapshot.pendingSuccession).toEqual({
       key: "navigator-succession:v1:wreck:12",
       reason: "wreck",
       resolutionId: 12,
@@ -280,7 +259,7 @@ describe("NavigatorLineageSystem", () => {
   });
 
   it("defensively freezes restored records and snapshots", () => {
-    const source = jsonClone(migrateBaselineNavigatorLineage(1));
+    const source = jsonClone(new NavigatorLineageSystem(1).snapshot());
     const lineage = NavigatorLineageSystem.fromSnapshot(source);
     (source.navigators[0] as { generation: number }).generation = 99;
 
