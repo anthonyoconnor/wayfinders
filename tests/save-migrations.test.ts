@@ -55,8 +55,12 @@ describe("save migration chain", () => {
     };
 
     const migrated = migrateSaveGame(versionThree);
-    expect(migrated.schemaVersion).toBe(4);
+    expect(migrated.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
     expect(migrated.fishingShoals).toEqual({ provisional: [], returned: [] });
+    expect(migrated.navigatorLineage).toMatchObject({
+      navigators: [{ generation: 1, state: "active" }],
+      pendingSuccession: null,
+    });
     expect(versionThree).not.toHaveProperty("fishingShoals.returned");
   });
 
@@ -87,12 +91,21 @@ describe("save migration chain", () => {
     expect(pending).not.toBeNull();
     expect(simulation.wreckPresentationActive).toBe(true);
     expect(simulation.generation).toBe(1);
+    expect(simulation.currentNavigator).toMatchObject({ generation: 1, state: "lost" });
+    expect(simulation.navigatorLineage).toHaveLength(1);
 
-    simulation.update({ turn: 0, throttle: 0 }, pending?.remainingSeconds ?? 0);
-    expect(simulation.wreckPresentationActive).toBe(false);
-    expect(simulation.generation).toBe(2);
-    simulation.update({ turn: 0, throttle: 0 }, 1);
-    expect(simulation.generation).toBe(2);
+    simulation.update({ turn: 0, throttle: 0 }, (pending?.remainingSeconds ?? 0) / 2);
+    const midHoldSave = simulation.createSave();
+    const restored = new GameSimulation(simulation.config);
+    restored.restoreSave(midHoldSave);
+    restored.update({ turn: 0, throttle: 0 }, restored.respawnSecondsRemaining);
+    expect(restored.wreckPresentationActive).toBe(false);
+    expect(restored.generation).toBe(2);
+    expect(restored.currentNavigator).toMatchObject({ generation: 2, state: "active" });
+    expect(restored.navigatorLineage).toHaveLength(2);
+    restored.update({ turn: 0, throttle: 0 }, 1);
+    expect(restored.generation).toBe(2);
+    expect(restored.navigatorLineage).toHaveLength(2);
   });
 
   it("preserves unsupported newer slots and distinguishes corrupt known schemas", () => {

@@ -28,6 +28,10 @@ import { ReturnPathSystem, type ReturnPathResult } from "../exploration/ReturnPa
 import { VisibilitySystem } from "../exploration/VisibilitySystem";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
 import {
+  NavigatorLineageSystem,
+  type NavigatorRecordV1,
+} from "../lineage/NavigatorLineageSystem";
+import {
   SAVE_SCHEMA_VERSION,
   WORLD_GENERATOR_VERSION,
   applyGenerationConfig,
@@ -92,6 +96,8 @@ export interface SimulationSnapshot {
     respawnSecondsRemaining: number;
     pendingWreckId: number | null;
   };
+  navigator: Readonly<NavigatorRecordV1>;
+  lineage: readonly Readonly<NavigatorRecordV1>[];
   wrecks: readonly Readonly<ShipwreckState>[];
   discoveries: {
     available: number;
@@ -178,7 +184,7 @@ export class GameSimulation {
   private readonly generator: WorldGenerator;
   private expeditionId = 1;
   private activeExpedition = false;
-  private currentGeneration = 1;
+  private lineage = new NavigatorLineageSystem();
   private returnCount = 0;
   private failureCount = 0;
   private readonly shipwrecks: ShipwreckState[] = [];
@@ -204,7 +210,15 @@ export class GameSimulation {
   }
 
   get generation(): number {
-    return this.currentGeneration;
+    return this.lineage.generation;
+  }
+
+  get currentNavigator(): Readonly<NavigatorRecordV1> {
+    return this.lineage.currentNavigator;
+  }
+
+  get navigatorLineage(): readonly Readonly<NavigatorRecordV1>[] {
+    return this.lineage.navigators;
   }
 
   get successfulReturns(): number {
@@ -388,7 +402,7 @@ export class GameSimulation {
     this.generated = this.generator.generate(normalizedSeed);
     this.expeditionId = 1;
     this.activeExpedition = false;
-    this.currentGeneration = 1;
+    this.lineage = new NavigatorLineageSystem();
     this.returnCount = 0;
     this.failureCount = 0;
     this.shipwrecks.length = 0;
@@ -519,7 +533,7 @@ export class GameSimulation {
     const result = this.fishingShoalSystem.applyInteraction(command, {
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
-    }, this.expeditionId, this.currentGeneration);
+    }, this.expeditionId, this.generation);
     if (result.status !== "surveyed") return result;
 
     const definition = this.fishingShoalSystem.definitionFor(result.id);
@@ -567,7 +581,7 @@ export class GameSimulation {
         generationConfig: captureGenerationConfig(this.config),
         contentVersions: { fishingShoals: FISHING_SHOAL_CONTENT_VERSION },
       },
-      generation: this.currentGeneration,
+      generation: this.generation,
       expedition: {
         id: this.expeditionId,
         active: this.activeExpedition,
@@ -597,6 +611,7 @@ export class GameSimulation {
         provisional: this.provisionalFishingShoals.map((record) => ({ ...record })),
         returned: this.returnedFishingShoals.map((record) => ({ ...record })),
       },
+      navigatorLineage: this.lineage.snapshot(),
       terrainPatches: [],
     };
   }
@@ -653,6 +668,7 @@ export class GameSimulation {
     }
 
     const restoredWrecks = parsed.wrecks.map((wreck) => ({ ...wreck }));
+    const restoredLineage = NavigatorLineageSystem.fromSnapshot(parsed.navigatorLineage);
     let pendingRespawn: PendingRespawnState | undefined;
     if (parsed.expedition.pendingRespawn) {
       const pending = parsed.expedition.pendingRespawn;
@@ -671,7 +687,7 @@ export class GameSimulation {
     this.generated = generated;
     this.expeditionId = parsed.expedition.id;
     this.activeExpedition = parsed.expedition.active;
-    this.currentGeneration = parsed.generation;
+    this.lineage = restoredLineage;
     this.returnCount = parsed.expedition.successfulReturns;
     this.failureCount = parsed.expedition.failedExpeditions;
     this.shipwrecks.length = 0;
@@ -731,7 +747,7 @@ export class GameSimulation {
       expedition: {
         id: this.expeditionId,
         active: this.activeExpedition,
-        generation: this.currentGeneration,
+        generation: this.generation,
         successfulReturns: this.returnCount,
         failures: this.failureCount,
         atDock: this.atDock,
@@ -739,6 +755,8 @@ export class GameSimulation {
         respawnSecondsRemaining: this.respawnSecondsRemaining,
         pendingWreckId: this.pendingWreckId,
       },
+      navigator: { ...this.currentNavigator },
+      lineage: this.navigatorLineage.map((navigator) => ({ ...navigator })),
       wrecks: this.shipwrecks.map((wreck) => ({ ...wreck })),
       discoveries: {
         available: this.discoveryDefinitions.length,
@@ -770,7 +788,7 @@ export class GameSimulation {
     this.activeExpedition = true;
     this.events.emit("expeditionStarted", {
       expeditionId: this.expeditionId,
-      generation: this.currentGeneration,
+      generation: this.generation,
     });
   }
 
@@ -788,7 +806,7 @@ export class GameSimulation {
 
   private completeExpedition(): number {
     const expeditionId = this.expeditionId;
-    const generation = this.currentGeneration;
+    const generation = this.generation;
     const committed = this.knowledge.commitExpedition(expeditionId);
     const returnedDiscoveries = this.discoverySystem.commitExpedition(expeditionId);
     const returnedFishingShoals = this.fishingShoalSystem.commitExpedition(expeditionId);
@@ -823,7 +841,7 @@ export class GameSimulation {
 
   private failExpedition(): number {
     const expeditionId = this.expeditionId;
-    const generation = this.currentGeneration;
+    const generation = this.generation;
     const lostShip = this.ship;
     const wreckId = this.shipwrecks.reduce((maximum, wreck) => Math.max(maximum, wreck.id), 0) + 1;
     if (!Number.isSafeInteger(wreckId)) throw new RangeError("No safe shipwreck identifier remains");
@@ -856,6 +874,7 @@ export class GameSimulation {
       wreck,
       remainingSeconds: this.config.simulation.wreckPresentationSeconds,
     };
+    this.lineage.beginSuccession("wreck", wreck.id);
     this.lastMovement = NO_MOVEMENT;
     this.lifecycleResolutionRevision++;
     if (previousProvisions !== 0) {
@@ -907,7 +926,11 @@ export class GameSimulation {
   private completePendingRespawn(pending: PendingRespawnState): void {
     this.pendingRespawn = undefined;
     this.world.clearVisibility();
-    this.currentGeneration++;
+    const succession = this.lineage.pendingSuccession;
+    if (!succession || succession.reason !== "wreck" || succession.resolutionId !== pending.wreck.id) {
+      throw new RangeError("Pending wreck does not match navigator succession");
+    }
+    const advanced = this.lineage.completeSuccession(succession.key);
     this.advanceExpeditionId();
 
     this.ship = createShipStateAtGrid(
@@ -923,7 +946,9 @@ export class GameSimulation {
     this.revision++;
     this.events.emit("generationAdvanced", {
       previousGeneration: pending.generation,
-      generation: this.currentGeneration,
+      previousNavigatorId: advanced.transition.fromNavigatorId,
+      generation: this.generation,
+      navigatorId: advanced.navigator.id,
       reason: "wreck",
     });
     this.emitReplenishment(
@@ -937,7 +962,7 @@ export class GameSimulation {
       expeditionId: pending.expeditionId,
       generation: pending.generation,
       forgottenTiles: pending.forgottenTiles,
-      nextGeneration: this.currentGeneration,
+      nextGeneration: this.generation,
       wreck: { ...pending.wreck },
     });
   }
@@ -963,7 +988,7 @@ export class GameSimulation {
     if (previous !== current) this.events.emit("provisionsChanged", { previous, current });
     if (changed || forceEvent) {
       this.events.emit("shipReplenished", {
-        generation: this.currentGeneration,
+        generation: this.generation,
         bundles: current,
         reason,
       });
@@ -1005,7 +1030,7 @@ export class GameSimulation {
     if (!this.activeExpedition || this.pendingRespawn) return 0;
     const observation = this.discoverySystem.observeCurrentSight(
       this.expeditionId,
-      this.currentGeneration,
+      this.generation,
     );
     for (const discovery of observation.found) this.events.emit("discoveryFound", discovery);
     return observation.found.length;
@@ -1015,7 +1040,7 @@ export class GameSimulation {
     if (!this.activeExpedition || this.pendingRespawn) return 0;
     const observation = this.fishingShoalSystem.observeCurrentSight(
       this.expeditionId,
-      this.currentGeneration,
+      this.generation,
     );
     for (const record of observation.found) {
       const definition = this.fishingShoalSystem.definitionFor(record.id);

@@ -12,11 +12,17 @@ import {
   type FishingShoalReturnedRecordV1,
   type FishingShoalSightedSaveRecordV1,
 } from "../exploration/FishingShoalContracts";
+import {
+  NavigatorLineageValidationError,
+  migrateBaselineNavigatorLineage,
+  parseNavigatorLineageSnapshot,
+  type NavigatorLineageSnapshotV1,
+} from "../lineage/NavigatorLineageSystem";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
 export const ACCEPTED_BASELINE_SAVE_SCHEMA_VERSION = 1 as const;
-export const SAVE_SCHEMA_VERSION = 4 as const;
+export const SAVE_SCHEMA_VERSION = 5 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -130,7 +136,13 @@ export type SaveGameV4<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRec
     };
   };
 
-export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV4<TDiscovery>;
+export type SaveGameV5<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
+  Omit<SaveGameV4<TDiscovery>, "schemaVersion"> & {
+    schemaVersion: 5;
+    navigatorLineage: NavigatorLineageSnapshotV1;
+  };
+
+export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV5<TDiscovery>;
 
 type SaveMigration = (value: unknown) => unknown;
 
@@ -142,6 +154,7 @@ const SAVE_MIGRATIONS: ReadonlyMap<number, SaveMigration> = new Map<number, Save
   [1, migrateSaveGameV1ToV2],
   [2, migrateSaveGameV2ToV3],
   [3, migrateSaveGameV3ToV4],
+  [4, migrateSaveGameV4ToV5],
 ]);
 
 export interface KnowledgeCell {
@@ -398,7 +411,7 @@ export function migrateSaveGame(value: unknown): SaveGame {
     schemaVersion = migratedVersion;
   }
 
-  return parseSaveGameV4(current);
+  return parseSaveGameV5(current);
 }
 
 /** Main load entrypoint; retained under the established API name. */
@@ -596,6 +609,56 @@ export function parseSaveGameV4(value: unknown): SaveGameV4 {
   return value as SaveGameV4;
 }
 
+/** Validates the GP-2.1 schema with an authoritative navigator lineage. */
+export function parseSaveGameV5(value: unknown): SaveGameV5 {
+  const root = record(value, "save");
+  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
+  if (schemaVersion !== 5) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+
+  const { navigatorLineage: _navigatorLineage, ...previous } = root;
+  parseSaveGameV4({ ...previous, schemaVersion: 4 });
+
+  let navigatorLineage: NavigatorLineageSnapshotV1;
+  try {
+    navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
+  } catch (error) {
+    if (error instanceof NavigatorLineageValidationError) {
+      fail(error.message, `save.${error.path}`);
+    }
+    throw error;
+  }
+
+  const generation = positiveSafeInteger(root.generation, "save.generation");
+  if (navigatorLineage.navigators.at(-1)?.generation !== generation) {
+    fail("latest navigator generation must match the saved generation", "save.navigatorLineage.navigators");
+  }
+  const expedition = record(root.expedition, "save.expedition");
+  const pendingRespawn = expedition.pendingRespawn === null
+    ? null
+    : record(expedition.pendingRespawn, "save.expedition.pendingRespawn");
+  const pendingSuccession = navigatorLineage.pendingSuccession;
+  if (pendingRespawn === null && pendingSuccession !== null) {
+    fail("cannot be pending without a wreck hold", "save.navigatorLineage.pendingSuccession");
+  }
+  if (pendingRespawn !== null) {
+    if (pendingSuccession?.reason !== "wreck") {
+      fail("must contain the pending wreck succession", "save.navigatorLineage.pendingSuccession");
+    }
+    const wreckId = positiveSafeInteger(
+      pendingRespawn.wreckId,
+      "save.expedition.pendingRespawn.wreckId",
+    );
+    if (
+      pendingSuccession.resolutionId !== wreckId
+      || pendingSuccession.fromGeneration !== generation
+    ) {
+      fail("must match the pending wreck hold", "save.navigatorLineage.pendingSuccession");
+    }
+  }
+
+  return value as SaveGameV5;
+}
+
 export function isSaveGame(value: unknown): boolean {
   try {
     parseSaveGame(value);
@@ -652,6 +715,18 @@ function migrateSaveGameV3ToV4(value: unknown): SaveGameV4 {
       provisional: previous.fishingShoals.provisional,
       returned: [],
     },
+  };
+}
+
+function migrateSaveGameV4ToV5(value: unknown): SaveGameV5 {
+  const previous = structuredClone(parseSaveGameV4(value));
+  return {
+    ...previous,
+    schemaVersion: 5,
+    navigatorLineage: migrateBaselineNavigatorLineage(
+      previous.generation,
+      previous.expedition.pendingRespawn?.wreckId ?? null,
+    ),
   };
 }
 

@@ -388,6 +388,9 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.expeditionId = String(this.simulation.currentExpeditionId);
       host.dataset.expeditionActive = String(this.simulation.expeditionActive);
       host.dataset.generation = String(this.simulation.generation);
+      host.dataset.navigatorId = this.simulation.currentNavigator.id;
+      host.dataset.navigatorState = this.simulation.currentNavigator.state;
+      host.dataset.lineageNavigators = String(this.simulation.navigatorLineage.length);
       host.dataset.successfulReturns = String(this.simulation.successfulReturns);
       host.dataset.failedExpeditions = String(this.simulation.failedExpeditions);
       host.dataset.atDock = String(this.simulation.atDock);

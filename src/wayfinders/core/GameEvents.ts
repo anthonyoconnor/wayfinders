@@ -7,6 +7,7 @@ import type {
   FishingShoalProvisionalRecordV1,
   FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
+import type { NavigatorId, NavigatorSuccessionReason } from "../lineage/NavigatorLineageSystem";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
 
@@ -41,8 +42,10 @@ export interface GameEventMap {
   };
   generationAdvanced: {
     previousGeneration: number;
+    previousNavigatorId: NavigatorId;
     generation: number;
-    reason: "wreck";
+    navigatorId: NavigatorId;
+    reason: NavigatorSuccessionReason;
   };
   wreckDiscovered: {
     wreckId: number;

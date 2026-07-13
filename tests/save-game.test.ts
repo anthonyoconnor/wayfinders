@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { makeConfig } from "./helpers.ts";
 import { IndexedDbSaveStore } from "../src/wayfinders/persistence/IndexedDbSaveStore.ts";
 import { createFishingShoalId } from "../src/wayfinders/exploration/FishingShoalContracts.ts";
+import { migrateBaselineNavigatorLineage } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 import {
   SAVE_SCHEMA_VERSION,
   WORLD_GENERATOR_VERSION,
@@ -87,6 +88,7 @@ function makeValidSave(): SaveGame {
       }],
     },
     fishingShoals: { provisional: [], returned: [] },
+    navigatorLineage: migrateBaselineNavigatorLineage(2),
     terrainPatches: [],
   };
 }
@@ -304,6 +306,7 @@ describe("save-game validation", () => {
       wreckId: wreck.id,
       remainingSeconds: 3.999,
     };
+    save.navigatorLineage = migrateBaselineNavigatorLineage(wreck.generation, wreck.id);
     Object.assign(save.ship, {
       worldX: wreck.worldX,
       worldY: wreck.worldY,
@@ -328,6 +331,7 @@ describe("save-game validation", () => {
         wreckId: wreck.id,
         remainingSeconds: 2,
       };
+      save.navigatorLineage = migrateBaselineNavigatorLineage(wreck.generation, wreck.id);
       Object.assign(save.ship, {
         worldX: wreck.worldX,
         worldY: wreck.worldY,

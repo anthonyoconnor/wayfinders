@@ -11,8 +11,9 @@ persistence and the performance foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
-`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-1.4` batch is
-complete and accepted. No later milestone is authorized.
+`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-2.1` work is
+complete and accepted. The active authorization continues without pauses
+through `GP-2.2`, `GP-2.3` and `GP-3.1`.
 
 ## Run and verify
 
@@ -34,7 +35,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 173 automated tests pass across 19 files.
+- 182 automated tests pass across 20 files.
 - The production Vite build passes.
 - Browser tests cover discovery and fishing return, returned-lead upgrade,
   autosave reload, manual checkpoint restore, exact ship/camera restoration,
@@ -98,8 +99,13 @@ Current verification baseline:
 - Exhausting provisions outside Supported water immediately reverts the failed
   expedition's Personal knowledge and creates a wreck that persists across
   reloads and later voyages until explicit world regeneration.
-- The lost ship remains visible and uncontrollable for four seconds. Completion
-  then respawns a supplied ship at the dock and advances the generation once.
+- Each navigator has a stable versioned ID and an `active`, `retired` or `lost`
+  lifecycle record. Wreck and retirement share one deterministic succession
+  contract while remaining distinct reasons.
+- The lost ship remains visible and uncontrollable for four seconds. The
+  outgoing navigator is already recorded as lost during that hold; completion
+  then respawns a supplied ship at the dock and creates exactly one successor.
+  Reloading during the hold resumes the same persisted succession key.
 - Earlier Supported routes, returned discoveries and runtime wrecks survive a
   later failure.
 
@@ -216,8 +222,9 @@ Current verification baseline:
   returned-ground cue; authoritative fishing activation/output, tribe
   economics, explorer aging, lineage achievements and idols are not yet
   implemented.
-- Gameplay track: the current generation is a wreck-driven counter rather than
-  a complete navigator/aging/succession model.
+- Gameplay track: navigator identity and succession are authoritative, but
+  voyage-based aging, safe retirement and lineage achievements remain in the
+  active GP-2.2/GP-2.3 batch.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
   player-facing saved-game model has not been chosen.
 - `GP-3`: there are no fishing boats, trade vessels or
@@ -228,12 +235,11 @@ Current verification baseline:
   baseline. Touch-first sailing is not implemented, and representative
   mid-range mobile rendering/performance validation remains outstanding.
 
-## Proposed continuation
+## Authorized continuation
 
-The authorized `GP-0.1` through `GP-1.4` batch is complete. No further
-implementation should begin until the user authorizes another named roadmap
-minor or ordered batch. An authorized batch remains in force through its final
-named minor without renewed permission pauses.
+`GP-2.1` is accepted. The current user-authorized batch continues directly
+through `GP-2.2`, `GP-2.3` and `GP-3.1`; there is no permission pause between
+those milestones.
 
 The completed batch is:
 
@@ -243,11 +249,10 @@ The completed batch is:
 4. `GP-1.2` — accepted: the one-case Survey / Leave action and interaction cue;
 5. `GP-1.3` — accepted: exact-dock returned leads/surveys and wreck rollback;
 6. `GP-1.4` — accepted: derived Supported-water home-connection proof and cue.
+7. `GP-2.1` — accepted: stable navigator identity and idempotent succession.
 
-The next proposed gameplay milestone is `GP-2.1`, the navigator and succession
-model. It is not authorized by completion of this batch.
-
-Navigator and general route contracts remain deferred to their owning minors.
+The next in-progress gameplay milestone is `GP-2.2`, voyage-event aging and
+safe retirement, followed by `GP-2.3` and `GP-3.1` under the same authorization.
 
 The first product acceptance target is the complete `GP-1` survey loop. The
 graphics track remains deferred until `GP-3.2` is accepted, proving the

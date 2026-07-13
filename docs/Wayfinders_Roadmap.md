@@ -302,7 +302,20 @@ credit across the lineage.
 
 #### GP-2.1 — Navigator and succession model
 
-Status: proposed.
+Status: accepted.
+
+Acceptance evidence (2026-07-13): a dedicated lineage authority owns stable
+versioned navigator IDs, `active` / `retired` / `lost` lifecycle records and
+deterministic wreck/retirement succession keys. Wreck rollback now terminalizes
+the outgoing navigator before the unchanged four-second presentation, while
+completion creates exactly one successor. Schema V5 migrates every supported
+legacy save into a valid lineage, including a pending wreck transition; a
+mid-hold save/reload finishes the same key once without duplicating or skipping
+a generation. The simulation snapshot and browser diagnostics expose navigator
+identity without moving authority into presentation. All inherited Supported
+water, returned content and persistent wrecks retain their prior behavior. The
+full pipeline passes 182 tests across 20 files plus typecheck and production
+build.
 
 - Give each navigator a stable ID and lifecycle state.
 - Centralize succession reasons such as wreck and later retirement.
