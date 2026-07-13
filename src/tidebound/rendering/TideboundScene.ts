@@ -9,10 +9,12 @@ import {
 import { GameSimulation } from "../core/GameSimulation";
 import { SimulationClock } from "../core/SimulationClock";
 import type { MovementInput } from "../core/types";
+import type { SaveStore } from "../persistence/IndexedDbSaveStore";
 import { worldToGrid } from "../world/CoordinateSystem";
 import type { GeneratedIsland } from "../world/IslandGenerator";
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
+import { DiscoveryRenderer } from "./DiscoveryRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
 import { ShipRenderer } from "./ShipRenderer";
@@ -39,6 +41,15 @@ interface BrowserDebugApi {
   forceWreck: () => boolean;
   regenerate: (seed?: number) => ReturnType<GameSimulation["snapshot"]>;
   setOverlay: (name: keyof GameSimulation["debug"], visible: boolean) => void;
+  saveNow: () => Promise<boolean>;
+  loadSave: () => Promise<boolean>;
+  clearSave: () => Promise<boolean>;
+}
+
+export interface PersistenceBootState {
+  status: "new" | "loaded" | "recovered" | "unavailable" | "incompatible";
+  message: string;
+  autosave: boolean;
 }
 
 declare global {
@@ -53,14 +64,18 @@ const PALETTE = {
 } as const;
 
 export class TideboundScene extends Phaser.Scene {
-  readonly simulation = new GameSimulation();
+  readonly simulation: GameSimulation;
 
   private readonly clock = new SimulationClock();
+  private readonly saveStore: SaveStore<unknown>;
+  private readonly checkpointStore: SaveStore<unknown>;
+  private readonly persistenceBoot: PersistenceBootState;
   private keys!: MovementKeys;
   private worldRenderer!: WorldRenderer;
   private knowledgeOverlay!: KnowledgeOverlayRenderer;
   private riskOverlay!: RiskOverlayRenderer;
   private cargoRenderer!: CargoRenderer;
+  private discoveryRenderer!: DiscoveryRenderer;
   private shipRenderer!: ShipRenderer;
   private wreckRenderer!: WreckRenderer;
   private gridGraphics!: Phaser.GameObjects.Graphics;
@@ -70,6 +85,8 @@ export class TideboundScene extends Phaser.Scene {
   private gameHost?: HTMLElement;
   private gameStatus?: HTMLElement;
   private provisionOutput?: HTMLOutputElement;
+  private persistenceOutput?: HTMLOutputElement;
+  private discoveryOutput?: HTMLOutputElement;
   private teleportOnClick = false;
   private islandInspectionIndex = 0;
   private datasetGenerated?: GameSimulation["generated"];
@@ -78,9 +95,35 @@ export class TideboundScene extends Phaser.Scene {
   private lastDiagnosticsRevision = -1;
   private lastDiagnosticsOverlayRevision = -1;
   private lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
+  private persistenceEnabled: boolean;
+  private autosaveProtected: boolean;
+  private persistenceStatus: PersistenceBootState["status"];
+  private lastSavedRevision = -1;
+  private lastSaveAt = Number.NEGATIVE_INFINITY;
+  private saveInFlight?: Promise<boolean>;
+  private saveQueued = false;
+  private checkpointAvailable: boolean | undefined;
+  private browserDebugApi?: BrowserDebugApi;
+  private activeLifecycleCue?: Phaser.GameObjects.Text;
+  private returnCueScheduled = false;
+  private returnCuePending = false;
+  private pendingReturnedDiscoveryNames: string[] = [];
 
-  constructor() {
+  constructor(
+    simulation = new GameSimulation(),
+    saveStore: SaveStore<unknown>,
+    checkpointStore: SaveStore<unknown>,
+    persistenceBoot: PersistenceBootState,
+  ) {
     super({ key: "TideboundScene" });
+    this.simulation = simulation;
+    this.saveStore = saveStore;
+    this.checkpointStore = checkpointStore;
+    this.persistenceBoot = persistenceBoot;
+    this.persistenceEnabled = persistenceBoot.autosave;
+    this.autosaveProtected = persistenceBoot.status === "incompatible";
+    this.persistenceStatus = persistenceBoot.status;
+    if (persistenceBoot.status === "loaded") this.lastSavedRevision = simulation.revision;
   }
 
   create(): void {
@@ -89,6 +132,7 @@ export class TideboundScene extends Phaser.Scene {
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
     this.riskOverlay = new RiskOverlayRenderer(this);
     this.cargoRenderer = new CargoRenderer(this);
+    this.discoveryRenderer = new DiscoveryRenderer(this);
     this.shipRenderer = new ShipRenderer(this);
     this.gridGraphics = this.add.graphics().setDepth(70);
     this.debugGraphics = this.add.graphics().setDepth(71);
@@ -122,6 +166,10 @@ export class TideboundScene extends Phaser.Scene {
     this.installBrowserDebugApi();
     this.bindSimulationEvents();
     this.syncPresentation(true);
+    this.log(this.persistenceBoot.message);
+    void this.refreshCheckpointAvailability();
+    window.addEventListener("pagehide", this.onPageHide);
+    document.addEventListener("visibilitychange", this.onVisibilityChange);
 
     const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
     if (sceneStatus) sceneStatus.textContent = "Exploration sandbox active";
@@ -130,7 +178,7 @@ export class TideboundScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyBindings());
   }
 
-  override update(_time: number, delta: number): void {
+  override update(time: number, delta: number): void {
     if (Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) this.changeZoom(0.1);
     if (Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) this.changeZoom(-0.1);
     const movementInput = this.readMovementInput();
@@ -142,6 +190,7 @@ export class TideboundScene extends Phaser.Scene {
       return keepAdvancing;
     });
     this.syncPresentation();
+    this.maybeAutosave(time);
   }
 
   private readMovementInput(): MovementInput {
@@ -201,6 +250,7 @@ export class TideboundScene extends Phaser.Scene {
   private syncPresentation(force = false): void {
     this.shipRenderer.sync(this.simulation.ship, !this.simulation.wreckPresentationActive);
     this.wreckRenderer.sync(this.simulation.wrecks, this.simulation.world);
+    this.discoveryRenderer.sync(this.simulation.discoveries);
     this.knowledgeOverlay.sync(this.simulation.world, this.simulation.generated.seed, force);
     this.riskOverlay.sync(
       this.simulation.world,
@@ -241,6 +291,9 @@ export class TideboundScene extends Phaser.Scene {
       host.dataset.failedExpeditions = String(this.simulation.failedExpeditions);
       host.dataset.atDock = String(this.simulation.atDock);
       host.dataset.wrecks = String(this.simulation.wrecks.length);
+      host.dataset.discoveryProvisional = String(this.simulation.provisionalDiscoveries.length);
+      host.dataset.discoveryReturned = String(this.simulation.returnedDiscoveries.length);
+      host.dataset.persistenceStatus = this.persistenceStatus;
       host.dataset.wreckPresentation = String(this.simulation.wreckPresentationActive);
       host.dataset.respawnSeconds = this.simulation.respawnSecondsRemaining.toFixed(3);
       host.dataset.lifecyclePhase = this.simulation.wreckPresentationActive ? "wreck-hold" : "active";
@@ -361,6 +414,16 @@ export class TideboundScene extends Phaser.Scene {
           </div>
         </fieldset>
         <fieldset>
+          <legend>Save and discoveries</legend>
+          <div class="tool-row tool-row--buttons">
+            <button data-action="save-checkpoint" type="button">Save checkpoint</button>
+            <button data-action="load-checkpoint" type="button">Load checkpoint</button>
+            <button data-action="clear-save" type="button">Clear saves</button>
+          </div>
+          <output data-output="persistence">${this.persistenceSummary()}</output>
+          <output data-output="discoveries">${this.discoverySummary()}</output>
+        </fieldset>
+        <fieldset>
           <legend>Debug views</legend>
           ${this.toggleMarkup("navigationGrid", "Navigation grid")}
           ${this.toggleMarkup("currentSight", "Current line of sight")}
@@ -389,6 +452,8 @@ export class TideboundScene extends Phaser.Scene {
       </div>`;
 
     this.provisionOutput = slot.querySelector<HTMLOutputElement>("[data-output='provisions']") ?? undefined;
+    this.persistenceOutput = slot.querySelector<HTMLOutputElement>("[data-output='persistence']") ?? undefined;
+    this.discoveryOutput = slot.querySelector<HTMLOutputElement>("[data-output='discoveries']") ?? undefined;
 
     slot.querySelectorAll<HTMLInputElement>("input[data-overlay]").forEach((input) => {
       input.addEventListener("change", () => {
@@ -433,6 +498,15 @@ export class TideboundScene extends Phaser.Scene {
     slot.querySelector<HTMLButtonElement>("[data-action='force-wreck']")?.addEventListener("click", () => {
       if (this.simulation.wreckPresentationActive) this.log("The wreck presentation is already in progress.");
       else if (!this.forceWreckForTesting()) this.log("Move outside Supported water before forcing a wreck.");
+    }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-action='save-checkpoint']")?.addEventListener("click", () => {
+      void this.saveCheckpoint();
+    }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-action='load-checkpoint']")?.addEventListener("click", () => {
+      void this.loadCheckpointFromStore();
+    }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-action='clear-save']")?.addEventListener("click", () => {
+      void this.clearSaveFromStore();
     }, { signal });
   }
 
@@ -512,6 +586,168 @@ export class TideboundScene extends Phaser.Scene {
     if (this.provisionOutput) {
       this.provisionOutput.value = `${this.simulation.ship.provisions} developer bundles`;
     }
+    this.updatePersistenceOutputs();
+  }
+
+  private persistenceSummary(): string {
+    const label = this.persistenceStatus === "loaded"
+      ? "saved"
+      : this.persistenceStatus === "new"
+        ? "empty"
+        : this.persistenceStatus;
+    const checkpoint = this.checkpointAvailable === undefined
+      ? "checking"
+      : this.checkpointAvailable
+        ? "ready"
+        : "none";
+    return `Browser autosave: ${label}${this.persistenceEnabled ? " · on" : " · off"} `
+      + `· Manual checkpoint: ${checkpoint}`;
+  }
+
+  private discoverySummary(): string {
+    return `Discoveries: ${this.simulation.provisionalDiscoveries.length} provisional · `
+      + `${this.simulation.returnedDiscoveries.length} returned`;
+  }
+
+  private updatePersistenceOutputs(): void {
+    if (this.persistenceOutput) this.persistenceOutput.value = this.persistenceSummary();
+    if (this.discoveryOutput) this.discoveryOutput.value = this.discoverySummary();
+  }
+
+  private maybeAutosave(time: number): void {
+    if (!this.persistenceEnabled || this.lastSavedRevision === this.simulation.revision) return;
+    if (this.saveInFlight) return;
+    if (time - this.lastSaveAt < 750) return;
+    void this.saveNow(false);
+  }
+
+  private saveNow(reportSuccess: boolean): Promise<boolean> {
+    if (!this.persistenceEnabled) {
+      if (reportSuccess) this.log("Browser saving is unavailable for this session.");
+      this.updatePersistenceOutputs();
+      return Promise.resolve(false);
+    }
+    if (this.saveInFlight) {
+      this.saveQueued = true;
+      return this.saveInFlight;
+    }
+
+    const operation = this.performSaveLoop(reportSuccess);
+    this.saveInFlight = operation;
+    void operation.finally(() => {
+      if (this.saveInFlight === operation) this.saveInFlight = undefined;
+    });
+    return operation;
+  }
+
+  private async performSaveLoop(reportSuccess: boolean): Promise<boolean> {
+    try {
+      do {
+        this.saveQueued = false;
+        const revision = this.simulation.revision;
+        await this.saveStore.save(this.simulation.createSave());
+        this.lastSavedRevision = revision;
+        this.lastSaveAt = this.time.now;
+      } while (this.saveQueued);
+      this.persistenceStatus = "loaded";
+      this.updatePersistenceOutputs();
+      if (reportSuccess) this.log("Saved the inherited world to browser storage.");
+      return true;
+    } catch (error) {
+      this.persistenceStatus = "unavailable";
+      this.persistenceEnabled = false;
+      this.updatePersistenceOutputs();
+      this.log(`Browser save failed: ${error instanceof Error ? error.message : "unknown storage error"}`);
+      return false;
+    }
+  }
+
+  private async refreshCheckpointAvailability(): Promise<void> {
+    try {
+      this.checkpointAvailable = await this.checkpointStore.load() !== undefined;
+    } catch {
+      this.checkpointAvailable = false;
+    }
+    this.updatePersistenceOutputs();
+  }
+
+  private async saveCheckpoint(): Promise<boolean> {
+    try {
+      const tile = this.simulation.snapshot().tile;
+      await this.checkpointStore.save(this.simulation.createSave());
+      this.checkpointAvailable = true;
+      this.updatePersistenceOutputs();
+      this.showLifecycleCue(
+        `CHECKPOINT SAVED\nSHIP AT ${tile.x}, ${tile.y}`,
+        "#d9fff5",
+        3_000,
+      );
+      this.log(`Saved a manual checkpoint with the ship at ${tile.x}, ${tile.y}.`);
+      return true;
+    } catch (error) {
+      this.log(`Checkpoint save failed: ${error instanceof Error ? error.message : "storage error"}`);
+      return false;
+    }
+  }
+
+  private async loadCheckpointFromStore(): Promise<boolean> {
+    try {
+      const value = await this.checkpointStore.load();
+      if (value === undefined) {
+        this.checkpointAvailable = false;
+        this.updatePersistenceOutputs();
+        this.log("No manual checkpoint exists yet. Use Save checkpoint first.");
+        return false;
+      }
+      if (this.saveInFlight) await this.saveInFlight;
+      this.simulation.restoreSave(value);
+      this.checkpointAvailable = true;
+      if (!this.autosaveProtected) {
+        this.persistenceEnabled = true;
+        this.persistenceStatus = "loaded";
+        // The loaded checkpoint becomes the new rolling autosave baseline so
+        // a subsequent page reload resumes from the restored state.
+        this.lastSavedRevision = -1;
+      }
+      this.mountDeveloperTools();
+      this.afterWorldChanged();
+      const tile = this.simulation.snapshot().tile;
+      this.showLifecycleCue(
+        `CHECKPOINT LOADED\nSHIP RESTORED TO ${tile.x}, ${tile.y}`,
+        "#d9fff5",
+        3_000,
+      );
+      this.log(
+        `Loaded the manual checkpoint, restored the ship to ${tile.x}, ${tile.y}, `
+        + "and rebuilt sight and route calculations.",
+      );
+      if (!this.autosaveProtected) await this.saveNow(false);
+      return true;
+    } catch (error) {
+      this.log(`Load failed without changing the running world: ${error instanceof Error ? error.message : "invalid save"}`);
+      return false;
+    }
+  }
+
+  private async clearSaveFromStore(): Promise<boolean> {
+    try {
+      await Promise.all([this.saveStore.clear(), this.checkpointStore.clear()]);
+      this.persistenceEnabled = true;
+      this.autosaveProtected = false;
+      this.persistenceStatus = "new";
+      this.checkpointAvailable = false;
+      this.lastSavedRevision = this.simulation.revision;
+      this.updatePersistenceOutputs();
+      this.log("Cleared the browser autosave and manual checkpoint. The running world was not reset.");
+      return true;
+    } catch (error) {
+      this.log(`Could not clear browser storage: ${error instanceof Error ? error.message : "storage error"}`);
+      return false;
+    }
+  }
+
+  private requestLifecycleSave(): void {
+    queueMicrotask(() => void this.saveNow(false));
   }
 
   private afterWorldChanged(): void {
@@ -525,6 +761,10 @@ export class TideboundScene extends Phaser.Scene {
     this.lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
     this.updateProvisionOutput();
     this.syncPresentation(true);
+    // Camera follow deliberately uses smoothing during play. A restored or
+    // regenerated world is a discontinuity, so snap to the authoritative ship
+    // before smooth following resumes.
+    this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
   }
 
   private inspectNextIsland(): void {
@@ -583,7 +823,7 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private installBrowserDebugApi(): void {
-    window.__WAYFINDERS__ = {
+    const api: BrowserDebugApi = {
       snapshot: () => this.simulation.snapshot(),
       teleport: (x, y) => this.simulation.teleport({ x: Math.trunc(x), y: Math.trunc(y) }),
       addProvisions: (delta) => {
@@ -600,7 +840,12 @@ export class TideboundScene extends Phaser.Scene {
         return this.simulation.snapshot();
       },
       setOverlay: (name, visible) => this.simulation.setDebugVisibility(name, visible),
+      saveNow: () => this.saveCheckpoint(),
+      loadSave: () => this.loadCheckpointFromStore(),
+      clearSave: () => this.clearSaveFromStore(),
     };
+    this.browserDebugApi = api;
+    window.__WAYFINDERS__ = api;
   }
 
   private log(message: string): void {
@@ -623,10 +868,12 @@ export class TideboundScene extends Phaser.Scene {
     this.eventUnsubscribers.push(
       this.simulation.events.on("expeditionReturned", ({ supportedTileCount, closedUnknownTileCount }) => {
         this.renderWorld();
-        this.showLifecycleCue("EXPEDITION RETURNED\nROUTE NOW SUPPORTED\nPROVISIONS REPLENISHED", "#d9fff5");
+        this.returnCuePending = true;
+        this.scheduleReturnCue();
         this.log(
           `Expedition returned: ${supportedTileCount} Personal tiles and ${closedUnknownTileCount} enclosed Unknown tiles became Supported.`,
         );
+        this.requestLifecycleSave();
       }),
       this.simulation.events.on("shipWrecked", ({ generation }) => {
         const holdMs = Math.max(0, this.simulation.config.simulation.wreckPresentationSeconds * 1000 - 480);
@@ -639,6 +886,7 @@ export class TideboundScene extends Phaser.Scene {
           `Generation ${generation}'s ship was wrecked; respawn begins in `
           + `${this.simulation.config.simulation.wreckPresentationSeconds} seconds.`,
         );
+        this.requestLifecycleSave();
       }),
       this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
         this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
@@ -649,6 +897,7 @@ export class TideboundScene extends Phaser.Scene {
         this.log(
           `Generation ${generation} lost ${forgottenTiles} unreturned tiles; generation ${nextGeneration} departed.`,
         );
+        this.requestLifecycleSave();
       }),
       this.simulation.events.on("shipReplenished", ({ reason }) => {
         if (reason !== "dock") return;
@@ -657,11 +906,72 @@ export class TideboundScene extends Phaser.Scene {
       }),
       this.simulation.events.on("wreckDiscovered", ({ wreckId, generation }) => {
         this.log(`Found wreck ${wreckId} from generation ${generation}.`);
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("discoveryFound", ({ name, detail }) => {
+        this.showLifecycleCue(
+          `DISCOVERY SIGHTED\n${name.toUpperCase()}\nRETURN HOME TO SECURE IT`,
+          "#b9fff5",
+          5_000,
+        );
+        this.log(`Provisional discovery: ${name}. ${detail}`);
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("discoveriesReturned", ({ discoveries }) => {
+        const names = discoveries.map(({ name }) => name).join(", ");
+        this.pendingReturnedDiscoveryNames.push(...discoveries.map(({ name }) => name));
+        this.scheduleReturnCue();
+        this.log(`Returned discoveries secured: ${names}.`);
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("discoveriesLost", ({ discoveries }) => {
+        this.log(`Unreturned discoveries lost with the ship: ${discoveries.map(({ name }) => name).join(", ")}.`);
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("worldRegenerated", () => {
+        this.requestLifecycleSave();
       }),
     );
   }
 
-  private showLifecycleCue(message: string, color: string, holdMs = 1_050): void {
+  private scheduleReturnCue(): void {
+    if (this.returnCueScheduled) return;
+    this.returnCueScheduled = true;
+    queueMicrotask(() => {
+      this.returnCueScheduled = false;
+      const names = this.pendingReturnedDiscoveryNames.splice(0);
+      const returned = this.returnCuePending;
+      this.returnCuePending = false;
+      if (!returned && names.length === 0) return;
+
+      if (names.length > 0) {
+        const discoveryLine = names.length === 1
+          ? names[0].toUpperCase()
+          : `${names.length} DISCOVERIES RETURNED`;
+        this.showLifecycleCue(
+          `EXPEDITION RETURNED\n${discoveryLine}\nADDED TO THE INHERITED CHART\nROUTE SUPPORTED · PROVISIONS REPLENISHED`,
+          "#eadb9f",
+          5_000,
+        );
+      } else {
+        this.showLifecycleCue(
+          "EXPEDITION RETURNED\nROUTE NOW SUPPORTED\nPROVISIONS REPLENISHED",
+          "#d9fff5",
+          3_500,
+        );
+      }
+    });
+  }
+
+  private showLifecycleCue(message: string, color: string, holdMs = 2_600): void {
+    if (this.activeLifecycleCue) {
+      this.tweens.killTweensOf(this.activeLifecycleCue);
+      this.activeLifecycleCue.destroy();
+      this.activeLifecycleCue = undefined;
+    }
     const cue = this.add.text(this.scale.width / 2, Math.max(90, this.scale.height * 0.17), message, {
       align: "center",
       color,
@@ -671,6 +981,7 @@ export class TideboundScene extends Phaser.Scene {
       stroke: "#082d35",
       strokeThickness: 6,
     }).setOrigin(0.5).setScrollFactor(0).setDepth(110).setAlpha(0);
+    this.activeLifecycleCue = cue;
     this.cameras.main.flash(180, 125, 212, 199, false);
     this.tweens.add({
       targets: cue,
@@ -679,7 +990,10 @@ export class TideboundScene extends Phaser.Scene {
       duration: 240,
       yoyo: true,
       hold: holdMs,
-      onComplete: () => cue.destroy(),
+      onComplete: () => {
+        cue.destroy();
+        if (this.activeLifecycleCue === cue) this.activeLifecycleCue = undefined;
+      },
     });
   }
 
@@ -688,13 +1002,37 @@ export class TideboundScene extends Phaser.Scene {
     this.gameHost = undefined;
     this.gameStatus = undefined;
     this.provisionOutput = undefined;
+    this.persistenceOutput = undefined;
+    this.discoveryOutput = undefined;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.knowledgeOverlay.destroy();
     this.riskOverlay.destroy();
     this.cargoRenderer.destroy();
+    this.discoveryRenderer.destroy();
     this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
-    if (window.__WAYFINDERS__?.snapshot().seed === this.simulation.generated.seed) delete window.__WAYFINDERS__;
+    window.removeEventListener("pagehide", this.onPageHide);
+    document.removeEventListener("visibilitychange", this.onVisibilityChange);
+    this.saveStore.close();
+    this.checkpointStore.close();
+    if (this.activeLifecycleCue) {
+      this.tweens.killTweensOf(this.activeLifecycleCue);
+      this.activeLifecycleCue.destroy();
+      this.activeLifecycleCue = undefined;
+    }
+    if (window.__WAYFINDERS__ === this.browserDebugApi) delete window.__WAYFINDERS__;
+    this.browserDebugApi = undefined;
   }
+
+  private readonly onPageHide = (): void => {
+    if (this.lastSavedRevision !== this.simulation.revision) void this.saveNow(false);
+  };
+
+  private readonly onVisibilityChange = (): void => {
+    if (
+      document.visibilityState === "hidden"
+      && this.lastSavedRevision !== this.simulation.revision
+    ) void this.saveNow(false);
+  };
 }

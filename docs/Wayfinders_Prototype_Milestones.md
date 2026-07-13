@@ -6,7 +6,7 @@ This roadmap breaks the prototype into playable milestones. Each milestone ends 
 
 ## Asset Strategy
 
-For **Milestones 0–3**, use **developer art** only.
+For **Milestones 0–4**, use **developer art** only.
 
 Developer art should be functional rather than attractive. Its purpose is to validate mechanics, readability, and game feel before significant time is invested in asset production.
 
@@ -24,7 +24,10 @@ Only enough art should be created to clearly communicate the exploration mechani
 
 Production-quality assets should **not** be created during these milestones.
 
-Beginning with **Milestone 4**, replace developer art incrementally with production-quality assets only after the exploration loop has been proven.
+Beginning with **Milestone 5**, replace developer art incrementally with
+production-quality assets. The project owner explicitly kept Milestone 4 on
+functional developer presentation so discovery and persistence behaviour can
+be evaluated before the asset pass.
 
 ---
 
@@ -248,11 +251,14 @@ edge-connected or incompletely bounded Unknown regions remain Unknown, and a
 wreck never closes a pocket.
 
 Milestone 3.1 passed its repeat playtest and closes the Milestone 3 review gate.
-Milestone 4 is now the active roadmap scope; Milestone 5 remains deferred.
+Milestone 4 is implemented and awaiting its user playtest; Milestone 5 remains
+deferred.
 
 ------------------------------------------------------------------------
 
 # Milestone 4 --- Discoveries and Persistence
+
+Status: **implemented — ready for user playtesting**.
 
 ## Goal
 
@@ -273,6 +279,10 @@ meaningful discoveries.
 Reloading a saved game preserves the routes, wrecks, generation state and
 returned discoveries created by earlier play, while discoveries provide new
 reasons to undertake expeditions.
+
+Implementation note: the build uses deterministic named island discoveries,
+developer chart pins and text rewards. Production discovery and island assets
+are intentionally deferred to Milestone 5.
 
 ------------------------------------------------------------------------
 

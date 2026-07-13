@@ -1,4 +1,5 @@
 import type { GridPoint, ShipwreckState } from "./types";
+import type { DiscoveryRecord } from "../exploration/DiscoverySystem";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
 
@@ -42,6 +43,18 @@ export interface GameEventMap {
     tileX: number;
     tileY: number;
   };
+  discoveryFound: Readonly<DiscoveryRecord>;
+  discoveriesReturned: {
+    expeditionId: number;
+    generation: number;
+    discoveries: readonly Readonly<DiscoveryRecord>[];
+  };
+  discoveriesLost: {
+    expeditionId: number;
+    generation: number;
+    discoveries: readonly Readonly<DiscoveryRecord>[];
+  };
+  gameLoaded: { schemaVersion: number; seed: number };
   expeditionFailed: {
     expeditionId: number;
     generation: number;

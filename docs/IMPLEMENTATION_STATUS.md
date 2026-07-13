@@ -1,6 +1,70 @@
 # Wayfinders implementation status
 
-This file is the continuation point for prototype work. The project is intentionally paused after Milestone 3.1 for the revised review gate in `Wayfinders_Prototype_Milestones.md`.
+This file is the continuation point for prototype work. Milestone 4 is
+implemented and the project is paused for its discovery-and-persistence user
+playtest. Milestones 0–3.1 and their accepted performance/overlay remediation
+must not be redone. The next action is to run `MILESTONE_4_PLAYTEST.md`, record
+the player's findings, and either remediate Milestone 4 or explicitly accept
+it before beginning Milestone 5.
+
+## Milestone 4 — Discoveries and Persistence
+
+Status: **implemented — ready for user playtesting**
+
+- Every generated non-home island receives a stable, seed-derived name and a
+  deterministic discovery type, reward and descriptive reason to investigate.
+  The default catalog includes settlements, resources, anchorages/reef
+  passages and historic-wreck/fishing-ground discoveries.
+- Discovery content uses an independent seeded namespace keyed by the stable
+  generated island ID. It cannot move islands, change terrain, alter collision
+  or consume any terrain-generation random stream.
+- A discovery is created only from the ship's current sight after an expedition
+  has begun. It remains provisional during the voyage, becomes returned only
+  at the exact home dock, and is removed if that expedition wrecks.
+- Runtime player wrecks remain separate from generated historic-wreck
+  discoveries and retain their Milestone 3 lifecycle and renderer.
+- Functional developer chart pins distinguish provisional and returned
+  discoveries and display the generated name/reward. Production assets remain
+  deferred to Milestone 5 by project-owner decision.
+- Discovery-sighted cues remain readable for five seconds. Exact-dock return
+  coalesces route, replenishment and returned-discovery information into one
+  five-second cue, and the presentation owns only one lifecycle cue at a time
+  so messages cannot overlap.
+- Schema-version 1 saves store the seed plus generation-versioned configuration,
+  ship/provision state, expedition/generation counters, a compact run-length
+  encoded knowledge/stamp map, runtime wrecks, pending wreck holds, and both
+  returned and active provisional discoveries.
+- Base terrain and deterministic island descriptors are regenerated from the
+  save key. Current sight, movement systems, forward reach and return paths are
+  rebuilt after load; they are never serialized.
+- IndexedDB provides an atomic rolling autosave plus a separate stable manual
+  checkpoint. Startup hydration of the autosave completes before
+  Phaser begins, continuous sailing is throttled to at most one normal save
+  every 750 ms, lifecycle changes request an immediate serialized save, and
+  page hide performs a best-effort flush.
+- Developer tools and `window.__WAYFINDERS__` expose save, load and clear
+  controls. The canvas dataset exposes provisional/returned counts and storage
+  status for browser verification.
+- Manual load restores the authoritative saved ship coordinates, forces a
+  presentation sync and snaps the smoothed follow camera to that location.
+  The log and load cue report the restored tile explicitly.
+- A malformed current-version save is removed and starts a fresh playable
+  chart. An unsupported future schema or world-generator version is preserved
+  with autosave disabled so newer data is never overwritten. Storage failure
+  leaves the game playable without persistence.
+
+Verification: 119 automated tests across 13 files pass. Fifteen focused
+Milestone 4 tests cover RLE validation, schema/generator rejection, deterministic
+catalog generation, current-sight-only detection, exact-dock commitment,
+wreck loss, full state round trips, derived-state rebuilding, atomic corrupt
+load rejection and pending-wreck restoration at the 3.999/4.000-second edge.
+A real-browser pass confirmed provisional presentation, exact-dock return,
+Supported-route growth, IndexedDB reload, pending-wreck reload, generation-two
+respawn, retained wreck/discovery state and a clean browser console. The test
+save was cleared afterward so the next playtest starts from generation one.
+The latest sequential typecheck/test/build verification completed in 119.3 seconds;
+Vitest reported 16.22 seconds and the production Vite build reported 56.73
+seconds. The existing Phaser bundle-size advisory remains informational.
 
 ## Milestone 0 — Developer Sandbox
 
@@ -85,7 +149,9 @@ Status: complete — stop here for user playtesting
 - Wreck completion then clears the loss-site visibility, respawns a fully supplied ship at the dock and advances the generation exactly once.
 - Successful returns never advance the generation.
 - Supported routes, wreck records and generation state persist through later expeditions and wrecks in the current generated runtime.
-- Regeneration or browser reload resets runtime routes, wrecks and generation; save/load and cross-session persistence remain Milestone 4.
+- At the Milestone 3 boundary, regeneration or browser reload reset runtime
+  inheritance. Milestone 4 persistence, documented above, now supersedes the
+  reload part of that historical limitation; explicit regeneration still resets.
 
 Verification: the full `npm.cmd run check` pipeline passes TypeScript, 66
 automated tests across eight files and the production Vite build; the
@@ -346,9 +412,10 @@ For every candidate build at this gate:
     overlays, then confirm the underlying Unknown/Personal travel cost and
     knowledge state are unchanged and presentation returns after sight moves.
 
-Milestone 3 is complete. The next action is roadmap Milestone 4: generic
-discoveries, save/load and cross-session persistence. Milestone 5 living-world
-work has not been started.
+Milestone 3 is complete and must not be repeated. Roadmap Milestone 4 generic
+discoveries, save/load and cross-session persistence are now implemented as
+recorded at the top of this file. The next action is the Milestone 4 user
+playtest; Milestone 5 living-world and production-asset work has not started.
 
 ## Decisions to review at Milestone 3
 
@@ -374,10 +441,13 @@ work has not been started.
 17. **Exact-dock resolution and replenishment.** Only entering the generated home dock successfully returns an active expedition. It converts matching stamped Personal water to Supported, clears stamps and fractional provision use, restores configured starting bundles and keeps the same generation. Entering the dock without an active expedition also replenishes. If the final bundle is consumed on the docking step, success takes precedence over wreck.
 18. **Dependency advisory.** Runtime dependencies audit clean. Vitest was patched from 3.2.4 to 3.2.7 to remove a development-server advisory before handoff.
 19. **Outward/return asymmetry.** The supplied concept requires the current forward range to cost full bundles and the trail home to cost half. Current sight therefore reveals terrain visually, while broad perpendicular strips centred on navigation tiles the ship has actually left commit passable water to Personal knowledge. The occupied and forward water remains Unknown while advancing, making an outward leg cost twice its Personal retrace without turns pre-charting untouched sea. Visible blocking landmarks are remembered immediately because they cannot discount travel. Stationary developer teleport still reveals its full sight disc for inspection. This intentionally refines the technical document's broader visible-to-Personal rule to preserve its own full-cost-out/half-cost-back requirement.
-20. **Runtime persistence boundary.** Successful routes, wreck records and generation state persist through later voyages and wrecks in the current generated runtime. Regeneration or browser reload resets them. Save/load and cross-session persistence remain Milestone 4 features.
+20. **Historical Milestone 3 persistence boundary.** Successful routes, wreck
+    records and generation state persisted only in the current runtime at that
+    gate. Milestone 4 now preserves them across reload; explicit regeneration
+    remains a reset.
 21. **Generation model.** Expedition ID and generation are separate. Every resolved expedition advances its expedition ID, but only wreck advances the generation. A successful return replenishes the current navigator and allows the same generation to sail again.
-22. **Wreck discovery boundary.** A runtime wreck is an immutable marker hidden by Unknown fog until a later generation sees it. Once discovered, the marker remains identified for later runtime voyages even when it leaves current sight or a later expedition fails; discovering it does not restore failed knowledge. Generic discovery types, returned-discovery progression and cross-session discovery persistence remain Milestone 4.
-23. **Island scope boundary.** The eight default non-home islands are Milestone 3 base terrain and navigation content, not generic discoveries. High Island, Low Cay, Atoll and Rocky Skerry kinds and their size bands affect descriptor shape, terrain composition, collision, sight blocking and developer-art presentation only. Names, rewards, settlements, resources and `DiscoveryRecord` state remain Milestone 4.
+22. **Wreck discovery boundary.** A runtime wreck is an immutable marker hidden by Unknown fog until a later generation sees it. Once discovered, the marker remains identified for later runtime voyages even when it leaves current sight or a later expedition fails; discovering it does not restore failed knowledge. Milestone 4 generic discoveries remain a separate record and renderer.
+23. **Island scope boundary.** The eight default non-home islands remain base terrain and navigation content, not mutable generic discovery records. High Island, Low Cay, Atoll and Rocky Skerry kinds and their size bands affect descriptor shape, terrain composition, collision, sight blocking and developer-art presentation only. Milestone 4 attaches names, rewards, settlements and resources externally by stable island ID.
 24. **Deterministic island identity.** A seed and configuration produce stable descriptor IDs, kinds, sizes, centres, radii, rotations, shape seeds and bounds. Profile, placement, shape and terrain sampling use separate deterministic namespaces, allowing later discovery systems to use another namespace without moving or repainting the reviewed island world.
 25. **Placement and navigability.** The default generator places eight islands using configured home clearance, six-tile world margins, eleven-tile minimum channels and bounded placement attempts with deterministic fallback. A two-tile half-width eastbound corridor remains completely clear from the home dock; atolls receive a cardinally connected lagoon passage; and a final flood check requires passable water from the dock to reach all four world edges and every atoll centre.
 26. **Island presentation and concealment.** Each kind uses a distinct generated developer-art palette and minimal terrain marks. Unknown interiors remain fully opaque so island silhouettes cannot leak before reveal. This is functional exploration content, not production island art or Milestone 4 environmental polish.
@@ -420,3 +490,39 @@ work has not been started.
     only. The underlying tile remains Unknown or Personal, route calculations
     still cross visible water and movement charges its actual knowledge cost.
     When sight moves away, Personal-grey and any applicable route risk return.
+34. **Discovery identity boundary.** One generic discovery record is attached
+    to each stable non-home island ID. Names, types, rewards, settlement/resource
+    metadata and descriptive text use a separate seeded namespace, so content
+    iteration cannot perturb reviewed island placement, terrain or navigation.
+35. **Discovery commitment boundary.** Only the final current-sight set can
+    create a record; crossed-but-no-longer-visible movement observations cannot.
+    The record is provisional and expedition-owned until exact-dock success.
+    Remote Supported water does not commit it, while wreck removes it with the
+    same failed expedition knowledge. Returned records survive later failures.
+36. **Version-one save boundary.** Saves contain authoritative mutable state
+    plus a seed and generation configuration. They do not contain base terrain,
+    generated island descriptors, current visibility, risk masks or pathfinding
+    results. Knowledge and expedition stamps use canonical non-Unknown runs;
+    deterministic base content is regenerated and derived systems are rebuilt.
+37. **Browser recovery policy.** IndexedDB writes each autosave/checkpoint key
+    atomically. Startup hydrates the rolling autosave record.
+    Invalid current-version state is discarded in favour of a fresh playable
+    world; an unsupported future schema/generator is preserved with autosave
+    off. This distinguishes corrupt data recovery from forward compatibility
+    and avoids overwriting data created by a newer build.
+38. **Milestone 4 presentation scope.** Discovery pins, labels and rewards use
+    functional developer art. The project owner explicitly deferred proper
+    assets to Milestone 5, overriding the roadmap's earlier suggestion to start
+    production replacement during Milestone 4.
+39. **Lifecycle-cue arbitration.** Only one large lifecycle cue may exist at a
+    time. Discovery sightings use a five-second hold. Exact-dock success and
+    returned-discovery events are coalesced in one microtask into a single
+    five-second message, preventing simultaneous text at the same screen
+    position while preserving the detailed developer log.
+40. **Autosave/checkpoint separation.** Page reload hydrates the rolling
+    autosave, while **Save checkpoint** and **Load checkpoint** use a separate
+    stable IndexedDB record. Loading restores exact ship world/tile coordinates,
+    rebuilds derived state, snaps the smoothed camera to the restored ship and
+    then makes that checkpoint the new autosave baseline. This prevents
+    continuous autosave from silently replacing the position a player expects
+    the Load button to restore.

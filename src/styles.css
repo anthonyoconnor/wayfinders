@@ -425,6 +425,13 @@ a:focus-visible {
   padding: 0.25rem 0.4rem;
 }
 
+.sandbox-tools output {
+  display: block;
+  color: var(--shell-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .tool-row {
   display: flex;
   flex-wrap: wrap;

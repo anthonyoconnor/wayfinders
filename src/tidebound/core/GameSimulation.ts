@@ -4,11 +4,24 @@ import {
   type PrototypeConfig,
 } from "../config/prototypeConfig";
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
+import {
+  DiscoverySystem,
+  type DiscoveryDefinition,
+  type DiscoveryRecord,
+} from "../exploration/DiscoverySystem";
 import { KnowledgeSystem } from "../exploration/KnowledgeSystem";
 import { ProvisionSystem, knowledgeTravelCost } from "../exploration/ProvisionSystem";
 import { ReturnPathSystem, type ReturnPathResult } from "../exploration/ReturnPathSystem";
 import { VisibilitySystem } from "../exploration/VisibilitySystem";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
+import {
+  applyGenerationConfig,
+  captureGenerationConfig,
+  decodeKnowledgeRuns,
+  encodeKnowledgeRuns,
+  parseSaveGame,
+  type SaveGameV1,
+} from "../persistence/SaveGame";
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import { WorldGenerator } from "../world/WorldGenerator";
 import type { WorldGrid } from "../world/WorldGrid";
@@ -64,6 +77,12 @@ export interface SimulationSnapshot {
     pendingWreckId: number | null;
   };
   wrecks: readonly Readonly<ShipwreckState>[];
+  discoveries: {
+    available: number;
+    provisional: number;
+    returned: number;
+    records: readonly Readonly<DiscoveryRecord>[];
+  };
   debug: Readonly<DebugVisibilityState>;
 }
 
@@ -81,6 +100,14 @@ interface PendingRespawnState {
   forgottenTiles: number;
   wreck: ShipwreckState;
   remainingSeconds: number;
+}
+
+/** A structurally valid save conflicts with its regenerated authoritative world. */
+export class SaveRestoreError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SaveRestoreError";
+  }
 }
 
 /**
@@ -111,6 +138,7 @@ export class GameSimulation {
   private provisions!: ProvisionSystem;
   private forwardRanges!: ForwardRangeSystem;
   private returnPathing!: ReturnPathSystem;
+  private discoverySystem!: DiscoverySystem;
   private readonly generator: WorldGenerator;
   private expeditionId = 1;
   private activeExpedition = false;
@@ -151,6 +179,22 @@ export class GameSimulation {
 
   get wrecks(): readonly Readonly<ShipwreckState>[] {
     return this.shipwrecks;
+  }
+
+  get discoveryDefinitions(): readonly Readonly<DiscoveryDefinition>[] {
+    return this.discoverySystem.definitions;
+  }
+
+  get provisionalDiscoveries(): readonly Readonly<DiscoveryRecord>[] {
+    return this.discoverySystem.provisional;
+  }
+
+  get returnedDiscoveries(): readonly Readonly<DiscoveryRecord>[] {
+    return this.discoverySystem.returned;
+  }
+
+  get discoveries(): readonly Readonly<DiscoveryRecord>[] {
+    return this.discoverySystem.allRecords;
   }
 
   get wreckPresentationActive(): boolean {
@@ -223,6 +267,7 @@ export class GameSimulation {
       const visibility = this.visibility.updateForMovement(previousTile, currentTile);
       const knowledge = this.knowledge.applyTrailingVisibility(visibility, this.expeditionId);
       knowledgeChanged += knowledge.changedCount;
+      this.observeDiscoveries();
       this.discoverVisibleWrecks();
       this.events.emit("shipEnteredTile", currentTile);
 
@@ -275,6 +320,11 @@ export class GameSimulation {
     this.provisions = new ProvisionSystem(this.world, this.config);
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
+    this.discoverySystem = new DiscoverySystem(
+      this.world,
+      this.generated.seed,
+      this.generated.islands,
+    );
     this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
     this.lastMovement = NO_MOVEMENT;
@@ -292,6 +342,7 @@ export class GameSimulation {
     this.movement.teleport(this.ship, tile);
     const visibility = this.visibility.updateAt(tile);
     let knowledgeChanged = this.knowledge.applyVisibility(visibility, this.expeditionId).changedCount;
+    this.observeDiscoveries();
     this.discoverVisibleWrecks();
     this.lastMovement = NO_MOVEMENT;
     this.events.emit("shipTeleported", tile);
@@ -311,6 +362,7 @@ export class GameSimulation {
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
     const visibility = this.visibility.updateAt(tile);
     const knowledge = this.knowledge.applyVisibility(visibility, this.expeditionId);
+    this.observeDiscoveries();
     this.discoverVisibleWrecks();
     this.recalculateRiskOverlays();
     this.revision++;
@@ -359,6 +411,129 @@ export class GameSimulation {
     this.revision++;
   }
 
+  createSave(): SaveGameV1<DiscoveryRecord> {
+    return {
+      schemaVersion: 1,
+      savedAt: Date.now(),
+      world: {
+        seed: this.generated.seed,
+        generatorVersion: 1,
+        generationConfig: captureGenerationConfig(this.config),
+      },
+      generation: this.currentGeneration,
+      expedition: {
+        id: this.expeditionId,
+        active: this.activeExpedition,
+        successfulReturns: this.returnCount,
+        failedExpeditions: this.failureCount,
+        pendingRespawn: this.pendingRespawn
+          ? {
+              expeditionId: this.pendingRespawn.expeditionId,
+              generation: this.pendingRespawn.generation,
+              forgottenTiles: this.pendingRespawn.forgottenTiles,
+              wreckId: this.pendingRespawn.wreck.id,
+              remainingSeconds: this.pendingRespawn.remainingSeconds,
+            }
+          : null,
+      },
+      ship: { ...this.ship },
+      knowledge: {
+        encoding: "non-unknown-runs-v1",
+        runs: encodeKnowledgeRuns(this.world.tileCount, (index) => ({
+          state: this.world.getKnowledgeAtIndex(index),
+          expeditionStamp: this.world.getExpeditionStampAtIndex(index),
+        })),
+      },
+      wrecks: this.shipwrecks.map((wreck) => ({ ...wreck })),
+      discoveries: {
+        provisional: this.provisionalDiscoveries.map((discovery) => ({ ...discovery })),
+        returned: this.returnedDiscoveries.map((discovery) => ({ ...discovery })),
+      },
+      terrainPatches: [],
+    };
+  }
+
+  /**
+   * Restores authoritative state only. Base terrain and discovery definitions
+   * are regenerated, while sight, movement caches and risk paths are rebuilt.
+   */
+  restoreSave(value: unknown): void {
+    const parsed = parseSaveGame(value) as SaveGameV1<DiscoveryRecord>;
+    const currentGenerationConfig = captureGenerationConfig(this.config);
+    const savedGenerationConfig = captureGenerationConfig(applyGenerationConfig(
+      parsed.world.generationConfig,
+      parsed.world.seed,
+    ));
+    if (JSON.stringify(savedGenerationConfig) !== JSON.stringify(currentGenerationConfig)) {
+      throw new SaveRestoreError("Saved world generation settings do not match this simulation configuration");
+    }
+
+    const generated = this.generator.generate(parsed.world.seed);
+    const decoded = decodeKnowledgeRuns(generated.grid.tileCount, parsed.knowledge.runs);
+    for (let index = 0; index < generated.grid.tileCount; index++) {
+      generated.grid.setKnowledgeAtIndex(index, KnowledgeState.Unknown, 0);
+    }
+    for (let index = 0; index < generated.grid.tileCount; index++) {
+      const knowledge = decoded.knowledge[index] as KnowledgeState;
+      if (knowledge === KnowledgeState.Unknown) continue;
+      generated.grid.setKnowledgeAtIndex(index, knowledge, decoded.expeditionStamps[index]);
+    }
+
+    if (generated.grid.isMovementBlocked(parsed.ship.currentTileX, parsed.ship.currentTileY)) {
+      throw new SaveRestoreError("Saved ship tile is blocked in the regenerated world");
+    }
+    const restoredDiscoveries = new DiscoverySystem(
+      generated.grid,
+      generated.seed,
+      generated.islands,
+    );
+    try {
+      restoredDiscoveries.restore(parsed.discoveries.provisional, parsed.discoveries.returned);
+    } catch (error) {
+      throw new SaveRestoreError(error instanceof Error ? error.message : "Saved discoveries are invalid");
+    }
+
+    const restoredWrecks = parsed.wrecks.map((wreck) => ({ ...wreck }));
+    let pendingRespawn: PendingRespawnState | undefined;
+    if (parsed.expedition.pendingRespawn) {
+      const pending = parsed.expedition.pendingRespawn;
+      const wreck = restoredWrecks.find(({ id }) => id === pending.wreckId);
+      if (!wreck) throw new SaveRestoreError(`Pending wreck ${pending.wreckId} is missing`);
+      pendingRespawn = {
+        expeditionId: pending.expeditionId,
+        generation: pending.generation,
+        forgottenTiles: pending.forgottenTiles,
+        wreck,
+        remainingSeconds: pending.remainingSeconds,
+      };
+    }
+
+    this.config.world.seed = parsed.world.seed;
+    this.generated = generated;
+    this.expeditionId = parsed.expedition.id;
+    this.activeExpedition = parsed.expedition.active;
+    this.currentGeneration = parsed.generation;
+    this.returnCount = parsed.expedition.successfulReturns;
+    this.failureCount = parsed.expedition.failedExpeditions;
+    this.shipwrecks.length = 0;
+    this.shipwrecks.push(...restoredWrecks);
+    this.pendingRespawn = pendingRespawn;
+    this.ship = { ...parsed.ship };
+    this.movement = new MovementSystem(this.world, this.config);
+    this.visibility = new VisibilitySystem(this.world, this.config);
+    this.knowledge = new KnowledgeSystem(this.world, this.config);
+    this.provisions = new ProvisionSystem(this.world, this.config);
+    this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
+    this.returnPathing = new ReturnPathSystem(this.world, this.config);
+    this.discoverySystem = restoredDiscoveries;
+    this.visibility.updateAt({ x: this.ship.currentTileX, y: this.ship.currentTileY });
+    this.lastMovement = NO_MOVEMENT;
+    this.recalculateRiskOverlays();
+    this.lifecycleResolutionRevision++;
+    this.revision++;
+    this.events.emit("gameLoaded", { schemaVersion: parsed.schemaVersion, seed: parsed.world.seed });
+  }
+
   snapshot(): SimulationSnapshot {
     const knowledge = {
       supported: this.world.getKnowledgeCount(KnowledgeState.Supported),
@@ -402,6 +577,12 @@ export class GameSimulation {
         pendingWreckId: this.pendingWreckId,
       },
       wrecks: this.shipwrecks.map((wreck) => ({ ...wreck })),
+      discoveries: {
+        available: this.discoveryDefinitions.length,
+        provisional: this.provisionalDiscoveries.length,
+        returned: this.returnedDiscoveries.length,
+        records: this.discoveries.map((discovery) => ({ ...discovery })),
+      },
       debug: { ...this.debug },
     };
   }
@@ -431,6 +612,7 @@ export class GameSimulation {
     const expeditionId = this.expeditionId;
     const generation = this.currentGeneration;
     const committed = this.knowledge.commitExpedition(expeditionId);
+    const returnedDiscoveries = this.discoverySystem.commitExpedition(expeditionId);
     this.activeExpedition = false;
     this.returnCount++;
     this.advanceExpeditionId();
@@ -440,6 +622,13 @@ export class GameSimulation {
       supportedTileCount: committed.changedCount - (committed.closedUnknownCount ?? 0),
       closedUnknownTileCount: committed.closedUnknownCount ?? 0,
     });
+    if (returnedDiscoveries.length > 0) {
+      this.events.emit("discoveriesReturned", {
+        expeditionId,
+        generation,
+        discoveries: returnedDiscoveries,
+      });
+    }
     this.replenishCurrentShip("return", true);
     this.lifecycleResolutionRevision++;
     return committed.changedCount;
@@ -462,6 +651,7 @@ export class GameSimulation {
     };
     this.shipwrecks.push(wreck);
     const reverted = this.knowledge.revertExpedition(expeditionId);
+    const lostDiscoveries = this.discoverySystem.revertExpedition(expeditionId);
     const previousProvisions = lostShip.provisions;
     lostShip.provisions = 0;
     lostShip.provisionAccumulator = 0;
@@ -489,6 +679,13 @@ export class GameSimulation {
       worldX: wreck.worldX,
       worldY: wreck.worldY,
     });
+    if (lostDiscoveries.length > 0) {
+      this.events.emit("discoveriesLost", {
+        expeditionId,
+        generation,
+        discoveries: lostDiscoveries,
+      });
+    }
     return reverted.changedCount;
   }
 
@@ -599,6 +796,15 @@ export class GameSimulation {
         tileY: wreck.tileY,
       });
     }
+  }
+
+  private observeDiscoveries(): void {
+    if (!this.activeExpedition || this.pendingRespawn) return;
+    const observation = this.discoverySystem.observeCurrentSight(
+      this.expeditionId,
+      this.currentGeneration,
+    );
+    for (const discovery of observation.found) this.events.emit("discoveryFound", discovery);
   }
 
   private recalculateRiskOverlays(): void {

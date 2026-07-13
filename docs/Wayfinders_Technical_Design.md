@@ -476,9 +476,10 @@ interface GeneratedIsland {
 
 The home island uses ID `0`; default non-home descriptors use stable IDs
 `1` through `8`. `islandId` links painted terrain back to its descriptor.
-Milestone 3 island descriptors contain no names, rewards, settlements,
-resources or `DiscoveryRecord` state. Their tile `resourceId` values remain
-unset; those systems remain Milestone 4 work.
+Generated island descriptors still contain no names, rewards, settlements,
+resources or `DiscoveryRecord` state. Milestone 4 attaches that content in a
+separate deterministic catalog keyed by `islandId`; it does not repaint base
+tile resource IDs.
 
 ---
 
@@ -875,9 +876,9 @@ marker's `discovered` flag but does not restore the failed expedition's
 Personal knowledge. The discovered flag remains set through later runtime
 voyages and wrecks even when the marker leaves current sight.
 
-Supported routes and `WreckRecord` objects persist across later expeditions and
-wrecks in the current generated runtime. Regenerating the world or reloading the
-browser resets them in Milestone 3. Milestone 4 adds cross-session persistence.
+Supported routes and `ShipwreckState` objects persist across later expeditions
+and wrecks in the current generated runtime. Explicit regeneration resets them.
+From Milestone 4 onward, browser reload restores them from the hydrated save.
 
 ---
 
@@ -1224,22 +1225,24 @@ palette and minimal terrain decoration:
 - Atoll: reef ring and shallow lagoon with a deterministic navigable passage;
 - Rocky Skerry: rock-dominant silhouette with sparse land and reef fringe.
 
-These palettes and marks communicate terrain composition only. Do not add
-production sprites, names, settlements, rewards, resources or generic
-discovery presentation before Milestone 4.
+These palettes and marks communicate terrain composition only. Milestone 4
+adds deterministic names and functional chart pins without replacing these
+developer-art terrain layers. Production presentation is deferred to
+Milestone 5 by project-owner decision.
 
 ---
 
 ## 25. Discoveries
 
-Generic discoveries are a Milestone 4 feature. The runtime wreck markers
-created by Milestone 3 use `WreckRecord` and remain separate from this
+Generic discoveries are implemented in Milestone 4. The runtime wreck markers
+created by Milestone 3 use `ShipwreckState` and remain separate from this
 provisional-discovery lifecycle.
 
-Likewise, Milestone 3 `GeneratedIsland` descriptors are deterministic base
-terrain, not `DiscoveryRecord` objects. They have no names, rewards,
-settlements or resource records. Milestone 4 may attach returned discovery
-records to those stable island IDs without changing base generation.
+Likewise, `GeneratedIsland` descriptors remain deterministic base terrain,
+not `DiscoveryRecord` objects. `DiscoverySystem` derives one separate catalog
+definition per non-home island from the world seed, stable island ID and an
+independent discovery namespace. Names and content therefore cannot perturb
+island placement, shape or terrain.
 
 ```ts
 export const enum DiscoveryType {
@@ -1261,17 +1264,33 @@ Store it as provisional during the expedition.
 interface DiscoveryRecord {
   id: number;
   type: DiscoveryType;
+  islandId: number;
+  name: string;
+  rewardId: string;
+  rewardLabel: string;
+  detail: string;
   tileX: number;
   tileY: number;
   returned: boolean;
+  expeditionId: number;
+  generation: number;
+  settlementId?: string;
+  resourceId?: number;
 }
 ```
 
-Only successful return at the exact home dock marks it returned and allows
-later world effects.
+Detection reads only the final current-sight set, not the broader union of
+tiles observed at crossed movement centres. A visible generated-island tile
+creates the record only while an expedition is active. Repeated sight cannot
+duplicate it.
 
-For Milestone 4, discoveries need only a visible world marker,
-successful-return commitment and cross-session persistence.
+Only successful return at the exact home dock marks it returned and allows
+later world effects. A wreck removes provisional records owned by that failed
+expedition while earlier returned records remain. Active provisional records
+are saved so a mid-expedition reload cannot erase a discovery already seen.
+
+Milestone 4 uses a developer chart pin and name/reward label. Returned and
+provisional states are visually distinct; production art remains Milestone 5.
 
 ---
 
@@ -1293,21 +1312,35 @@ NPC traffic is cosmetic in the first implementation.
 
 ## 27. Save Format
 
-Cross-session persistence is a Milestone 4 feature. Before it is implemented,
-browser reload and world regeneration intentionally reset Supported routes,
-wreck records and generation state to the generated seed defaults.
+Cross-session persistence is implemented in Milestone 4 through IndexedDB.
+Explicit world regeneration remains a deliberate fresh-world reset, while a
+browser reload hydrates the saved state before Phaser starts.
 
 ```ts
 interface SaveGame {
   schemaVersion: 1;
-  worldSeed: number;
-  currentExpeditionId: number;
+  savedAt: number;
+  world: {
+    seed: number;
+    generatorVersion: 1;
+    generationConfig: GenerationConfigV1;
+  };
   generation: number;
-  expedition: ExpeditionState;
-  ship: ShipSaveData;
-  modifiedChunks: ChunkSaveData[];
-  wrecks: WreckRecord[];
-  returnedDiscoveries: DiscoveryRecord[];
+  expedition: {
+    id: number;
+    active: boolean;
+    successfulReturns: number;
+    failedExpeditions: number;
+    pendingRespawn: PendingRespawnSaveState | null;
+  };
+  ship: ShipState;
+  knowledge: { encoding: "non-unknown-runs-v1"; runs: KnowledgeRun[] };
+  wrecks: ShipwreckState[];
+  discoveries: {
+    provisional: DiscoveryRecord[];
+    returned: DiscoveryRecord[];
+  };
+  terrainPatches: [];
 }
 ```
 
@@ -1322,8 +1355,9 @@ Save:
 - generation and current expedition state;
 - runtime-created wreck records and their discovered state;
 - returned discoveries;
-- terrain modifications;
-- persistent objects.
+- active provisional discoveries;
+- reserved terrain modifications and persistent objects when later schemas
+  introduce runtime terrain edits.
 
 Do not save derived overlays or pathfinding output. Rebuild them on load.
 
@@ -1332,7 +1366,15 @@ terrain. Reconstruct them from the saved world seed and generation-versioned
 configuration, then apply only saved terrain modifications and Milestone 4
 discovery records keyed by stable island ID.
 
-Use browser storage through the existing persistence layer. Use IndexedDB when no existing storage layer is present.
+`IndexedDbSaveStore` writes each structured-clone key atomically. The
+`autosave` key is rolling reload state; the `checkpoint` key changes only via
+the developer **Save checkpoint** control and is restored by **Load checkpoint**.
+Loading a checkpoint immediately makes it the new autosave baseline. Normal
+dirty autosave state is saved on a 750 ms throttle, lifecycle events request an
+immediate serialized write, and page hide requests a best-effort flush.
+Malformed current-schema state is cleared and recovers to a fresh world.
+Unsupported future schema/generator versions are preserved with autosave
+disabled. Storage failure never prevents unsaved play.
 
 ---
 
@@ -1523,7 +1565,8 @@ Required unit tests:
 - a wreck respawns a fully supplied ship at the dock and advances the generation exactly once;
 - successful return never advances the generation;
 - zero provisions in Supported water do not cause a wreck;
-- runtime routes and wrecks survive later expeditions but reset on regeneration or browser reload in Milestone 3;
+- runtime routes and wrecks survive later expeditions, reset on explicit
+  regeneration, and survive browser reload from Milestone 4 onward;
 - browser automation receives lifecycle events in the documented order.
 
 ### Milestone 4 persistence
@@ -1723,10 +1766,14 @@ discoverable marker and advance a fully supplied next generation.
 
 ### Milestone 7 — Discoveries and Cross-Session Persistence (roadmap Milestone 4)
 
-- Add generic provisional discoveries.
-- Commit discoveries only on exact-dock return.
-- Save and load Supported routes, wrecks, generation state and returned discoveries.
-- Restore the same inherited world after browser reload.
+Status: complete in the current implementation; awaiting user playtest.
+
+- Generic provisional discoveries are generated from stable island IDs.
+- Discoveries commit only on exact-dock return and are lost on wreck.
+- Saves preserve Supported routes, active Personal stamps, wrecks, generation
+  state, pending wreck holds, provisional and returned discoveries.
+- Browser reload restores the inherited world before Phaser starts and
+  rebuilds all derived sight/range/path state.
 
 Completion condition: the runtime inheritance state proven in Milestone 6
 survives across browser sessions.
@@ -1745,8 +1792,8 @@ Completion condition: the full exploration loop can be played repeatedly for eva
 
 ## 35. Prototype Review-Gate Acceptance Criteria
 
-The roadmap Milestone 3 playtest build is ready for its explicit review gate
-when all of the following are true:
+The following list records the historical roadmap Milestone 3 review gate. It
+is complete and must not be reapplied as Milestone 4 work:
 
 1. The browser game loads through the existing Phaser project.
 2. The ship is visually smooth but logically occupies one navigation tile.
@@ -1796,7 +1843,8 @@ when all of the following are true:
 
 Milestone 4 is complete when save/load preserves Supported routes, wreck
 records, generation state, discovered wreck state and returned generic
-discoveries across browser sessions.
+discoveries across browser sessions. That engineering condition is implemented;
+the remaining gate is the Milestone 4 user playtest.
 
 ---
 

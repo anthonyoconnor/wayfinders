@@ -1,5 +1,19 @@
 import Phaser from "phaser";
-import { TideboundScene } from "./tidebound/rendering/TideboundScene";
+import {
+  patchPrototypeConfig,
+  prototypeConfig,
+  resetPrototypeConfig,
+} from "./tidebound/config/prototypeConfig";
+import { GameSimulation, SaveRestoreError } from "./tidebound/core/GameSimulation";
+import { IndexedDbSaveStore } from "./tidebound/persistence/IndexedDbSaveStore";
+import {
+  applyGenerationConfig,
+  parseSaveGame,
+  SaveValidationError,
+  UnsupportedSaveSchemaVersionError,
+  UnsupportedWorldGeneratorVersionError,
+} from "./tidebound/persistence/SaveGame";
+import { TideboundScene, type PersistenceBootState } from "./tidebound/rendering/TideboundScene";
 import "./styles.css";
 
 type ShellState = "starting" | "ready" | "error";
@@ -110,7 +124,78 @@ document.documentElement.dataset.appReady = "true";
 export let wayfindersGame: Phaser.Game | undefined;
 
 try {
-  wayfindersGame = createWayfindersGame([TideboundScene]);
+  const saveStore = new IndexedDbSaveStore<unknown>();
+  const checkpointStore = new IndexedDbSaveStore<unknown>({ saveKey: "checkpoint" });
+  let simulation: GameSimulation;
+  let persistenceBoot: PersistenceBootState;
+  let storedValue: unknown;
+
+  try {
+    storedValue = await saveStore.load();
+    if (storedValue === undefined) {
+      simulation = new GameSimulation();
+      persistenceBoot = {
+        status: "new",
+        message: "No inherited browser save was found; a new chart has begun.",
+        autosave: true,
+      };
+    } else {
+      const save = parseSaveGame(storedValue);
+      const restoredConfig = applyGenerationConfig(save.world.generationConfig, save.world.seed);
+      patchPrototypeConfig(restoredConfig);
+      simulation = new GameSimulation(prototypeConfig);
+      simulation.restoreSave(save);
+      persistenceBoot = {
+        status: "loaded",
+        message: `Loaded generation ${simulation.generation} and its inherited chart from browser storage.`,
+        autosave: true,
+      };
+    }
+  } catch (error) {
+    resetPrototypeConfig();
+    simulation = new GameSimulation();
+    if (
+      error instanceof UnsupportedSaveSchemaVersionError
+      || error instanceof UnsupportedWorldGeneratorVersionError
+    ) {
+      persistenceBoot = {
+        status: "incompatible",
+        message: `${error.message}. The stored data was preserved and autosave is disabled.`,
+        autosave: false,
+      };
+    } else if (
+      storedValue !== undefined
+      && (error instanceof SaveValidationError || error instanceof SaveRestoreError)
+    ) {
+      let cleared = true;
+      try {
+        await saveStore.clear();
+      } catch {
+        cleared = false;
+      }
+      persistenceBoot = {
+        status: "recovered",
+        message: `The browser save was invalid; a fresh chart was opened${cleared ? " and the corrupt save was removed" : ""}.`,
+        autosave: cleared,
+      };
+    } else if (storedValue !== undefined) {
+      persistenceBoot = {
+        status: "incompatible",
+        message: `The browser save could not be loaded safely and was preserved. Autosave is disabled: ${error instanceof Error ? error.message : "unexpected load error"}.`,
+        autosave: false,
+      };
+    } else {
+      persistenceBoot = {
+        status: "unavailable",
+        message: `Browser storage is unavailable: ${error instanceof Error ? error.message : "unknown storage error"}.`,
+        autosave: false,
+      };
+    }
+  }
+
+  wayfindersGame = createWayfindersGame([
+    new TideboundScene(simulation, saveStore, checkpointStore, persistenceBoot),
+  ]);
   window.dispatchEvent(
     new CustomEvent("wayfinders:shell-ready", {
       detail: { shell: wayfindersShell, game: wayfindersGame },
