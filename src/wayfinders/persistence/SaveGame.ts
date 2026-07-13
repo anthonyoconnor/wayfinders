@@ -13,15 +13,15 @@ import {
   type FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
 import {
-  NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS,
   NavigatorLineageValidationError,
+  parseNavigatorSuccessionKey,
   parseNavigatorLineageSnapshot,
-  type NavigatorLineageSnapshotV2,
+  type NavigatorLineageSnapshotV3,
 } from "../lineage/NavigatorLineageSystem";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
-export const SAVE_SCHEMA_VERSION = 6 as const;
+export const SAVE_SCHEMA_VERSION = 7 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -86,8 +86,6 @@ export interface SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySave
   expedition: {
     id: number;
     active: boolean;
-    successfulReturns: number;
-    failedExpeditions: number;
     pendingRespawn: PendingRespawnSaveState | null;
   };
   ship: ShipState;
@@ -104,7 +102,7 @@ export interface SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySave
     provisional: FishingShoalProvisionalRecordV1[];
     returned: FishingShoalReturnedRecordV1[];
   };
-  navigatorLineage: NavigatorLineageSnapshotV2;
+  navigatorLineage: NavigatorLineageSnapshotV3;
   terrainPatches: [];
 }
 
@@ -369,8 +367,6 @@ export function parseSaveGame(value: unknown): SaveGame {
   const expedition = record(root.expedition, "save.expedition");
   const expeditionId = unsigned32(expedition.id, "save.expedition.id", false);
   const expeditionActive = boolean(expedition.active, "save.expedition.active");
-  nonNegativeSafeInteger(expedition.successfulReturns, "save.expedition.successfulReturns");
-  nonNegativeSafeInteger(expedition.failedExpeditions, "save.expedition.failedExpeditions");
   const pendingRespawn = validatePendingRespawn(expedition.pendingRespawn, expeditionId, generation, expeditionActive);
 
   const ship = validateShip(root.ship, generationConfig);
@@ -437,7 +433,7 @@ export function parseSaveGame(value: unknown): SaveGame {
       );
     }
   }
-  let navigatorLineage: NavigatorLineageSnapshotV2;
+  let navigatorLineage: NavigatorLineageSnapshotV3;
   try {
     navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
   } catch (error) {
@@ -449,6 +445,7 @@ export function parseSaveGame(value: unknown): SaveGame {
   if (navigatorLineage.navigators.at(-1)?.generation !== generation) {
     fail("latest navigator generation must match the saved generation", "save.navigatorLineage.navigators");
   }
+  validateLineageWrecks(navigatorLineage, wrecks);
   const pendingSuccession = navigatorLineage.pendingSuccession;
   if (pendingRespawn === null && pendingSuccession !== null) {
     fail("cannot be pending without a wreck hold", "save.navigatorLineage.pendingSuccession");
@@ -462,24 +459,6 @@ export function parseSaveGame(value: unknown): SaveGame {
       || pendingSuccession.fromGeneration !== generation
     ) {
       fail("must match the pending wreck hold", "save.navigatorLineage.pendingSuccession");
-    }
-  }
-  const navigator = navigatorLineage.navigators[navigatorLineage.navigators.length - 1];
-  const unresolvedRetirementChoice = navigator.state === "active"
-    && navigator.ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
-    && !navigator.finalVoyageDeclared;
-  if (unresolvedRetirementChoice) {
-    if (expeditionActive) {
-      fail("must be inactive while a retirement choice is unresolved", "save.expedition.active");
-    }
-    const dockX = Math.floor(generationConfig.world.width / 2)
-      + generationConfig.world.homeIslandRadius + 1;
-    const dockY = Math.floor(generationConfig.world.height / 2);
-    if (
-      ship.currentTileX !== dockX
-      || ship.currentTileY !== dockY
-    ) {
-      fail("must be at the exact home dock while a retirement choice is unresolved", "save.ship");
     }
   }
   return value as SaveGame;
@@ -673,6 +652,58 @@ function validateWrecks(value: unknown, config: GenerationConfigV1): ShipwreckSt
     assertWorldPointMatchesTile(result.worldX, result.worldY, result.tileX, result.tileY, config, path);
     return result;
   });
+}
+
+function validateLineageWrecks(
+  lineage: NavigatorLineageSnapshotV3,
+  wrecks: readonly ShipwreckState[],
+): void {
+  const lostNavigatorByWreckId = new Map<number, { generation: number; index: number }>();
+  for (let index = 0; index < lineage.navigators.length; index++) {
+    const navigator = lineage.navigators[index];
+    if (navigator.state !== "lost") continue;
+    const parsedKey = parseNavigatorSuccessionKey(navigator.endedBySuccessionKey);
+    if (!parsedKey || parsedKey.reason !== "wreck") {
+      fail(
+        "must contain a current wreck succession key",
+        `save.navigatorLineage.navigators[${index}].endedBySuccessionKey`,
+      );
+    }
+    if (lostNavigatorByWreckId.has(parsedKey.resolutionId)) {
+      fail(
+        "must reference a unique wreck",
+        `save.navigatorLineage.navigators[${index}].endedBySuccessionKey`,
+      );
+    }
+    lostNavigatorByWreckId.set(parsedKey.resolutionId, {
+      generation: navigator.generation,
+      index,
+    });
+  }
+
+  const wreckIds = new Set(wrecks.map(({ id }) => id));
+  for (const [wreckId, lostNavigator] of lostNavigatorByWreckId) {
+    if (!wreckIds.has(wreckId)) {
+      fail(
+        `does not reference saved wreck ${wreckId}`,
+        `save.navigatorLineage.navigators[${lostNavigator.index}].endedBySuccessionKey`,
+      );
+    }
+  }
+
+  for (let index = 0; index < wrecks.length; index++) {
+    const wreck = wrecks[index];
+    const lostNavigator = lostNavigatorByWreckId.get(wreck.id);
+    if (!lostNavigator) {
+      fail("must match exactly one lost navigator", `save.wrecks[${index}].id`);
+    }
+    if (lostNavigator.generation !== wreck.generation) {
+      fail(
+        "must match its lost navigator generation",
+        `save.wrecks[${index}].generation`,
+      );
+    }
+  }
 }
 
 function validatePendingWreck(

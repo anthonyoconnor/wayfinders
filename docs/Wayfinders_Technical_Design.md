@@ -287,12 +287,16 @@ Only the generated home return dock resolves success:
 1. Teleport the ship to the exact dock centre.
 2. Commit Personal tiles carrying the active expedition stamp to Supported.
 3. Run one bounded knowledge-only cleanup for tiny enclosed Unknown pockets.
-4. Commit provisional discoveries owned by that expedition.
+4. Commit provisional discoveries and fishing records owned by that expedition.
 5. Replenish provisions and clear fractional use.
-6. Advance the expedition ID while keeping the same generation.
+6. Record one completed voyage for the current navigator and advance the
+   expedition ID.
+7. Keep the same navigator and generation after voyages one through three. On
+   voyage four, complete the navigator's tenure and create exactly one
+   successor after every expedition result has committed.
 
 Docking without an active expedition replenishes supplies but does not change
-generation or return counts.
+generation or completed-voyage counts.
 
 ### Failure and wreck
 
@@ -301,17 +305,37 @@ use the same failure path:
 
 1. Record a runtime wreck at the exact ship position and heading.
 2. Revert the active expedition's Personal tiles to Unknown.
-3. Remove that expedition's provisional discoveries.
-4. Freeze the empty ship at the loss site for four simulation seconds.
-5. Clear loss-site visibility at completion.
-6. Spawn a supplied ship at the home dock.
-7. Advance expedition ID and generation exactly once.
+3. Remove that expedition's provisional discoveries and fishing records without
+   increasing the navigator's completed-voyage count.
+4. Record the navigator as lost and begin one persisted wreck succession.
+5. Freeze the empty ship at the loss site for four simulation seconds.
+6. Clear loss-site visibility at completion.
+7. Spawn a supplied ship and exactly one successor at the home dock, then
+   advance expedition ID and generation once.
 
 Timer overshoot is discarded. Successful return on a final-bundle docking step
 takes precedence over wreck creation.
 
 Runtime wrecks remain hidden by fog after respawn until a later generation sees
 them. Their `discovered` state then persists independently of knowledge loss.
+The stable wreck generation identifies the lost navigator. Later gameplay may
+turn finding that wreck and recovering bounded evidence or knowledge into a
+subgoal, but no such recovery effect exists in the current baseline.
+
+### Navigator tenure and transition time
+
+A lineage voyage is one active expedition successfully committed at the exact
+home dock. Every navigator can complete at most four. The authoritative lineage
+stores `completedVoyages` on each `active`, `completed` or `lost` navigator and
+uses deterministic `tenure` and `wreck` succession keys. There is no age,
+retirement choice or fifth-voyage state.
+
+The next playable voyage begins immediately after a safe-return transition or
+wreck succession. Narratively, that boundary represents elapsed world time: the
+tribe can act on returned findings, or determine that a lost navigator will not
+return, mourn them and nominate a successor. Future economy systems settle at
+this event boundary and future presentation may show a handover or mourning
+scene; neither wall-clock waiting nor a cutscene is authoritative gameplay.
 
 ## 11. Discoveries
 
@@ -342,19 +366,24 @@ approved gameplay minor plus a save-schema version decision.
 
 ### Exact-version save boundary
 
-Current schema version 6 stores:
+Current schema version 7 stores:
 
 - save, world-generator, content and serialized-format versions;
 - seed and generation-affecting configuration;
 - ship position, heading, provisions and accumulator;
-- expedition ID, active state, generation and counters;
+- expedition ID, active state and top-level generation;
 - optional pending wreck hold;
-- navigator lineage, age and final-voyage choice;
+- navigator lineage, completed-voyage counts and pending succession;
 - all non-Unknown knowledge as canonical run-length encoded state/stamp runs;
 - runtime wrecks and discovered flags;
 - provisional and returned discovery records;
 - provisional and returned fishing-shoal records;
 - an empty reserved terrain-patch list.
+
+Schema 7 requires navigator-lineage contract 3. That contract replaces the
+age/final-voyage shape with `completedVoyages`, `active` / `completed` / `lost`
+states and `tenure` / `wreck` succession reasons. Earlier shapes are deleted
+under the exact-version policy rather than migrated.
 
 The save does not contain base terrain, generated island descriptors,
 visibility, range masks, return paths, renderer state or caches.
@@ -418,6 +447,14 @@ growth and replenishment into one five-second message. A return without a
 discovery uses a 3.5-second route/replenishment cue. Only one lifecycle cue may
 exist at a time.
 
+The fourth safe return replaces the ordinary cue with a tenure-completion cue
+after all voyage results commit. A wreck hold identifies the navigator as lost,
+states that their wreck remains and compresses the tribe's mourning and elapsed
+time before the successor takes the helm. These messages present authoritative
+transitions; their display duration does not measure simulated world time.
+The ordinary shell status and return overlays expose **Voyage n of 4** so the
+bounded tenure is legible without a retirement decision control.
+
 The camera follows the interpolated ship smoothly during play. World regeneration and
 checkpoint restore are discontinuities, so the camera snaps to the
 authoritative ship before smoothing resumes.
@@ -440,6 +477,7 @@ shipReplenished
 returnStateChanged
 expeditionStarted
 expeditionReturned
+navigatorTenureCompleted
 shipWrecked
 generationAdvanced
 wreckDiscovered
@@ -450,6 +488,11 @@ discoveriesLost
 worldRegenerated
 gameLoaded
 ```
+
+`expeditionReturned` identifies the navigator, completed voyage number,
+remaining voyage allowance and whether the tenure completed.
+`navigatorTenureCompleted` identifies the outgoing and successor navigators.
+`generationAdvanced.reason` is either `tenure` or `wreck`.
 
 Developer UI capabilities:
 
@@ -496,13 +539,15 @@ is still required; no Web Worker is justified without new profiling evidence.
 
 The automated suite covers configuration, deterministic generation, movement,
 visibility, knowledge asymmetry, provisions, forward/return calculations,
-overlay invalidation, island navigation, expedition success/failure, Unknown
-pocket cleanup, discoveries, save validation, persistence round trips, save
-dirtiness, cached encoding, frame telemetry and ship interpolation.
+overlay invalidation, island navigation, expedition success/failure,
+four-voyage tenure and succession, Unknown pocket cleanup, discoveries, save
+validation, persistence round trips, save dirtiness, cached encoding, frame
+telemetry and ship interpolation.
 
 Browser verification covers WebGL startup, controls, discovery cues, combined
-return presentation, rolling reload, stable manual checkpoints, exact
-ship/camera restoration, pending wreck reload, save clearing and console health.
+return presentation, fourth-return automatic succession, fatal-wreck mourning
+and succession, rolling reload, stable manual checkpoints, exact ship/camera
+restoration, pending wreck reload, save clearing and console health.
 
 Desktop keyboard/pointer play is the validated target. Responsive resize is
 implemented. Touch-first sailing is not implemented and requires a separately
@@ -512,8 +557,9 @@ performance validation belongs to later graphics/platform hardening.
 
 ## 17. Baseline extension and exact-version boundary
 
-The accepted baseline includes fishing surveys, navigator lineage and aging.
-The forward roadmap may add chronicles, tribe economics, idols, the full
+The accepted baseline includes fishing surveys, navigator lineage and the
+four-voyage tenure. The forward roadmap may add the Great Hall chronicle,
+tribe economics, idols, the full
 save/load experience, production assets and environmental polish. These are
 proposed extensions, not implemented baseline behavior.
 

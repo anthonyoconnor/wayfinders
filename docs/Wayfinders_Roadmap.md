@@ -58,16 +58,17 @@ The current build already provides:
   provisional-to-returned records;
 - wreck rollback, persistent wrecks and exactly-once generation advancement
   per resolved wreck;
-- versioned navigator identities, exact-return voyage aging and safe
-  retirement with exactly-once succession;
+- versioned navigator identities, four-voyage tenures and exactly-once
+  succession after either a completed tenure or a fatal wreck;
 - schema-validated IndexedDB autosave, a stable manual checkpoint and exact
   ship/camera restoration;
 - functional developer graphics, developer controls, diagnostics and the
   performance foundation.
 
 Generation is backed by a versioned navigator lineage with distinct active,
-retired and lost records. Exact-dock voyage returns drive aging, while wreck
-and safe-retirement transitions share one idempotent succession authority.
+completed and lost records. Exact-dock active-expedition returns complete one
+of a navigator's four voyages, while fatal wrecks and completed-tenure
+transitions share one idempotent succession authority.
 Discoveries are descriptive records and do not yet create active resources or
 a tribe economy. Save/load is functional infrastructure rather than a complete
 player-facing game-management flow.
@@ -313,12 +314,12 @@ credit across the lineage.
 Status: accepted.
 
 Acceptance evidence (2026-07-13): a dedicated lineage authority owns stable
-versioned navigator IDs, `active` / `retired` / `lost` lifecycle records and
-deterministic wreck/retirement succession keys. Wreck rollback now terminalizes
-the outgoing navigator before the unchanged four-second presentation, while
-completion creates exactly one successor. Schema V5 requires a current lineage
-fragment, including a coherent pending wreck transition; incompatible saves are
-removed rather than upgraded. A mid-hold save/reload finishes the same key once
+versioned navigator IDs, lifecycle history and deterministic succession keys.
+Wreck rollback terminalizes the outgoing navigator before the unchanged
+four-second presentation, while completion creates exactly one successor.
+Schema V5 first required a coherent lineage and pending-wreck fragment;
+subsequent exact-version contracts supersede it rather than migrate it. A
+mid-hold save/reload finishes the same key once
 without duplicating or skipping a generation. The simulation snapshot and
 browser diagnostics expose navigator
 identity without moving authority into presentation. All inherited Supported
@@ -327,63 +328,86 @@ full pipeline passes 182 tests across 20 files plus typecheck and production
 build.
 
 - Give each navigator a stable ID and lifecycle state.
-- Centralize succession reasons such as wreck and retirement.
+- Centralize succession reasons such as wreck and completed tenure.
 - Preserve the four-second wreck sequence and inherited world state.
 
 Acceptance gate: every succession creates exactly one navigator/generation;
 reload during a current-version transition cannot skip or duplicate it;
 non-current lineage contracts are rejected and removed.
 
-#### GP-2.2 — Explorer aging and safe retirement
+#### GP-2.2 — Four-voyage navigator tenure
 
 Status: accepted.
 
-Acceptance evidence (2026-07-13): each navigator starts at age 30 and advances
-five years only when an active expedition completes at the exact home dock.
-The fourth successful return reaches age 50 and opens a dock-only choice:
-retire safely now or declare one final voyage. Immediate retirement creates
-one age-30 successor; a safe fifth return reaches age 55, commits the voyage
-and then creates one age-30 successor. A final-voyage wreck wins at age 50 and
-uses the unchanged four-second wreck presentation and succession path. Idle
-time, reload, inactive docking, travel time and distance never age the
-navigator. Schema V6 requires the V2 lineage age/final-voyage contract; V5 and
-lineage V1 records are incompatible and removed. The accessible retirement
-ribbon appears only at the dock; sailing has no permanent age HUD. The full
-pipeline passes 188 tests across 20 files plus typecheck and production build.
-Browser acceptance covers the age-50 choice, immediate retirement, checkpoint
-restoration, the declared final-voyage safe return and a clean warning/error console.
+Acceptance evidence (2026-07-13): each navigator may complete at most four
+numbered voyages. Only an active expedition's successful exact-home-dock
+return completes a voyage; inactive docking, replenishment, idle time,
+distance, travel time and reload do not. Returns one through three commit their
+results and replenish normally. The fourth return commits normally and then
+completes the navigator's tenure, immediately creating exactly one successor
+without a retirement choice or fifth voyage. A wreck during any voyage is
+fatal: it records the navigator as lost, preserves the unchanged four-second
+wreck presentation and creates exactly one successor after the pending
+transition. Schema V7 requires the V3 lineage contract, which stores each
+navigator's completed-voyage count; V6 and older age/final-voyage records are
+incompatible and removed under the exact-version save policy. Retirement
+actions and their dock ribbon are absent. The full pipeline passes 189 tests
+across 20 files plus typecheck and production build. Browser acceptance covers
+the voyage status, fourth-return succession, fatal-wreck transition and a clean
+warning/error console.
 
-- Advance age only on an active expedition's exact-dock successful return:
-  start at 30 and add five years per return.
-- At age 50 after four returns, require either safe retirement or one declared
-  final voyage before sailing can resume.
-- Retire immediately at 50 or after a safe fifth return at 55, creating exactly
-  one age-30 successor through the shared succession authority.
-- Let a wreck during the final voyage take precedence at age 50 and preserve
-  the existing four-second wreck sequence.
+- Complete one numbered voyage only on an active expedition's successful
+  exact-home-dock return, after its discoveries, surveys and knowledge commit.
+- After returns one through three, replenish and begin the next voyage with
+  the same navigator; after return four, complete the tenure and create exactly
+  one successor through the shared succession authority.
+- Let a wreck during any voyage kill the navigator early, preserve the
+  existing four-second wreck sequence and create exactly one successor when
+  that persisted transition completes.
+- Treat every return-to-next-voyage and wreck-to-successor boundary as elapsed
+  world time. Safe-return transitions are immediate; wrecks retain only their
+  existing four-second presentation hold, with no additional gameplay/economy
+  wait. Later milestones may settle community activity or show a
+  handover/mourning scene there, but GP-2.2 adds no economy or cutscene.
+- Keep the limit legible through the existing navigator status and return cues
+  as **Voyage n of 4**; add no retirement decision interface.
 
-Acceptance gate: idling and reload do not age an explorer; the player can plan
-a final voyage; retirement advances generation exactly once and preserves the
-inherited world.
+Acceptance gate: the fourth exact-dock return commits before generation
+advances exactly once; the same navigator can never begin a fifth voyage; a
+wreck at any voyage count ends that navigator without crediting the failed
+expedition; reload cannot consume, skip or duplicate a voyage or succession;
+inactive docking consumes no voyage; and inherited world state survives both
+completion and loss. Status/checkpoint restoration shows the correct next
+voyage and no retirement control remains.
 
-#### GP-2.3 — Achievement chronicle
+#### GP-2.3 — Great Hall voyage chronicle
 
 Status: proposed.
 
-- Credit returned landfalls, surveys, Supported connections and later idols to
-  the responsible navigator.
-- Maintain lineage-wide aggregates and a respectful final-voyage record.
-- Present history at home, after important returns or during succession—not as
-  a sailing score HUD.
+- Give every navigator four numbered Great Hall voyage positions and credit
+  returned landfalls, surveys, Supported connections and later idols to the
+  responsible navigator and voyage.
+- Show all four returned voyages for a completed tenure. For a navigator lost
+  early, show their completed voyages plus a respectful terminal lost-voyage
+  record; never credit provisional achievements from that fatal expedition.
+- Maintain lineage-wide aggregates and present history at home, after important
+  returns or during succession—not as a sailing score HUD.
+- Associate a lost navigator with their persistent wreck so a later discovery
+  can reveal their fate. Recovering evidence or knowledge from that wreck is a
+  later GP-3.4 mechanic, not part of the chronicle milestone.
 
-The chronicle framework may begin after GP-2.1, but each category is integrated
+The chronicle framework begins after GP-2.2 supplies stable voyage ordinals and
+terminal states, but each category is integrated
 at its owning gate: returned surveys after GP-1.3, fishing activation after
 GP-3.2, connected-community/trade records after GP-3.5 and idols after GP-4.2.
-Stable achievement keys must prevent duplicate credit.
+Stable achievement keys must include navigator and voyage identity and prevent
+duplicate credit.
 
-Acceptance gate: only exact-dock-committed achievements receive credit; no
-reload or checkpoint replay duplicates credit; navigator and lineage totals
-reconcile; provisional information never appears as permanent history.
+Acceptance gate: only exact-dock-committed achievements receive credit; four
+numbered positions reconcile with each navigator's completed-voyage count and
+terminal state; no reload or checkpoint replay duplicates credit; navigator and
+lineage totals reconcile; provisional information never appears as permanent
+history.
 
 ### GP-3 — Tribe economy, support and recovery
 
@@ -396,7 +420,8 @@ Status: proposed.
 
 - Add a small community-support state and a guaranteed useful recovery
   allocation.
-- Settle activity only on meaningful voyage events, never wall-clock waiting.
+- Settle activity only on the instantaneous inter-voyage return/wreck
+  transitions defined by GP-2.2, never wall-clock waiting.
 - Define a persisted settlement key/cursor and apply tribe changes atomically
   inside the authoritative return/wreck transaction; presentation events are
   notifications, not the economy ledger.
@@ -415,7 +440,7 @@ Status: proposed.
 - Promote a GP-1.4-eligible returned survey into authoritative `Active` tribe
   state and let it contribute a simple fishing benefit.
 - Add sparse non-blocking fishing activity on Supported routes using developer
-  graphics.
+  graphics so returned findings can become visible on later voyages.
 - Settle output idempotently on meaningful events; regenerate routine boat
   transforms instead of saving them.
 
@@ -443,16 +468,22 @@ always useful; reload cannot create supplies.
 
 Status: proposed.
 
-Depends on GP-2.1's accepted navigator/succession model.
+Depends on GP-2.1's accepted navigator/succession model and GP-2.3's stable
+voyage-record identity.
 
 - Lose the current tribe investment on wreck, reduce optional support and lower
   visible activity.
 - Preserve Supported routes, returned opportunities and the minimum allocation.
 - Recover through successful play and established activity, never waiting.
+- Let later navigators find the persistent wreck of a lost navigator and
+  recover bounded evidence or knowledge of what happened. The wreck remains a
+  meaningful optional subgoal rather than restoring the failed expedition's
+  provisional achievements wholesale.
 
 Acceptance gate: a major loss affects the next generation; no legal failure
 sequence creates an unwinnable or idle-only state; the approved minor defines
-and tests a concrete maximum recovery sequence; pending-wreck reload remains
+and tests a concrete maximum recovery sequence; recovered evidence is credited
+once to the correct lost navigator/wreck; pending-wreck reload remains
 idempotent.
 
 #### GP-3.5 — Connected communities and automatic trade
@@ -464,6 +495,8 @@ Status: proposed.
 - Give connected communities a small, legible surplus/need relationship and
   settle exchange automatically without prices or manual cargo orders.
 - Use sparse, non-blocking developer-art trade traffic as world feedback.
+- Activate and settle new links at inter-voyage transitions so their traffic
+  can first appear naturally on a later voyage.
 
 Acceptance gate: trade begins only after both endpoints and their Supported
 connection are returned; traffic never reveals or enters Personal/Unknown
@@ -566,7 +599,7 @@ unrelated saved lineage or checkpoint.
 
 Status: proposed.
 
-- Test repeated current-version save/load across aging, succession, economy,
+- Test repeated current-version save/load across voyage tenure, succession, economy,
   idol loss/recovery and optional completion.
 - Delete malformed or version-mismatched records and provide legible fresh-start
   recovery behavior.
@@ -697,8 +730,9 @@ not require a permanent numerical panel.
 
 #### GR-3.4 — Lineage, idol and completion presentation
 
-Status: proposed. Add navigator/chronicle presentation, age cues, idol cargo,
-archive exhibits and optional-ending celebration without leaking hidden state.
+Status: proposed. Add navigator/voyage cues, Great Hall and chronicle
+presentation, optional handover/mourning transitions, idol cargo, archive
+exhibits and optional-ending celebration without leaking hidden state.
 
 Acceptance gate: presentation matches authoritative navigator/idol records,
 does not reveal hidden locations and never forces the optional ending.
@@ -727,14 +761,14 @@ flowchart LR
     B["Accepted baseline"] --> GP0["GP-0 exact save boundary and first contracts"]
     GP0 --> GP1["GP-1 fishing and surveying"]
     GP0 --> GP21["GP-2.1 navigator and succession"]
-    GP21 --> GP22["GP-2.2 aging and retirement"]
-    GP1 --> GP23["GP-2.3 chronicle framework"]
-    GP21 --> GP23
+    GP21 --> GP22["GP-2.2 four-voyage tenure"]
+    GP1 --> GP23["GP-2.3 Great Hall chronicle"]
+    GP22 --> GP23
     GP1 --> GP31["GP-3.1 tribe capacity"]
     GP31 --> GP32["GP-3.2 fishing activation"]
     GP23 --> GP32
     GP32 --> GP33["GP-3.3 commitments and cargo"]
-    GP21 --> GP34["GP-3.4 wreck recovery"]
+    GP23 --> GP34["GP-3.4 wreck recovery"]
     GP33 --> GP34
     GP32 --> GP35["GP-3.5 automatic trade"]
     GP1 --> GP41["GP-4.1 idol catalog"]
@@ -777,7 +811,7 @@ accepted:
 | --- | --- | --- |
 | Opportunity catalog | New deterministic catalog module and dedicated tests; do not edit terrain/island generators | Content-version and save identity are integrated by one owner |
 | Survey lifecycle | Separate headless opportunity-state reducer and tests against frozen catalog types | One owner wires actions, return/wreck behavior and saves |
-| Navigator identity, age policy and chronicle reducers | Separate headless lineage modules/read model and dedicated tests | Succession/event/save integration is serialized |
+| Navigator identity, voyage-tenure policy and chronicle reducers | Separate headless lineage modules/read model and dedicated tests | Succession/event/save integration is serialized |
 | Supported-only route selection | New read-only navigation/activity module wrapping existing graph/path primitives | Economy activation and simulation wiring are serialized |
 | Economy settlement reducer | New pure reducer after settlement-key/outcome contracts are approved | Atomic return/wreck mutation and persistence are serialized |
 | Placeholder opportunity and traffic renderers | New renderer classes against a frozen read model | Scene construction, input and lifecycle wiring are serialized |
@@ -799,7 +833,7 @@ concurrently by feature agents:
 - `tests/helpers.ts` plus shared save, persistence, expedition and
   full-simulation tests.
 
-Economy commitments, cargo/salvage, aging/succession and endgame all change
+Economy commitments, cargo/salvage, voyage succession and endgame all change
 lifecycle ordering. Their pure domain models can overlap, but their integration
 must be serialized through one owner. Each parallel branch should add its own
 new modules and tests; a designated integrator performs schema, simulation and
@@ -816,7 +850,8 @@ each minor is planned; they are not permanent product rules.
   assignment, fleet management and labour allocation.
 - Real-time economic refill timers or idle progression.
 - NPC collision, combat, escorts or direct fleet commands.
-- Family trees, inheritable traits, politics, illness and mid-voyage age death.
+- Family trees, inheritable traits, politics, illness, age simulation and
+  non-wreck mid-voyage death.
 - Idols as money, compulsory upgrades, arbitrary random collectibles or a
   forced ending.
 - A permanent economy panel or arcade score HUD.
@@ -848,10 +883,10 @@ authorized ordered batch:
 
 Additional product decisions are recorded here for later milestones:
 
-- GP-2.2 is confirmed and accepted: navigators start at 30, gain five years
-  only on active-expedition exact-dock returns, choose at 50 after four returns,
-  and either retire safely or take one final voyage to a safe retirement at 55;
-  a final-voyage wreck takes precedence at age 50.
+- GP-2.2 is confirmed and accepted: each navigator may complete at most four
+  active-expedition exact-dock voyages; the fourth return commits before
+  automatic succession, while a wreck during any voyage is fatal and creates
+  a new navigator after the compressed non-return/mourning transition.
 - GP-3 must define the minimal tribe vocabulary, settlement transactions,
   tuning values and maximum recovery bound before economy implementation.
 - GP-4 proposes an optional ending plus continued play after the last idol;

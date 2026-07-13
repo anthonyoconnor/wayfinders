@@ -28,8 +28,9 @@ import { ReturnPathSystem, type ReturnPathResult } from "../exploration/ReturnPa
 import { VisibilitySystem } from "../exploration/VisibilitySystem";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
 import {
+  NAVIGATOR_VOYAGE_LIMIT,
   NavigatorLineageSystem,
-  type NavigatorRecordV2,
+  type NavigatorRecordV3,
 } from "../lineage/NavigatorLineageSystem";
 import {
   SAVE_SCHEMA_VERSION,
@@ -96,8 +97,8 @@ export interface SimulationSnapshot {
     respawnSecondsRemaining: number;
     pendingWreckId: number | null;
   };
-  navigator: Readonly<NavigatorRecordV2>;
-  lineage: readonly Readonly<NavigatorRecordV2>[];
+  navigator: Readonly<NavigatorRecordV3>;
+  lineage: readonly Readonly<NavigatorRecordV3>[];
   wrecks: readonly Readonly<ShipwreckState>[];
   discoveries: {
     available: number;
@@ -185,8 +186,6 @@ export class GameSimulation {
   private expeditionId = 1;
   private activeExpedition = false;
   private lineage = new NavigatorLineageSystem();
-  private returnCount = 0;
-  private failureCount = 0;
   private readonly shipwrecks: ShipwreckState[] = [];
   private pendingRespawn?: PendingRespawnState;
   private knowledgeSaveCache?: KnowledgeSaveCache;
@@ -213,32 +212,34 @@ export class GameSimulation {
     return this.lineage.generation;
   }
 
-  get currentNavigator(): Readonly<NavigatorRecordV2> {
+  get currentNavigator(): Readonly<NavigatorRecordV3> {
     return this.lineage.currentNavigator;
   }
 
-  get navigatorLineage(): readonly Readonly<NavigatorRecordV2>[] {
+  get navigatorLineage(): readonly Readonly<NavigatorRecordV3>[] {
     return this.lineage.navigators;
   }
 
-  get navigatorAgeYears(): number {
-    return this.lineage.aging.ageYears;
+  get navigatorVoyagesCompleted(): number {
+    return this.currentNavigator.completedVoyages;
   }
 
-  get finalVoyageDeclared(): boolean {
-    return this.lineage.aging.finalVoyageDeclared;
+  get navigatorVoyagesRemaining(): number {
+    return this.currentNavigator.state === "active"
+      ? NAVIGATOR_VOYAGE_LIMIT - this.currentNavigator.completedVoyages
+      : 0;
   }
 
-  get retirementDecisionRequired(): boolean {
-    return this.lineage.aging.retirementChoiceRequired;
+  get navigatorVoyageNumber(): number {
+    return Math.min(this.navigatorVoyagesCompleted + 1, NAVIGATOR_VOYAGE_LIMIT);
   }
 
   get successfulReturns(): number {
-    return this.returnCount;
+    return this.lineage.totalCompletedVoyages;
   }
 
   get failedExpeditions(): number {
-    return this.failureCount;
+    return this.lineage.lostNavigatorCount;
   }
 
   get wrecks(): readonly Readonly<ShipwreckState>[] {
@@ -331,11 +332,6 @@ export class GameSimulation {
 
   update(input: MovementInput, deltaSeconds: number): MovementResult {
     if (this.pendingRespawn) return this.advanceWreckPresentation(deltaSeconds);
-    if (this.retirementDecisionRequired) {
-      this.ship.speed = 0;
-      this.lastMovement = NO_MOVEMENT;
-      return NO_MOVEMENT;
-    }
     const previousShip = { ...this.ship };
     const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     const previousHeading = this.ship.heading;
@@ -424,8 +420,6 @@ export class GameSimulation {
     this.expeditionId = 1;
     this.activeExpedition = false;
     this.lineage = new NavigatorLineageSystem();
-    this.returnCount = 0;
-    this.failureCount = 0;
     this.shipwrecks.length = 0;
     this.wrecksRevision++;
     this.pendingRespawn = undefined;
@@ -466,7 +460,7 @@ export class GameSimulation {
   }
 
   teleport(tile: GridPoint): boolean {
-    if (this.pendingRespawn || this.retirementDecisionRequired) return false;
+    if (this.pendingRespawn) return false;
     if (!this.world.inBounds(tile.x, tile.y) || this.world.isMovementBlocked(tile.x, tile.y)) return false;
     const targetKnowledge = this.world.getKnowledge(tile.x, tile.y);
     if (!this.activeExpedition && targetKnowledge !== KnowledgeState.Supported) this.startExpedition();
@@ -491,7 +485,7 @@ export class GameSimulation {
   }
 
   refreshVisibility(): void {
-    if (this.pendingRespawn || this.retirementDecisionRequired) return;
+    if (this.pendingRespawn) return;
     const wasActiveExpedition = this.activeExpedition;
     const tile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
@@ -535,7 +529,7 @@ export class GameSimulation {
   interactWithFishingShoal(
     command: Readonly<FishingShoalInteractionCommandV1>,
   ): FishingShoalInteractionResultV1 {
-    if (this.pendingRespawn || this.retirementDecisionRequired) {
+    if (this.pendingRespawn) {
       return {
         contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
         status: "rejected",
@@ -570,7 +564,7 @@ export class GameSimulation {
 
   /** Deterministic sandbox hook; normal play reaches this outcome through travel consumption. */
   forceWreck(): boolean {
-    if (this.pendingRespawn || this.retirementDecisionRequired) return false;
+    if (this.pendingRespawn) return false;
     if (this.isInSupportedWater()) return false;
     if (!this.activeExpedition) this.startExpedition();
     const knowledgeChanged = this.failExpedition();
@@ -584,46 +578,6 @@ export class GameSimulation {
   refreshRiskOverlays(): void {
     this.recalculateRiskOverlays();
     this.revision++;
-  }
-
-  declareFinalVoyage(): boolean {
-    if (
-      this.pendingRespawn
-      || !this.atDock
-      || this.activeExpedition
-      || !this.retirementDecisionRequired
-    ) return false;
-    const declared = this.lineage.declareFinalVoyage();
-    if (declared.status !== "declared") return false;
-    this.lifecycleResolutionRevision++;
-    this.revision++;
-    this.saveRevision++;
-    this.events.emit("retirementChoiceResolved", {
-      navigatorId: declared.navigator.id,
-      generation: declared.navigator.generation,
-      choice: "final-voyage",
-    });
-    return true;
-  }
-
-  retireNavigator(): boolean {
-    if (
-      this.pendingRespawn
-      || !this.atDock
-      || this.activeExpedition
-      || !this.retirementDecisionRequired
-    ) return false;
-    const outgoing = this.currentNavigator;
-    this.events.emit("retirementChoiceResolved", {
-      navigatorId: outgoing.id,
-      generation: outgoing.generation,
-      choice: "retire",
-    });
-    this.completeRetirementSuccession(false);
-    this.lifecycleResolutionRevision++;
-    this.revision++;
-    this.saveRevision++;
-    return true;
   }
 
   setDebugVisibility<K extends keyof DebugVisibilityState>(name: K, visible: boolean): void {
@@ -646,8 +600,6 @@ export class GameSimulation {
       expedition: {
         id: this.expeditionId,
         active: this.activeExpedition,
-        successfulReturns: this.returnCount,
-        failedExpeditions: this.failureCount,
         pendingRespawn: this.pendingRespawn
           ? {
               expeditionId: this.pendingRespawn.expeditionId,
@@ -749,8 +701,6 @@ export class GameSimulation {
     this.expeditionId = parsed.expedition.id;
     this.activeExpedition = parsed.expedition.active;
     this.lineage = restoredLineage;
-    this.returnCount = parsed.expedition.successfulReturns;
-    this.failureCount = parsed.expedition.failedExpeditions;
     this.shipwrecks.length = 0;
     this.shipwrecks.push(...restoredWrecks);
     this.wrecksRevision++;
@@ -809,8 +759,8 @@ export class GameSimulation {
         id: this.expeditionId,
         active: this.activeExpedition,
         generation: this.generation,
-        successfulReturns: this.returnCount,
-        failures: this.failureCount,
+        successfulReturns: this.successfulReturns,
+        failures: this.failedExpeditions,
         atDock: this.atDock,
         wreckPresentationActive: this.wreckPresentationActive,
         respawnSecondsRemaining: this.respawnSecondsRemaining,
@@ -869,17 +819,19 @@ export class GameSimulation {
     const expeditionId = this.expeditionId;
     const generation = this.generation;
     const navigatorId = this.currentNavigator.id;
-    const finalVoyage = this.finalVoyageDeclared;
     const committed = this.knowledge.commitExpedition(expeditionId);
     const returnedDiscoveries = this.discoverySystem.commitExpedition(expeditionId);
     const returnedFishingShoals = this.fishingShoalSystem.commitExpedition(expeditionId);
     this.activeExpedition = false;
-    this.returnCount++;
     this.advanceExpeditionId();
-    const aging = this.lineage.advanceSuccessfulReturn();
+    const voyage = this.lineage.completeSuccessfulVoyage();
     this.events.emit("expeditionReturned", {
       expeditionId,
       generation,
+      navigatorId,
+      voyageNumber: voyage.completedVoyages,
+      voyagesRemaining: voyage.remainingVoyages,
+      tenureCompleted: voyage.tenureCompleted,
       supportedTileCount: committed.changedCount - (committed.closedUnknownCount ?? 0),
       closedUnknownTileCount: committed.closedUnknownCount ?? 0,
     });
@@ -898,39 +850,25 @@ export class GameSimulation {
         surveys: returnedFishingShoals.surveys,
       });
     }
-    this.events.emit("navigatorAged", {
-      navigatorId,
-      generation,
-      previousAgeYears: aging.previousAgeYears,
-      ageYears: aging.ageYears,
-      retirementChoiceRequired: aging.retirementChoiceRequired,
-      retirementRequired: aging.retirementRequired,
-    });
     this.replenishCurrentShip("return", true);
-    if (finalVoyage && aging.retirementRequired) this.completeRetirementSuccession(true);
+    if (voyage.status === "tenure-completed") {
+      this.events.emit("generationAdvanced", {
+        previousGeneration: generation,
+        previousNavigatorId: navigatorId,
+        generation: voyage.successor.generation,
+        navigatorId: voyage.successor.id,
+        reason: "tenure",
+      });
+      this.events.emit("navigatorTenureCompleted", {
+        navigatorId,
+        generation,
+        completedVoyages: voyage.completedVoyages,
+        nextNavigatorId: voyage.successor.id,
+        nextGeneration: voyage.successor.generation,
+      });
+    }
     this.lifecycleResolutionRevision++;
     return committed.changedCount;
-  }
-
-  private completeRetirementSuccession(finalVoyage: boolean): void {
-    const outgoing = this.currentNavigator;
-    const begun = this.lineage.beginSuccession("retirement", outgoing.generation);
-    const advanced = this.lineage.completeSuccession(begun.transition.key);
-    this.events.emit("generationAdvanced", {
-      previousGeneration: outgoing.generation,
-      previousNavigatorId: outgoing.id,
-      generation: advanced.navigator.generation,
-      navigatorId: advanced.navigator.id,
-      reason: "retirement",
-    });
-    this.events.emit("navigatorRetired", {
-      navigatorId: outgoing.id,
-      generation: outgoing.generation,
-      ageYears: outgoing.ageYears,
-      finalVoyage,
-      nextNavigatorId: advanced.navigator.id,
-      nextGeneration: advanced.navigator.generation,
-    });
   }
 
   private failExpedition(): number {
@@ -960,7 +898,6 @@ export class GameSimulation {
     lostShip.provisionAccumulator = 0;
     lostShip.speed = 0;
     this.activeExpedition = false;
-    this.failureCount++;
     this.pendingRespawn = {
       expeditionId,
       generation,

@@ -25,7 +25,11 @@ import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 
 function makeLineage(generation: number, pendingWreckId?: number) {
-  const lineage = new NavigatorLineageSystem(generation);
+  const lineage = new NavigatorLineageSystem();
+  for (let currentGeneration = 1; currentGeneration < generation; currentGeneration++) {
+    const wreck = lineage.beginSuccession("wreck", currentGeneration);
+    lineage.completeSuccession(wreck.transition.key);
+  }
   if (pendingWreckId !== undefined) lineage.beginSuccession("wreck", pendingWreckId);
   return lineage.snapshot();
 }
@@ -47,8 +51,6 @@ function makeValidSave(): SaveGame {
     expedition: {
       id: 4,
       active: false,
-      successfulReturns: 2,
-      failedExpeditions: 1,
       pendingRespawn: null,
     },
     ship: {

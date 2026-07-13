@@ -178,15 +178,6 @@ a:focus-visible {
   display: none;
 }
 
-.retirement-ribbon {
-  border-color: rgba(234, 219, 159, 0.72);
-  background: rgba(30, 27, 20, 0.96);
-}
-
-.retirement-ribbon strong {
-  color: #fff0b5;
-}
-
 .survey-ribbon > div:first-child {
   display: grid;
   gap: 0.2rem;

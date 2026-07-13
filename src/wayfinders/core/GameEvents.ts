@@ -23,30 +23,20 @@ export interface GameEventMap {
   };
   returnStateChanged: undefined;
   expeditionStarted: { expeditionId: number; generation: number };
-  navigatorAged: {
+  navigatorTenureCompleted: {
     navigatorId: NavigatorId;
     generation: number;
-    previousAgeYears: number;
-    ageYears: number;
-    retirementChoiceRequired: boolean;
-    retirementRequired: boolean;
-  };
-  retirementChoiceResolved: {
-    navigatorId: NavigatorId;
-    generation: number;
-    choice: "retire" | "final-voyage";
-  };
-  navigatorRetired: {
-    navigatorId: NavigatorId;
-    generation: number;
-    ageYears: number;
-    finalVoyage: boolean;
+    completedVoyages: number;
     nextNavigatorId: NavigatorId;
     nextGeneration: number;
   };
   expeditionReturned: {
     expeditionId: number;
     generation: number;
+    navigatorId: NavigatorId;
+    voyageNumber: number;
+    voyagesRemaining: number;
+    tenureCompleted: boolean;
     /** Personal route tiles committed by this expedition. */
     supportedTileCount: number;
     /** Enclosed Unknown tiles separately inferred by the return cleanup. */

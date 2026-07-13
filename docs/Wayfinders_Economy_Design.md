@@ -129,23 +129,24 @@ Surveying an idol site must cost expedition capacity, normally a survey or salva
 
 An idol aboard a wrecked ship is not credited as collected. It should become recoverable by a future generation through the wreck marker, or be restored to its original site if that is clearer for the content. This preserves meaningful failure without breaking a full-collection game goal.
 
-### 5.4 Generation scorecard and lineage archive
+### 5.4 Great Hall voyage record and lineage archive
 
-The player-facing scorecard should be diegetic: a **Wayfinder Chronicle**, **Legacy Record** or chart-house archive rather than an arcade score screen. It is opened at the home island, after an important return or on the handover to a new generation. It is not a permanent sailing HUD.
+The player-facing record is a diegetic **Great Hall** rather than an arcade score screen. It is opened at the home island, after an important return or on the handover to a new generation. It is not a permanent sailing HUD.
 
-Each navigator receives a record of returned achievements:
+Each navigator receives four numbered voyage positions. A navigator who completes their tenure fills all four with safely returned voyages. A navigator who dies in a wreck keeps their earlier completed voyages, receives a respectful terminal lost-voyage record and cannot use the remaining positions.
 
 | Record section | Examples |
 | --- | --- |
+| Voyages 1–4 | Numbered returned voyages, or the terminal voyage on which the navigator was lost |
 | Landfalls | Islands, shoals, wrecks, anchorages and passages first brought home as knowledge |
 | Surveys returned | Fishing grounds, resources, settlement contacts, migration sites and safe routes confirmed |
 | Connections made | Supported corridors, active fishing grounds, trade links and future home sites enabled |
 | Idols recovered | Named relics returned by that navigator |
-| Final voyage | A respectful record of a wreck or retirement, without treating loss as a positive score |
+| Navigator's fate | Completed four-voyage tenure or lost at sea, without treating death as a positive score |
 
 The lineage archive aggregates permanent progress across every generation. It may show a restrained completion count such as **Idols recovered: 4 of 12**, recovered silhouettes and named exhibits. It must not reveal the remaining locations.
 
-Only returned achievements count as permanent legacy. Sighted and surveyed-but-unreturned opportunities remain provisional and are lost after a wreck. This keeps exact-dock return as the game's clear commitment boundary.
+Only returned achievements count as permanent legacy. Sighted and surveyed-but-unreturned opportunities remain provisional and are lost after a wreck. The terminal lost-voyage entry records what happened, not its provisional achievements. This keeps exact-dock return as the game's clear commitment boundary.
 
 ### 5.5 How idols drive exploration
 
@@ -229,6 +230,11 @@ At the same time, a wreck must preserve earlier success:
 - the wreck remains as a visible, later-discoverable marker;
 - the next navigator can use Supported water at no provision cost to reach a distant old frontier.
 
+The persistent wreck remains associated with the lost navigator. Finding it can
+later become an optional objective that resolves part of the Great Hall record
+and returns bounded evidence or knowledge of what happened. Recovery must not
+retroactively commit every provisional discovery from the fatal expedition.
+
 This is the central inheritance rule:
 
 > A wreck does not erase the inherited world, but it makes the next generation rely on it.
@@ -249,14 +255,14 @@ The player does not open a route-management screen. Their return report and Supp
 
 ## 10. Economic time without waiting
 
-Economic simulation should advance on meaningful voyage events, not through a requirement to idle at the dock.
+Economic simulation should advance on meaningful voyage transitions, not through a requirement to idle at the dock.
 
-While the player is sailing, connected communities are assumed to be fishing, trading and working. On return, wreck resolution or another meaningful world transition, the game can settle the effects of that elapsed period and show the outcome.
+The next playable voyage starts immediately, but a safe return or fatal-wreck succession represents elapsed world time between voyages. Connected communities are assumed to have been fishing, trading and working; after a loss, the tribe has also determined that its navigator will not return, mourned them and nominated a successor. The transition settles the effects of that elapsed period and can later present a short world-facing handover or mourning scene without imposing real-time waiting.
 
 This supports the desired pacing:
 
 - the player returns and can leave again immediately;
-- automatic routes have had time to matter while the voyage took place;
+- automatic routes have had time to matter during the compressed transition;
 - a major loss changes available support and visible activity immediately;
 - recovery occurs through successful play and established infrastructure rather than a countdown timer.
 
@@ -357,11 +363,11 @@ Begin with deterministic fishing-shoal clues, limited survey cases, an explicit 
 
 ### GP-2: explorers, generations and lineage history
 
-Add persistent navigator identity, voyage-based aging, safe retirement and the achievement chronicle used to credit later economic discoveries and idols. The existing wreck-driven generation counter is the starting point, not the finished model.
+Add persistent navigator identity, a maximum four-voyage tenure, automatic succession after the fourth safe return, fatal early succession on wreck and the Great Hall voyage chronicle used to credit later economic discoveries and idols. A later wreck-recovery milestone may let another navigator discover evidence or knowledge about someone lost at sea.
 
 ### GP-3: tribe economy, support and recovery
 
-After survey work is understood, introduce tribe support state, a protected recovery floor, automatic activation and output from returned fishing grounds, dockside voyage commitments, Supported-only fishing activity, wreck setback/recovery and later automatic exchange with connected communities. Economic time settles on voyage events and never requires real-time waiting.
+After survey work is understood, introduce tribe support state, a protected recovery floor, automatic activation and output from returned fishing grounds, dockside voyage commitments, Supported-only fishing activity, wreck setback/recovery and later automatic exchange with connected communities. Economic time settles on inter-voyage return/wreck transitions and never requires real-time waiting.
 
 `GP-3.2` is the proposed earliest gate for isolated graphics-platform work: the complete survey → return → visible tribe benefit loop must first work with developer graphics.
 

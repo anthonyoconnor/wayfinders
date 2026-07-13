@@ -7,8 +7,8 @@ This is the starting point for a new development session.
 The current implementation is the accepted starting point. It includes
 developer tooling, home waters, exploration knowledge, provision-aware risk
 and return, expedition inheritance, deterministic discoveries, cross-session
-persistence, versioned navigator succession, exact-return aging, safe
-retirement and the performance foundation.
+persistence, versioned navigator succession, four-voyage navigator tenures
+and the performance foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
@@ -36,14 +36,13 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 188 automated tests pass across 20 files.
+- 189 automated tests pass across 20 files.
 - The production Vite build passes.
 - Browser tests cover discovery and fishing return, returned-lead upgrade,
   autosave reload, manual checkpoint restore, exact ship/camera restoration,
   the home-linked fishing-ground cue, wreck-hold reload, generation
-  advancement, save clearing, the age-50 retirement choice, checkpoint-restored
-  choice actions, immediate retirement, a declared final-voyage safe return,
-  and a clean warning/error console.
+  advancement, save clearing, four-voyage automatic succession and a clean
+  warning/error console.
 - The Phaser bundle-size warning remains informational.
 
 ## Current playable foundation
@@ -98,24 +97,27 @@ Current verification baseline:
   provisions.
 - Only the exact home dock commits an active expedition and replenishes the
   current ship. Docking without an active expedition also replenishes.
-- Ordinary successful returns keep the same generation. A declared final
-  voyage commits normally at the dock and then retires the navigator.
+- Successful returns one through three keep the same navigator and generation.
+  The fourth commits normally at the dock and then completes the navigator's
+  tenure, immediately creating one successor.
 - Exhausting provisions outside Supported water immediately reverts the failed
   expedition's Personal knowledge and creates a wreck that persists across
   reloads and later voyages until explicit world regeneration.
-- Each navigator has a stable versioned ID and an `active`, `retired` or `lost`
-  lifecycle record. Wreck and retirement share one deterministic succession
-  contract while remaining distinct reasons.
-- Navigators start at age 30 and gain exactly five years only when an active
-  expedition returns to the exact home dock. Idle time, travel time, distance,
-  reload and docking without an active expedition do not age them.
-- The fourth successful return reaches age 50 and suppresses sailing until the
-  player chooses **Retire now** or **Take one final voyage** at the dock.
-  Immediate retirement creates one age-30 successor. A safe fifth return
-  reaches age 55, commits the voyage and creates one age-30 successor.
-- A wreck during the declared final voyage takes precedence at age 50. It uses
-  the same four-second lost-navigator succession path and cannot also retire
-  or duplicate the successor.
+- Each navigator has a stable versioned ID and an `active`, `completed` or
+  `lost` lifecycle record. Fatal wreck and completed-tenure transitions share
+  one deterministic succession contract while remaining distinct reasons.
+- Only a successful active-expedition return to the exact home dock completes
+  one of the navigator's four numbered voyages. Idle time, travel time,
+  distance, reload, replenishment and docking without an active expedition do
+  not consume a voyage.
+- The fourth successful return commits its knowledge and discoveries before
+  completing the tenure and creating exactly one successor. There is no
+  retirement decision, final fifth voyage or sailing lock.
+- A wreck during any voyage kills the navigator early. The tribe's wait to
+  determine that they will not return and its mourning are compressed into the
+  wreck-to-successor transition: it is immediate in world progression for the
+  player apart from the existing presentation hold, while narrative time has
+  passed.
 - The lost ship remains visible and uncontrollable for four seconds. The
   outgoing navigator is already recorded as lost during that hold; completion
   then respawns a supplied ship at the dock and creates exactly one successor.
@@ -152,10 +154,10 @@ Current verification baseline:
   reload and intentionally replenishes only on the next dock or respawn
   allocation; unused cases never stack.
 - Schema-versioned saves persist the authoritative ship, provisions,
-  expedition/generation state, navigator lineage, age and final-voyage choice,
+  expedition/generation state, navigator lineage and completed-voyage counts,
   knowledge and stamps, runtime wrecks, pending wreck holds,
   provisional/returned discoveries and provisional/returned fishing records.
-  Schema V6 requires lineage contract V2; non-current schemas and lineage
+  Schema V7 requires lineage contract V3; non-current schemas and lineage
   contracts are not migrated.
   Fishing connectivity and its path are derived after load, never serialized.
 - Base terrain and island descriptors regenerate from the saved seed and world
@@ -182,9 +184,8 @@ Current verification baseline:
 - A connected returned fishing survey shows an unmistakable double-diamond,
   cardinal-ray developer beacon and home-linked label. Disconnected returned
   surveys retain their ordinary returned mark.
-- At age 50, an accessible dock-only retirement ribbon presents **Retire now**
-  and **Take one final voyage**. It remains actionable after checkpoint load;
-  navigator age is not a permanent sailing HUD.
+- Voyage progress is presented as a bounded **Voyage n of 4** navigator cue.
+  The obsolete retirement-choice ribbon and age HUD are absent.
 - Developer tools provide seed regeneration, island inspection, water-tile
   teleport, provision/wreck controls, overlay toggles, live configuration,
   autosave status and checkpoint controls.
@@ -244,9 +245,10 @@ Current verification baseline:
   only. The complete `GP-1` fishing survey loop ends at a derived connected
   returned-ground cue; authoritative fishing activation/output, tribe
   economics, lineage achievements and idols are not yet implemented.
-- Gameplay track: navigator identity, succession, voyage-based aging and safe
-  retirement are authoritative. The achievement chronicle remains proposed as
-  `GP-2.3`.
+- Gameplay track: navigator identity, succession and the four-voyage tenure
+  are authoritative. The Great Hall voyage chronicle remains proposed as
+  `GP-2.3`; later recovered-knowledge play around a lost navigator's wreck
+  belongs to `GP-3.4`.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
   player-facing saved-game model has not been chosen.
 - `GP-3`: there are no fishing boats, trade vessels or
@@ -272,10 +274,11 @@ The completed milestones are:
 5. `GP-1.3` — accepted: exact-dock returned leads/surveys and wreck rollback;
 6. `GP-1.4` — accepted: derived Supported-water home-connection proof and cue;
 7. `GP-2.1` — accepted: stable navigator identity and idempotent succession;
-8. `GP-2.2` — accepted: exact-return aging, safe retirement and final-voyage
-   wreck precedence.
+8. `GP-2.2` — accepted: four exact-return voyages, automatic tenure
+   succession and fatal-wreck early succession.
 
-The next proposed gameplay milestone is `GP-2.3`, the achievement chronicle.
+The next proposed gameplay milestone is `GP-2.3`, the Great Hall voyage
+chronicle.
 It requires renewed authorization. `GP-3.1` remains untouched.
 
 The graphics track remains deferred until `GP-3.2` is accepted, proving the
