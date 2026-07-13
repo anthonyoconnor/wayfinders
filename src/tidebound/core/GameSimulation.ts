@@ -38,12 +38,13 @@ export interface SimulationSnapshot {
   risk: {
     budget: number;
     forwardReachable: number;
-    forwardFocused: number;
+    forwardFrontier: number;
+    forwardHeading: number;
+    forwardConeHalfAngleDegrees: number;
     comfortable: number;
     warning: number;
     critical: number;
     impossible: number;
-    forwardFocusRadius: number;
     returnPathTiles: number;
     returnCorridorTiles: number;
     returnLevel: number;
@@ -179,10 +180,12 @@ export class GameSimulation {
   update(input: MovementInput, deltaSeconds: number): MovementResult {
     if (this.pendingRespawn) return this.advanceWreckPresentation(deltaSeconds);
     const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
+    const previousHeading = this.ship.heading;
     const previousKnowledge = this.world.getKnowledge(previousTile.x, previousTile.y);
     const previousBundles = this.ship.provisions;
     const movementInput = this.stranded ? { turn: input.turn, throttle: 0 } : input;
     const movement = this.movement.update(this.ship, movementInput, deltaSeconds);
+    const headingChanged = this.ship.heading !== previousHeading;
     this.lastMovement = movement;
     const preparedCharge = this.provisions.prepareMovement(movement.segments);
     const charge = this.provisions.applyPreparedMovement(this.ship, preparedCharge, (remaining) => {
@@ -240,8 +243,10 @@ export class GameSimulation {
       this.recalculateRiskOverlays();
     } else if (preparedCharge.totalCost > 0) {
       this.updateRiskOverlayBudgets();
+    } else if (headingChanged) {
+      this.updateRiskOverlayHeading();
     }
-    if (movement.tileChanged || charge.consumedBundles > 0 || knowledgeChanged > 0 || lifecycleChanged) {
+    if (movement.tileChanged || headingChanged || charge.consumedBundles > 0 || knowledgeChanged > 0 || lifecycleChanged) {
       this.revision++;
     }
     return this.lastMovement;
@@ -266,7 +271,7 @@ export class GameSimulation {
     );
     this.movement = new MovementSystem(this.world, this.config);
     this.visibility = new VisibilitySystem(this.world, this.config);
-    this.knowledge = new KnowledgeSystem(this.world);
+    this.knowledge = new KnowledgeSystem(this.world, this.config);
     this.provisions = new ProvisionSystem(this.world, this.config);
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
@@ -364,12 +369,13 @@ export class GameSimulation {
     const risk = {
       budget: this.forwardRange.budget,
       forwardReachable: this.forwardRange.reachableCount,
-      forwardFocused: this.forwardRange.focusCount,
+      forwardFrontier: this.forwardRange.frontierCount,
+      forwardHeading: this.forwardRange.presentationHeading,
+      forwardConeHalfAngleDegrees: this.forwardRange.coneHalfAngleDegrees,
       comfortable: this.returnPaths.riskCounts.comfortable,
       warning: this.returnPaths.riskCounts.warning,
       critical: this.returnPaths.riskCounts.critical,
       impossible: this.returnPaths.riskCounts.impossible,
-      forwardFocusRadius: this.forwardRange.focusRadius,
       returnPathTiles: this.returnPaths.pathIndices.length,
       returnCorridorTiles: this.returnPaths.corridorIndices.length,
       returnLevel: this.returnPaths.riskLevel,
@@ -431,7 +437,8 @@ export class GameSimulation {
     this.events.emit("expeditionReturned", {
       expeditionId,
       generation,
-      supportedTileCount: committed.changedCount,
+      supportedTileCount: committed.changedCount - (committed.closedUnknownCount ?? 0),
+      closedUnknownTileCount: committed.closedUnknownCount ?? 0,
     });
     this.replenishCurrentShip("return", true);
     this.lifecycleResolutionRevision++;
@@ -605,6 +612,12 @@ export class GameSimulation {
     const forwardChanged = this.forwardRanges.updateBudget(this.forwardRange, this.ship);
     const returnChanged = this.returnPathing.updateBudget(this.returnPaths, this.ship);
     if (!forwardChanged && !returnChanged) return;
+    this.overlaysRevision++;
+    this.events.emit("returnStateChanged", undefined);
+  }
+
+  private updateRiskOverlayHeading(): void {
+    if (!this.forwardRanges.updateHeading(this.forwardRange, this.ship)) return;
     this.overlaysRevision++;
     this.events.emit("returnStateChanged", undefined);
   }

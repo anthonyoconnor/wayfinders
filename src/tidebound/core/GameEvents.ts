@@ -17,7 +17,10 @@ export interface GameEventMap {
   expeditionReturned: {
     expeditionId: number;
     generation: number;
+    /** Personal route tiles committed by this expedition. */
     supportedTileCount: number;
+    /** Enclosed Unknown tiles separately inferred by the return cleanup. */
+    closedUnknownTileCount: number;
   };
   shipWrecked: {
     wreckId: number;

@@ -87,13 +87,42 @@ describe("prototype configuration", () => {
     expect(prototypeConfig.simulation.wreckPresentationSeconds).toBe(4);
   });
 
-  it("accepts only non-negative integer overlay focus and route padding", () => {
-    patchPrototypeConfig({ overlays: { forwardFocusPadding: 5, returnPathPadding: 2 } });
-    expect(prototypeConfig.overlays.forwardFocusPadding).toBe(5);
+  it("requires a positive Unknown travel cost so forward reach has a finite frontier", () => {
+    expect(() => patchPrototypeConfig({ provisions: { unknownCost: 0 } })).toThrow(
+      "provisions.unknownCost must be positive",
+    );
+    expect(prototypeConfig.provisions.unknownCost).toBe(DEFAULT_PROTOTYPE_CONFIG.provisions.unknownCost);
+  });
+
+  it("accepts forward cone half-angles from 1 through 180 degrees", () => {
+    for (const value of [1, 60, 180]) {
+      patchPrototypeConfig({ overlays: { forwardConeHalfAngleDegrees: value } });
+      expect(prototypeConfig.overlays.forwardConeHalfAngleDegrees).toBe(value);
+    }
+    expect(() => patchPrototypeConfig({ overlays: { forwardConeHalfAngleDegrees: 0 } })).toThrow(
+      "overlays.forwardConeHalfAngleDegrees must be positive",
+    );
+    expect(() => patchPrototypeConfig({ overlays: { forwardConeHalfAngleDegrees: 181 } })).toThrow(
+      "overlays.forwardConeHalfAngleDegrees must be at most 180",
+    );
+  });
+
+  it("accepts only non-negative integer Unknown cleanup limits and route padding", () => {
+    patchPrototypeConfig({
+      world: { maxEnclosedUnknownTiles: 0 },
+      overlays: { returnPathPadding: 2 },
+    });
+    expect(prototypeConfig.world.maxEnclosedUnknownTiles).toBe(0);
     expect(prototypeConfig.overlays.returnPathPadding).toBe(2);
 
-    expect(() => patchPrototypeConfig({ overlays: { forwardFocusPadding: 1.5 } })).toThrow(
-      "overlays.forwardFocusPadding must be a non-negative integer",
+    patchPrototypeConfig({ world: { maxEnclosedUnknownTiles: 5 } });
+    expect(prototypeConfig.world.maxEnclosedUnknownTiles).toBe(5);
+
+    expect(() => patchPrototypeConfig({ world: { maxEnclosedUnknownTiles: -1 } })).toThrow(
+      "world.maxEnclosedUnknownTiles must be a non-negative integer",
+    );
+    expect(() => patchPrototypeConfig({ world: { maxEnclosedUnknownTiles: 1.5 } })).toThrow(
+      "world.maxEnclosedUnknownTiles must be a non-negative integer",
     );
     expect(() => patchPrototypeConfig({ overlays: { returnPathPadding: -1 } })).toThrow(
       "overlays.returnPathPadding must be a non-negative integer",

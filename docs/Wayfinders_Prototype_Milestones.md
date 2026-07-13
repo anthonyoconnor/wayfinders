@@ -200,8 +200,17 @@ play area in competing blocks of risk colour.
 ## Features
 
 - Preserve the complete provision-aware forward calculation, but present only
-  reachable Unknown water inside a ship-centred focus extending three tiles
-  beyond current sight by default.
+  reachable Unknown cells in its outermost Unknown-cost band. For provision
+  budget `B` and configured Unknown cost `U`, the displayed frontier is
+  `B - U < minimumCost <= B`; `U` must be positive because free Unknown travel
+  has no finite provision frontier. This puts the cue at the true maximum reach immediately. While sailing
+  through equal-cost Unknown water, spending `U` and moving `U` closer should
+  normally leave the same frontier anchored to the world.
+- Present only the portion inside a heading-centred cone with a configurable
+  60-degree half-angle by default. Turning reclips the terminal band without
+  rerunning the full cost search.
+- Render pale segmented outward contour edges only: do not fill frontier tiles
+  and do not close cone ends with radial walls.
 - Identify one deterministic minimum-provision-cost route from the ship to the
   first reachable Supported water tile.
 - Present return risk only on that route and a configurable one-tile passable
@@ -211,17 +220,32 @@ play area in competing blocks of risk colour.
   the remaining provision budget.
 - Keep unseen Unknown water, blocked terrain, unrelated Personal branches and
   Supported water outside the coloured return corridor.
-- Expose forward-focus depth and return-route padding in Developer tools for
-  playtest tuning without adding a numerical player HUD.
+- Suppress knowledge-grey and all risk overlays inside current sight. Visible
+  tiles use unmodified world colour like Supported water, while their actual
+  knowledge state and movement cost remain unchanged.
+- After a successful Personal-to-Supported commit, run one knowledge-only pass
+  that fills fully Supported-bounded, non-edge, 8-connected Unknown pockets no
+  larger than `world.maxEnclosedUnknownTiles`. The default maximum is two;
+  zero disables cleanup. Do not inspect terrain or resources, and never run
+  this pass when a wreck reverts an expedition.
+- Expose return-route padding in Developer tools for playtest tuning without
+  adding a numerical player HUD.
 
 ## Success Criteria
 
 At any point in a connected expedition, the player sees one continuous padded
-route from the ship toward Supported water rather than colours across the full
+route from the current-sight boundary toward Supported water rather than colours across the full
 Personal region. The route changes colour as one unit when provisions cross a
-risk threshold. Forward reach appears only as a bounded local cue around the
-ship, and moving the ship clears obsolete route and focus pixels without chunk
-seams or hidden-terrain disclosure.
+risk threshold. Forward reach appears as a thin frontier at the true
+maximum-reach limit and normally stays world-anchored during equal-cost Unknown
+travel. Only the configured forward-heading cone is visible, and its segmented
+line has transparent tile interiors. Moving the ship or changing the budget clears obsolete frontier and
+route pixels without chunk seams or hidden-terrain disclosure.
+Current sight contains no grey or risk tint even where the logical return route
+passes through it; leaving sight restores the correct Personal/risk treatment.
+Exact-dock success closes only eligible tiny Supported-bounded knowledge pockets; larger,
+edge-connected or incompletely bounded Unknown regions remain Unknown, and a
+wreck never closes a pocket.
 
 Milestone 3.1 returns to the same Milestone 3 review gate. Milestones 4 and 5
 remain paused until this revised presentation has been user playtested.
@@ -312,9 +336,16 @@ generation.
 - Do the overlays communicate enough information without requiring numerical UI?
 - Does one padded minimum-cost return route read more clearly than a field of
   coloured Personal-water blocks?
-- Does the ship-local forward cue stay useful without dominating the play area?
+- Does the thin maximum-reach frontier make the exploration limit clear
+  without dominating the play area, and does it normally stay world-anchored
+  during equal-cost Unknown travel?
+- Does restricting the segmented line to the forward heading cone remove
+  irrelevant opposite-side information without hiding useful choices?
 - Does returning home feel rewarding?
 - Does converting a returned Personal route to Supported water make the next voyage meaningfully stronger?
+- Does successful-return cleanup remove distracting one- or two-tile black
+  pockets without filling larger, edge-connected or incompletely bounded
+  Unknown regions?
 - Does replenishment at the home dock make repeated voyages flow naturally?
 - Does the immediate wreck onset and four-second loss presentation feel clear,
   fair and appropriately paced?

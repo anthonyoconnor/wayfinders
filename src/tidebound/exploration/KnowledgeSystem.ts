@@ -1,3 +1,4 @@
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import { WorldGrid } from "../world/WorldGrid";
 import { KnowledgeState } from "../world/TileData";
 import type { VisibilityUpdate } from "./VisibilitySystem";
@@ -5,13 +6,19 @@ import type { VisibilityUpdate } from "./VisibilitySystem";
 export interface KnowledgeUpdate {
   changedIndices: readonly number[];
   changedCount: number;
+  /** Unknown pinholes inferred as Supported by successful-return cleanup. */
+  closedUnknownIndices?: readonly number[];
+  closedUnknownCount?: number;
 }
 
 /** Converts observed Unknown tiles into expedition-stamped Personal knowledge. */
 export class KnowledgeSystem {
   private readonly indicesByExpedition = new Map<number, Set<number>>();
 
-  constructor(private world: WorldGrid) {
+  constructor(
+    private world: WorldGrid,
+    private readonly config: PrototypeConfig = prototypeConfig,
+  ) {
     this.indexExistingPersonalKnowledge();
   }
 
@@ -69,7 +76,15 @@ export class KnowledgeSystem {
   }
 
   commitExpedition(expeditionId: number): KnowledgeUpdate {
-    return this.resolveExpedition(expeditionId, KnowledgeState.Supported);
+    const committed = this.resolveExpedition(expeditionId, KnowledgeState.Supported);
+    const enclosed = this.closeEnclosedUnknownPockets(committed.changedIndices);
+    const changedIndices = [...committed.changedIndices, ...enclosed];
+    return {
+      changedIndices,
+      changedCount: changedIndices.length,
+      closedUnknownIndices: enclosed,
+      closedUnknownCount: enclosed.length,
+    };
   }
 
   revertExpedition(expeditionId: number): KnowledgeUpdate {
@@ -112,6 +127,86 @@ export class KnowledgeSystem {
   private indexExistingPersonalKnowledge(): void {
     for (const index of this.world.getPersonalKnowledgeIndices()) {
       this.getExpeditionIndices(this.world.getExpeditionStampAtIndex(index)).add(index);
+    }
+  }
+
+  /**
+   * Removes only tiny Unknown pinholes closed by this successful return.
+   * Component and boundary decisions use knowledge topology exclusively, so
+   * hidden terrain cannot influence whether fog is removed.
+   */
+  private closeEnclosedUnknownPockets(committedIndices: readonly number[]): number[] {
+    const maximumSize = this.config.world.maxEnclosedUnknownTiles;
+    if (!Number.isInteger(maximumSize) || maximumSize < 0) {
+      throw new RangeError("world.maxEnclosedUnknownTiles must be a non-negative integer");
+    }
+    if (maximumSize === 0 || committedIndices.length === 0) return [];
+
+    const candidates = new Set<number>();
+    for (const index of committedIndices) {
+      this.forEachEightNeighbor(index, (neighbor) => {
+        if (this.world.getKnowledgeAtIndex(neighbor) === KnowledgeState.Unknown) candidates.add(neighbor);
+      });
+    }
+
+    const closed: number[] = [];
+    for (const seed of candidates) {
+      if (this.world.getKnowledgeAtIndex(seed) !== KnowledgeState.Unknown) continue;
+      const component = this.collectClosableUnknownComponent(seed, maximumSize);
+      if (!component) continue;
+      for (const index of component) {
+        this.world.setKnowledgeAtIndex(index, KnowledgeState.Supported, 0);
+        closed.push(index);
+      }
+    }
+    return closed;
+  }
+
+  private collectClosableUnknownComponent(seed: number, maximumSize: number): number[] | undefined {
+    const component: number[] = [seed];
+    const queued = new Set<number>([seed]);
+    let head = 0;
+
+    while (head < component.length) {
+      const index = component[head++];
+      if (component.length > maximumSize) return undefined;
+
+      const x = index % this.world.width;
+      const y = Math.floor(index / this.world.width);
+      if (x === 0 || y === 0 || x + 1 === this.world.width || y + 1 === this.world.height) {
+        return undefined;
+      }
+
+      let supportedBoundary = true;
+      this.forEachEightNeighbor(index, (neighbor) => {
+        const knowledge = this.world.getKnowledgeAtIndex(neighbor);
+        if (knowledge === KnowledgeState.Unknown) {
+          if (!queued.has(neighbor)) {
+            queued.add(neighbor);
+            component.push(neighbor);
+          }
+        } else if (knowledge !== KnowledgeState.Supported) {
+          supportedBoundary = false;
+        }
+      });
+      if (!supportedBoundary) return undefined;
+    }
+
+    return component.length <= maximumSize ? component : undefined;
+  }
+
+  private forEachEightNeighbor(index: number, visitor: (neighbor: number) => void): void {
+    const originX = index % this.world.width;
+    const originY = Math.floor(index / this.world.width);
+    for (let offsetY = -1; offsetY <= 1; offsetY++) {
+      const y = originY + offsetY;
+      if (y < 0 || y >= this.world.height) continue;
+      for (let offsetX = -1; offsetX <= 1; offsetX++) {
+        if (offsetX === 0 && offsetY === 0) continue;
+        const x = originX + offsetX;
+        if (x < 0 || x >= this.world.width) continue;
+        visitor(y * this.world.width + x);
+      }
     }
   }
 }

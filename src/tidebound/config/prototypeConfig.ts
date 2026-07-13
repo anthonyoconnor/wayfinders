@@ -16,6 +16,8 @@ export interface PrototypeConfig {
     shallowWaterRadius: number;
     hiddenObstacleRadius: number;
     hiddenObstacleDistance: number;
+    /** Maximum eight-connected Unknown pocket filled after a successful return. */
+    maxEnclosedUnknownTiles: number;
   };
   islands: {
     count: number;
@@ -49,8 +51,8 @@ export interface PrototypeConfig {
     fogBlend: number;
     forwardOverlayOpacity: number;
     returnOverlayOpacity: number;
-    /** Extra tiles beyond current sight in which forward reach is presented. */
-    forwardFocusPadding: number;
+    /** Half-angle of the heading-centred forward presentation cone. */
+    forwardConeHalfAngleDegrees: number;
     /** Cardinal passable-water padding around the minimum-cost return path. */
     returnPathPadding: number;
   };
@@ -103,6 +105,7 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
     shallowWaterRadius: 7,
     hiddenObstacleRadius: 2,
     hiddenObstacleDistance: 24,
+    maxEnclosedUnknownTiles: 2,
   },
   islands: {
     count: 8,
@@ -134,9 +137,9 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
   overlays: {
     fogNoise: 0.18,
     fogBlend: 0.12,
-    forwardOverlayOpacity: 0.18,
+    forwardOverlayOpacity: 0.55,
     returnOverlayOpacity: 0.35,
-    forwardFocusPadding: 3,
+    forwardConeHalfAngleDegrees: 60,
     returnPathPadding: 1,
   },
   movement: {
@@ -290,6 +293,7 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   positiveInteger(config.world.shallowWaterRadius, "world.shallowWaterRadius");
   positiveInteger(config.world.hiddenObstacleRadius, "world.hiddenObstacleRadius");
   nonNegative(config.world.hiddenObstacleDistance, "world.hiddenObstacleDistance");
+  nonNegativeInteger(config.world.maxEnclosedUnknownTiles, "world.maxEnclosedUnknownTiles");
   positiveInteger(config.islands.count, "islands.count");
   positive(config.islands.minRadius, "islands.minRadius");
   positive(config.islands.maxRadius, "islands.maxRadius");
@@ -319,7 +323,7 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   nonNegativeInteger(config.provisions.startingBundles, "provisions.startingBundles");
   nonNegative(config.provisions.supportedCost, "provisions.supportedCost");
   nonNegative(config.provisions.personalCost, "provisions.personalCost");
-  nonNegative(config.provisions.unknownCost, "provisions.unknownCost");
+  positive(config.provisions.unknownCost, "provisions.unknownCost");
 
   nonNegative(config.returnRisk.comfortable, "returnRisk.comfortable");
   nonNegative(config.returnRisk.warning, "returnRisk.warning");
@@ -332,7 +336,10 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   unitInterval(config.overlays.fogBlend, "overlays.fogBlend");
   unitInterval(config.overlays.forwardOverlayOpacity, "overlays.forwardOverlayOpacity");
   unitInterval(config.overlays.returnOverlayOpacity, "overlays.returnOverlayOpacity");
-  nonNegativeInteger(config.overlays.forwardFocusPadding, "overlays.forwardFocusPadding");
+  positive(config.overlays.forwardConeHalfAngleDegrees, "overlays.forwardConeHalfAngleDegrees");
+  if (config.overlays.forwardConeHalfAngleDegrees > 180) {
+    throw new RangeError("overlays.forwardConeHalfAngleDegrees must be at most 180");
+  }
   nonNegativeInteger(config.overlays.returnPathPadding, "overlays.returnPathPadding");
 
   nonNegative(config.movement.shipSpeed, "movement.shipSpeed");

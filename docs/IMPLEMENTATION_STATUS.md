@@ -52,8 +52,9 @@ Status: complete — stop here for user playtesting
 - Physical, countable provision bundles in an on-board cargo rack; no visible numerical resource bar.
 - Distance-based charging captured before the corresponding observation update.
 - Configured Supported / Personal / Unknown costs of 0 / 0.5 / 1 bundle-units per tile.
-- Cost-limited forward Dijkstra with a ship-local presentation focus extending
-  three tiles beyond current sight by default.
+- Cost-limited forward Dijkstra with a thin presentation frontier containing
+  only reachable Unknown cells in the outermost Unknown-cost band at the true
+  maximum-reach limit and inside a 120-degree heading cone.
 - Targeted multi-source return Dijkstra reconstructing one minimum-cost route
   from the ship to the first Supported water.
 - Reusable chunk-sized WebGL forward and return textures with dotted, diagonal and crosshatched accessibility treatments.
@@ -73,6 +74,10 @@ Status: complete — stop here for user playtesting
 - An expedition starts when the ship leaves Supported water and remains active when crossing Supported water away from home.
 - Successful return resolves only on entering the exact generated home dock.
 - Successful return converts only Personal tiles stamped for the current expedition to Supported, clears those stamps, replenishes configured starting bundles, clears fractional provision use and keeps the same generation.
+- After a successful commit, one knowledge-only pass fills fully
+  Supported-bounded, non-edge, 8-connected Unknown pockets of at most
+  `world.maxEnclosedUnknownTiles` tiles (two by default; zero disables it).
+  Wreck/revert never runs this cleanup.
 - Entering the exact dock without an active expedition also replenishes supplies without changing expedition or generation state.
 - Natural supply exhaustion outside Supported water begins an immediate wreck transition; exact-dock return takes precedence if both occur on the same movement step.
 - Wreck onset reverts only failed-expedition Personal knowledge, preserves earlier Supported routes, records and displays the wreck at the loss location, freezes input and holds the old generation there for four seconds.
@@ -233,8 +238,16 @@ yellow, orange and red blocks covered much of the explored play area. The
 revised presentation separates calculation from display:
 
 - the complete forward-reach calculation remains available to simulation and
-  diagnostics, while only reachable Unknown water within current sight plus a
-  default three-tile focus padding is presented;
+  diagnostics, while presentation contains only reachable Unknown cells in
+  the outermost Unknown-cost band `(budget - unknownCost, budget]`;
+- the resulting thin frontier is at the true maximum-reach limit immediately
+  and normally remains anchored to the same world cells while equal-cost
+  Unknown travel reduces path cost and provisions together;
+- the visible frontier is clipped to a heading-centred cone with a default
+  60-degree half-angle. Turning rotates the visible arc by reclipping the
+  sparse terminal band without rerunning Dijkstra;
+- only pale segmented outward contour edges are drawn. Frontier tiles have no
+  filled overlay, and the cone ends do not receive artificial radial walls;
 - return search accepts passable current-sight water as the connection from
   the ship to its Personal trail, stops when the ship's minimum cost is final
   and reconstructs one route to the first Supported boundary;
@@ -244,34 +257,58 @@ revised presentation separates calculation from display:
 - every route and padding tile receives the same ship-level state: pale or
   strong yellow, orange, or red. Unrelated Personal branches keep only their
   normal grey knowledge treatment;
-- the return corridor remains visible through current sight so the route is
-  continuous from the ship, while the neutral forward cue remains suppressed
-  inside sight and reads as a local fringe beyond it;
+- return calculation remains continuous through current sight, but current
+  sight suppresses Personal-grey, forward and return-risk presentation so
+  visible tiles use the same unmodified world rendering as Supported water;
 - previous and current sparse forward/corridor candidates are diffed so turns,
   route changes and chunk crossings clear stale pixels.
+- after Personal-to-Supported commit, one knowledge-only pass fills an
+  8-connected Unknown component only when it is fully Supported-bounded,
+  touches no world edge and contains no more than
+  `world.maxEnclosedUnknownTiles` tiles (two by default; zero disables it);
+- cleanup is seeded from the just-committed route, runs only once after success,
+  does not inspect terrain or resources and never runs during wreck/revert.
 
-Developer tools now expose **Forward focus beyond sight** and **Return route
-padding**. Normal play still contains no numerical route or resource HUD.
+Developer tools expose **Forward cone half-angle** and **Return route
+padding**. Forward depth has no control because its location follows the
+provision budget and configured travel costs. Normal play still contains no
+numerical route or resource HUD.
 
 Final verification:
 
-- the clean `npm.cmd run check` pipeline passed TypeScript, 81 tests across
-  nine files and the production build in 68.2 seconds wall time;
-- Vitest reported 9.45 seconds for the full suite and Vite built in 31.58
-  seconds. The existing bundle-size advisory remains informational;
-- focused overlay, visibility, simulation-integration and configuration runs
-  passed 41 tests before the clean pipeline;
-- browser seed 13371 produced a ten-tile core route with a 28-tile padded
-  corridor inside 126 Personal tiles, confirming unrelated Personal water was
-  not coloured;
-- the same browser state calculated 1,009 logically reachable forward cells
-  but kept only 87 candidates in the radius-eight local focus;
-- cargo changes moved one unchanged corridor through comfortable/warning,
-  critical and impossible yellow/orange/red treatments, and adding cargo
-  reversed the last transition immediately;
-- a branching route switched between core paths and cleared the abandoned
-  corridor. The route crossed the `x = 64` chunk boundary without a gap,
-  duplicate band or colour seam;
+- the clean `npm.cmd run check` pipeline passed TypeScript, 104 tests across ten
+  files and the production build in 34.7 seconds wall time;
+- Vitest reported 4.39 seconds for the full suite and Vite built in 15.47
+  seconds. The existing Phaser bundle-size advisory remains informational;
+- the eight focused cleanup tests cover one/two-tile fills, larger and
+  diagonal components, world edges, non-Supported boundaries, zero-disable,
+  exact indices/counts/stamps and absence of cleanup on revert;
+- the forward regression keeps the frontier on the same world tile while the
+  ship advances through three equal-cost Unknown positions and spends the
+  matching provisions; incremental masks also match fresh calculations;
+- cone regressions confirm the default 60-degree half-angle excludes side and
+  opposite arcs, turning rotates presentation without changing cached logical
+  masks/costs, presentation-only range expansion still invalidates stale
+  pixels, and 1/60/180-degree configuration bounds are enforced;
+- renderer regressions confirm thin-only pixels, outward-edge selection, no
+  cone-end walls, globally continuous chunk-seam phase, sparse seam
+  invalidation, skipped logical scans during heading-only changes and
+  current-sight suppression;
+- browser seed 13371 rendered a thin maximum-range frontier and a 16-tile
+  logical padded return corridor around a six-tile minimum-cost route. Its
+  logical state became impossible when provisions fell below the 2.5-bundle
+  return cost, while the currently visible part remained untinted;
+- reducing the budget below the cost of reaching Unknown water cleared the
+  previous frontier without stale pixels. A successful dock return committed
+  90 Personal tiles, ran the cleanup pass, cleared the return corridor and
+  replenished all 12 bundles;
+- the final cone browser check showed 18 presented terminal cells at a
+  30-degree half-angle, 33 at the default 60 degrees and 130 at 180 degrees.
+  The segmented arc rotated with the ship and kept transparent tile interiors;
+- current-sight browser verification kept all 81 visible tiles in unmodified
+  world colour while the logical return state was impossible/red. Focused tests
+  confirm return tint restores after sight moves and visible Unknown water
+  still charges full Unknown cost;
 - the final browser console contained no warnings or errors.
 
 Milestone 3.1 now returns to human playtesting at the existing review gate.
@@ -295,8 +332,18 @@ For every candidate build at this gate:
    routes, wrecks, counters and generation.
 7. Confirm the browser console remains free of warnings and errors.
 8. Confirm return colours occupy only one padded minimum-cost route, change as
-   a single state with cargo, and clear stale pixels; confirm forward reach is
-   presented only in the ship-local sight-plus-padding focus.
+   a single state with cargo, and clear stale pixels. Confirm forward
+   presentation contains only the outermost reachable Unknown-cost band, sits
+   at the true maximum range and normally remains world-anchored during
+   equal-cost Unknown travel. Confirm it is clipped to the configured cone
+   ahead of the ship and rendered as a thin segmented outward contour.
+9. Confirm a successful commit fills only non-edge, fully Supported-bounded,
+   8-connected Unknown pockets no larger than
+   `world.maxEnclosedUnknownTiles`; confirm zero disables cleanup and
+   wreck/revert never fills a pocket.
+10. Confirm current sight suppresses Personal-grey and forward/return risk
+    overlays, then confirm the underlying Unknown/Personal travel cost and
+    knowledge state are unchanged and presentation returns after sight moves.
 
 Development is intentionally paused at the revised Milestone 3 review gate.
 Generic discoveries, save/load, cross-session persistence and Milestone 5
@@ -341,8 +388,34 @@ living-world work have not been started.
     ends at the first Supported tile. Supported water itself is not coloured.
     With no connected known/currently-visible route, no false corridor is
     drawn; the diagnostic state remains impossible.
-30. **Milestone 3.1 locality.** Full forward reach remains the logical result,
-    but presentation is clipped to a Euclidean radius of sight plus three
-    configurable tiles. Return padding uses one configurable cardinal step so
-    it cannot jump across blockers. These values are sandbox tuning controls,
-    not normal-player numeric UI.
+30. **Milestone 3.1 frontier semantics.** Full forward reach remains the
+    logical result, but presentation includes only reachable Unknown cells in
+    the outermost Unknown-cost band `(budget - unknownCost, budget]`. Unknown
+    cost must be positive because free Unknown travel has no finite provision
+    frontier. This is the actual maximum-reach limit immediately and normally
+    stays world-anchored while equal-cost Unknown movement spends provisions.
+    The former forward-focus setting and developer control were removed.
+    Return padding remains one configurable cardinal step so it cannot jump
+    across blockers.
+31. **Successful-return pocket cleanup.** Cleanup runs once, after matching
+    Personal tiles commit to Supported, and is seeded only from that committed
+    route. It considers knowledge topology only: an 8-connected Unknown
+    component must be fully bounded by Supported knowledge, must not touch a
+    world edge and must contain at most `world.maxEnclosedUnknownTiles` tiles
+    (two by default; zero disables cleanup). Filled tiles become Supported with
+    no expedition stamp. Terrain, collision, resources and hidden island data
+    are never inspected, and wreck/revert never invokes the pass.
+32. **Heading cone and contour rendering.** The full logical cost result stays
+    cached, but only the terminal cost band inside a heading-centred cone is
+    presented. The default half-angle is 60 degrees (120 degrees total).
+    Turning reclips that sparse band without rerunning Dijkstra; sailing
+    straight retains the world-anchored limit. Rendering draws globally phased
+    pale segments only on outward edges where adjacent logical reach ends, so
+    tiles are not filled, chunk seams remain continuous and cone cut edges do
+    not become radial walls.
+33. **Current-sight presentation.** Anything currently visible uses the same
+    unmodified world rendering as Supported water: Unknown fog, Personal-grey,
+    forward contour and return-risk colour are all suppressed. This is visual
+    only. The underlying tile remains Unknown or Personal, route calculations
+    still cross visible water and movement charges its actual knowledge cost.
+    When sight moves away, Personal-grey and any applicable route risk return.

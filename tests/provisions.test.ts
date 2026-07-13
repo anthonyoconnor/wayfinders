@@ -37,6 +37,19 @@ it("uses config-driven costs for Supported, Personal, and Unknown water", () => 
   }
 });
 
+it("keeps visible Unknown water at Unknown travel cost", () => {
+  const config = makeConfig({ navigation: { tileSize: 32 }, provisions: { unknownCost: 1 } });
+  const world = createWorld(KnowledgeState.Unknown);
+  world.setVisibleNow(0, 0, true);
+  const ship = makeShip();
+
+  const result = new ProvisionSystem(world, config).chargeMovement(ship, [makeSegment(0, 0, 32)]);
+
+  expect(world.getKnowledge(0, 0)).toBe(KnowledgeState.Unknown);
+  expect(result.cost).toBe(1);
+  expect(ship.provisions).toBe(4);
+});
+
 it("makes partial movement accumulation frame-rate independent", () => {
   const config = makeConfig({ navigation: { tileSize: 32 } });
   const world = createWorld(KnowledgeState.Unknown);

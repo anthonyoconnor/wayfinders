@@ -36,7 +36,7 @@ describe("GameSimulation exploration integration", () => {
     expect(trailColumn.every((state) => state === KnowledgeState.Personal)).toBe(true);
   });
 
-  it("presents one local forward focus and one padded return route that clears at the dock", () => {
+  it("presents one forward frontier and one padded return route that clears at the dock", () => {
     const simulation = new GameSimulation();
     const centerY = simulation.generated.landmarks.homeCenter.y;
     let firstUnknownX = simulation.generated.landmarks.dock.x;
@@ -58,25 +58,52 @@ describe("GameSimulation exploration integration", () => {
     expect(outbound.risk.returnCorridorTiles).toBeGreaterThan(0);
     expect(outbound.risk.returnCorridorTiles).toBeLessThan(outbound.knowledge.personal);
     expect(corridorRiskCount).toBe(outbound.risk.returnCorridorTiles);
+    expect(outbound.risk.forwardFrontier).toBe(simulation.forwardRange.frontierCount);
+    expect(outbound.risk.forwardFrontier).toBeGreaterThan(0);
+    expect(outbound.risk.forwardHeading).toBe(simulation.ship.heading);
+    expect(outbound.risk.forwardConeHalfAngleDegrees).toBe(60);
     expect(simulation.returnPaths.pathIndices[0]).toBe(
       simulation.world.index(simulation.ship.currentTileX, simulation.ship.currentTileY),
     );
     expect(simulation.world.getKnowledgeAtIndex(
       simulation.returnPaths.pathIndices[simulation.returnPaths.pathIndices.length - 1],
     )).toBe(KnowledgeState.Supported);
-    expect(simulation.forwardRange.presentationCandidateIndices.every((index) => {
-      const x = index % simulation.world.width;
-      const y = Math.floor(index / simulation.world.width);
-      const dx = x - simulation.ship.currentTileX;
-      const dy = y - simulation.ship.currentTileY;
-      return dx * dx + dy * dy <= simulation.forwardRange.focusRadius ** 2;
-    })).toBe(true);
+    const frontierMinimumCost = simulation.forwardRange.budget - simulation.config.provisions.unknownCost;
+    expect(simulation.forwardRange.presentationCandidateIndices).toHaveLength(
+      simulation.forwardRange.frontierCount,
+    );
+    expect(simulation.forwardRange.presentationCandidateIndices.every((index) => (
+      simulation.forwardRange.presentationMask[index] === 1
+      && simulation.forwardRange.mask[index] === 1
+      && simulation.forwardRange.costs[index] > frontierMinimumCost
+      && simulation.forwardRange.costs[index] <= simulation.forwardRange.budget
+    ))).toBe(true);
 
     expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
     const returned = simulation.snapshot();
     expect(returned.risk.returnPathTiles).toBe(1);
     expect(returned.risk.returnCorridorTiles).toBe(0);
     expect(returned.risk.returnLevel).toBe(0);
+  });
+
+  it("rotates the forward presentation while turning in place without recalculating logical reach", () => {
+    const simulation = new GameSimulation();
+    const range = simulation.forwardRange;
+    const logicalMask = range.mask.slice();
+    const candidates = range.candidateIndices;
+    const overlayRevision = simulation.overlaysRevision;
+    const tile = simulation.snapshot().tile;
+
+    simulation.update({ turn: 1, throttle: 0 }, 0.25);
+    const turned = simulation.snapshot();
+
+    expect(turned.tile).toEqual(tile);
+    expect(turned.risk.forwardHeading).toBe(45);
+    expect(turned.risk.forwardConeHalfAngleDegrees).toBe(60);
+    expect(simulation.forwardRange).toBe(range);
+    expect(simulation.forwardRange.mask).toEqual(logicalMask);
+    expect(simulation.forwardRange.candidateIndices).toBe(candidates);
+    expect(simulation.overlaysRevision).toBeGreaterThan(overlayRevision);
   });
 
   it("teleports without revealing a connecting line between distant tiles", () => {

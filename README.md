@@ -10,8 +10,10 @@ wreck presentation at the loss site, a fully supplied ship respawns at home
 and the generation advances.
 
 The Milestone 3.1 presentation shows return risk only on one padded
-minimum-cost route from the ship to Supported water. Forward reach is a local
-ship-centred cue rather than a map-wide field.
+minimum-cost route from the ship to Supported water. Forward reach is a thin
+segmented frontier at the ship's true maximum range, clipped to a 120-degree
+cone ahead of its current heading rather than circling the map. A successful return also closes tiny, fully
+Supported-bounded Unknown pockets; a wreck never performs that cleanup.
 
 Every seed also produces a stable set of eight non-home islands in the default
 configuration. High Islands, Low Cays, Atolls and Rocky Skerries appear across

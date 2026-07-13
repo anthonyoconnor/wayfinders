@@ -165,8 +165,17 @@ a:focus-visible {
 }
 
 .legend-swatch--forward {
-  border-style: dashed;
-  background: rgba(165, 192, 190, 0.28);
+  border-color: transparent;
+  background: transparent;
+}
+
+.legend-swatch--forward::after {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  border-top: 2px dashed rgba(226, 230, 210, 0.7);
+  content: "";
 }
 
 .legend-swatch--warning {

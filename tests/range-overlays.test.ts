@@ -96,11 +96,32 @@ it("matches fresh masks across incremental budget decreases and increases", () =
     expect(live.budget).toBe(fresh.budget);
     expect(live.mask).toEqual(fresh.mask);
     expect(live.presentationMask).toEqual(fresh.presentationMask);
+    expect(live.presentationCandidateIndices).toEqual(fresh.presentationCandidateIndices);
     expect(live.reachableCount).toBe(fresh.reachableCount);
-    expect(live.focusCount).toBe(fresh.focusCount);
+    expect(live.frontierCount).toBe(fresh.frontierCount);
+    expect(live.presentationHeading).toBe(fresh.presentationHeading);
+    expect(live.coneHalfAngleDegrees).toBe(fresh.coneHalfAngleDegrees);
     expect(live.reachableCount).toBe(countMask(live.mask));
+    expect(live.frontierCount).toBe(countMask(live.presentationMask));
     expect(changed).toBe(previousMask.some((value, index) => value !== live.mask[index]));
   }
+});
+
+it("reports a presentation-only change when expansion moves the frontier beyond the world", () => {
+  const world = new WorldGrid(3, 1, 3);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  const ship = shipAt(0, 0, 2);
+  const system = new ForwardRangeSystem(world, makeConfig());
+  const result = system.calculate(ship);
+  const logicalMask = result.mask.slice();
+  expect(result.presentationCandidateIndices).toEqual([world.index(2, 0)]);
+
+  ship.provisions = 3;
+  expect(system.updateBudget(result, ship)).toBe(true);
+  expect(result.mask).toEqual(logicalMask);
+  expect(result.presentationCandidateIndices).toEqual([]);
+  expect(result.frontierCount).toBe(0);
 });
 
 it("stops at known blockers without leaking hidden terrain into Unknown cost", () => {
@@ -142,29 +163,100 @@ it("post-processes only settled forward candidates instead of scanning the world
   expect(tileScanSpy).not.toHaveBeenCalled();
 });
 
-it("presents forward reach only inside a ship-local sight-plus-padding focus", () => {
+it("presents only reachable Unknown cells in the outermost provision-cost band", () => {
   const config = makeConfig({
-    navigation: { sightRadius: 2 },
-    overlays: { forwardFocusPadding: 2 },
-    provisions: { unknownCost: 1 },
+    provisions: { personalCost: 0.5, unknownCost: 1 },
   });
-  const world = new WorldGrid(40, 40, 8);
+  const world = new WorldGrid(8, 1, 4);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
-  const ship = shipAt(20, 20, 20);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  world.setKnowledge(1, 0, KnowledgeState.Personal, 1);
+  const ship = shipAt(0, 0, 3.5);
   const result = new ForwardRangeSystem(world, config).calculate(ship);
 
-  expect(result.focusRadius).toBe(4);
-  expect(result.mask[world.index(30, 20)]).toBe(1);
-  expect(result.presentationMask[world.index(30, 20)]).toBe(0);
-  expect(result.presentationMask[world.index(24, 20)]).toBe(1);
-  expect(result.presentationMask[world.index(25, 20)]).toBe(0);
-  expect(result.presentationCandidateIndices.every((index) => {
-    const x = index % world.width;
-    const y = Math.floor(index / world.width);
-    return (x - 20) ** 2 + (y - 20) ** 2 <= 16;
-  })).toBe(true);
+  expect(result.mask[world.index(3, 0)]).toBe(1);
+  expect(result.mask[world.index(4, 0)]).toBe(1);
+  expect(result.presentationMask[world.index(3, 0)]).toBe(0);
+  expect(result.presentationMask[world.index(4, 0)]).toBe(1);
+  expect(result.presentationCandidateIndices).toEqual([world.index(4, 0)]);
   expect(result.presentationCandidateIndices.length).toBeLessThan(result.candidateIndices.length);
-  expect(result.focusCount).toBe(result.presentationCandidateIndices.length);
+  expect(result.frontierCount).toBe(result.presentationCandidateIndices.length);
+});
+
+it("keeps the forward frontier anchored in world space as travel consumes its budget", () => {
+  const config = makeConfig({ provisions: { unknownCost: 1 } });
+  const world = new WorldGrid(8, 1, 4);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  const ship = shipAt(0, 0, 5);
+  const system = new ForwardRangeSystem(world, config);
+  const expectedFrontier = [world.index(5, 0)];
+
+  // Keep x1 and x2 Unknown to isolate one equal-cost route. Promoting traversed
+  // cells to cheaper Personal knowledge would introduce a different cost graph.
+  for (const state of [
+    { x: 0, provisions: 5 },
+    { x: 1, provisions: 4 },
+    { x: 2, provisions: 3 },
+  ]) {
+    ship.currentTileX = state.x;
+    ship.worldX = state.x * config.navigation.tileSize + config.navigation.tileSize / 2;
+    ship.provisions = state.provisions;
+    const result = system.calculate(ship);
+
+    expect(result.presentationCandidateIndices).toEqual(expectedFrontier);
+    expect(result.presentationMask[expectedFrontier[0]]).toBe(1);
+    expect(result.frontierCount).toBe(1);
+  }
+});
+
+it("clips the terminal band to the configured cone ahead of the ship", () => {
+  const config = makeConfig({ overlays: { forwardConeHalfAngleDegrees: 60 } });
+  const world = new WorldGrid(11, 11, 6);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  const ship = shipAt(5, 5, 3);
+  ship.heading = 0;
+  const result = new ForwardRangeSystem(world, config).calculate(ship);
+
+  expect(result.presentationMask[world.index(8, 5)]).toBe(1);
+  expect(result.presentationMask[world.index(2, 5)]).toBe(0);
+  expect(result.presentationMask[world.index(5, 2)]).toBe(0);
+  expect(result.presentationMask[world.index(5, 8)]).toBe(0);
+  expect(result.mask[world.index(2, 5)]).toBe(1);
+  expect(result.presentationHeading).toBe(0);
+  expect(result.coneHalfAngleDegrees).toBe(60);
+});
+
+it("rotates only the sparse presentation cone when heading changes", () => {
+  const config = makeConfig({ overlays: { forwardConeHalfAngleDegrees: 60 } });
+  const world = new WorldGrid(11, 11, 6);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  const ship = shipAt(5, 5, 3);
+  const system = new ForwardRangeSystem(world, config);
+  const result = system.calculate(ship);
+  const logicalMask = result.mask.slice();
+  const logicalCandidates = result.candidateIndices;
+  const costs = result.costs.slice();
+
+  ship.heading = 90;
+  expect(system.updateHeading(result, ship)).toBe(true);
+
+  expect(result.presentationMask[world.index(8, 5)]).toBe(0);
+  expect(result.presentationMask[world.index(5, 8)]).toBe(1);
+  expect(result.presentationHeading).toBe(90);
+  expect(result.mask).toEqual(logicalMask);
+  expect(result.candidateIndices).toBe(logicalCandidates);
+  expect(result.costs).toEqual(costs);
+});
+
+it("rejects zero-cost Unknown travel because it has no finite provision frontier", () => {
+  const world = new WorldGrid(4, 1, 2);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  const system = new ForwardRangeSystem(world, makeConfig({ provisions: { unknownCost: 0 } }));
+
+  expect(() => system.calculate(shipAt(0, 0, 5))).toThrow(
+    "provisions.unknownCost must be positive to define a forward frontier",
+  );
 });
 });
 

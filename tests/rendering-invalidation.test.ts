@@ -1,11 +1,138 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { prototypeConfig } from "../src/tidebound/config/prototypeConfig";
+import type { ForwardRangeResult } from "../src/tidebound/exploration/ForwardRangeSystem";
+import { ReturnRiskLevel, type ReturnPathResult } from "../src/tidebound/exploration/ReturnPathSystem";
 import {
   addCardinalChunkDependents,
   addPaddedChunkNeighbours,
 } from "../src/tidebound/rendering/OverlayChunkInvalidation";
+import { RiskOverlayRenderer } from "../src/tidebound/rendering/RiskOverlayRenderer";
 import type { WorldChunk } from "../src/tidebound/world/WorldChunk";
 import { WorldGrid } from "../src/tidebound/world/WorldGrid";
 import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData";
+
+vi.mock("phaser", () => ({
+  default: { Textures: { FilterMode: { LINEAR: 0 } } },
+}));
+
+interface FillCall {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  style: string;
+}
+
+interface FakeTexture {
+  width: number;
+  height: number;
+  calls: FillCall[];
+  refreshCount: number;
+  getContext(): CanvasRenderingContext2D;
+  setFilter(): void;
+  refresh(): void;
+}
+
+function makeRendererHarness(key = "overlay-test") {
+  const textures = new Map<string, FakeTexture>();
+  const scene = {
+    sys: { settings: { key } },
+    textures: {
+      createCanvas(textureKey: string, width: number, height: number) {
+        const calls: FillCall[] = [];
+        const context = {
+          fillStyle: "",
+          clearRect: () => { calls.length = 0; },
+          fillRect(x: number, y: number, fillWidth: number, fillHeight: number) {
+            calls.push({
+              x,
+              y,
+              width: fillWidth,
+              height: fillHeight,
+              style: String(this.fillStyle),
+            });
+          },
+        } as unknown as CanvasRenderingContext2D;
+        const texture: FakeTexture = {
+          width,
+          height,
+          calls,
+          refreshCount: 0,
+          getContext: () => context,
+          setFilter: () => undefined,
+          refresh() { this.refreshCount++; },
+        };
+        textures.set(textureKey, texture);
+        return texture;
+      },
+      exists: (textureKey: string) => textures.has(textureKey),
+      remove: (textureKey: string) => textures.delete(textureKey),
+    },
+    add: {
+      image: () => {
+        const image = {
+          setOrigin: () => image,
+          setDisplaySize: () => image,
+          setDepth: () => image,
+          setVisible: () => image,
+          destroy: () => undefined,
+        };
+        return image;
+      },
+    },
+  };
+  return {
+    renderer: new RiskOverlayRenderer(scene as never),
+    texture: (chunkX: number, chunkY: number) => {
+      const texture = textures.get(`${key}-risk-forward-${chunkX}-${chunkY}`);
+      if (!texture) throw new Error(`Missing forward texture ${chunkX},${chunkY}`);
+      return texture;
+    },
+  };
+}
+
+function makeForward(
+  world: WorldGrid,
+  reachableIndices: readonly number[],
+  presentationIndices: readonly number[],
+): ForwardRangeResult {
+  const mask = new Uint8Array(world.tileCount);
+  const presentationMask = new Uint8Array(world.tileCount);
+  for (const index of reachableIndices) mask[index] = 1;
+  for (const index of presentationIndices) presentationMask[index] = 1;
+  return {
+    mask,
+    presentationMask,
+    costs: new Float64Array(world.tileCount),
+    budget: 1,
+    reachableCount: reachableIndices.length,
+    frontierCount: presentationIndices.length,
+    presentationHeading: 0,
+    coneHalfAngleDegrees: 45,
+    candidateIndices: reachableIndices,
+    presentationCandidateIndices: presentationIndices,
+  };
+}
+
+function emptyReturn(world: WorldGrid): ReturnPathResult {
+  return {
+    risk: new Uint8Array(world.tileCount),
+    corridorIndices: [],
+  } as unknown as ReturnPathResult;
+}
+
+function comfortableReturn(world: WorldGrid, index: number): ReturnPathResult {
+  const risk = new Uint8Array(world.tileCount);
+  risk[index] = ReturnRiskLevel.Comfortable;
+  return { risk, corridorIndices: [index] } as unknown as ReturnPathResult;
+}
+
+const debugVisibility = {
+  navigationGrid: false,
+  currentSight: false,
+  forwardRange: true,
+  returnViability: true,
+};
 
 function keys(chunks: ReadonlySet<WorldChunk>): string[] {
   return [...chunks]
@@ -28,7 +155,7 @@ describe("overlay chunk invalidation", () => {
     ]);
   });
 
-  it("invalidates only cardinal chunk dependents for a boundary-dot change", () => {
+  it("invalidates only cardinal chunk dependents for a frontier-contour change", () => {
     const world = new WorldGrid(12, 12, 4);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const dirty = new Set<WorldChunk>();
@@ -38,7 +165,7 @@ describe("overlay chunk invalidation", () => {
     expect(keys(dirty)).toEqual(["0,1", "1,0", "1,1"]);
   });
 
-  it("keeps an interior boundary-dot change local to its owning chunk", () => {
+  it("keeps an interior frontier-contour change local to its owning chunk", () => {
     const world = new WorldGrid(12, 12, 4);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const dirty = new Set<WorldChunk>();
@@ -46,5 +173,124 @@ describe("overlay chunk invalidation", () => {
     addCardinalChunkDependents(world, world.index(5, 6), dirty);
 
     expect(keys(dirty)).toEqual(["1,1"]);
+  });
+});
+
+describe("forward frontier rendering", () => {
+  it("draws thin pale segments only on edges facing outside the logical reach mask", () => {
+    const world = new WorldGrid(3, 3, 3);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const center = world.index(1, 1);
+    const forward = makeForward(
+      world,
+      [center, world.index(0, 1), world.index(1, 0)],
+      [center],
+    );
+    const { renderer, texture } = makeRendererHarness();
+
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
+
+    const calls = texture(0, 0).calls;
+    expect(calls.length).toBeGreaterThan(0);
+    expect(calls.every(({ width, height }) => width === 1 && height === 1)).toBe(true);
+    expect(calls.every(({ style }) => (
+      style === `rgba(226, 230, 210, ${prototypeConfig.overlays.forwardOverlayOpacity})`
+    ))).toBe(true);
+    expect(calls.every(({ x, y }) => x === 11 || y === 11)).toBe(true);
+    expect(calls.some(({ x }) => x === 11)).toBe(true);
+    expect(calls.some(({ y }) => y === 11)).toBe(true);
+    expect(calls.some(({ x }) => x === 6)).toBe(false);
+    expect(calls.some(({ y }) => y === 6)).toBe(false);
+  });
+
+  it("keeps dash phase continuous across chunk seams without drawing a radial seam wall", () => {
+    const world = new WorldGrid(4, 3, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const row = [0, 1, 2, 3].map((x) => world.index(x, 1));
+    const forward = makeForward(world, row, [row[1], row[2]]);
+    const { renderer, texture } = makeRendererHarness("seam-test");
+
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
+
+    const leftCalls = texture(0, 0).calls;
+    const rightCalls = texture(1, 0).calls.map((call) => ({ ...call, x: call.x + 12 }));
+    const globalCalls = [...leftCalls, ...rightCalls];
+    expect(globalCalls.every(({ y }) => y === 6 || y === 11)).toBe(true);
+    expect(globalCalls.filter(({ y }) => y === 6).map(({ x }) => x)).toEqual([
+      8, 9, 12, 13, 16, 17,
+    ]);
+  });
+
+  it("redraws seam dependents when only an adjacent logical reach bit changes", () => {
+    const world = new WorldGrid(4, 1, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const frontier = world.index(1, 0);
+    const seamNeighbour = world.index(2, 0);
+    const first = makeForward(world, [frontier, seamNeighbour], [frontier]);
+    const { renderer, texture } = makeRendererHarness("topology-test");
+    renderer.sync(world, first, emptyReturn(world), debugVisibility, 1, true);
+    const leftRefreshes = texture(0, 0).refreshCount;
+    const rightRefreshes = texture(1, 0).refreshCount;
+    expect(texture(0, 0).calls.some(({ x }) => x === 11)).toBe(false);
+
+    const second = makeForward(world, [frontier], [frontier]);
+    renderer.sync(world, second, emptyReturn(world), debugVisibility, 2);
+
+    expect(texture(0, 0).refreshCount).toBe(leftRefreshes + 1);
+    expect(texture(1, 0).refreshCount).toBe(rightRefreshes + 1);
+    expect(texture(0, 0).calls.some(({ x }) => x === 11)).toBe(true);
+  });
+
+  it("suppresses the forward contour on currently visible frontier cells", () => {
+    const world = new WorldGrid(3, 3, 3);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const center = world.index(1, 1);
+    world.setVisibleNowAtIndex(center, true);
+    const forward = makeForward(world, [center], [center]);
+    const { renderer, texture } = makeRendererHarness("visibility-test");
+
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
+
+    expect(texture(0, 0).calls).toEqual([]);
+  });
+
+  it("suppresses return risk in current sight and restores it after sight moves away", () => {
+    const world = new WorldGrid(3, 3, 3);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Personal);
+    const center = world.index(1, 1);
+    const returning = comfortableReturn(world, center);
+    const forward = makeForward(world, [], []);
+    world.setVisibleNowAtIndex(center, true);
+    const { renderer } = makeRendererHarness("return-sight-test");
+
+    renderer.sync(world, forward, returning, debugVisibility, 1, true);
+    const presented = (renderer as unknown as { returnPresented: Uint8Array }).returnPresented;
+    expect(presented[center]).toBe(ReturnRiskLevel.Hidden);
+
+    world.clearVisibility();
+    renderer.sync(world, forward, returning, debugVisibility, 1);
+    expect(presented[center]).toBe(ReturnRiskLevel.Comfortable);
+  });
+
+  it("skips full logical-candidate diffing for a presentation-only heading change", () => {
+    const world = new WorldGrid(4, 2, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const left = world.index(1, 0);
+    const right = world.index(2, 0);
+    const forward = makeForward(world, [left, right], [left]);
+    const { renderer } = makeRendererHarness("heading-test");
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
+    const reachableDiff = vi.spyOn(
+      renderer as unknown as { updateForwardReachableIndices: (...args: unknown[]) => void },
+      "updateForwardReachableIndices",
+    );
+
+    forward.presentationMask[left] = 0;
+    forward.presentationMask[right] = 1;
+    forward.presentationCandidateIndices = [right];
+    forward.presentationHeading = 90;
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 2);
+
+    expect(reachableDiff).not.toHaveBeenCalled();
   });
 });

@@ -17,6 +17,8 @@ interface OverlayChunkView {
 }
 
 const OVERLAY_SCALE = 6;
+const FORWARD_DASH_PERIOD = 4;
+const FORWARD_DASH_LENGTH = 2;
 
 /**
  * Renders cost-grid results into independently uploaded chunk textures. The
@@ -32,10 +34,13 @@ export class RiskOverlayRenderer {
   private lastVisibilityVersion = -1;
   private lastSignature = "";
   private forwardPresented = new Uint8Array(0);
+  private forwardReachable = new Uint8Array(0);
   private returnPresented = new Uint8Array(0);
   private lastForward?: ForwardRangeResult;
   private lastReturning?: ReturnPathResult;
   private lastForwardPresentationCandidates: readonly number[] = [];
+  private lastForwardCandidates: readonly number[] = [];
+  private lastForwardReachableCount = -1;
   private lastReturnCorridor: readonly number[] = [];
   private lastVisibleIndices: readonly number[] = [];
   private lastForwardVisible?: boolean;
@@ -57,6 +62,7 @@ export class RiskOverlayRenderer {
     if (worldChanged) {
       this.destroyViews();
       this.forwardPresented = new Uint8Array(world.tileCount);
+      this.forwardReachable = new Uint8Array(world.tileCount);
       this.returnPresented = new Uint8Array(world.tileCount);
       this.lastWorld = world;
       this.lastRevision = -1;
@@ -65,6 +71,8 @@ export class RiskOverlayRenderer {
       this.lastForward = undefined;
       this.lastReturning = undefined;
       this.lastForwardPresentationCandidates = [];
+      this.lastForwardCandidates = [];
+      this.lastForwardReachableCount = -1;
       this.lastReturnCorridor = [];
       this.lastVisibleIndices = [];
       this.lastForwardVisible = undefined;
@@ -79,6 +87,8 @@ export class RiskOverlayRenderer {
     const dataChanged = revision !== this.lastRevision
       || forward !== this.lastForward
       || returning !== this.lastReturning;
+    const logicalForwardChanged = forward !== this.lastForward
+      || forward.reachableCount !== this.lastForwardReachableCount;
     const chunksChanged = chunks.length !== this.views.size;
     const debugChanged = debug.forwardRange !== this.lastForwardVisible
       || debug.returnViability !== this.lastReturnVisible;
@@ -105,6 +115,10 @@ export class RiskOverlayRenderer {
     const dirtyReturn = new Set<WorldChunk>();
 
     if (force || worldChanged || dataChanged || chunksChanged) {
+      if (force || worldChanged || logicalForwardChanged) {
+        this.updateForwardReachableIndices(world, forward, this.lastForwardCandidates, dirtyForward);
+        this.updateForwardReachableIndices(world, forward, forward.candidateIndices, dirtyForward);
+      }
       this.updateForwardIndices(world, forward, this.lastForwardPresentationCandidates, dirtyForward);
       this.updateForwardIndices(world, forward, forward.presentationCandidateIndices, dirtyForward);
       this.updateReturnIndices(world, returning, this.lastReturnCorridor, dirtyReturn);
@@ -112,6 +126,8 @@ export class RiskOverlayRenderer {
     } else if (visibilityChanged) {
       this.updateForwardIndices(world, forward, this.lastVisibleIndices, dirtyForward);
       this.updateForwardIndices(world, forward, world.getVisibleIndices(), dirtyForward);
+      this.updateReturnIndices(world, returning, this.lastVisibleIndices, dirtyReturn);
+      this.updateReturnIndices(world, returning, world.getVisibleIndices(), dirtyReturn);
     }
 
     if (redrawAll) {
@@ -131,7 +147,7 @@ export class RiskOverlayRenderer {
     for (const chunk of dirtyForward) {
       const view = this.views.get(this.chunkKey(chunk));
       if (!view) continue;
-      this.renderForwardChunk(world, chunk, view.forwardTexture);
+      this.renderForwardChunk(world, forward, chunk, view.forwardTexture);
       view.forwardTexture.refresh();
     }
     for (const chunk of dirtyReturn) {
@@ -146,6 +162,8 @@ export class RiskOverlayRenderer {
     this.lastSignature = signature;
     this.lastForward = forward;
     this.lastReturning = returning;
+    this.lastForwardCandidates = forward.candidateIndices;
+    this.lastForwardReachableCount = forward.reachableCount;
     this.lastForwardPresentationCandidates = forward.presentationCandidateIndices;
     this.lastReturnCorridor = returning.corridorIndices;
     this.lastVisibleIndices = [...world.getVisibleIndices()];
@@ -157,10 +175,13 @@ export class RiskOverlayRenderer {
     this.destroyViews();
     this.lastWorld = undefined;
     this.forwardPresented = new Uint8Array(0);
+    this.forwardReachable = new Uint8Array(0);
     this.returnPresented = new Uint8Array(0);
     this.lastForward = undefined;
     this.lastReturning = undefined;
     this.lastForwardPresentationCandidates = [];
+    this.lastForwardCandidates = [];
+    this.lastForwardReachableCount = -1;
     this.lastReturnCorridor = [];
     this.lastVisibleIndices = [];
     this.lastForwardVisible = undefined;
@@ -174,6 +195,20 @@ export class RiskOverlayRenderer {
     dirtyChunks: Set<WorldChunk>,
   ): void {
     for (const index of indices) this.updateForwardIndex(world, forward, index, dirtyChunks);
+  }
+
+  private updateForwardReachableIndices(
+    world: WorldGrid,
+    forward: ForwardRangeResult,
+    indices: Iterable<number>,
+    dirtyChunks: Set<WorldChunk>,
+  ): void {
+    for (const index of indices) {
+      const next = forward.mask[index] !== 0 ? 1 : 0;
+      if (this.forwardReachable[index] === next) continue;
+      this.forwardReachable[index] = next;
+      addCardinalChunkDependents(world, index, dirtyChunks);
+    }
   }
 
   private updateReturnIndices(
@@ -203,7 +238,7 @@ export class RiskOverlayRenderer {
     index: number,
     dirtyChunks: Set<WorldChunk>,
   ): void {
-    const next = returning.risk[index];
+    const next = world.isVisibleNowAtIndex(index) ? ReturnRiskLevel.Hidden : returning.risk[index];
     if (this.returnPresented[index] === next) return;
     this.returnPresented[index] = next;
     const x = index % world.width;
@@ -261,12 +296,14 @@ export class RiskOverlayRenderer {
 
   private renderForwardChunk(
     world: WorldGrid,
+    forward: ForwardRangeResult,
     chunk: WorldChunk,
     texture: Phaser.Textures.CanvasTexture,
   ): void {
     const context = texture.getContext();
     context.clearRect(0, 0, texture.width, texture.height);
     const opacity = prototypeConfig.overlays.forwardOverlayOpacity;
+    context.fillStyle = `rgba(226, 230, 210, ${opacity})`;
 
     for (let localY = 0; localY < chunk.size; localY++) {
       const y = chunk.chunkY * chunk.size + localY;
@@ -278,16 +315,54 @@ export class RiskOverlayRenderer {
         if (!this.forwardPresented[index]) continue;
         const px = localX * OVERLAY_SCALE;
         const py = localY * OVERLAY_SCALE;
-        context.fillStyle = `rgba(165, 192, 190, ${opacity})`;
-        context.fillRect(px, py, OVERLAY_SCALE, OVERLAY_SCALE);
-
-        if (this.touchesOutside(this.forwardPresented, world, x, y)) {
-          context.fillStyle = `rgba(226, 230, 210, ${Math.min(0.9, opacity * 3.4)})`;
-          context.fillRect(px + OVERLAY_SCALE / 2 - 0.5, py, 1, 1);
-          context.fillRect(px + OVERLAY_SCALE / 2 - 0.5, py + OVERLAY_SCALE - 1, 1, 1);
-          context.fillRect(px, py + OVERLAY_SCALE / 2 - 0.5, 1, 1);
-          context.fillRect(px + OVERLAY_SCALE - 1, py + OVERLAY_SCALE / 2 - 0.5, 1, 1);
+        if (y === 0 || forward.mask[index - world.width] === 0) {
+          this.drawHorizontalForwardSegment(context, px, py, x * OVERLAY_SCALE);
         }
+        if (y + 1 >= world.height || forward.mask[index + world.width] === 0) {
+          this.drawHorizontalForwardSegment(
+            context,
+            px,
+            py + OVERLAY_SCALE - 1,
+            x * OVERLAY_SCALE,
+          );
+        }
+        if (x === 0 || forward.mask[index - 1] === 0) {
+          this.drawVerticalForwardSegment(context, px, py, y * OVERLAY_SCALE);
+        }
+        if (x + 1 >= world.width || forward.mask[index + 1] === 0) {
+          this.drawVerticalForwardSegment(
+            context,
+            px + OVERLAY_SCALE - 1,
+            py,
+            y * OVERLAY_SCALE,
+          );
+        }
+      }
+    }
+  }
+
+  private drawHorizontalForwardSegment(
+    context: CanvasRenderingContext2D,
+    px: number,
+    py: number,
+    worldPixelX: number,
+  ): void {
+    for (let offset = 0; offset < OVERLAY_SCALE; offset++) {
+      if ((worldPixelX + offset) % FORWARD_DASH_PERIOD < FORWARD_DASH_LENGTH) {
+        context.fillRect(px + offset, py, 1, 1);
+      }
+    }
+  }
+
+  private drawVerticalForwardSegment(
+    context: CanvasRenderingContext2D,
+    px: number,
+    py: number,
+    worldPixelY: number,
+  ): void {
+    for (let offset = 0; offset < OVERLAY_SCALE; offset++) {
+      if ((worldPixelY + offset) % FORWARD_DASH_PERIOD < FORWARD_DASH_LENGTH) {
+        context.fillRect(px, py + offset, 1, 1);
       }
     }
   }
@@ -353,17 +428,6 @@ export class RiskOverlayRenderer {
     }
     context.stroke();
     context.restore();
-  }
-
-  private touchesOutside(mask: Uint8Array, world: WorldGrid, x: number, y: number): boolean {
-    return x === 0
-      || y === 0
-      || x + 1 >= world.width
-      || y + 1 >= world.height
-      || mask[y * world.width + x - 1] === 0
-      || mask[y * world.width + x + 1] === 0
-      || mask[(y - 1) * world.width + x] === 0
-      || mask[(y + 1) * world.width + x] === 0;
   }
 
   private chunkKey(chunk: WorldChunk): string {

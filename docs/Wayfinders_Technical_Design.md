@@ -101,6 +101,10 @@ export const PrototypeConfig = {
     chunkSize: 32,
   },
 
+  world: {
+    maxEnclosedUnknownTiles: 2,
+  },
+
   islands: {
     count: 8,
     minRadius: 2,
@@ -134,9 +138,9 @@ export const PrototypeConfig = {
   overlays: {
     fogNoise: 0.18,
     fogBlend: 0.12,
-    forwardOverlayOpacity: 0.18,
+    forwardOverlayOpacity: 0.55,
     returnOverlayOpacity: 0.35,
-    forwardFocusPadding: 3,
+    forwardConeHalfAngleDegrees: 60,
     returnPathPadding: 1,
   },
 
@@ -812,10 +816,27 @@ On successful return:
 2. Convert only those tiles to Supported.
 3. Clear their expedition stamps to zero.
 4. Leave Personal tiles owned by any other expedition unchanged.
-5. Mark the expedition inactive and increment the expedition ID.
-6. Replenish the configured starting bundles and clear the fractional accumulator.
-7. Keep the same generation and ship at the home dock.
-8. Redraw Supported-water presentation and recalculate overlays.
+5. Run the single successful-return Unknown-pocket cleanup described below.
+6. Mark the expedition inactive and increment the expedition ID.
+7. Replenish the configured starting bundles and clear the fractional accumulator.
+8. Keep the same generation and ship at the home dock.
+9. Redraw Supported-water presentation and recalculate overlays.
+
+The cleanup is a deliberately narrow knowledge-topology correction. After the
+Personal-to-Supported commit, inspect only 8-connected Unknown components
+adjacent to tiles committed by that return. Fill a component with Supported
+knowledge only when all of these conditions hold:
+
+- its size is at most `world.maxEnclosedUnknownTiles` (two by default; zero
+  disables the pass);
+- no component tile touches a world edge; and
+- every 8-neighbour outside the component is Supported.
+
+Run one pass only and clear filled tiles' expedition stamps to zero. The pass
+may read knowledge state and world bounds, but it must not inspect terrain,
+collision, resources or hidden island data. It runs only after a successful
+commit. Wreck rollback/revert never invokes it, so a failed voyage cannot turn
+Unknown water into inherited knowledge.
 
 Entering the exact home dock without an active expedition also replenishes the
 configured starting bundles and clears the accumulator. It does not change the
@@ -884,16 +905,29 @@ Stop expanding when accumulated cost exceeds:
 ship.provisions - ship.provisionAccumulator
 ```
 
-Keep the complete logical result for diagnostics, but derive a separate
-presentation mask. Present only candidates inside a Euclidean focus centred on
-the ship:
+Keep the complete logical result for diagnostics, but derive a separate thin
+presentation frontier. For provision budget `B` and configured Unknown cost
+`U > 0`, display only reachable Unknown cells in the outermost Unknown-cost
+band:
 
 ```ts
-focusRadius = sightRadius + forwardFocusPadding;
+B - U < minimumCost && minimumCost <= B
 ```
 
-The default padding is three tiles. This produces a local band beyond current
-sight instead of tinting every reachable Unknown cell in the play area.
+Require `U` to be positive; free Unknown travel has no finite provision
+frontier. This puts the cue at the true maximum reach immediately, instead of
+growing outward from current sight. During travel
+through equal-cost Unknown water, moving one step reduces the remaining path
+cost and provision budget by the same amount, so the frontier should normally
+remain anchored to the same world cells. Knowledge, cost or route changes can
+legitimately reshape it.
+
+Clip presentation membership to a cone centred on the ship heading (zero
+degrees east, positive rotation south). The default half-angle is 60 degrees,
+for a 120-degree total cone. Keep the full logical result cached so a heading
+change can reclip only the sparse terminal band without rerunning Dijkstra.
+Turning rotates the visible arc; straight equal-cost travel retains the
+world-anchored limit.
 
 Output one logical and one presentation mask value per tile:
 
@@ -904,12 +938,13 @@ Output one logical and one presentation mask value per tile:
 
 Display only Unknown cells.
 
-Do not display direction, safety level, terrain or discoveries.
+Do not display a heading value, safety level, terrain or discoveries.
 
 Recalculate when:
 
 - the ship enters a tile;
 - provisions change;
+- heading changes (presentation reclip only);
 - knowledge changes;
 - a blocking tile changes.
 
@@ -1071,18 +1106,28 @@ must never reveal base terrain or island descriptors.
 
 ### Current visibility
 
-The visibility mask removes both Unknown fog and Personal desaturation in the five-tile sight area.
+The visibility mask removes Unknown fog, Personal desaturation, forward-range
+contours and return-risk colour in the five-tile sight area. A visible tile is
+rendered like Supported water because the player can directly inspect it. This
+does not mutate knowledge or discount travel: visible Unknown and Personal
+water retain their configured movement costs.
 
 ### Forward range
 
-Render a neutral low-opacity texture over Unknown fog only inside the
-ship-centred focus. Do not reveal the base scene.
+Render only thin pale segmented contour edges over Unknown fog on the
+maximum-reach frontier. Draw an edge only where the adjacent cardinal tile is
+outside the full logical reach mask. Do not fill frontier tiles and do not draw
+radial walls at the clipped ends of the heading cone. Anchor the segment phase
+in world coordinates so chunk seams are continuous. Do not reveal the base
+scene.
 
 ### Return risk
 
 Tint only the selected padded route corridor according to the ship's single
 return-risk state. The corridor may cross currently visible Unknown water to
 connect the ship to its Personal trail; it never enters unseen Unknown water.
+Suppress the tint wherever current visibility is set, while retaining those
+tiles in the logical route and cost calculation.
 
 ---
 
@@ -1318,7 +1363,7 @@ Lifecycle event payloads must include enough immutable context for renderers
 and browser tests:
 
 ```ts
-expeditionReturned: { expeditionId, generation, supportedTileCount }
+expeditionReturned: { expeditionId, generation, supportedTileCount, closedUnknownTileCount }
 shipReplenished: { generation, bundles, reason: "return" | "dock" | "respawn" }
 shipWrecked: { wreckId, expeditionId, generation, tileX, tileY, worldX, worldY }
 generationAdvanced: { previousGeneration, generation, reason: "wreck" }
@@ -1412,6 +1457,7 @@ Required unit tests:
 - supported movement costs zero;
 - unknown movement costs one per tile;
 - personal movement costs half per tile;
+- current visibility changes no movement cost;
 - partial movement accumulates correctly;
 - frame rate does not affect cost.
 
@@ -1421,8 +1467,17 @@ Required unit tests:
 - excludes cells beyond provision budget;
 - does not reveal hidden terrain costs;
 - updates after provision consumption;
-- presents only the subset within `sightRadius + forwardFocusPadding` of the ship;
-- clears the old local focus when the ship changes tile.
+- presents only cells in the outermost Unknown-cost band
+  `budget - unknownCost < minimumCost <= budget`, with positive Unknown cost;
+- clips presentation to `overlays.forwardConeHalfAngleDegrees` around ship
+  heading and rotates it without recalculating logical costs;
+- appears at the true maximum-reach limit immediately and normally remains
+  world-anchored during equal-cost Unknown travel;
+- renders transparent tile interiors with thin segmented outward edges, no
+  radial cone walls and continuous dash phase across chunk seams;
+- suppresses presentation inside current sight without changing logical reach;
+- clears stale frontier pixels when ship position, provisions, knowledge or
+  blocking state changes.
 
 ### Return path
 
@@ -1432,6 +1487,7 @@ Required unit tests:
 - reaches the nearest Supported region;
 - permits currently visible passable Unknown only as the connection from the
   ship to its Personal trail;
+- suppresses route tint inside current sight without changing route cost;
 - reconstructs one deterministic minimum-cost path;
 - pads only through adjacent passable Personal/currently-visible water;
 - excludes unrelated Personal branches, blocked terrain, unseen Unknown and
@@ -1446,6 +1502,11 @@ Required unit tests:
 - Supported water away from home neither completes the expedition nor replenishes provisions;
 - only entering the exact home dock completes an active expedition;
 - successful return converts only Personal tiles carrying the current expedition stamp to Supported and clears those stamps;
+- after that commit, one knowledge-only pass fills an 8-connected Unknown
+  component only if it is non-edge, fully Supported-bounded and no larger than
+  `world.maxEnclosedUnknownTiles` (two by default, zero disables);
+- successful-return cleanup does not inspect terrain or resources and never
+  runs on wreck/revert;
 - successful return replenishes configured starting bundles, clears the fractional accumulator and keeps the same generation;
 - entering the dock without an active expedition replenishes supplies without changing expedition ID or generation;
 - a final bundle spent on the docking step resolves as success rather than wreck;
@@ -1615,15 +1676,19 @@ Completion condition: the player can visually identify both remaining forward re
 
 ### Milestone 5.1 — Overlay Readability Rework (roadmap Milestone 3.1)
 
-- Restrict forward presentation to a ship-local sight-plus-padding focus while
-  retaining the full logical provision calculation.
+- Restrict forward presentation to the outermost reachable Unknown-cost band
+  at the true maximum-reach limit while retaining the full logical provision
+  calculation.
+- Clip that band to the configurable forward heading cone and render it as a
+  thin segmented outward contour rather than filled tiles.
 - Reconstruct one minimum-cost ship-to-Supported route.
 - Pad that route through passable known/currently-visible water only.
 - Apply one yellow, orange or red risk family to the complete corridor.
 - Remove coloured risk treatment from unrelated Personal water.
 
 Completion condition: the player sees one coherent route-home decision and a
-local forward cue without map-wide coloured blocks.
+thin, normally world-anchored maximum-reach frontier without map-wide coloured
+blocks.
 
 ### Milestone 6 — Expedition Resolution (completes roadmap Milestone 3)
 
@@ -1639,6 +1704,10 @@ local forward cue without map-wide coloured blocks.
 - Track current expedition-stamped Personal tiles separately from generation.
 - Resolve successful return only at the exact home dock.
 - Convert only current expedition-stamped Personal tiles to Supported and clear their stamps.
+- After a successful commit, fill only tiny non-edge, fully Supported-bounded
+  Unknown knowledge pockets according to `world.maxEnclosedUnknownTiles`.
+- Never run pocket cleanup during wreck rollback, and never inspect hidden
+  terrain or resources to decide whether to fill.
 - Replenish at the dock while keeping the same generation after success.
 - Replenish on entering the dock without an active expedition.
 - Begin the wreck transition immediately on natural supply exhaustion outside Supported water.
@@ -1682,13 +1751,17 @@ when all of the following are true:
 1. The browser game loads through the existing Phaser project.
 2. The ship is visually smooth but logically occupies one navigation tile.
 3. Unknown water is black and hides all content.
-4. The five-tile sight area is shown in normal colour.
+4. The five-tile sight area is shown in normal Supported-style colour with no
+   knowledge-grey or risk tint, while underlying knowledge and travel cost stay unchanged.
 5. Travel creates a broad Personal corridor.
 6. Personal water is gray after leaving current sight.
 7. Physical provisions visibly diminish.
 8. Unknown travel costs twice as much as retracing Personal water.
 9. Supported travel costs nothing.
-10. The neutral overlay shows reachable Unknown water only in a bounded focus around the ship.
+10. The neutral overlay shows a thin segmented outward contour only for the
+    outermost reachable Unknown-cost band inside the configured forward
+    heading cone. It normally stays world-anchored during equal-cost Unknown
+    travel, rotates when the ship turns and does not fill tile interiors.
 11. The return overlay communicates viability on one minimum-cost route to Supported water.
 12. Yellow, orange and red appear only on that route and its passable configured padding.
 13. Red means the minimum-cost known return exceeds the remaining provisions.
@@ -1696,27 +1769,30 @@ when all of the following are true:
 15. Entering Supported water away from home neither completes nor replenishes the expedition.
 16. Entering the exact home dock successfully returns an active expedition.
 17. Successful return converts only current expedition-stamped Personal knowledge to Supported and clears those stamps.
-18. Successful return restores configured starting bundles, clears fractional provision use and keeps the same generation.
-19. Entering the home dock without an active expedition also replenishes supplies without changing generation.
-20. Natural supply exhaustion outside Supported water immediately begins a wreck transition unless the same step successfully enters the dock.
-21. Wreck removes only failed-expedition Personal knowledge; previous Supported knowledge survives.
-22. Wreck leaves a world marker which a later generation can discover.
-23. The wreck remains visibly at the loss site with input suppressed and the old generation authoritative for four seconds.
-24. Wreck completion respawns a fully provisioned ship at the dock and advances generation exactly once.
-25. Successful return never advances generation.
-26. Supported routes and wrecks survive later expeditions and wrecks in the same generated runtime.
-27. Regeneration or browser reload resets runtime routes, wrecks and generation before Milestone 4 persistence exists.
-28. Normal exploration contains no numerical resource bar or route forecast.
-29. The prototype maintains the performance targets on desktop and mobile browsers.
-30. The default configuration generates eight non-home islands with stable IDs and descriptors.
-31. Regenerating the same seed reproduces island kind, size, centre, radii, rotation, shape seed, bounds and painted terrain.
-32. High Island, Low Cay, Atoll and Rocky Skerry kinds and small, medium and large sizes all appear in the default set.
-33. Islands respect configured home exclusion, world margins and minimum channel width.
-34. The complete eastbound home-dock corridor remains clear and passable ocean reaches all four world edges.
-35. Fully opaque Unknown fog prevents terrain or decoration from silhouetting before reveal.
-36. Revealed islands use functional developer art and authoritative terrain collision and sight blocking.
-37. Milestone 3 islands have no names, rewards, settlements, resource records or generic discovery records.
-38. Developer tools can inspect the stable descriptor list using **Inspect next island**.
+18. Successful return fills only configured-size, non-edge, fully
+    Supported-bounded Unknown knowledge pockets; zero disables the pass, and
+    wreck/revert never invokes it.
+19. Successful return restores configured starting bundles, clears fractional provision use and keeps the same generation.
+20. Entering the home dock without an active expedition also replenishes supplies without changing generation.
+21. Natural supply exhaustion outside Supported water immediately begins a wreck transition unless the same step successfully enters the dock.
+22. Wreck removes only failed-expedition Personal knowledge; previous Supported knowledge survives.
+23. Wreck leaves a world marker which a later generation can discover.
+24. The wreck remains visibly at the loss site with input suppressed and the old generation authoritative for four seconds.
+25. Wreck completion respawns a fully provisioned ship at the dock and advances generation exactly once.
+26. Successful return never advances generation.
+27. Supported routes and wrecks survive later expeditions and wrecks in the same generated runtime.
+28. Regeneration or browser reload resets runtime routes, wrecks and generation before Milestone 4 persistence exists.
+29. Normal exploration contains no numerical resource bar or route forecast.
+30. The prototype maintains the performance targets on desktop and mobile browsers.
+31. The default configuration generates eight non-home islands with stable IDs and descriptors.
+32. Regenerating the same seed reproduces island kind, size, centre, radii, rotation, shape seed, bounds and painted terrain.
+33. High Island, Low Cay, Atoll and Rocky Skerry kinds and small, medium and large sizes all appear in the default set.
+34. Islands respect configured home exclusion, world margins and minimum channel width.
+35. The complete eastbound home-dock corridor remains clear and passable ocean reaches all four world edges.
+36. Fully opaque Unknown fog prevents terrain or decoration from silhouetting before reveal.
+37. Revealed islands use functional developer art and authoritative terrain collision and sight blocking.
+38. Milestone 3 islands have no names, rewards, settlements, resource records or generic discovery records.
+39. Developer tools can inspect the stable descriptor list using **Inspect next island**.
 
 Milestone 4 is complete when save/load preserves Supported routes, wreck
 records, generation state, discovered wreck state and returned generic
