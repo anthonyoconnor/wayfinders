@@ -26,7 +26,12 @@ export interface ShipState {
   provisionAccumulator: number;
 }
 
-/** Immutable record of a ship lost during an expedition. */
+export type ShipwreckSurveyState =
+  | { readonly state: "unexamined" }
+  | { readonly state: "provisional"; readonly expeditionId: number; readonly generation: number }
+  | { readonly state: "returned"; readonly expeditionId: number; readonly generation: number };
+
+/** Persistent record of a ship lost during an expedition. */
 export interface ShipwreckState {
   id: number;
   generation: number;
@@ -37,6 +42,7 @@ export interface ShipwreckState {
   tileY: number;
   heading: number;
   discovered: boolean;
+  survey: ShipwreckSurveyState;
 }
 
 export interface MovementInput {

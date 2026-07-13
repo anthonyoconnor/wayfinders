@@ -204,6 +204,7 @@ describe("GameSimulation expedition lifecycle", () => {
     expect(simulation.generation).toBe(2);
     expect(simulation.currentExpeditionId).toBe(3);
     expect(simulation.ship.provisions).toBe(simulation.config.provisions.startingBundles);
+    expect(simulation.acknowledgeGenerationHandover()).toBe(true);
 
     expect(simulation.teleport(secondTarget)).toBe(true);
     expect(simulation.wrecks[0].discovered).toBe(true);

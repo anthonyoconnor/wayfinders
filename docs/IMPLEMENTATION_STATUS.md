@@ -8,7 +8,8 @@ The current implementation is the accepted starting point. It includes
 developer tooling, home waters, exploration knowledge, provision-aware risk
 and return, expedition inheritance, deterministic discoveries, cross-session
 persistence, versioned navigator succession, four-voyage navigator tenures
-and the performance foundation.
+with outcome-only generation summaries, returned identity/fate reports for
+runtime navigator wrecks and the performance foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
@@ -36,12 +37,13 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 189 automated tests pass across 20 files.
+- 207 automated tests pass across 22 files.
 - The production Vite build passes.
 - Browser tests cover discovery and fishing return, returned-lead upgrade,
   autosave reload, manual checkpoint restore, exact ship/camera restoration,
   the home-linked fishing-ground cue, wreck-hold reload, generation
-  advancement, save clearing, four-voyage automatic succession and a clean
+  advancement, save clearing, four-voyage automatic succession, both
+  generation-summary outcomes, runtime-wreck survey/reporting and a clean
   warning/error console.
 - The Phaser bundle-size warning remains informational.
 
@@ -122,6 +124,14 @@ Current verification baseline:
   outgoing navigator is already recorded as lost during that hold; completion
   then respawns a supplied ship at the dock and creates exactly one successor.
   Reloading during the hold resumes the same persisted succession key.
+- Every fourth-return or fatal-wreck succession presents a required placeholder
+  modal derived from the committed outgoing navigator. A completed tenure lists
+  four safely returned voyages; an early death lists earlier safe returns and
+  the numbered voyage on which the navigator was lost at sea. Sailing remains
+  suppressed until dismissal. The unacknowledged handover is authoritative,
+  survives save/reload and reopens the modal after refresh. The modal confirms
+  that earlier returned findings remain secured, contains no detailed
+  achievements and never credits provisional fatal-voyage results.
 - Earlier Supported routes, returned discoveries and runtime wrecks survive a
   later failure.
 
@@ -135,6 +145,13 @@ Current verification baseline:
   expedition.
 - Runtime player wrecks and generated historic-wreck discoveries are separate
   record types and presentations.
+- A later generation first sights a runtime player wreck as unidentified.
+  **Survey wreck** spends the existing one-per-voyage survey case and gives the
+  active expedition a provisional identity/fate report for the navigator lost
+  there. Only exact-dock return permanently reports that association to the
+  tribe and lineage. If the surveying navigator wrecks, the provisional report
+  is discarded and the discovered wreck can be surveyed again. Revisit, repeat
+  input, dock, wreck and current-version reload are idempotent.
 - Four sparse fishing shoals are derived deterministically from the world seed
   in a separate content namespace. Current-sight clues create provisional
   sightings without revealing hidden quality or mutating terrain, islands,
@@ -155,10 +172,12 @@ Current verification baseline:
   allocation; unused cases never stack.
 - Schema-versioned saves persist the authoritative ship, provisions,
   expedition/generation state, navigator lineage and completed-voyage counts,
-  knowledge and stamps, runtime wrecks, pending wreck holds,
-  provisional/returned discoveries and provisional/returned fishing records.
-  Schema V7 requires lineage contract V3; non-current schemas and lineage
-  contracts are not migrated.
+  knowledge and stamps, runtime wrecks, pending wreck holds and unacknowledged
+  generation handovers,
+  provisional/returned wreck identity reports, provisional/returned
+  discoveries and provisional/returned fishing records. Save schema V8
+  requires the exact current V3 lineage, generation-handover V1 contract and
+  current wreck shape; non-current records are not migrated.
   Fishing connectivity and its path are derived after load, never serialized.
 - Base terrain and island descriptors regenerate from the saved seed and world
   configuration. Visibility, forward range and return paths rebuild on load.
@@ -186,6 +205,12 @@ Current verification baseline:
   surveys retain their ordinary returned mark.
 - Voyage progress is presented as a bounded **Voyage n of 4** navigator cue.
   The obsolete retirement-choice ribbon and age HUD are absent.
+- The required generation modal is an outcome-only placeholder, not the Great
+  Hall. GR-3.4 may polish or replace it without changing authoritative lineage
+  results.
+- Discovered, unreported runtime wrecks use an unidentified marker and a
+  contextual **Survey wreck / Leave** action. The aboard result names the lost
+  navigator provisionally; exact-dock return makes the report permanent.
 - Developer tools provide seed regeneration, island inspection, water-tile
   teleport, provision/wreck controls, overlay toggles, live configuration,
   autosave status and checkpoint controls.
@@ -247,8 +272,9 @@ Current verification baseline:
   economics, lineage achievements and idols are not yet implemented.
 - Gameplay track: navigator identity, succession and the four-voyage tenure
   are authoritative. The Great Hall voyage chronicle remains proposed as
-  `GP-2.3`; later recovered-knowledge play around a lost navigator's wreck
-  belongs to `GP-3.4`.
+  `GP-2.3`. Runtime wreck identity/fate surveying and reporting are implemented;
+  salvage, bounded chart restoration, cargo and economy recovery remain
+  `GP-3.4` work.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
   player-facing saved-game model has not been chosen.
 - `GP-3`: there are no fishing boats, trade vessels or
@@ -275,7 +301,8 @@ The completed milestones are:
 6. `GP-1.4` — accepted: derived Supported-water home-connection proof and cue;
 7. `GP-2.1` — accepted: stable navigator identity and idempotent succession;
 8. `GP-2.2` — accepted: four exact-return voyages, automatic tenure
-   succession and fatal-wreck early succession.
+   succession, fatal-wreck early succession, outcome-only generation summaries
+   and exact-dock-committed runtime-wreck identity/fate reports.
 
 The next proposed gameplay milestone is `GP-2.3`, the Great Hall voyage
 chronicle.

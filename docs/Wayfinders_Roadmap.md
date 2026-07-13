@@ -87,9 +87,10 @@ generator, content versions and serialized sub-format versions. Any readable
 record that is malformed, older or newer is deleted instead of migrated or
 preserved. A rejected autosave starts fresh; a rejected checkpoint becomes
 unavailable without replacing the running world. Current docked-return,
-active-expedition and pending-wreck states still round-trip through the two
-atomic IndexedDB records. The full pipeline passes 188 tests across 20 files
-plus typecheck and production build; validation runs only at load boundaries
+active-expedition, pending-wreck and unacknowledged generation-handover states
+still round-trip through the two atomic IndexedDB records. The full pipeline
+passes 207 tests across 22 files plus typecheck and production build;
+validation runs only at load boundaries
 and adds no movement-loop work.
 
 Before new authoritative gameplay state is integrated:
@@ -346,15 +347,19 @@ distance, travel time and reload do not. Returns one through three commit their
 results and replenish normally. The fourth return commits normally and then
 completes the navigator's tenure, immediately creating exactly one successor
 without a retirement choice or fifth voyage. A wreck during any voyage is
-fatal: it records the navigator as lost, preserves the unchanged four-second
-wreck presentation and creates exactly one successor after the pending
-transition. Schema V7 requires the V3 lineage contract, which stores each
-navigator's completed-voyage count; V6 and older age/final-voyage records are
-incompatible and removed under the exact-version save policy. Retirement
-actions and their dock ribbon are absent. The full pipeline passes 189 tests
-across 20 files plus typecheck and production build. Browser acceptance covers
-the voyage status, fourth-return succession, fatal-wreck transition and a clean
-warning/error console.
+fatal: it records the navigator as lost, preserves the four-second wreck
+presentation and creates exactly one successor after the pending transition.
+Every succession presents a required placeholder outcome summary: a completed
+tenure shows four safely returned voyages, while an early loss shows the safe
+returns followed by the numbered voyage on which the navigator was lost at
+sea. Detailed achievements remain GP-2.3 work. A later navigator can sight an
+unidentified runtime wreck, spend the existing one-per-voyage survey case to
+identify it provisionally, and commit that identity/fate report only by
+returning to the exact home dock. Retirement actions and their dock ribbon are
+absent. The full verification pipeline and browser acceptance cover the voyage
+status, both succession summaries, fatal-wreck transition, wreck-survey commit
+and rollback, and a clean warning/error console. The full pipeline passes 207
+tests across 22 files plus typecheck and production build.
 
 - Complete one numbered voyage only on an active expedition's successful
   exact-home-dock return, after its discoveries, surveys and knowledge commit.
@@ -364,11 +369,27 @@ warning/error console.
 - Let a wreck during any voyage kill the navigator early, preserve the
   existing four-second wreck sequence and create exactly one successor when
   that persisted transition completes.
+- At each fourth-return or fatal-wreck succession, show a required placeholder
+  modal for the outgoing navigator. List only numbered voyage outcomes:
+  safely returned voyages, followed by **Lost at sea** at the fatal voyage when
+  applicable. Do not pull detailed landfalls, surveys or other achievements
+  forward from GP-2.3, and do not credit provisional fatal-voyage results.
+  Persist the unacknowledged handover, reopen it after reload and suppress
+  authoritative sailing until the player begins the successor's generation.
+- Keep a later generation's sighting of a runtime player wreck unidentified
+  until the player deliberately surveys it. Surveying spends the existing
+  one-per-voyage survey case and makes the wreck's navigator identity and fate
+  provisional to that expedition. Exact-dock return commits the report; a
+  wreck before return discards it so the persistent wreck can be surveyed
+  again. This adds no salvage, cargo, chart restoration or economy reward.
 - Treat every return-to-next-voyage and wreck-to-successor boundary as elapsed
   world time. Safe-return transitions are immediate; wrecks retain only their
-  existing four-second presentation hold, with no additional gameplay/economy
-  wait. Later milestones may settle community activity or show a
-  handover/mourning scene there, but GP-2.2 adds no economy or cutscene.
+  existing four-second presentation hold, with no additional timed or
+  wall-clock wait and no economy accumulation. The acknowledgement gate still
+  suppresses sailing. The required placeholder modal makes the generation
+  handover legible;
+  later milestones may settle community activity there or replace the modal
+  with a richer handover/mourning presentation.
 - Keep the limit legible through the existing navigator status and return cues
   as **Voyage n of 4**; add no retirement decision interface.
 
@@ -378,7 +399,13 @@ wreck at any voyage count ends that navigator without crediting the failed
 expedition; reload cannot consume, skip or duplicate a voyage or succession;
 inactive docking consumes no voyage; and inherited world state survives both
 completion and loss. Status/checkpoint restoration shows the correct next
-voyage and no retirement control remains.
+voyage and no retirement control remains. The transition modal reconciles
+exactly with the outgoing navigator's safe-return count and fatal voyage,
+suppresses sailing while open and never displays provisional achievements. A
+runtime wreck is reported at most once to its correct lost navigator; sight,
+survey, repeat input, exact-dock return, survey-expedition loss and reload are
+idempotent, and a failed report never restores the lost expedition's Personal
+chart or provisional discoveries.
 
 #### GP-2.3 — Great Hall voyage chronicle
 
@@ -392,9 +419,12 @@ Status: proposed.
   record; never credit provisional achievements from that fatal expedition.
 - Maintain lineage-wide aggregates and present history at home, after important
   returns or during succession—not as a sailing score HUD.
-- Associate a lost navigator with their persistent wreck so a later discovery
-  can reveal their fate. Recovering evidence or knowledge from that wreck is a
-  later GP-3.4 mechanic, not part of the chronicle milestone.
+- Expand GP-2.2's outcome-only transition summary into the detailed permanent
+  chronicle; the placeholder modal is not the Great Hall.
+- Show a lost navigator as **Lost at sea** before their wreck is located. When
+  GP-2.2's provisional wreck-identity survey is returned, attach the confirmed
+  wreck and fate report to the correct navigator. Deeper salvage, bounded chart
+  recovery, cargo and economy effects remain GP-3.4 work.
 
 The chronicle framework begins after GP-2.2 supplies stable voyage ordinals and
 terminal states, but each category is integrated
@@ -468,23 +498,23 @@ always useful; reload cannot create supplies.
 
 Status: proposed.
 
-Depends on GP-2.1's accepted navigator/succession model and GP-2.3's stable
-voyage-record identity.
+Depends on GP-2.1's accepted navigator/succession model, GP-2.3's stable
+voyage-record identity and GP-3.3's physical cargo/salvage contract.
 
 - Lose the current tribe investment on wreck, reduce optional support and lower
   visible activity.
 - Preserve Supported routes, returned opportunities and the minimum allocation.
 - Recover through successful play and established activity, never waiting.
-- Let later navigators find the persistent wreck of a lost navigator and
-  recover bounded evidence or knowledge of what happened. The wreck remains a
-  meaningful optional subgoal rather than restoring the failed expedition's
-  provisional achievements wholesale.
+- Build on GP-2.2's returned wreck-identity/fate report with bounded salvage,
+  chart knowledge, cargo or economy recovery. The wreck remains a meaningful
+  optional subgoal rather than restoring the failed expedition's Personal
+  chart or provisional achievements wholesale.
 
 Acceptance gate: a major loss affects the next generation; no legal failure
 sequence creates an unwinnable or idle-only state; the approved minor defines
-and tests a concrete maximum recovery sequence; recovered evidence is credited
-once to the correct lost navigator/wreck; pending-wreck reload remains
-idempotent.
+and tests a concrete maximum recovery sequence; salvage and recovered chart or
+economy effects are credited once to the already-identified wreck; cargo state
+and pending-wreck reload remain idempotent.
 
 #### GP-3.5 — Connected communities and automatic trade
 
@@ -731,8 +761,9 @@ not require a permanent numerical panel.
 #### GR-3.4 — Lineage, idol and completion presentation
 
 Status: proposed. Add navigator/voyage cues, Great Hall and chronicle
-presentation, optional handover/mourning transitions, idol cargo, archive
-exhibits and optional-ending celebration without leaking hidden state.
+presentation, replace or polish GP-2.2's required placeholder
+handover/mourning modal, and add idol cargo, archive exhibits and
+optional-ending celebration without leaking hidden state.
 
 Acceptance gate: presentation matches authoritative navigator/idol records,
 does not reveal hidden locations and never forces the optional ending.
@@ -886,7 +917,10 @@ Additional product decisions are recorded here for later milestones:
 - GP-2.2 is confirmed and accepted: each navigator may complete at most four
   active-expedition exact-dock voyages; the fourth return commits before
   automatic succession, while a wreck during any voyage is fatal and creates
-  a new navigator after the compressed non-return/mourning transition.
+  a new navigator after the compressed non-return/mourning transition. Every
+  succession shows an outcome-only placeholder summary. A later navigator may
+  survey the lost navigator's unidentified runtime wreck with the existing
+  survey case, but only exact-dock return commits its identity/fate report.
 - GP-3 must define the minimal tribe vocabulary, settlement transactions,
   tuning values and maximum recovery bound before economy implementation.
 - GP-4 proposes an optional ending plus continued play after the last idol;

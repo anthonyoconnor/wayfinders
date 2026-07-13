@@ -85,6 +85,11 @@ describe("four-journey navigator tenure", () => {
       state: "active",
       completedVoyages: 0,
     });
+    expect(simulation.pendingGenerationHandover).toMatchObject({
+      fromGeneration: 1,
+      nextGeneration: 2,
+      reason: "tenure",
+    });
     expect(simulation.successfulReturns).toBe(4);
     expect(simulation.navigatorVoyageNumber).toBe(1);
     expect(simulation.navigatorVoyagesRemaining).toBe(4);
@@ -94,6 +99,7 @@ describe("four-journey navigator tenure", () => {
     const simulation = new GameSimulation();
     for (let voyage = 0; voyage < NAVIGATOR_VOYAGE_LIMIT; voyage++) returnOneExpedition(simulation);
 
+    expect(simulation.acknowledgeGenerationHandover()).toBe(true);
     returnOneExpedition(simulation);
 
     expect(simulation.successfulReturns).toBe(5);
@@ -107,6 +113,28 @@ describe("four-journey navigator tenure", () => {
       state: "active",
       completedVoyages: 1,
     });
+  });
+
+  it("installs the fourth-return handover gate before lifecycle subscribers run", () => {
+    const simulation = new GameSimulation();
+    for (let voyage = 0; voyage < NAVIGATOR_VOYAGE_LIMIT - 1; voyage++) returnOneExpedition(simulation);
+    const attemptedTarget = findUnknownWater(simulation);
+    let callbackTeleport: boolean | undefined;
+    let callbackSave: ReturnType<GameSimulation["createSave"]> | undefined;
+    simulation.events.on("expeditionReturned", ({ tenureCompleted }) => {
+      if (!tenureCompleted) return;
+      callbackSave = simulation.createSave();
+      callbackTeleport = simulation.teleport(attemptedTarget);
+    });
+
+    returnOneExpedition(simulation);
+
+    expect(callbackTeleport).toBe(false);
+    expect(simulation.atDock).toBe(true);
+    expect(simulation.expeditionActive).toBe(false);
+    expect(simulation.generationHandoverActive).toBe(true);
+    expect(callbackSave).toBeDefined();
+    expect(() => parseSaveGame(callbackSave)).not.toThrow();
   });
 
   it("does not count idle time, reloads, or inactive dock arrivals as journeys", () => {
@@ -138,10 +166,27 @@ describe("four-journey navigator tenure", () => {
     returnOneExpedition(restored);
     const afterFourth = restored.createSave();
 
+    const underSuppliedHandover = structuredClone(afterFourth);
+    underSuppliedHandover.ship.provisions--;
+    expect(() => new GameSimulation(simulation.config).restoreSave(underSuppliedHandover))
+      .toThrow(/fully supplied ship/);
+
     const reloaded = new GameSimulation(simulation.config);
     reloaded.restoreSave(afterFourth);
+    const blockedTarget = findUnknownWater(reloaded);
+    const blockedShip = { ...reloaded.ship };
     reloaded.update({ turn: 0, throttle: 0 }, 10_000);
-    expect(reloaded.teleport(reloaded.generated.landmarks.homeReturnTile)).toBe(true);
+    expect(reloaded.ship).toEqual(blockedShip);
+    expect(reloaded.teleport(blockedTarget)).toBe(false);
+    expect(reloaded.pendingGenerationHandover).toMatchObject({
+      fromGeneration: 1,
+      nextGeneration: 2,
+      reason: "tenure",
+    });
+    expect(parseSaveGame(reloaded.createSave()).expedition.pendingGenerationHandover).not.toBeNull();
+    expect(reloaded.acknowledgeGenerationHandover()).toBe(true);
+    expect(reloaded.acknowledgeGenerationHandover()).toBe(false);
+    expect(reloaded.teleport(blockedTarget)).toBe(true);
 
     expect(reloaded.generation).toBe(2);
     expect(reloaded.navigatorLineage).toHaveLength(2);
@@ -179,6 +224,16 @@ describe("four-journey navigator tenure", () => {
     expect(restored.navigatorLineage).toHaveLength(2);
     expect(restored.navigatorLineage[0]).toMatchObject({ state: "lost", completedVoyages: 2 });
     expect(restored.currentNavigator).toMatchObject({ state: "active", completedVoyages: 0 });
+    expect(restored.pendingGenerationHandover).toMatchObject({
+      fromGeneration: 1,
+      nextGeneration: 2,
+      reason: "wreck",
+    });
+    const afterSuccession = new GameSimulation(simulation.config);
+    afterSuccession.restoreSave(restored.createSave());
+    expect(afterSuccession.teleport(findUnknownWater(afterSuccession))).toBe(false);
+    expect(afterSuccession.acknowledgeGenerationHandover()).toBe(true);
+    expect(afterSuccession.teleport(findUnknownWater(afterSuccession))).toBe(true);
     expect(restored.successfulReturns).toBe(2);
     expect(restored.failedExpeditions).toBe(1);
   });

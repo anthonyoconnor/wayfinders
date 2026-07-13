@@ -4,7 +4,7 @@ import {
   type DeepReadonly,
   type PrototypeConfig,
 } from "../config/prototypeConfig";
-import type { ShipState, ShipwreckState } from "../core/types";
+import type { ShipState, ShipwreckState, ShipwreckSurveyState } from "../core/types";
 import type { ValidatedSlotStore } from "./IndexedDbSaveStore";
 import {
   FISHING_SHOAL_CONTENT_VERSION,
@@ -13,15 +13,19 @@ import {
   type FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
 import {
+  NAVIGATOR_GENERATION_HANDOVER_VERSION,
   NavigatorLineageValidationError,
+  createNavigatorId,
+  isCurrentNavigatorId,
   parseNavigatorSuccessionKey,
   parseNavigatorLineageSnapshot,
+  type NavigatorGenerationHandoverV1,
   type NavigatorLineageSnapshotV3,
 } from "../lineage/NavigatorLineageSystem";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
-export const SAVE_SCHEMA_VERSION = 7 as const;
+export const SAVE_SCHEMA_VERSION = 8 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -87,6 +91,7 @@ export interface SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySave
     id: number;
     active: boolean;
     pendingRespawn: PendingRespawnSaveState | null;
+    pendingGenerationHandover: NavigatorGenerationHandoverV1 | null;
   };
   ship: ShipState;
   knowledge: {
@@ -368,16 +373,31 @@ export function parseSaveGame(value: unknown): SaveGame {
   const expeditionId = unsigned32(expedition.id, "save.expedition.id", false);
   const expeditionActive = boolean(expedition.active, "save.expedition.active");
   const pendingRespawn = validatePendingRespawn(expedition.pendingRespawn, expeditionId, generation, expeditionActive);
+  const pendingGenerationHandover = validatePendingGenerationHandover(
+    expedition.pendingGenerationHandover,
+    generation,
+    expeditionActive,
+  );
+  if (pendingRespawn && pendingGenerationHandover) {
+    fail("cannot coexist with a wreck hold", "save.expedition.pendingGenerationHandover");
+  }
 
   const ship = validateShip(root.ship, generationConfig);
   if (pendingRespawn && ship.provisions !== 0) fail("must have zero provisions during a wreck hold", "save.ship.provisions");
+  validateGenerationHandoverShip(pendingGenerationHandover, ship, generationConfig);
 
   const knowledge = record(root.knowledge, "save.knowledge");
   if (knowledge.encoding !== "non-unknown-runs-v1") fail("has an unsupported encoding", "save.knowledge.encoding");
   validateKnowledgeRuns(tileCount, knowledge.runs);
   validateExpeditionKnowledge(knowledge.runs, expeditionId, expeditionActive);
 
-  const wrecks = validateWrecks(root.wrecks, generationConfig);
+  const wrecks = validateWrecks(
+    root.wrecks,
+    generationConfig,
+    generation,
+    expeditionId,
+    expeditionActive,
+  );
   for (let index = 0; index < wrecks.length; index++) {
     if (wrecks[index].generation > generation) {
       fail("cannot be later than the current generation", `save.wrecks[${index}].generation`);
@@ -433,6 +453,14 @@ export function parseSaveGame(value: unknown): SaveGame {
       );
     }
   }
+  const provisionalWreckSurveyIndex = wrecks.findIndex(({ survey }) => survey.state === "provisional");
+  const provisionalFishingSurveyIndex = provisionalFishingShoals.findIndex(({ state }) => state === "surveyed");
+  if (provisionalWreckSurveyIndex >= 0 && provisionalFishingSurveyIndex >= 0) {
+    fail(
+      `cannot coexist with provisional wreck survey ${wrecks[provisionalWreckSurveyIndex].id} under the one-case allocation`,
+      `save.fishingShoals.provisional[${provisionalFishingSurveyIndex}].state`,
+    );
+  }
   let navigatorLineage: NavigatorLineageSnapshotV3;
   try {
     navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
@@ -446,6 +474,7 @@ export function parseSaveGame(value: unknown): SaveGame {
     fail("latest navigator generation must match the saved generation", "save.navigatorLineage.navigators");
   }
   validateLineageWrecks(navigatorLineage, wrecks);
+  validateReturnedSurveyCases(navigatorLineage, wrecks, returnedFishingShoals);
   const pendingSuccession = navigatorLineage.pendingSuccession;
   if (pendingRespawn === null && pendingSuccession !== null) {
     fail("cannot be pending without a wreck hold", "save.navigatorLineage.pendingSuccession");
@@ -461,6 +490,11 @@ export function parseSaveGame(value: unknown): SaveGame {
       fail("must match the pending wreck hold", "save.navigatorLineage.pendingSuccession");
     }
   }
+  validateLineageGenerationHandover(
+    pendingGenerationHandover,
+    navigatorLineage,
+    pendingRespawn,
+  );
   return value as SaveGame;
 }
 
@@ -609,6 +643,71 @@ function validatePendingRespawn(
   return result;
 }
 
+function validatePendingGenerationHandover(
+  value: unknown,
+  generation: number,
+  expeditionActive: boolean,
+): NavigatorGenerationHandoverV1 | null {
+  if (value === null) return null;
+  if (expeditionActive) {
+    fail("cannot coexist with an active expedition", "save.expedition.pendingGenerationHandover");
+  }
+  const path = "save.expedition.pendingGenerationHandover";
+  const handover = record(value, path);
+  if (integer(handover.contractVersion, `${path}.contractVersion`) !== NAVIGATOR_GENERATION_HANDOVER_VERSION) {
+    fail(`must use contract version ${NAVIGATOR_GENERATION_HANDOVER_VERSION}`, `${path}.contractVersion`);
+  }
+  const fromGeneration = positiveSafeInteger(handover.fromGeneration, `${path}.fromGeneration`);
+  const nextGeneration = positiveSafeInteger(handover.nextGeneration, `${path}.nextGeneration`);
+  const fromNavigatorId = handover.fromNavigatorId;
+  const nextNavigatorId = handover.nextNavigatorId;
+  if (!isCurrentNavigatorId(fromNavigatorId)) {
+    fail("has an invalid or unsupported navigator ID", `${path}.fromNavigatorId`);
+  }
+  if (!isCurrentNavigatorId(nextNavigatorId)) {
+    fail("has an invalid or unsupported navigator ID", `${path}.nextNavigatorId`);
+  }
+  if (fromNavigatorId !== createNavigatorId(fromGeneration)) {
+    fail("must match the source generation", `${path}.fromNavigatorId`);
+  }
+  if (nextNavigatorId !== createNavigatorId(nextGeneration)) {
+    fail("must match the next generation", `${path}.nextNavigatorId`);
+  }
+  if (nextGeneration !== generation || fromGeneration + 1 !== nextGeneration) {
+    fail("must describe the transition into the current generation", path);
+  }
+  if (handover.reason !== "wreck" && handover.reason !== "tenure") {
+    fail("must be wreck or tenure", `${path}.reason`);
+  }
+  return {
+    contractVersion: NAVIGATOR_GENERATION_HANDOVER_VERSION,
+    fromNavigatorId,
+    fromGeneration,
+    nextNavigatorId,
+    nextGeneration,
+    reason: handover.reason,
+  };
+}
+
+function validateGenerationHandoverShip(
+  handover: NavigatorGenerationHandoverV1 | null,
+  ship: ShipState,
+  config: GenerationConfigV1,
+): void {
+  if (!handover) return;
+  const homeReturnTile = {
+    x: Math.floor(config.world.width / 2) + config.world.homeIslandRadius + 1,
+    y: Math.floor(config.world.height / 2),
+  };
+  if (ship.currentTileX !== homeReturnTile.x || ship.currentTileY !== homeReturnTile.y) {
+    fail("must remain at the home dock during a generation handover", "save.ship");
+  }
+  if (ship.speed !== 0) fail("must be stopped during a generation handover", "save.ship.speed");
+  if (ship.provisionAccumulator !== 0) {
+    fail("must have no fractional provision charge during a generation handover", "save.ship.provisionAccumulator");
+  }
+}
+
 function validateShip(value: unknown, config: GenerationConfigV1): ShipState {
   const ship = record(value, "save.ship");
   const result: ShipState = {
@@ -628,22 +727,44 @@ function validateShip(value: unknown, config: GenerationConfigV1): ShipState {
   return result;
 }
 
-function validateWrecks(value: unknown, config: GenerationConfigV1): ShipwreckState[] {
+function validateWrecks(
+  value: unknown,
+  config: GenerationConfigV1,
+  currentGeneration: number,
+  currentExpeditionId: number,
+  expeditionActive: boolean,
+): ShipwreckState[] {
   if (!Array.isArray(value)) fail("must be an array", "save.wrecks");
   const ids = new Set<number>();
+  let provisionalSurveyCount = 0;
   return value.map((raw, index) => {
     const path = `save.wrecks[${index}]`;
     const wreck = record(raw, path);
+    const generation = positiveSafeInteger(wreck.generation, `${path}.generation`);
+    const discovered = boolean(wreck.discovered, `${path}.discovered`);
+    const survey = validateWreckSurvey(
+      wreck.survey,
+      `${path}.survey`,
+      generation,
+      discovered,
+      currentGeneration,
+      currentExpeditionId,
+      expeditionActive,
+    );
+    if (survey.state === "provisional" && ++provisionalSurveyCount > 1) {
+      fail("cannot consume more than the one-case allocation", `${path}.survey.state`);
+    }
     const result: ShipwreckState = {
       id: positiveSafeInteger(wreck.id, `${path}.id`),
-      generation: positiveSafeInteger(wreck.generation, `${path}.generation`),
+      generation,
       expeditionId: unsigned32(wreck.expeditionId, `${path}.expeditionId`, false),
       worldX: finite(wreck.worldX, `${path}.worldX`),
       worldY: finite(wreck.worldY, `${path}.worldY`),
       tileX: integer(wreck.tileX, `${path}.tileX`),
       tileY: integer(wreck.tileY, `${path}.tileY`),
       heading: finite(wreck.heading, `${path}.heading`),
-      discovered: boolean(wreck.discovered, `${path}.discovered`),
+      discovered,
+      survey,
     };
     if (ids.has(result.id)) fail(`duplicates wreck id ${result.id}`, `${path}.id`);
     ids.add(result.id);
@@ -652,6 +773,42 @@ function validateWrecks(value: unknown, config: GenerationConfigV1): ShipwreckSt
     assertWorldPointMatchesTile(result.worldX, result.worldY, result.tileX, result.tileY, config, path);
     return result;
   });
+}
+
+function validateWreckSurvey(
+  value: unknown,
+  path: string,
+  wreckGeneration: number,
+  wreckDiscovered: boolean,
+  currentGeneration: number,
+  currentExpeditionId: number,
+  expeditionActive: boolean,
+): ShipwreckSurveyState {
+  const survey = record(value, path);
+  if (survey.state === "unexamined") return { state: "unexamined" };
+  if (survey.state !== "provisional" && survey.state !== "returned") {
+    fail("must be unexamined, provisional or returned", `${path}.state`);
+  }
+  if (!wreckDiscovered) fail("requires the wreck to be discovered", path);
+
+  const expeditionId = unsigned32(survey.expeditionId, `${path}.expeditionId`, false);
+  const generation = positiveSafeInteger(survey.generation, `${path}.generation`);
+  if (generation <= wreckGeneration) {
+    fail("must belong to a later generation than the lost navigator", `${path}.generation`);
+  }
+  if (generation > currentGeneration) {
+    fail("cannot be later than the current generation", `${path}.generation`);
+  }
+  if (survey.state === "provisional") {
+    if (!expeditionActive) fail("requires an active expedition", path);
+    if (expeditionId !== currentExpeditionId) {
+      fail("must belong to the active expedition", `${path}.expeditionId`);
+    }
+    if (generation !== currentGeneration) {
+      fail("must belong to the current generation", `${path}.generation`);
+    }
+  }
+  return { state: survey.state, expeditionId, generation };
 }
 
 function validateLineageWrecks(
@@ -703,6 +860,83 @@ function validateLineageWrecks(
         `save.wrecks[${index}].generation`,
       );
     }
+  }
+}
+
+function validateReturnedSurveyCases(
+  lineage: NavigatorLineageSnapshotV3,
+  wrecks: readonly ShipwreckState[],
+  fishingShoals: readonly FishingShoalReturnedRecordV1[],
+): void {
+  const completedVoyages = new Set<string>();
+  let expeditionId = 1;
+  for (const navigator of lineage.navigators) {
+    for (let voyage = 0; voyage < navigator.completedVoyages; voyage++) {
+      completedVoyages.add(`${navigator.generation}:${expeditionId}`);
+      expeditionId = nextExpeditionId(expeditionId);
+    }
+    if (navigator.state === "lost") expeditionId = nextExpeditionId(expeditionId);
+  }
+
+  const caseUse = new Map<string, string>();
+  const register = (generation: number, surveyExpeditionId: number, path: string): void => {
+    const key = `${generation}:${surveyExpeditionId}`;
+    if (!completedVoyages.has(key)) {
+      fail("must match a completed voyage for its navigator", path);
+    }
+    const priorPath = caseUse.get(key);
+    if (priorPath) fail(`duplicates the one survey case already used by ${priorPath}`, path);
+    caseUse.set(key, path);
+  };
+
+  for (let index = 0; index < wrecks.length; index++) {
+    const survey = wrecks[index].survey;
+    if (survey.state !== "returned") continue;
+    register(survey.generation, survey.expeditionId, `save.wrecks[${index}].survey`);
+  }
+  for (let index = 0; index < fishingShoals.length; index++) {
+    const survey = fishingShoals[index];
+    if (survey.state !== "survey") continue;
+    register(survey.generation, survey.expeditionId, `save.fishingShoals.returned[${index}]`);
+  }
+}
+
+function nextExpeditionId(expeditionId: number): number {
+  return expeditionId === 0xffff_ffff ? 1 : expeditionId + 1;
+}
+
+function validateLineageGenerationHandover(
+  handover: NavigatorGenerationHandoverV1 | null,
+  lineage: NavigatorLineageSnapshotV3,
+  pendingRespawn: PendingRespawnSaveState | null,
+): void {
+  if (!handover) return;
+  const path = "save.expedition.pendingGenerationHandover";
+  if (pendingRespawn) fail("cannot coexist with a wreck hold", path);
+  if (lineage.pendingSuccession) fail("requires succession to be complete", path);
+
+  const sourceIndex = lineage.navigators.findIndex(({ id }) => id === handover.fromNavigatorId);
+  const nextIndex = lineage.navigators.findIndex(({ id }) => id === handover.nextNavigatorId);
+  if (sourceIndex !== lineage.navigators.length - 2 || nextIndex !== lineage.navigators.length - 1) {
+    fail("must reference the latest terminal navigator and active successor", path);
+  }
+  const source = lineage.navigators[sourceIndex];
+  const next = lineage.navigators[nextIndex];
+  if (
+    !source
+    || source.state === "active"
+    || source.generation !== handover.fromGeneration
+    || source.successionReason !== handover.reason
+  ) {
+    fail("does not match the terminal navigator", `${path}.fromNavigatorId`);
+  }
+  if (
+    !next
+    || next.state !== "active"
+    || next.generation !== handover.nextGeneration
+    || next.createdBySuccessionKey !== source.endedBySuccessionKey
+  ) {
+    fail("does not match the active successor", `${path}.nextNavigatorId`);
   }
 }
 

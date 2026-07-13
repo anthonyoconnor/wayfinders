@@ -2,6 +2,7 @@ export const NAVIGATOR_LINEAGE_CONTRACT_VERSION = 3 as const;
 export const NAVIGATOR_ID_VERSION = 1 as const;
 export const NAVIGATOR_SUCCESSION_KEY_VERSION = 2 as const;
 export const NAVIGATOR_VOYAGE_LIMIT = 4 as const;
+export const NAVIGATOR_GENERATION_HANDOVER_VERSION = 1 as const;
 
 const navigatorIdBrand: unique symbol = Symbol("NavigatorId");
 const navigatorSuccessionKeyBrand: unique symbol = Symbol("NavigatorSuccessionKey");
@@ -74,6 +75,16 @@ export interface NavigatorLineageSnapshotV3 {
   contractVersion: typeof NAVIGATOR_LINEAGE_CONTRACT_VERSION;
   navigators: readonly Readonly<NavigatorRecordV3>[];
   pendingSuccession: Readonly<NavigatorSuccessionTransitionV2> | null;
+}
+
+/** Required presentation gate between a terminal navigator and their successor. */
+export interface NavigatorGenerationHandoverV1 {
+  readonly contractVersion: typeof NAVIGATOR_GENERATION_HANDOVER_VERSION;
+  readonly fromNavigatorId: NavigatorId;
+  readonly fromGeneration: number;
+  readonly nextNavigatorId: NavigatorId;
+  readonly nextGeneration: number;
+  readonly reason: NavigatorSuccessionReason;
 }
 
 export type NavigatorSuccessfulVoyageResult =

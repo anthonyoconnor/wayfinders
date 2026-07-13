@@ -7,6 +7,10 @@ import type {
   FishingShoalProvisionalRecordV1,
   FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
+import type {
+  WreckSurveyReportV1,
+  WreckSurveyedResultV1,
+} from "../exploration/WreckSurveyContracts";
 import type { NavigatorId, NavigatorSuccessionReason } from "../lineage/NavigatorLineageSystem";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
@@ -60,9 +64,21 @@ export interface GameEventMap {
   };
   wreckDiscovered: {
     wreckId: number;
-    generation: number;
     tileX: number;
     tileY: number;
+  };
+  wreckSurveyed: Readonly<WreckSurveyedResultV1> & {
+    tile: Readonly<GridPoint>;
+  };
+  wreckSurveysReturned: {
+    expeditionId: number;
+    generation: number;
+    reports: readonly Readonly<WreckSurveyReportV1>[];
+  };
+  wreckSurveysLost: {
+    expeditionId: number;
+    generation: number;
+    reports: readonly Readonly<WreckSurveyReportV1>[];
   };
   discoveryFound: Readonly<DiscoveryRecord>;
   fishingShoalSighted: {

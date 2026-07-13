@@ -317,10 +317,24 @@ Timer overshoot is discarded. Successful return on a final-bundle docking step
 takes precedence over wreck creation.
 
 Runtime wrecks remain hidden by fog after respawn until a later generation sees
-them. Their `discovered` state then persists independently of knowledge loss.
-The stable wreck generation identifies the lost navigator. Later gameplay may
-turn finding that wreck and recovering bounded evidence or knowledge into a
-subgoal, but no such recovery effect exists in the current baseline.
+them. Their `discovered` state then persists independently of knowledge loss,
+but the sighting is an unidentified wreck and does not expose the associated
+lost navigator. Every runtime wreck retains a stable association with the
+navigator who died there; generated historic-wreck discoveries remain separate
+content records and have no lineage navigator.
+
+During a later active expedition, an unidentified runtime wreck in interaction
+range can be deliberately surveyed with the existing one-per-voyage survey
+case. The action spends that case and creates an expedition-owned provisional
+identity/fate report. The surveying crew can identify whose wreck it is, but
+the tribe and permanent lineage do not receive the report until exact-home-dock
+return. Successful return commits the report once to the wreck and correct lost
+navigator. A fatal surveying expedition discards its provisional report while
+leaving the wreck discovered, unidentified and available to survey again.
+Repeated input, revisit, dock and reload cannot duplicate either the survey
+cost or returned report. This baseline report does not salvage cargo, restore
+Personal chart knowledge, commit the lost expedition's provisional discoveries
+or apply an economy reward; those extensions belong to GP-3.4.
 
 ### Navigator tenure and transition time
 
@@ -330,12 +344,25 @@ stores `completedVoyages` on each `active`, `completed` or `lost` navigator and
 uses deterministic `tenure` and `wreck` succession keys. There is no age,
 retirement choice or fifth-voyage state.
 
-The next playable voyage begins immediately after a safe-return transition or
-wreck succession. Narratively, that boundary represents elapsed world time: the
-tribe can act on returned findings, or determine that a lost navigator will not
-return, mourn them and nominate a successor. Future economy systems settle at
-this event boundary and future presentation may show a handover or mourning
-scene; neither wall-clock waiting nor a cutscene is authoritative gameplay.
+Authoritative tenure completion or wreck succession commits exactly once before
+its presentation can affect play. Every generation boundary then creates a
+persisted, unacknowledged handover and opens a required placeholder modal for
+the outgoing navigator. The simulation suppresses sailing until the handover
+is acknowledged; reload reopens the same modal rather than bypassing it. A
+completed tenure lists voyages one through four as
+safely returned. An early loss lists the preceding safe returns and the next
+numbered voyage as **Lost at sea**. It contains no detailed landfalls, surveys
+or other achievements, confirms that returned findings remain secured and
+never credits provisional results from a fatal expedition; the permanent
+detailed chronicle remains GP-2.3 work.
+
+Narratively, that boundary represents elapsed world time: the tribe can act on
+returned findings, or determine that a lost navigator will not return, mourn
+them and nominate a successor. Future economy systems settle at this event
+boundary, and future presentation may replace the placeholder with a richer
+handover or mourning scene. Neither wall-clock waiting nor modal display time
+advances authoritative gameplay or economy time; the pending handover itself
+remains authoritative input-gating state until acknowledgement.
 
 ## 11. Discoveries
 
@@ -366,24 +393,29 @@ approved gameplay minor plus a save-schema version decision.
 
 ### Exact-version save boundary
 
-Current schema version 7 stores:
+The current exact-version save schema is V8, the navigator-lineage contract is
+V3 and the generation-handover contract is V1. It stores:
 
 - save, world-generator, content and serialized-format versions;
 - seed and generation-affecting configuration;
 - ship position, heading, provisions and accumulator;
 - expedition ID, active state and top-level generation;
-- optional pending wreck hold;
+- optional pending wreck hold and optional unacknowledged generation handover;
 - navigator lineage, completed-voyage counts and pending succession;
 - all non-Unknown knowledge as canonical run-length encoded state/stamp runs;
-- runtime wrecks and discovered flags;
+- runtime wreck identity, discovered state and provisional/returned
+  identity/fate reports;
 - provisional and returned discovery records;
 - provisional and returned fishing-shoal records;
 - an empty reserved terrain-patch list.
 
-Schema 7 requires navigator-lineage contract 3. That contract replaces the
-age/final-voyage shape with `completedVoyages`, `active` / `completed` / `lost`
-states and `tenure` / `wreck` succession reasons. Earlier shapes are deleted
-under the exact-version policy rather than migrated.
+The current schema requires the current navigator-lineage and runtime-wreck
+contracts. The lineage contract replaces the age/final-voyage shape with
+`completedVoyages`, `active` / `completed` / `lost` states and `tenure` /
+`wreck` succession reasons. Runtime-wreck records distinguish an unidentified
+sighting, an expedition-owned provisional survey and an exact-dock-committed
+report associated with one lost navigator. Earlier shapes are deleted under
+the exact-version policy rather than migrated.
 
 The save does not contain base terrain, generated island descriptors,
 visibility, range masks, return paths, renderer state or caches.
@@ -447,13 +479,21 @@ growth and replenishment into one five-second message. A return without a
 discovery uses a 3.5-second route/replenishment cue. Only one lifecycle cue may
 exist at a time.
 
-The fourth safe return replaces the ordinary cue with a tenure-completion cue
-after all voyage results commit. A wreck hold identifies the navigator as lost,
-states that their wreck remains and compresses the tribe's mourning and elapsed
-time before the successor takes the helm. These messages present authoritative
-transitions; their display duration does not measure simulated world time.
+The fourth safe return replaces the ordinary cue after all voyage results
+commit. A wreck hold identifies the navigator as lost, states that their wreck
+remains and compresses the tribe's mourning and elapsed time. Either path then
+opens the required outcome-only generation modal. Its rows are derived from the
+committed outgoing lineage record, it does not create the successor or settle
+economy state, and sailing input remains suppressed until dismissal. GR-3.4 may
+polish or replace this placeholder without changing the authoritative record.
 The ordinary shell status and return overlays expose **Voyage n of 4** so the
 bounded tenure is legible without a retirement decision control.
+
+A discovered but unreported runtime wreck uses an unidentified marker and a
+contextual **Survey wreck / Leave** action. Surveying exposes the navigator's
+identity only as aboard, provisional knowledge. Exact-dock commitment changes
+the persistent presentation to a returned fate report. Historic generated
+wreck discoveries keep their distinct marker and never claim a lineage link.
 
 The camera follows the interpolated ship smoothly during play. World regeneration and
 checkpoint restore are discontinuities, so the camera snaps to the
@@ -481,10 +521,17 @@ navigatorTenureCompleted
 shipWrecked
 generationAdvanced
 wreckDiscovered
+wreckSurveyed
+wreckSurveysReturned
+wreckSurveysLost
 expeditionFailed
 discoveryFound
 discoveriesReturned
 discoveriesLost
+fishingShoalSighted
+fishingShoalSurveyed
+fishingShoalsReturned
+fishingShoalsLost
 worldRegenerated
 gameLoaded
 ```
@@ -541,13 +588,16 @@ The automated suite covers configuration, deterministic generation, movement,
 visibility, knowledge asymmetry, provisions, forward/return calculations,
 overlay invalidation, island navigation, expedition success/failure,
 four-voyage tenure and succession, Unknown pocket cleanup, discoveries, save
-validation, persistence round trips, save dirtiness, cached encoding, frame
-telemetry and ship interpolation.
+validation, runtime-wreck survey commit/rollback and idempotence, persistence
+round trips, save dirtiness, cached encoding, frame telemetry and ship
+interpolation.
 
 Browser verification covers WebGL startup, controls, discovery cues, combined
 return presentation, fourth-return automatic succession, fatal-wreck mourning
-and succession, rolling reload, stable manual checkpoints, exact ship/camera
-restoration, pending wreck reload, save clearing and console health.
+and succession, both outcome-only generation summaries, unidentified wreck
+survey and exact-dock reporting, rolling reload, stable manual checkpoints,
+exact ship/camera restoration, pending wreck reload, save clearing and console
+health.
 
 Desktop keyboard/pointer play is the validated target. Responsive resize is
 implemented. Touch-first sailing is not implemented and requires a separately
@@ -557,11 +607,13 @@ performance validation belongs to later graphics/platform hardening.
 
 ## 17. Baseline extension and exact-version boundary
 
-The accepted baseline includes fishing surveys, navigator lineage and the
-four-voyage tenure. The forward roadmap may add the Great Hall chronicle,
-tribe economics, idols, the full
-save/load experience, production assets and environmental polish. These are
-proposed extensions, not implemented baseline behavior.
+The accepted baseline includes fishing surveys, navigator lineage, the
+four-voyage tenure, outcome-only succession summaries and returned
+identity/fate reports for runtime navigator wrecks. The forward roadmap may add
+the detailed Great Hall chronicle, wreck salvage and bounded chart/economy
+recovery, tribe economics, idols, the full save/load experience, production
+assets and environmental polish. These are proposed extensions, not
+implemented baseline behavior.
 
 Presentation-only extensions may preserve the current save shape when they add
 no authoritative state. Gameplay extensions must define deterministic identity,

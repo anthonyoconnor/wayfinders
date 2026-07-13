@@ -26,10 +26,23 @@ import { KnowledgeSystem } from "../exploration/KnowledgeSystem";
 import { ProvisionSystem, knowledgeTravelCost } from "../exploration/ProvisionSystem";
 import { ReturnPathSystem, type ReturnPathResult } from "../exploration/ReturnPathSystem";
 import { VisibilitySystem } from "../exploration/VisibilitySystem";
+import {
+  WRECK_SURVEY_CONTRACT_VERSION,
+  WRECK_SURVEY_INTERACTION_RANGE_TILES,
+  WRECK_SURVEY_PRESENTATION_MS,
+  type WreckSurveyReportV1,
+  type WreckSurveyInteractionCommandV1,
+  type WreckSurveyInteractionReadModelV1,
+  type WreckSurveyInteractionResultV1,
+  type WreckSurveyRejectionReasonV1,
+} from "../exploration/WreckSurveyContracts";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
 import {
+  NAVIGATOR_GENERATION_HANDOVER_VERSION,
   NAVIGATOR_VOYAGE_LIMIT,
   NavigatorLineageSystem,
+  createNavigatorId,
+  type NavigatorGenerationHandoverV1,
   type NavigatorRecordV3,
 } from "../lineage/NavigatorLineageSystem";
 import {
@@ -96,6 +109,7 @@ export interface SimulationSnapshot {
     wreckPresentationActive: boolean;
     respawnSecondsRemaining: number;
     pendingWreckId: number | null;
+    pendingGenerationHandover: Readonly<NavigatorGenerationHandoverV1> | null;
   };
   navigator: Readonly<NavigatorRecordV3>;
   lineage: readonly Readonly<NavigatorRecordV3>[];
@@ -188,6 +202,8 @@ export class GameSimulation {
   private lineage = new NavigatorLineageSystem();
   private readonly shipwrecks: ShipwreckState[] = [];
   private pendingRespawn?: PendingRespawnState;
+  private pendingGenerationHandoverValue?: Readonly<NavigatorGenerationHandoverV1>;
+  private interactionTransactionActive = false;
   private knowledgeSaveCache?: KnowledgeSaveCache;
   private riskResultsInitialized = false;
 
@@ -234,6 +250,14 @@ export class GameSimulation {
     return Math.min(this.navigatorVoyagesCompleted + 1, NAVIGATOR_VOYAGE_LIMIT);
   }
 
+  get pendingGenerationHandover(): Readonly<NavigatorGenerationHandoverV1> | undefined {
+    return this.pendingGenerationHandoverValue;
+  }
+
+  get generationHandoverActive(): boolean {
+    return this.pendingGenerationHandoverValue !== undefined;
+  }
+
   get successfulReturns(): number {
     return this.lineage.totalCompletedVoyages;
   }
@@ -244,6 +268,14 @@ export class GameSimulation {
 
   get wrecks(): readonly Readonly<ShipwreckState>[] {
     return this.shipwrecks;
+  }
+
+  get provisionalWreckSurveys(): readonly Readonly<ShipwreckState>[] {
+    return this.shipwrecks.filter(({ survey }) => survey.state === "provisional");
+  }
+
+  get returnedWreckSurveys(): readonly Readonly<ShipwreckState>[] {
+    return this.shipwrecks.filter(({ survey }) => survey.state === "returned");
   }
 
   get discoveryDefinitions(): readonly Readonly<DiscoveryDefinition>[] {
@@ -295,14 +327,48 @@ export class GameSimulation {
   }
 
   get surveyCasesRemaining(): 0 | 1 {
-    return this.pendingRespawn ? 0 : this.fishingShoalSystem.surveyCasesRemaining;
+    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return 0;
+    const wreckSurveyUsed = this.shipwrecks.some(({ survey }) => (
+      survey.state === "provisional" && survey.expeditionId === this.expeditionId
+    ));
+    return wreckSurveyUsed ? 0 : this.fishingShoalSystem.surveyCasesRemaining;
   }
 
   get fishingShoalInteraction(): Readonly<FishingShoalInteractionReadModel> | undefined {
-    if (this.pendingRespawn) return undefined;
-    return this.fishingShoalSystem.interactionNear({
+    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
+    const interaction = this.fishingShoalSystem.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
+    });
+    return interaction ? { ...interaction, surveyCasesRemaining: this.surveyCasesRemaining } : undefined;
+  }
+
+  get wreckSurveyInteraction(): Readonly<WreckSurveyInteractionReadModelV1> | undefined {
+    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
+    let closest: { wreck: ShipwreckState; distance: number } | undefined;
+    for (const wreck of this.shipwrecks) {
+      if (
+        !wreck.discovered
+        || wreck.survey.state !== "unexamined"
+        || wreck.generation >= this.generation
+      ) continue;
+      const distance = Math.hypot(
+        wreck.tileX - this.ship.currentTileX,
+        wreck.tileY - this.ship.currentTileY,
+      );
+      if (distance > WRECK_SURVEY_INTERACTION_RANGE_TILES) continue;
+      if (
+        closest
+        && (distance > closest.distance || (distance === closest.distance && wreck.id > closest.wreck.id))
+      ) continue;
+      closest = { wreck, distance };
+    }
+    if (!closest) return undefined;
+    return Object.freeze({
+      contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
+      wreckId: closest.wreck.id,
+      tile: Object.freeze({ x: closest.wreck.tileX, y: closest.wreck.tileY }),
+      surveyCasesRemaining: this.surveyCasesRemaining,
     });
   }
 
@@ -331,7 +397,13 @@ export class GameSimulation {
   }
 
   update(input: MovementInput, deltaSeconds: number): MovementResult {
+    if (this.interactionTransactionActive) return NO_MOVEMENT;
     if (this.pendingRespawn) return this.advanceWreckPresentation(deltaSeconds);
+    if (this.pendingGenerationHandoverValue) {
+      this.ship.speed = 0;
+      this.lastMovement = NO_MOVEMENT;
+      return NO_MOVEMENT;
+    }
     const previousShip = { ...this.ship };
     const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     const previousHeading = this.ship.heading;
@@ -410,6 +482,7 @@ export class GameSimulation {
   }
 
   regenerate(seed = this.config.world.seed): void {
+    if (this.interactionTransactionActive) return;
     const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
     if (this.config === prototypeConfig) {
       patchPrototypeConfig({ world: { seed: normalizedSeed } });
@@ -423,6 +496,7 @@ export class GameSimulation {
     this.shipwrecks.length = 0;
     this.wrecksRevision++;
     this.pendingRespawn = undefined;
+    this.pendingGenerationHandoverValue = undefined;
     this.ship = createShipStateAtGrid(
       this.generated.landmarks.dock,
       this.config.provisions.startingBundles,
@@ -460,7 +534,7 @@ export class GameSimulation {
   }
 
   teleport(tile: GridPoint): boolean {
-    if (this.pendingRespawn) return false;
+    if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return false;
     if (!this.world.inBounds(tile.x, tile.y) || this.world.isMovementBlocked(tile.x, tile.y)) return false;
     const targetKnowledge = this.world.getKnowledge(tile.x, tile.y);
     if (!this.activeExpedition && targetKnowledge !== KnowledgeState.Supported) this.startExpedition();
@@ -485,7 +559,7 @@ export class GameSimulation {
   }
 
   refreshVisibility(): void {
-    if (this.pendingRespawn) return;
+    if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return;
     const wasActiveExpedition = this.activeExpedition;
     const tile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
@@ -507,7 +581,7 @@ export class GameSimulation {
   }
 
   setProvisions(value: number): void {
-    if (this.pendingRespawn) return;
+    if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return;
     const previous = this.ship.provisions;
     const current = Math.max(0, Math.floor(Number.isFinite(value) ? value : previous));
     const accumulatorWillReset = current === 0 && this.ship.provisionAccumulator !== 0;
@@ -529,6 +603,22 @@ export class GameSimulation {
   interactWithFishingShoal(
     command: Readonly<FishingShoalInteractionCommandV1>,
   ): FishingShoalInteractionResultV1 {
+    if (this.interactionTransactionActive) {
+      return {
+        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+        status: "rejected",
+        id: command.id,
+        reason: "interaction-busy",
+      };
+    }
+    if (this.pendingGenerationHandoverValue) {
+      return {
+        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+        status: "rejected",
+        id: command.id,
+        reason: "generation-handover",
+      };
+    }
     if (this.pendingRespawn) {
       return {
         contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
@@ -538,6 +628,19 @@ export class GameSimulation {
       };
     }
     const interaction = this.fishingShoalInteraction;
+    if (
+      command.type === "survey"
+      && this.surveyCasesRemaining === 0
+      && this.fishingShoalSystem.surveyCasesRemaining === 1
+      && interaction?.id === command.id
+    ) {
+      return {
+        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+        status: "rejected",
+        id: command.id,
+        reason: "no-survey-case",
+      };
+    }
     if (
       command.type === "survey"
       && !this.activeExpedition
@@ -562,14 +665,106 @@ export class GameSimulation {
     return result;
   }
 
+  interactWithWreck(
+    command: Readonly<WreckSurveyInteractionCommandV1>,
+  ): WreckSurveyInteractionResultV1 {
+    const raw = command as unknown as Record<string, unknown> | null;
+    const wreckId = raw && Number.isSafeInteger(raw.wreckId) ? raw.wreckId as number : -1;
+    if (!raw || raw.contractVersion !== WRECK_SURVEY_CONTRACT_VERSION) {
+      return this.rejectWreckSurvey(wreckId, "unsupported-contract");
+    }
+    if (raw.type !== "survey" && raw.type !== "leave") {
+      return this.rejectWreckSurvey(wreckId, "invalid-command");
+    }
+    if (this.interactionTransactionActive) {
+      return this.rejectWreckSurvey(wreckId, "interaction-busy");
+    }
+    if (this.pendingGenerationHandoverValue) {
+      return this.rejectWreckSurvey(wreckId, "generation-handover");
+    }
+    if (this.pendingRespawn) return this.rejectWreckSurvey(wreckId, "wreck-hold");
+    const wreck = this.shipwrecks.find(({ id }) => id === wreckId);
+    if (!wreck) return this.rejectWreckSurvey(wreckId, "unknown-wreck");
+    if (!wreck.discovered) return this.rejectWreckSurvey(wreckId, "not-discovered");
+    const distance = Math.hypot(
+      wreck.tileX - this.ship.currentTileX,
+      wreck.tileY - this.ship.currentTileY,
+    );
+    if (distance > WRECK_SURVEY_INTERACTION_RANGE_TILES) {
+      return this.rejectWreckSurvey(wreckId, "out-of-range");
+    }
+    if (wreck.generation >= this.generation) {
+      return this.rejectWreckSurvey(wreckId, "current-generation");
+    }
+    if (wreck.survey.state !== "unexamined") {
+      return this.rejectWreckSurvey(wreckId, "already-surveyed");
+    }
+    if (raw.type === "leave") {
+      return {
+        contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
+        status: "left",
+        wreckId: wreck.id,
+      };
+    }
+    if (this.surveyCasesRemaining === 0) {
+      return this.rejectWreckSurvey(wreckId, "no-survey-case");
+    }
+    const expeditionStarted = !this.activeExpedition;
+    this.interactionTransactionActive = true;
+    try {
+      if (expeditionStarted) this.activeExpedition = true;
+      wreck.survey = {
+        state: "provisional",
+        expeditionId: this.expeditionId,
+        generation: this.generation,
+      };
+      this.wrecksRevision++;
+      this.revision++;
+      this.saveRevision++;
+      const result = {
+        contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
+        status: "surveyed",
+        wreckId: wreck.id,
+        navigatorId: createNavigatorId(wreck.generation),
+        lostGeneration: wreck.generation,
+        casesRemaining: 0,
+        presentationMs: WRECK_SURVEY_PRESENTATION_MS,
+      } as const;
+      if (expeditionStarted) {
+        this.events.emit("expeditionStarted", {
+          expeditionId: this.expeditionId,
+          generation: this.generation,
+        });
+      }
+      this.events.emit("wreckSurveyed", {
+        ...result,
+        tile: { x: wreck.tileX, y: wreck.tileY },
+      });
+      return result;
+    } finally {
+      this.interactionTransactionActive = false;
+    }
+  }
+
   /** Deterministic sandbox hook; normal play reaches this outcome through travel consumption. */
   forceWreck(): boolean {
-    if (this.pendingRespawn) return false;
+    if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return false;
     if (this.isInSupportedWater()) return false;
     if (!this.activeExpedition) this.startExpedition();
     const knowledgeChanged = this.failExpedition();
     if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
     this.recalculateRiskOverlays();
+    this.revision++;
+    this.saveRevision++;
+    return true;
+  }
+
+  acknowledgeGenerationHandover(): boolean {
+    if (this.interactionTransactionActive || !this.pendingGenerationHandoverValue) return false;
+    this.pendingGenerationHandoverValue = undefined;
+    this.ship.speed = 0;
+    this.lastMovement = NO_MOVEMENT;
+    this.lifecycleResolutionRevision++;
     this.revision++;
     this.saveRevision++;
     return true;
@@ -609,13 +804,16 @@ export class GameSimulation {
               remainingSeconds: this.pendingRespawn.remainingSeconds,
             }
           : null,
+        pendingGenerationHandover: this.pendingGenerationHandoverValue
+          ? { ...this.pendingGenerationHandoverValue }
+          : null,
       },
       ship: { ...this.ship },
       knowledge: {
         encoding: "non-unknown-runs-v1",
         runs: this.copyKnowledgeRunsForSave(),
       },
-      wrecks: this.shipwrecks.map((wreck) => ({ ...wreck })),
+      wrecks: this.shipwrecks.map((wreck) => ({ ...wreck, survey: { ...wreck.survey } })),
       discoveries: {
         provisional: this.provisionalDiscoveries.map((discovery) => ({ ...discovery })),
         returned: this.returnedDiscoveries.map((discovery) => ({ ...discovery })),
@@ -634,6 +832,9 @@ export class GameSimulation {
    * are regenerated, while sight, movement caches and risk paths are rebuilt.
    */
   restoreSave(value: unknown): void {
+    if (this.interactionTransactionActive) {
+      throw new SaveRestoreError("Cannot restore a save during an interaction transaction");
+    }
     const parsed = parseSaveGame(value) as SaveGame<DiscoveryRecord>;
     const currentGenerationConfig = captureGenerationConfig(this.config);
     const savedGenerationConfig = captureGenerationConfig(applyGenerationConfig(
@@ -650,6 +851,12 @@ export class GameSimulation {
 
     if (generated.grid.isMovementBlocked(parsed.ship.currentTileX, parsed.ship.currentTileY)) {
       throw new SaveRestoreError("Saved ship tile is blocked in the regenerated world");
+    }
+    if (
+      parsed.expedition.pendingGenerationHandover
+      && parsed.ship.provisions !== this.config.provisions.startingBundles
+    ) {
+      throw new SaveRestoreError("Saved generation handover must contain a fully supplied ship");
     }
     const restoredDiscoveries = new DiscoverySystem(
       generated.grid,
@@ -680,7 +887,7 @@ export class GameSimulation {
       throw new SaveRestoreError(error instanceof Error ? error.message : "Saved fishing-shoal records are invalid");
     }
 
-    const restoredWrecks = parsed.wrecks.map((wreck) => ({ ...wreck }));
+    const restoredWrecks = parsed.wrecks.map((wreck) => ({ ...wreck, survey: { ...wreck.survey } }));
     const restoredLineage = NavigatorLineageSystem.fromSnapshot(parsed.navigatorLineage);
     let pendingRespawn: PendingRespawnState | undefined;
     if (parsed.expedition.pendingRespawn) {
@@ -705,6 +912,9 @@ export class GameSimulation {
     this.shipwrecks.push(...restoredWrecks);
     this.wrecksRevision++;
     this.pendingRespawn = pendingRespawn;
+    this.pendingGenerationHandoverValue = parsed.expedition.pendingGenerationHandover
+      ? Object.freeze({ ...parsed.expedition.pendingGenerationHandover })
+      : undefined;
     this.ship = { ...parsed.ship };
     this.movement = new MovementSystem(this.world, this.config);
     this.visibility = new VisibilitySystem(this.world, this.config);
@@ -765,10 +975,13 @@ export class GameSimulation {
         wreckPresentationActive: this.wreckPresentationActive,
         respawnSecondsRemaining: this.respawnSecondsRemaining,
         pendingWreckId: this.pendingWreckId,
+        pendingGenerationHandover: this.pendingGenerationHandoverValue
+          ? { ...this.pendingGenerationHandoverValue }
+          : null,
       },
       navigator: { ...this.currentNavigator },
       lineage: this.navigatorLineage.map((navigator) => ({ ...navigator })),
-      wrecks: this.shipwrecks.map((wreck) => ({ ...wreck })),
+      wrecks: this.shipwrecks.map((wreck) => ({ ...wreck, survey: { ...wreck.survey } })),
       discoveries: {
         available: this.discoveryDefinitions.length,
         provisional: this.provisionalDiscoveries.length,
@@ -795,7 +1008,7 @@ export class GameSimulation {
   }
 
   private startExpedition(): void {
-    if (this.activeExpedition || this.pendingRespawn) return;
+    if (this.activeExpedition || this.pendingRespawn || this.pendingGenerationHandoverValue) return;
     this.activeExpedition = true;
     this.events.emit("expeditionStarted", {
       expeditionId: this.expeditionId,
@@ -822,9 +1035,25 @@ export class GameSimulation {
     const committed = this.knowledge.commitExpedition(expeditionId);
     const returnedDiscoveries = this.discoverySystem.commitExpedition(expeditionId);
     const returnedFishingShoals = this.fishingShoalSystem.commitExpedition(expeditionId);
+    const returnedWreckSurveys = this.commitWreckSurveys(expeditionId);
     this.activeExpedition = false;
     this.advanceExpeditionId();
     const voyage = this.lineage.completeSuccessfulVoyage();
+    const previousProvisions = this.ship.provisions;
+    const previousAccumulator = this.ship.provisionAccumulator;
+    this.ship.provisions = this.config.provisions.startingBundles;
+    this.ship.provisionAccumulator = 0;
+    this.ship.speed = 0;
+    if (voyage.status === "tenure-completed") {
+      this.pendingGenerationHandoverValue = Object.freeze({
+        contractVersion: NAVIGATOR_GENERATION_HANDOVER_VERSION,
+        fromNavigatorId: navigatorId,
+        fromGeneration: generation,
+        nextNavigatorId: voyage.successor.id,
+        nextGeneration: voyage.successor.generation,
+        reason: "tenure",
+      });
+    }
     this.events.emit("expeditionReturned", {
       expeditionId,
       generation,
@@ -850,7 +1079,20 @@ export class GameSimulation {
         surveys: returnedFishingShoals.surveys,
       });
     }
-    this.replenishCurrentShip("return", true);
+    if (returnedWreckSurveys.length > 0) {
+      this.events.emit("wreckSurveysReturned", {
+        expeditionId,
+        generation,
+        reports: returnedWreckSurveys,
+      });
+    }
+    this.emitReplenishment(
+      previousProvisions,
+      previousAccumulator,
+      this.ship.provisions,
+      "return",
+      true,
+    );
     if (voyage.status === "tenure-completed") {
       this.events.emit("generationAdvanced", {
         previousGeneration: generation,
@@ -887,12 +1129,14 @@ export class GameSimulation {
       tileY: lostShip.currentTileY,
       heading: lostShip.heading,
       discovered: false,
+      survey: { state: "unexamined" },
     };
     this.shipwrecks.push(wreck);
     this.wrecksRevision++;
     const reverted = this.knowledge.revertExpedition(expeditionId);
     const lostDiscoveries = this.discoverySystem.revertExpedition(expeditionId);
     const lostFishingShoals = this.fishingShoalSystem.revertExpedition(expeditionId);
+    const lostWreckSurveys = this.revertWreckSurveys(expeditionId);
     const previousProvisions = lostShip.provisions;
     lostShip.provisions = 0;
     lostShip.provisionAccumulator = 0;
@@ -934,7 +1178,54 @@ export class GameSimulation {
         records: lostFishingShoals,
       });
     }
+    if (lostWreckSurveys.length > 0) {
+      this.events.emit("wreckSurveysLost", {
+        expeditionId,
+        generation,
+        reports: lostWreckSurveys,
+      });
+    }
     return reverted.changedCount;
+  }
+
+  private commitWreckSurveys(expeditionId: number): readonly Readonly<WreckSurveyReportV1>[] {
+    const reports: WreckSurveyReportV1[] = [];
+    for (const wreck of this.shipwrecks) {
+      const survey = wreck.survey;
+      if (survey.state !== "provisional" || survey.expeditionId !== expeditionId) continue;
+      reports.push({
+        wreckId: wreck.id,
+        navigatorId: createNavigatorId(wreck.generation),
+        lostGeneration: wreck.generation,
+        surveyExpeditionId: survey.expeditionId,
+        surveyGeneration: survey.generation,
+      });
+      wreck.survey = {
+        state: "returned",
+        expeditionId: survey.expeditionId,
+        generation: survey.generation,
+      };
+    }
+    if (reports.length > 0) this.wrecksRevision++;
+    return Object.freeze(reports.map((report) => Object.freeze(report)));
+  }
+
+  private revertWreckSurveys(expeditionId: number): readonly Readonly<WreckSurveyReportV1>[] {
+    const reports: WreckSurveyReportV1[] = [];
+    for (const wreck of this.shipwrecks) {
+      const survey = wreck.survey;
+      if (survey.state !== "provisional" || survey.expeditionId !== expeditionId) continue;
+      reports.push({
+        wreckId: wreck.id,
+        navigatorId: createNavigatorId(wreck.generation),
+        lostGeneration: wreck.generation,
+        surveyExpeditionId: survey.expeditionId,
+        surveyGeneration: survey.generation,
+      });
+      wreck.survey = { state: "unexamined" };
+    }
+    if (reports.length > 0) this.wrecksRevision++;
+    return Object.freeze(reports.map((report) => Object.freeze(report)));
   }
 
   private advanceWreckPresentation(deltaSeconds: number): MovementResult {
@@ -963,6 +1254,14 @@ export class GameSimulation {
     }
     const advanced = this.lineage.completeSuccession(succession.key);
     this.advanceExpeditionId();
+    this.pendingGenerationHandoverValue = Object.freeze({
+      contractVersion: NAVIGATOR_GENERATION_HANDOVER_VERSION,
+      fromNavigatorId: advanced.transition.fromNavigatorId,
+      fromGeneration: pending.generation,
+      nextNavigatorId: advanced.navigator.id,
+      nextGeneration: advanced.navigator.generation,
+      reason: "wreck",
+    });
 
     this.ship = createShipStateAtGrid(
       this.generated.landmarks.homeReturnTile,
@@ -994,7 +1293,7 @@ export class GameSimulation {
       generation: pending.generation,
       forgottenTiles: pending.forgottenTiles,
       nextGeneration: this.generation,
-      wreck: { ...pending.wreck },
+      wreck: { ...pending.wreck, survey: { ...pending.wreck.survey } },
     });
   }
 
@@ -1040,6 +1339,18 @@ export class GameSimulation {
     return this.world.getKnowledge(this.ship.currentTileX, this.ship.currentTileY) === KnowledgeState.Supported;
   }
 
+  private rejectWreckSurvey(
+    wreckId: number,
+    reason: WreckSurveyRejectionReasonV1,
+  ): WreckSurveyInteractionResultV1 {
+    return {
+      contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
+      status: "rejected",
+      wreckId,
+      reason,
+    };
+  }
+
   private discoverVisibleWrecks(): number {
     let discoveredCount = 0;
     for (const wreck of this.shipwrecks) {
@@ -1048,7 +1359,6 @@ export class GameSimulation {
       discoveredCount++;
       this.events.emit("wreckDiscovered", {
         wreckId: wreck.id,
-        generation: wreck.generation,
         tileX: wreck.tileX,
         tileY: wreck.tileY,
       });

@@ -146,7 +146,9 @@ export type FishingShoalSurveyRejectionReason =
   | "not-sighted"
   | "no-survey-case"
   | "already-surveyed"
-  | "wreck-hold";
+  | "wreck-hold"
+  | "interaction-busy"
+  | "generation-handover";
 
 export interface FishingShoalSurveyedResultV1 {
   contractVersion: typeof FISHING_SHOAL_CONTRACT_VERSION;

@@ -108,6 +108,7 @@ describe("GameSimulation save/load", () => {
     original.update({ turn: 0, throttle: 0 }, original.config.simulation.wreckPresentationSeconds);
     expect(original.generation).toBe(2);
     expect(original.wrecks).toHaveLength(1);
+    expect(original.acknowledgeGenerationHandover()).toBe(true);
     expect(original.teleport({ x: 4, y: 4 })).toBe(true);
     expect(original.wrecks[0].discovered).toBe(true);
 

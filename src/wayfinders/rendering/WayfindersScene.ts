@@ -14,6 +14,10 @@ import {
   FISHING_SHOAL_CONTRACT_VERSION,
   type FishingShoalInteractionResultV1,
 } from "../exploration/FishingShoalContracts";
+import {
+  WRECK_SURVEY_CONTRACT_VERSION,
+  type WreckSurveyInteractionResultV1,
+} from "../exploration/WreckSurveyContracts";
 import type { SaveStore } from "../persistence/IndexedDbSaveStore";
 import { loadExactSaveSlot } from "../persistence/SaveGame";
 import { worldToGrid } from "../world/CoordinateSystem";
@@ -28,6 +32,10 @@ import { ShipRenderer } from "./ShipRenderer";
 import type { ShipRenderPose } from "./ShipPose";
 import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
+import {
+  buildNavigatorGenerationSummary,
+  type NavigatorGenerationSummary,
+} from "./NavigatorGenerationSummary";
 
 interface MovementKeys {
   left: Phaser.Input.Keyboard.Key;
@@ -58,6 +66,9 @@ interface BrowserDebugApi {
   fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
   surveyFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
   leaveFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
+  surveyWreck: () => WreckSurveyInteractionResultV1 | undefined;
+  leaveWreck: () => WreckSurveyInteractionResultV1 | undefined;
+  continueGeneration: () => boolean;
 }
 
 export interface PersistenceBootState {
@@ -113,7 +124,16 @@ export class WayfindersScene extends Phaser.Scene {
   private surveyButton?: HTMLButtonElement;
   private leaveButton?: HTMLButtonElement;
   private dismissedFishingShoalId?: string;
+  private dismissedWreckId?: number;
   private surveyActionUntil = Number.NEGATIVE_INFINITY;
+  private generationSummaryDialog?: HTMLDialogElement;
+  private generationSummaryEyebrow?: HTMLElement;
+  private generationSummaryTitle?: HTMLElement;
+  private generationSummaryJourneys?: HTMLOListElement;
+  private generationSummaryFindings?: HTMLElement;
+  private generationSummaryHandover?: HTMLElement;
+  private generationSummaryContinue?: HTMLButtonElement;
+  private generationSummaryVisible = false;
   private teleportOnClick = false;
   private islandInspectionIndex = 0;
   private fishingShoalInspectionIndex = 0;
@@ -147,9 +167,10 @@ export class WayfindersScene extends Phaser.Scene {
   private pendingReturnedDiscoveryNames: string[] = [];
   private pendingReturnedFishingLeadCount = 0;
   private pendingReturnedFishingSurveyQualities: string[] = [];
+  private pendingReturnedWreckGenerations: number[] = [];
   private pendingReturnVoyageNumber?: number;
   private pendingReturnVoyagesRemaining?: number;
-  private pendingTenureSummary?: string;
+  private pendingGenerationSummary?: Readonly<NavigatorGenerationSummary>;
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
   private lastSaveSerializationMs = 0;
@@ -213,8 +234,10 @@ export class WayfindersScene extends Phaser.Scene {
     this.domAbort = new AbortController();
     this.mountDeveloperTools();
     this.mountSurveyRibbon();
+    this.mountGenerationSummaryDialog();
     this.installBrowserDebugApi();
     this.bindSimulationEvents();
+    this.showPendingGenerationSummary();
     this.syncPresentation(true);
     this.log(this.persistenceBoot.message);
     void this.refreshCheckpointAvailability();
@@ -233,10 +256,18 @@ export class WayfindersScene extends Phaser.Scene {
     const textInputFocused = activeElement instanceof HTMLInputElement
       || activeElement instanceof HTMLSelectElement
       || activeElement instanceof HTMLTextAreaElement;
-    if (!textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) this.changeZoom(0.1);
-    if (!textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) this.changeZoom(-0.1);
-    if (!textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.survey)) this.performFishingShoalSurvey();
-    if (!textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.leave)) this.performFishingShoalLeave();
+    if (!textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) {
+      this.changeZoom(0.1);
+    }
+    if (!textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) {
+      this.changeZoom(-0.1);
+    }
+    if (!textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.survey)) {
+      this.performSurveyAction();
+    }
+    if (!textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.leave)) {
+      this.performSurveyLeave();
+    }
     const movementInput = this.readMovementInput();
     let keepAdvancing = true;
     this.clock.advance(delta, (deltaSeconds) => {
@@ -256,6 +287,8 @@ export class WayfindersScene extends Phaser.Scene {
   private readMovementInput(): MovementInput {
     const active = document.activeElement;
     if (
+      this.simulation.generationHandoverActive
+      ||
       this.time.now < this.surveyActionUntil
       || active instanceof HTMLInputElement
       || active instanceof HTMLSelectElement
@@ -367,6 +400,7 @@ export class WayfindersScene extends Phaser.Scene {
         diagnosticsDirty
         || Math.abs(this.simulation.ship.speed) > 0
         || this.simulation.wreckPresentationActive
+        || this.simulation.generationHandoverActive
       )
     );
     const host = this.gameHost;
@@ -401,6 +435,9 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.failedExpeditions = String(this.simulation.failedExpeditions);
       host.dataset.atDock = String(this.simulation.atDock);
       host.dataset.wrecks = String(this.simulation.wrecks.length);
+      host.dataset.wreckSurveyProvisional = String(this.simulation.provisionalWreckSurveys.length);
+      host.dataset.wreckSurveyReturned = String(this.simulation.returnedWreckSurveys.length);
+      host.dataset.wreckSurveyInteraction = String(this.simulation.wreckSurveyInteraction?.wreckId ?? "");
       host.dataset.discoveryProvisional = String(this.simulation.provisionalDiscoveries.length);
       host.dataset.discoveryReturned = String(this.simulation.returnedDiscoveries.length);
       host.dataset.fishingShoalAvailable = String(this.simulation.fishingShoalDefinitions.length);
@@ -414,8 +451,14 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.persistenceStatus = this.persistenceStatus;
       host.dataset.wreckPresentation = String(this.simulation.wreckPresentationActive);
       host.dataset.respawnSeconds = this.simulation.respawnSecondsRemaining.toFixed(3);
-      host.dataset.lifecyclePhase = this.simulation.wreckPresentationActive ? "wreck-hold" : "active";
-      host.dataset.inputSuppressed = String(this.simulation.wreckPresentationActive);
+      host.dataset.lifecyclePhase = this.simulation.generationHandoverActive
+        ? "generation-summary"
+        : this.simulation.wreckPresentationActive
+          ? "wreck-hold"
+          : "active";
+      host.dataset.inputSuppressed = String(
+        this.simulation.wreckPresentationActive || this.simulation.generationHandoverActive,
+      );
       host.dataset.pendingWreckId = String(this.simulation.pendingWreckId ?? "");
       host.dataset.stranded = String(this.simulation.stranded);
       host.dataset.overlaysRevision = String(this.simulation.overlaysRevision);
@@ -478,7 +521,9 @@ export class WayfindersScene extends Phaser.Scene {
     }
     if (diagnosticsDue && this.gameStatus) {
       const voyage = `Voyage ${this.simulation.navigatorVoyageNumber} of 4`;
-      const message = this.simulation.wreckPresentationActive
+      const message = this.simulation.generationHandoverActive
+        ? "A navigator's journeys are being remembered · continue to begin the next generation"
+        : this.simulation.wreckPresentationActive
         ? `Home mourns · a new navigator takes the helm in ${this.simulation.respawnSecondsRemaining.toFixed(1)}s`
         : this.simulation.stranded
         ? "Developer zero-cargo state · add a bundle or force a wreck"
@@ -491,6 +536,10 @@ export class WayfindersScene extends Phaser.Scene {
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.teleportOnClick) return;
+    if (this.simulation.generationHandoverActive) {
+      this.log("Teleport is unavailable during the generation transition.");
+      return;
+    }
     if (this.simulation.wreckPresentationActive) {
       this.log("Teleport is unavailable during the wreck presentation.");
       return;
@@ -654,7 +703,7 @@ export class WayfindersScene extends Phaser.Scene {
     const ribbon = document.createElement("section");
     ribbon.className = "survey-ribbon";
     ribbon.hidden = true;
-    ribbon.setAttribute("aria-label", "Fishing-shoal survey decision");
+    ribbon.setAttribute("aria-label", "Survey decision");
     ribbon.innerHTML = `
       <div>
         <strong data-survey-title>Fishing sign nearby</strong>
@@ -672,17 +721,53 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveyRibbonCase = ribbon.querySelector<HTMLElement>("[data-survey-case]") ?? undefined;
     this.surveyButton = ribbon.querySelector<HTMLButtonElement>("[data-survey-action='survey']") ?? undefined;
     this.leaveButton = ribbon.querySelector<HTMLButtonElement>("[data-survey-action='leave']") ?? undefined;
-    this.surveyButton?.addEventListener("click", () => this.performFishingShoalSurvey(), { signal });
-    this.leaveButton?.addEventListener("click", () => this.performFishingShoalLeave(), { signal });
+    this.surveyButton?.addEventListener("click", () => this.performSurveyAction(), { signal });
+    this.leaveButton?.addEventListener("click", () => this.performSurveyLeave(), { signal });
   }
 
   private syncSurveyRibbon(): void {
     const ribbon = this.surveyRibbon;
     if (!ribbon) return;
+    if (this.simulation.generationHandoverActive) {
+      ribbon.hidden = true;
+      return;
+    }
+
+    const wreckInteraction = this.simulation.wreckSurveyInteraction;
+    if (wreckInteraction) {
+      this.dismissedFishingShoalId = undefined;
+      if (this.dismissedWreckId !== undefined && this.dismissedWreckId !== wreckInteraction.wreckId) {
+        this.dismissedWreckId = undefined;
+      }
+      if (this.dismissedWreckId === wreckInteraction.wreckId || this.time.now < this.surveyActionUntil) {
+        ribbon.hidden = true;
+        return;
+      }
+      if (this.surveyRibbonTitle) this.surveyRibbonTitle.textContent = "Unidentified navigator wreck";
+      if (this.surveyRibbonClue) {
+        this.surveyRibbonClue.textContent = "Survey the remains to identify the lost navigator.";
+      }
+      if (this.surveyRibbonCase) {
+        this.surveyRibbonCase.textContent = wreckInteraction.surveyCasesRemaining === 1
+          ? "Survey case ready — the identity report must be brought home."
+          : "No survey case remains on this voyage.";
+      }
+      if (this.surveyButton) this.surveyButton.disabled = wreckInteraction.surveyCasesRemaining === 0;
+      ribbon.dataset.surveyKind = "wreck";
+      ribbon.dataset.surveyTarget = String(wreckInteraction.wreckId);
+      delete ribbon.dataset.shoalId;
+      ribbon.hidden = false;
+      return;
+    }
+
+    this.dismissedWreckId = undefined;
     const interaction = this.simulation.fishingShoalInteraction;
     if (!interaction) {
       ribbon.hidden = true;
       this.dismissedFishingShoalId = undefined;
+      delete ribbon.dataset.surveyKind;
+      delete ribbon.dataset.surveyTarget;
+      delete ribbon.dataset.shoalId;
       return;
     }
     if (this.dismissedFishingShoalId && this.dismissedFishingShoalId !== interaction.id) {
@@ -705,8 +790,62 @@ export class WayfindersScene extends Phaser.Scene {
         : "No survey case remains on this voyage.";
     }
     if (this.surveyButton) this.surveyButton.disabled = interaction.surveyCasesRemaining === 0;
+    ribbon.dataset.surveyKind = "fishing-shoal";
+    ribbon.dataset.surveyTarget = interaction.id;
     ribbon.dataset.shoalId = interaction.id;
     ribbon.hidden = false;
+  }
+
+  private performSurveyAction(): FishingShoalInteractionResultV1 | WreckSurveyInteractionResultV1 | undefined {
+    if (this.simulation.generationHandoverActive) return undefined;
+    return this.simulation.wreckSurveyInteraction
+      ? this.performWreckSurvey()
+      : this.performFishingShoalSurvey();
+  }
+
+  private performSurveyLeave(): FishingShoalInteractionResultV1 | WreckSurveyInteractionResultV1 | undefined {
+    if (this.simulation.generationHandoverActive) return undefined;
+    return this.simulation.wreckSurveyInteraction
+      ? this.performWreckLeave()
+      : this.performFishingShoalLeave();
+  }
+
+  private performWreckSurvey(): WreckSurveyInteractionResultV1 | undefined {
+    const interaction = this.simulation.wreckSurveyInteraction;
+    if (!interaction || this.time.now < this.surveyActionUntil) return undefined;
+    const result = this.simulation.interactWithWreck({
+      contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
+      type: "survey",
+      wreckId: interaction.wreckId,
+    });
+    if (result.status === "surveyed") {
+      this.surveyActionUntil = this.time.now + result.presentationMs;
+      this.dismissedWreckId = interaction.wreckId;
+      this.updatePersistenceOutputs();
+      this.requestLifecycleSave();
+    } else if (result.status === "rejected") {
+      this.log(`Wreck survey was not started: ${result.reason}.`);
+    }
+    this.syncSurveyRibbon();
+    return result;
+  }
+
+  private performWreckLeave(): WreckSurveyInteractionResultV1 | undefined {
+    const interaction = this.simulation.wreckSurveyInteraction;
+    if (!interaction || this.time.now < this.surveyActionUntil) return undefined;
+    const result = this.simulation.interactWithWreck({
+      contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
+      type: "leave",
+      wreckId: interaction.wreckId,
+    });
+    if (result.status === "left") {
+      this.dismissedWreckId = interaction.wreckId;
+      this.log("Left the unidentified wreck unexamined; the survey case was preserved.");
+    } else if (result.status === "rejected") {
+      this.log(`Could not leave the wreck prompt: ${result.reason}.`);
+    }
+    this.syncSurveyRibbon();
+    return result;
   }
 
   private performFishingShoalSurvey(): FishingShoalInteractionResultV1 | undefined {
@@ -745,6 +884,112 @@ export class WayfindersScene extends Phaser.Scene {
     }
     this.syncSurveyRibbon();
     return result;
+  }
+
+  private mountGenerationSummaryDialog(): void {
+    const host = this.gameHost;
+    const signal = this.domAbort?.signal;
+    if (!host || !signal) return;
+    const dialog = document.createElement("dialog");
+    dialog.className = "generation-summary";
+    dialog.setAttribute("aria-labelledby", "generation-summary-title");
+    dialog.innerHTML = `
+      <div class="generation-summary__panel">
+        <p class="generation-summary__eyebrow" data-generation-summary-eyebrow></p>
+        <h2 id="generation-summary-title" data-generation-summary-title></h2>
+        <ol class="generation-summary__journeys" data-generation-summary-journeys></ol>
+        <p class="generation-summary__findings" data-generation-summary-findings></p>
+        <p class="generation-summary__handover" data-generation-summary-handover></p>
+        <button data-generation-summary-continue type="button">Continue</button>
+      </div>`;
+    host.append(dialog);
+    this.generationSummaryDialog = dialog;
+    this.generationSummaryEyebrow = dialog.querySelector<HTMLElement>("[data-generation-summary-eyebrow]") ?? undefined;
+    this.generationSummaryTitle = dialog.querySelector<HTMLElement>("[data-generation-summary-title]") ?? undefined;
+    this.generationSummaryJourneys = dialog.querySelector<HTMLOListElement>("[data-generation-summary-journeys]") ?? undefined;
+    this.generationSummaryFindings = dialog.querySelector<HTMLElement>("[data-generation-summary-findings]") ?? undefined;
+    this.generationSummaryHandover = dialog.querySelector<HTMLElement>("[data-generation-summary-handover]") ?? undefined;
+    this.generationSummaryContinue = dialog.querySelector<HTMLButtonElement>("[data-generation-summary-continue]") ?? undefined;
+    this.generationSummaryContinue?.addEventListener("click", () => this.dismissGenerationSummary(), { signal });
+    dialog.addEventListener("cancel", (event) => event.preventDefault(), { signal });
+  }
+
+  private showGenerationSummary(summary: Readonly<NavigatorGenerationSummary>): void {
+    const dialog = this.generationSummaryDialog;
+    if (!dialog) return;
+    if (this.generationSummaryEyebrow) {
+      this.generationSummaryEyebrow.textContent = `Generation ${summary.generation} navigator`;
+    }
+    if (this.generationSummaryTitle) {
+      this.generationSummaryTitle.textContent = summary.outcome === "tenure-completed"
+        ? "Four journeys completed"
+        : "Lost at sea";
+    }
+    if (this.generationSummaryJourneys) {
+      this.generationSummaryJourneys.replaceChildren(...summary.journeys.map((journey) => {
+        const row = document.createElement("li");
+        row.dataset.outcome = journey.outcome;
+        const label = document.createElement("strong");
+        label.textContent = `Journey ${journey.voyageNumber}`;
+        const outcome = document.createElement("span");
+        outcome.textContent = journey.outcome === "returned" ? "Returned safely" : "Lost at sea";
+        row.append(label, outcome);
+        return row;
+      }));
+    }
+    if (this.generationSummaryFindings) {
+      this.generationSummaryFindings.textContent = summary.outcome === "tenure-completed"
+        ? "All findings returned during these journeys are secured with the tribe."
+        : "Findings returned before the final voyage remain secured with the tribe.";
+    }
+    if (this.generationSummaryHandover) {
+      this.generationSummaryHandover.textContent = summary.outcome === "tenure-completed"
+        ? `Their four journeys enter the tribe's memory. Time passes, and generation ${summary.nextGeneration} takes the helm.`
+        : `The tribe mourns, time passes, and generation ${summary.nextGeneration} takes the helm.`;
+    }
+    if (this.generationSummaryContinue) {
+      this.generationSummaryContinue.textContent = `Begin generation ${summary.nextGeneration}`;
+    }
+    dialog.dataset.outcome = summary.outcome;
+    dialog.dataset.generation = String(summary.generation);
+    dialog.dataset.nextGeneration = String(summary.nextGeneration);
+    this.generationSummaryVisible = true;
+    if (typeof dialog.showModal === "function") dialog.showModal();
+    else dialog.setAttribute("open", "");
+    this.lastDiagnosticsRevision = -1;
+    this.syncSurveyRibbon();
+    this.generationSummaryContinue?.focus();
+  }
+
+  private showPendingGenerationSummary(): boolean {
+    const handover = this.simulation.pendingGenerationHandover;
+    if (!handover) return false;
+    const navigator = this.simulation.navigatorLineage.find(({ id }) => id === handover.fromNavigatorId);
+    if (!navigator || navigator.state === "active") {
+      throw new Error(`Terminal navigator ${handover.fromNavigatorId} is missing from the lineage`);
+    }
+    this.showGenerationSummary(buildNavigatorGenerationSummary(navigator));
+    return true;
+  }
+
+  private dismissGenerationSummary(): boolean {
+    if (!this.generationSummaryDialog || !this.generationSummaryVisible) return false;
+    if (!this.simulation.acknowledgeGenerationHandover()) return false;
+    this.closeGenerationSummaryPresentation();
+    this.requestLifecycleSave();
+    return true;
+  }
+
+  private closeGenerationSummaryPresentation(): boolean {
+    const dialog = this.generationSummaryDialog;
+    if (!dialog) return false;
+    const wasVisible = this.generationSummaryVisible || dialog.open;
+    if (typeof dialog.close === "function" && dialog.open) dialog.close();
+    else dialog.removeAttribute("open");
+    this.generationSummaryVisible = false;
+    this.lastDiagnosticsRevision = -1;
+    this.syncSurveyRibbon();
+    return wasVisible;
   }
 
   private toggleMarkup(name: keyof GameSimulation["debug"], label: string): string {
@@ -1065,9 +1310,13 @@ export class WayfindersScene extends Phaser.Scene {
     this.lastDiagnosticsOverlayRevision = -1;
     this.lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
     this.dismissedFishingShoalId = undefined;
+    this.dismissedWreckId = undefined;
     this.surveyActionUntil = Number.NEGATIVE_INFINITY;
+    this.pendingGenerationSummary = undefined;
+    this.closeGenerationSummaryPresentation();
     this.resetShipPresentation(true);
     this.updateProvisionOutput();
+    this.showPendingGenerationSummary();
     this.syncPresentation(true);
     // Camera follow deliberately uses smoothing during play. A restored or
     // regenerated world is a discontinuity, so snap to the authoritative ship
@@ -1181,6 +1430,9 @@ export class WayfindersScene extends Phaser.Scene {
       })),
       surveyFishingShoal: () => this.performFishingShoalSurvey(),
       leaveFishingShoal: () => this.performFishingShoalLeave(),
+      surveyWreck: () => this.performWreckSurvey(),
+      leaveWreck: () => this.performWreckLeave(),
+      continueGeneration: () => this.dismissGenerationSummary(),
     };
     this.browserDebugApi = api;
     window.__WAYFINDERS__ = api;
@@ -1222,11 +1474,14 @@ export class WayfindersScene extends Phaser.Scene {
         this.requestLifecycleSave();
       }),
       this.simulation.events.on("navigatorTenureCompleted", ({
+        navigatorId,
         generation,
         completedVoyages,
         nextGeneration,
       }) => {
-        this.pendingTenureSummary = `NAVIGATOR TENURE COMPLETE\nGENERATION ${nextGeneration} TAKES THE HELM`;
+        const navigator = this.simulation.navigatorLineage.find(({ id }) => id === navigatorId);
+        if (!navigator) throw new Error(`Completed navigator ${navigatorId} is missing from the lineage`);
+        this.pendingGenerationSummary = buildNavigatorGenerationSummary(navigator);
         this.scheduleReturnCue();
         this.log(
           `Generation ${generation}'s navigator completed ${completedVoyages} successful voyages; `
@@ -1249,10 +1504,9 @@ export class WayfindersScene extends Phaser.Scene {
       this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
         this.resetShipPresentation(false);
         this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
-        this.showLifecycleCue(
-          `TIME PASSES AT HOME\nGENERATION ${nextGeneration} TAKES THE HELM`,
-          "#ffd2aa",
-        );
+        const navigator = this.simulation.navigatorLineage.find((record) => record.generation === generation);
+        if (!navigator) throw new Error(`Lost navigator from generation ${generation} is missing from the lineage`);
+        this.showGenerationSummary(buildNavigatorGenerationSummary(navigator));
         this.log(
           `Generation ${generation} lost ${forgottenTiles} unreturned tiles; `
           + `generation ${nextGeneration} now carries the inherited chart.`,
@@ -1264,8 +1518,34 @@ export class WayfindersScene extends Phaser.Scene {
         this.showLifecycleCue("DOCKED\nPROVISIONS REPLENISHED", "#d9fff5");
         this.log("Dock stores replenished the ship's provisions.");
       }),
-      this.simulation.events.on("wreckDiscovered", ({ wreckId, generation }) => {
-        this.log(`Found wreck ${wreckId} from generation ${generation}.`);
+      this.simulation.events.on("wreckDiscovered", ({ wreckId }) => {
+        this.log(`Found unidentified navigator wreck ${wreckId}. Survey it to learn whose vessel it was.`);
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("wreckSurveyed", ({ lostGeneration, presentationMs }) => {
+        this.showLifecycleCue(
+          `WRECK IDENTIFIED\nGENERATION ${lostGeneration} NAVIGATOR\nRETURN HOME TO REPORT THEIR FATE`,
+          "#f0d7a2",
+          presentationMs,
+        );
+        this.log(`Wreck survey identified generation ${lostGeneration}'s navigator; the report is provisional.`);
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("wreckSurveysReturned", ({ reports }) => {
+        this.pendingReturnedWreckGenerations.push(...reports.map(({ lostGeneration }) => lostGeneration));
+        this.scheduleReturnCue();
+        this.log(
+          `Returned wreck report secured for ${reports.map(({ lostGeneration }) => `generation ${lostGeneration}`).join(", ")}.`,
+        );
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("wreckSurveysLost", ({ reports }) => {
+        this.log(
+          `Unreturned wreck identification lost at sea for ${reports.map(({ lostGeneration }) => `generation ${lostGeneration}`).join(", ")}; the wreck can be surveyed again.`,
+        );
+        this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
       this.simulation.events.on("discoveryFound", ({ name, detail }) => {
@@ -1358,32 +1638,26 @@ export class WayfindersScene extends Phaser.Scene {
       const fishingLeadCount = this.pendingReturnedFishingLeadCount;
       this.pendingReturnedFishingLeadCount = 0;
       const fishingSurveyQualities = this.pendingReturnedFishingSurveyQualities.splice(0);
+      const wreckGenerations = this.pendingReturnedWreckGenerations.splice(0);
       const returned = this.returnCuePending;
       this.returnCuePending = false;
       const voyageNumber = this.pendingReturnVoyageNumber;
       this.pendingReturnVoyageNumber = undefined;
       const voyagesRemaining = this.pendingReturnVoyagesRemaining;
       this.pendingReturnVoyagesRemaining = undefined;
-      const tenureSummary = this.pendingTenureSummary;
-      this.pendingTenureSummary = undefined;
+      const generationSummary = this.pendingGenerationSummary;
+      this.pendingGenerationSummary = undefined;
       if (
         !returned
         && names.length === 0
         && fishingLeadCount === 0
         && fishingSurveyQualities.length === 0
-        && !tenureSummary
+        && wreckGenerations.length === 0
+        && !generationSummary
       ) return;
 
-      if (tenureSummary) {
-        const findingCount = names.length + fishingLeadCount + fishingSurveyQualities.length;
-        const findings = findingCount > 0
-          ? `${findingCount} RETURNED FINDING${findingCount === 1 ? "" : "S"}\n`
-          : "";
-        this.showLifecycleCue(
-          `FOURTH VOYAGE RETURNED\n${findings}ROUTE SUPPORTED · PROVISIONS REPLENISHED\n${tenureSummary}`,
-          "#eadb9f",
-          5_000,
-        );
+      if (generationSummary) {
+        this.showGenerationSummary(generationSummary);
         return;
       }
 
@@ -1394,7 +1668,12 @@ export class WayfindersScene extends Phaser.Scene {
         ? ""
         : `${voyagesRemaining} VOYAGE${voyagesRemaining === 1 ? "" : "S"} REMAIN · `;
 
-      if (names.length > 0 || fishingLeadCount > 0 || fishingSurveyQualities.length > 0) {
+      if (
+        names.length > 0
+        || fishingLeadCount > 0
+        || fishingSurveyQualities.length > 0
+        || wreckGenerations.length > 0
+      ) {
         const discoveryLine = names.length === 1
           ? names[0].toUpperCase()
           : names.length > 1
@@ -1407,7 +1686,12 @@ export class WayfindersScene extends Phaser.Scene {
             : fishingLeadCount > 0
               ? `${fishingLeadCount} FISHING LEAD${fishingLeadCount === 1 ? "" : "S"} RECORDED`
               : "";
-        const findings = [discoveryLine, fishingLine].filter(Boolean).join("\n");
+        const wreckLine = wreckGenerations.length === 1
+          ? `WRECK REPORT RETURNED · GENERATION ${wreckGenerations[0]} NAVIGATOR`
+          : wreckGenerations.length > 1
+            ? `${wreckGenerations.length} WRECK REPORTS RETURNED`
+            : "";
+        const findings = [discoveryLine, fishingLine, wreckLine].filter(Boolean).join("\n");
         this.showLifecycleCue(
           `${voyageHeading}\n${findings}\nADDED TO THE INHERITED CHART\n`
           + `${remainingLine}ROUTE SUPPORTED · PROVISIONS REPLENISHED`,
@@ -1482,6 +1766,15 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveyRibbonCase = undefined;
     this.surveyButton = undefined;
     this.leaveButton = undefined;
+    this.generationSummaryDialog?.remove();
+    this.generationSummaryDialog = undefined;
+    this.generationSummaryEyebrow = undefined;
+    this.generationSummaryTitle = undefined;
+    this.generationSummaryJourneys = undefined;
+    this.generationSummaryFindings = undefined;
+    this.generationSummaryHandover = undefined;
+    this.generationSummaryContinue = undefined;
+    this.generationSummaryVisible = false;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.knowledgeOverlay.destroy();
     this.riskOverlay.destroy();

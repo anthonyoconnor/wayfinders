@@ -6,6 +6,7 @@ import type { WorldGrid } from "../world/WorldGrid";
 interface WreckView {
   container: Phaser.GameObjects.Container;
   hull: Phaser.GameObjects.Graphics;
+  label: Phaser.GameObjects.Text;
   known: boolean;
 }
 
@@ -27,6 +28,9 @@ export class WreckRenderer {
       const view = this.views.get(wreck.id) ?? this.create(wreck);
       view.container.setPosition(wreck.worldX, wreck.worldY);
       view.hull.setRotation(Phaser.Math.DegToRad(wreck.heading));
+      view.label.setText(wreck.survey.state === "unexamined"
+        ? "UNIDENTIFIED WRECK"
+        : `WRECK · GENERATION ${wreck.generation} NAVIGATOR`);
       const visibleNow = world.isVisibleNow(wreck.tileX, wreck.tileY);
       const known = visibleNow || wreck.discovered;
       view.known = known;
@@ -71,7 +75,9 @@ export class WreckRenderer {
     hull.fillStyle(0xc7b47d, 0.7);
     hull.fillTriangle(size * 0.15, -size * 0.55, size * 0.34, -size * 0.34, size * 0.2, -size * 0.28);
 
-    const label = this.scene.add.text(0, size * 0.42, `WRECK · GENERATION ${wreck.generation}`, {
+    const label = this.scene.add.text(0, size * 0.42, wreck.survey.state === "unexamined"
+      ? "UNIDENTIFIED WRECK"
+      : `WRECK · GENERATION ${wreck.generation} NAVIGATOR`, {
       align: "center",
       color: "#d8c9a2",
       fontFamily: "ui-monospace, monospace",
@@ -81,7 +87,7 @@ export class WreckRenderer {
       strokeThickness: 3,
     }).setOrigin(0.5, 0);
     const container = this.scene.add.container(wreck.worldX, wreck.worldY, [hull, label]).setDepth(36);
-    const view = { container, hull, known: false };
+    const view = { container, hull, label, known: false };
     this.views.set(wreck.id, view);
     return view;
   }

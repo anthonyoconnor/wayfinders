@@ -131,7 +131,7 @@ An idol aboard a wrecked ship is not credited as collected. It should become rec
 
 ### 5.4 Great Hall voyage record and lineage archive
 
-The player-facing record is a diegetic **Great Hall** rather than an arcade score screen. It is opened at the home island, after an important return or on the handover to a new generation. It is not a permanent sailing HUD.
+The player-facing permanent record is a diegetic **Great Hall** rather than an arcade score screen. It is opened at the home island, after an important return or from a generation handover. It is not a permanent sailing HUD. GP-2.2's required placeholder handover modal is deliberately smaller: it shows only numbered safely returned voyages and, for an early death, the numbered voyage on which the navigator was lost at sea. Detailed achievements and lineage aggregates remain Great Hall work.
 
 Each navigator receives four numbered voyage positions. A navigator who completes their tenure fills all four with safely returned voyages. A navigator who dies in a wreck keeps their earlier completed voyages, receives a respectful terminal lost-voyage record and cannot use the remaining positions.
 
@@ -142,11 +142,11 @@ Each navigator receives four numbered voyage positions. A navigator who complete
 | Surveys returned | Fishing grounds, resources, settlement contacts, migration sites and safe routes confirmed |
 | Connections made | Supported corridors, active fishing grounds, trade links and future home sites enabled |
 | Idols recovered | Named relics returned by that navigator |
-| Navigator's fate | Completed four-voyage tenure or lost at sea, without treating death as a positive score |
+| Navigator's fate | Completed four-voyage tenure, or lost at sea with the wreck initially unlocated and a later returned wreck report when found |
 
 The lineage archive aggregates permanent progress across every generation. It may show a restrained completion count such as **Idols recovered: 4 of 12**, recovered silhouettes and named exhibits. It must not reveal the remaining locations.
 
-Only returned achievements count as permanent legacy. Sighted and surveyed-but-unreturned opportunities remain provisional and are lost after a wreck. The terminal lost-voyage entry records what happened, not its provisional achievements. This keeps exact-dock return as the game's clear commitment boundary.
+Only returned achievements count as permanent legacy. Sighted and surveyed-but-unreturned opportunities remain provisional and are lost after a wreck. The terminal lost-voyage entry records that the navigator did not return, not the fatal expedition's provisional achievements. A later navigator's exact-dock-committed wreck survey can confirm whose wreck was found and attach that location/fate report to the lost record. This keeps exact-dock return as the game's clear commitment boundary.
 
 ### 5.5 How idols drive exploration
 
@@ -230,10 +230,19 @@ At the same time, a wreck must preserve earlier success:
 - the wreck remains as a visible, later-discoverable marker;
 - the next navigator can use Supported water at no provision cost to reach a distant old frontier.
 
-The persistent wreck remains associated with the lost navigator. Finding it can
-later become an optional objective that resolves part of the Great Hall record
-and returns bounded evidence or knowledge of what happened. Recovery must not
-retroactively commit every provisional discovery from the fatal expedition.
+The persistent runtime wreck remains associated with the lost navigator, but a
+later navigator initially sees only an unidentified wreck. Surveying it uses
+the existing one-per-voyage survey case and tells the crew whose wreck they
+found. That identity/fate report remains provisional aboard and resolves the
+corresponding lineage record only after exact-dock return. If the surveying
+navigator is also lost, the report is lost and the discovered wreck can be
+surveyed again. This report must not retroactively commit the fatal
+expedition's Personal chart or provisional discoveries.
+
+GP-3.4 may later build on a returned wreck report with bounded salvage, chart
+knowledge, cargo or economy recovery. Those rewards are separate from the
+baseline identification survey and require their own capacity and recovery
+rules.
 
 This is the central inheritance rule:
 
@@ -257,7 +266,7 @@ The player does not open a route-management screen. Their return report and Supp
 
 Economic simulation should advance on meaningful voyage transitions, not through a requirement to idle at the dock.
 
-The next playable voyage starts immediately, but a safe return or fatal-wreck succession represents elapsed world time between voyages. Connected communities are assumed to have been fishing, trading and working; after a loss, the tribe has also determined that its navigator will not return, mourned them and nominated a successor. The transition settles the effects of that elapsed period and can later present a short world-facing handover or mourning scene without imposing real-time waiting.
+Authoritative succession remains immediate, but every safe-tenure or fatal-wreck generation boundary presents GP-2.2's required placeholder summary before sailing resumes. A safe return or fatal-wreck succession represents elapsed world time between voyages. Connected communities are assumed to have been fishing, trading and working; after a loss, the tribe has also determined that its navigator will not return, mourned them and nominated a successor. The transition settles the effects of that elapsed period. Later presentation can replace the placeholder with a richer world-facing handover or mourning scene without imposing real-time waiting.
 
 This supports the desired pacing:
 
@@ -304,7 +313,9 @@ Only within inspection range should a small world-adjacent ribbon appear:
 - **Survey** — consumes a survey case;
 - **Leave** — continue sailing.
 
-For a wreck, the first option becomes **Examine wreck** and visually shows the required salvage case and cargo space. The selected physical case on the boat can highlight before it is consumed. The ship pauses briefly while the crew performs the action; this is a concise world action, not a long progress bar.
+For an unidentified runtime navigator wreck, the current baseline option is **Survey wreck**. It consumes the same one-per-voyage survey case used by other survey work, requires no cargo space and creates a provisional identity/fate report. The crew can learn whose wreck it is at sea, but the tribe and permanent lineage receive that knowledge only after exact-dock return. Generated historic-wreck discoveries remain separate content and do not claim an association with a lineage navigator.
+
+After GP-3.3 defines physical salvage capacity, GP-3.4 may add a separate **Salvage wreck** action that shows its salvage-case and cargo-space requirements. Survey identifies and reports; salvage recovers bounded physical or chart/economy value. Both should remain concise world actions rather than long progress bars.
 
 ### 11.4 Provisional records
 
@@ -312,7 +323,7 @@ A sighted or investigated opportunity can leave a faint temporary mark on the ex
 
 ### 11.5 Automatic return report
 
-At the dock, reporting is automatic. Workers receive the chart or cargo, followed by one concise world-facing confirmation such as **Fishing ground confirmed**. Later voyages visibly show the consequence: fishing skiffs operate at the shoal, trade vessels use the new route or the harbour gains activity.
+At the dock, reporting is automatic. Workers receive the chart, wreck report or cargo, followed by one concise world-facing confirmation such as **Fishing ground confirmed** or **Lost navigator's wreck identified**. Later voyages visibly show the consequence: a wreck's lineage association remains known, fishing skiffs operate at the shoal, trade vessels use the new route or the harbour gains activity.
 
 There is no sell screen and no manual route assignment.
 
@@ -363,11 +374,11 @@ Begin with deterministic fishing-shoal clues, limited survey cases, an explicit 
 
 ### GP-2: explorers, generations and lineage history
 
-Add persistent navigator identity, a maximum four-voyage tenure, automatic succession after the fourth safe return, fatal early succession on wreck and the Great Hall voyage chronicle used to credit later economic discoveries and idols. A later wreck-recovery milestone may let another navigator discover evidence or knowledge about someone lost at sea.
+Add persistent navigator identity, a maximum four-voyage tenure, automatic succession after the fourth safe return and fatal early succession on wreck. Every succession first uses an outcome-only placeholder summary; the later Great Hall expands those voyage positions with returned achievements. A later navigator can survey an unidentified runtime wreck with the existing survey case and permanently report whose wreck it is only after exact-dock return. GP-2 does not salvage cargo, restore chart knowledge or apply economy rewards from that wreck.
 
 ### GP-3: tribe economy, support and recovery
 
-After survey work is understood, introduce tribe support state, a protected recovery floor, automatic activation and output from returned fishing grounds, dockside voyage commitments, Supported-only fishing activity, wreck setback/recovery and later automatic exchange with connected communities. Economic time settles on inter-voyage return/wreck transitions and never requires real-time waiting.
+After survey work is understood, introduce tribe support state, a protected recovery floor, automatic activation and output from returned fishing grounds, dockside voyage commitments, Supported-only fishing activity, wreck setback/recovery and later automatic exchange with connected communities. GP-3.4 builds on GP-2's returned wreck identity/fate report with bounded salvage, chart, cargo and economy recovery rather than redefining identification. Economic time settles on inter-voyage return/wreck transitions and never requires real-time waiting.
 
 `GP-3.2` is the proposed earliest gate for isolated graphics-platform work: the complete survey → return → visible tribe benefit loop must first work with developer graphics.
 
@@ -399,6 +410,9 @@ The economy design is successful only if playtests show all of the following:
 - Every idol remains collectible after any legal sequence of wrecks; a lost relic is recoverable rather than silently destroyed.
 - The generation record clearly credits returned surveys and idols without becoming a permanent score HUD.
 - The lineage archive gives a clear collection goal without exposing exact remaining idol locations.
+- Players understand that sighting a runtime wreck does not identify it, an
+  aboard survey report is provisional, and only exact-dock return confirms the
+  wreck's lost navigator for the tribe and lineage.
 - Players understand that a wreck hurts the next generation while earlier Supported routes remain valuable.
 - Recovery feels achievable through smaller successful voyages and inherited routes, not through grinding.
 - Routine automatic traffic makes Supported waters feel alive without obscuring navigation, fog, risk overlays or performance.

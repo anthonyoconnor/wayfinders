@@ -322,6 +322,8 @@ describe("one-case fishing-shoal survey action", () => {
       id: target.id,
     })).toMatchObject({ status: "rejected", reason: "wreck-hold" });
     wrecked.update({ turn: 0, throttle: 0 }, wrecked.config.simulation.wreckPresentationSeconds);
+    expect(wrecked.surveyCasesRemaining).toBe(0);
+    expect(wrecked.acknowledgeGenerationHandover()).toBe(true);
     expect(wrecked.surveyCasesRemaining).toBe(1);
   });
 });
@@ -375,6 +377,7 @@ describe("returned fishing-shoal lifecycle", () => {
       { turn: 0, throttle: 0 },
       restoredUpgrade.config.simulation.wreckPresentationSeconds,
     );
+    expect(restoredUpgrade.acknowledgeGenerationHandover()).toBe(true);
 
     expect(restoredUpgrade.teleport(target.tile)).toBe(true);
     expect(restoredUpgrade.interactWithFishingShoal({

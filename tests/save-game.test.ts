@@ -52,6 +52,7 @@ function makeValidSave(): SaveGame {
       id: 4,
       active: false,
       pendingRespawn: null,
+      pendingGenerationHandover: null,
     },
     ship: {
       worldX: (tileX + 0.5) * config.navigation.tileSize,
@@ -77,6 +78,7 @@ function makeValidSave(): SaveGame {
       tileY: 20,
       heading: 180,
       discovered: true,
+      survey: { state: "unexamined" },
     }],
     discoveries: {
       provisional: [],
@@ -291,6 +293,172 @@ describe("save-game validation", () => {
     expect(() => parseSaveGame(wrongState)).toThrow(/sighted or surveyed/);
   });
 
+  it("validates provisional and returned wreck-survey provenance", () => {
+    const provisional = makeValidSave();
+    provisional.expedition.active = true;
+    provisional.wrecks[0].survey = {
+      state: "provisional",
+      expeditionId: provisional.expedition.id,
+      generation: provisional.generation,
+    };
+    expect(parseSaveGame(provisional)).toBe(provisional);
+
+    const returned = makeValidSave();
+    returned.navigatorLineage = structuredClone(returned.navigatorLineage);
+    (returned.navigatorLineage.navigators[1] as { completedVoyages: number }).completedVoyages = 1;
+    returned.wrecks[0].survey = {
+      state: "returned",
+      expeditionId: 2,
+      generation: returned.generation,
+    };
+    expect(parseSaveGame(returned)).toBe(returned);
+
+    const noCompletedSurveyVoyage = structuredClone(returned);
+    (noCompletedSurveyVoyage.navigatorLineage.navigators[1] as { completedVoyages: number }).completedVoyages = 0;
+    expect(() => parseSaveGame(noCompletedSurveyVoyage)).toThrow(/completed voyage/);
+
+    const undiscovered = structuredClone(provisional);
+    undiscovered.wrecks[0].discovered = false;
+    expect(() => parseSaveGame(undiscovered)).toThrow(/wreck to be discovered/);
+
+    const inactive = structuredClone(provisional);
+    inactive.expedition.active = false;
+    expect(() => parseSaveGame(inactive)).toThrow(/requires an active expedition/);
+
+    const staleExpedition = structuredClone(provisional);
+    if (staleExpedition.wrecks[0].survey.state !== "provisional") throw new Error("Expected provisional survey");
+    staleExpedition.wrecks[0].survey.expeditionId++;
+    expect(() => parseSaveGame(staleExpedition)).toThrow(/active expedition/);
+
+    const lostNavigatorGeneration = structuredClone(provisional);
+    if (lostNavigatorGeneration.wrecks[0].survey.state !== "provisional") {
+      throw new Error("Expected provisional survey");
+    }
+    lostNavigatorGeneration.wrecks[0].survey.generation = lostNavigatorGeneration.wrecks[0].generation;
+    expect(() => parseSaveGame(lostNavigatorGeneration)).toThrow(/later generation/);
+
+    const futureReturn = structuredClone(returned);
+    if (futureReturn.wrecks[0].survey.state !== "returned") throw new Error("Expected returned survey");
+    futureReturn.wrecks[0].survey.generation = futureReturn.generation + 1;
+    expect(() => parseSaveGame(futureReturn)).toThrow(/later than the current generation/);
+
+    const unsupportedState = structuredClone(returned) as unknown as {
+      wrecks: Array<{ survey: { state: string } }>;
+    };
+    unsupportedState.wrecks[0].survey.state = "surveyed";
+    expect(() => parseSaveGame(unsupportedState)).toThrow(/unexamined, provisional or returned/);
+
+    const missingSurvey = structuredClone(returned) as unknown as {
+      wrecks: Array<{ survey?: unknown }>;
+    };
+    delete missingSurvey.wrecks[0].survey;
+    expect(() => parseSaveGame(missingSurvey)).toThrow(/save\.wrecks\[0\]\.survey/);
+  });
+
+  it("validates the persisted generation-handover gate against lineage authority", () => {
+    const save = makeValidSave();
+    save.ship.provisions = 12;
+    save.ship.provisionAccumulator = 0;
+    const source = save.navigatorLineage.navigators[0];
+    const successor = save.navigatorLineage.navigators[1];
+    save.expedition.pendingGenerationHandover = {
+      contractVersion: 1,
+      fromNavigatorId: source.id,
+      fromGeneration: source.generation,
+      nextNavigatorId: successor.id,
+      nextGeneration: successor.generation,
+      reason: "wreck",
+    };
+    expect(parseSaveGame(save)).toBe(save);
+
+    const wrongReason = structuredClone(save);
+    if (!wrongReason.expedition.pendingGenerationHandover) throw new Error("Expected a generation handover");
+    wrongReason.expedition.pendingGenerationHandover.reason = "tenure";
+    expect(() => parseSaveGame(wrongReason)).toThrow(/terminal navigator/);
+
+    const activeExpedition = structuredClone(save);
+    activeExpedition.expedition.active = true;
+    expect(() => parseSaveGame(activeExpedition)).toThrow(/active expedition/);
+
+    const wrongSuccessor = structuredClone(save);
+    if (!wrongSuccessor.expedition.pendingGenerationHandover) throw new Error("Expected a generation handover");
+    wrongSuccessor.expedition.pendingGenerationHandover.nextNavigatorId = source.id;
+    expect(() => parseSaveGame(wrongSuccessor)).toThrow(/next generation|active successor/);
+
+    const remoteShip = structuredClone(save);
+    remoteShip.ship.currentTileX--;
+    remoteShip.ship.worldX -= remoteShip.world.generationConfig.navigation.tileSize;
+    expect(() => parseSaveGame(remoteShip)).toThrow(/home dock/);
+
+    const movingShip = structuredClone(save);
+    movingShip.ship.speed = 1;
+    expect(() => parseSaveGame(movingShip)).toThrow(/stopped/);
+
+    const chargedShip = structuredClone(save);
+    chargedShip.ship.provisionAccumulator = 0.25;
+    expect(() => parseSaveGame(chargedShip)).toThrow(/fractional provision/);
+  });
+
+  it("enforces one provisional wreck survey and one shared survey-case allocation", () => {
+    const duplicateWreckSurvey = makeValidSave();
+    duplicateWreckSurvey.generation = 3;
+    duplicateWreckSurvey.expedition.active = true;
+    duplicateWreckSurvey.navigatorLineage = makeLineage(3);
+    duplicateWreckSurvey.wrecks[0].survey = {
+      state: "provisional",
+      expeditionId: duplicateWreckSurvey.expedition.id,
+      generation: duplicateWreckSurvey.generation,
+    };
+    duplicateWreckSurvey.wrecks.push({
+      ...duplicateWreckSurvey.wrecks[0],
+      id: 2,
+      generation: 2,
+      survey: {
+        state: "provisional",
+        expeditionId: duplicateWreckSurvey.expedition.id,
+        generation: duplicateWreckSurvey.generation,
+      },
+    });
+    expect(() => parseSaveGame(duplicateWreckSurvey)).toThrow(/one-case allocation/);
+
+    const sharedCase = makeValidSave();
+    sharedCase.expedition.active = true;
+    sharedCase.wrecks[0].survey = {
+      state: "provisional",
+      expeditionId: sharedCase.expedition.id,
+      generation: sharedCase.generation,
+    };
+    sharedCase.fishingShoals.provisional.push({
+      id: createFishingShoalId(0),
+      state: "surveyed",
+      expeditionId: sharedCase.expedition.id,
+      generation: sharedCase.generation,
+    });
+    expect(() => parseSaveGame(sharedCase)).toThrow(/one-case allocation/);
+
+    const duplicateReturnedCase = makeValidSave();
+    duplicateReturnedCase.navigatorLineage = structuredClone(duplicateReturnedCase.navigatorLineage);
+    (duplicateReturnedCase.navigatorLineage.navigators[1] as { completedVoyages: number }).completedVoyages = 1;
+    duplicateReturnedCase.wrecks[0].survey = {
+      state: "returned",
+      expeditionId: 2,
+      generation: 2,
+    };
+    duplicateReturnedCase.fishingShoals.returned.push({
+      id: createFishingShoalId(0),
+      state: "survey",
+      expeditionId: 2,
+      generation: 2,
+    });
+    expect(() => parseSaveGame(duplicateReturnedCase)).toThrow(/one survey case/);
+
+    const futureReturnedCase = structuredClone(duplicateReturnedCase);
+    futureReturnedCase.fishingShoals.returned = [];
+    if (futureReturnedCase.wrecks[0].survey.state !== "returned") throw new Error("Expected returned survey");
+    futureReturnedCase.wrecks[0].survey.expeditionId = 3;
+    expect(() => parseSaveGame(futureReturnedCase)).toThrow(/completed voyage/);
+  });
+
   it("permits only the returned-lead plus provisional-survey upgrade overlap", () => {
     const returned = makeValidSave();
     returned.fishingShoals.returned.push({
@@ -302,6 +470,9 @@ describe("save-game validation", () => {
     expect(parseSaveGame(returned)).toBe(returned);
     const terminal = structuredClone(returned);
     terminal.fishingShoals.returned[0].state = "survey";
+    terminal.fishingShoals.returned[0].generation = 2;
+    terminal.navigatorLineage = structuredClone(terminal.navigatorLineage);
+    (terminal.navigatorLineage.navigators[1] as { completedVoyages: number }).completedVoyages = 1;
     expect(parseSaveGame(terminal)).toBe(terminal);
 
     const upgrade = structuredClone(returned);
