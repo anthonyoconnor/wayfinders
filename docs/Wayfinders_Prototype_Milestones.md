@@ -247,8 +247,8 @@ Exact-dock success closes only eligible tiny Supported-bounded knowledge pockets
 edge-connected or incompletely bounded Unknown regions remain Unknown, and a
 wreck never closes a pocket.
 
-Milestone 3.1 returns to the same Milestone 3 review gate. Milestones 4 and 5
-remain paused until this revised presentation has been user playtested.
+Milestone 3.1 passed its repeat playtest and closes the Milestone 3 review gate.
+Milestone 4 is now the active roadmap scope; Milestone 5 remains deferred.
 
 ------------------------------------------------------------------------
 

@@ -161,10 +161,10 @@ wreck pacing and repeated expeditions feel satisfying to a player.
 Human playtest status: the performance rework was accepted as noticeably
 better. The next playtest reported that map-wide coloured risk blocks were
 confusing and requested the Milestone 3.1 overlay rework recorded below.
-Product-owner gate decision: **pending**.
-Do not start production art or roadmap Milestones 4–5 until the tester repeats
-the playtest on the remediated build and the product owner records **Proceed**
-or another **Rework** decision here.
+Product-owner gate decision: **Proceed — Milestone 3 accepted on 2026-07-12**.
+The remediated Milestone 3.1 presentation was accepted after repeat playtesting.
+Milestone 4 discoveries and persistence are the next implementation scope;
+Milestone 5 living-world work remains deferred.
 
 ## Milestone 3 performance remediation — 2026-07-12
 
@@ -227,8 +227,8 @@ installed browser-test runner. Its console contained no warnings or errors.
 
 Critical decision: no Web Worker was added. Sparse main-thread work is now
 inside the current budget, while a worker would add state-transfer and
-determinism complexity without evidence that it is needed. Milestone 3.1
-overlay playtesting is the next action; Milestones 4–5 remain out of scope.
+determinism complexity without evidence that it is needed. This remediation
+subsequently passed the Milestone 3.1 playtest recorded below.
 
 ## Milestone 3.1 overlay readability rework — 2026-07-12
 
@@ -312,7 +312,7 @@ Final verification:
   still charges full Unknown cost;
 - the final browser console contained no warnings or errors.
 
-Milestone 3.1 now returns to human playtesting at the existing review gate.
+Milestone 3.1 passed human playtesting and closes the Milestone 3 review gate.
 
 ### Reusable Milestone 3 regression checks
 
@@ -346,9 +346,9 @@ For every candidate build at this gate:
     overlays, then confirm the underlying Unknown/Personal travel cost and
     knowledge state are unchanged and presentation returns after sight moves.
 
-Development is intentionally paused at the revised Milestone 3 review gate.
-Generic discoveries, save/load, cross-session persistence and Milestone 5
-living-world work have not been started.
+Milestone 3 is complete. The next action is roadmap Milestone 4: generic
+discoveries, save/load and cross-session persistence. Milestone 5 living-world
+work has not been started.
 
 ## Decisions to review at Milestone 3
 
