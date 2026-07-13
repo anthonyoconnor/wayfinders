@@ -23,6 +23,27 @@ export interface GameEventMap {
   };
   returnStateChanged: undefined;
   expeditionStarted: { expeditionId: number; generation: number };
+  navigatorAged: {
+    navigatorId: NavigatorId;
+    generation: number;
+    previousAgeYears: number;
+    ageYears: number;
+    retirementChoiceRequired: boolean;
+    retirementRequired: boolean;
+  };
+  retirementChoiceResolved: {
+    navigatorId: NavigatorId;
+    generation: number;
+    choice: "retire" | "final-voyage";
+  };
+  navigatorRetired: {
+    navigatorId: NavigatorId;
+    generation: number;
+    ageYears: number;
+    finalVoyage: boolean;
+    nextNavigatorId: NavigatorId;
+    nextGeneration: number;
+  };
   expeditionReturned: {
     expeditionId: number;
     generation: number;

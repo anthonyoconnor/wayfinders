@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   NAVIGATOR_LINEAGE_CONTRACT_VERSION,
+  NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1,
+  NAVIGATOR_RETIREMENT_AGE_YEARS,
+  NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS,
+  NAVIGATOR_STARTING_AGE_YEARS,
+  NAVIGATOR_SUCCESSFUL_RETURN_AGE_INCREMENT_YEARS,
   NavigatorLineageSystem,
   NavigatorLineageValidationError,
   createNavigatorId,
@@ -8,10 +13,13 @@ import {
   isCurrentNavigatorId,
   isCurrentNavigatorSuccessionKey,
   migrateBaselineNavigatorLineage,
+  migrateBaselineNavigatorLineageV1,
+  migrateNavigatorLineageV1ToV2,
   parseNavigatorId,
   parseNavigatorLineageSnapshot,
+  parseNavigatorLineageSnapshotV1,
   parseNavigatorSuccessionKey,
-  type NavigatorLineageSnapshotV1,
+  type NavigatorLineageSnapshotV2,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 
 function jsonClone<T>(value: T): T {
@@ -45,12 +53,98 @@ describe("NavigatorLineageSystem", () => {
         generation: 4,
         state: "active",
         createdBySuccessionKey: null,
+        ageYears: 30,
+        finalVoyageDeclared: false,
       }],
       pendingSuccession: null,
     });
     expect(NavigatorLineageSystem.fromSnapshot(jsonClone(migrated)).currentNavigator).toEqual(
       migrated.navigators[0],
     );
+  });
+
+  it("keeps the V1 contract strict and migrates it into deterministic age defaults", () => {
+    const v1 = migrateBaselineNavigatorLineageV1(4);
+
+    expect(v1.contractVersion).toBe(NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1);
+    expect(v1.navigators[0]).not.toHaveProperty("ageYears");
+    expect(parseNavigatorLineageSnapshotV1(jsonClone(v1))).toEqual(v1);
+
+    const v2 = migrateNavigatorLineageV1ToV2(v1);
+    expect(v2).toMatchObject({
+      contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION,
+      navigators: [{
+        ageYears: NAVIGATOR_STARTING_AGE_YEARS,
+        finalVoyageDeclared: false,
+      }],
+    });
+    expect(() => parseNavigatorLineageSnapshotV1(v2)).toThrow(/contract version 1/);
+  });
+
+  it("advances only successful-return calls and exposes the warning and final thresholds", () => {
+    expect(NAVIGATOR_STARTING_AGE_YEARS).toBe(30);
+    expect(NAVIGATOR_SUCCESSFUL_RETURN_AGE_INCREMENT_YEARS).toBe(5);
+    expect(NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS).toBe(50);
+    expect(NAVIGATOR_RETIREMENT_AGE_YEARS).toBe(55);
+
+    const lineage = new NavigatorLineageSystem();
+    for (const expectedAge of [35, 40, 45]) {
+      expect(lineage.advanceSuccessfulReturn()).toMatchObject({
+        status: "advanced",
+        ageYears: expectedAge,
+        retirementChoiceRequired: false,
+        retirementRequired: false,
+      });
+    }
+    expect(lineage.advanceSuccessfulReturn()).toMatchObject({
+      ageYears: 50,
+      retirementChoiceRequired: true,
+      retirementRequired: false,
+    });
+    expect(lineage.aging).toEqual({
+      navigatorId: "navigator:v1:g1",
+      ageYears: 50,
+      finalVoyageDeclared: false,
+      retirementChoiceRequired: true,
+      retirementRequired: false,
+    });
+    expect(() => lineage.advanceSuccessfulReturn()).toThrow(/retire or declare/);
+  });
+
+  it("declares one final voyage idempotently, reaches 55, and preserves it through retirement", () => {
+    const lineage = new NavigatorLineageSystem();
+    for (let returnIndex = 0; returnIndex < 4; returnIndex++) lineage.advanceSuccessfulReturn();
+
+    expect(lineage.declareFinalVoyage()).toMatchObject({ status: "declared" });
+    expect(lineage.declareFinalVoyage()).toMatchObject({ status: "already-declared" });
+    expect(lineage.advanceSuccessfulReturn()).toMatchObject({
+      ageYears: 55,
+      retirementRequired: true,
+    });
+    const begun = lineage.beginSuccession("retirement", 1);
+    expect(lineage.currentNavigator).toMatchObject({
+      state: "retired",
+      ageYears: 55,
+      finalVoyageDeclared: true,
+    });
+    lineage.completeSuccession(begun.transition.key);
+    expect(lineage.activeNavigator).toMatchObject({ ageYears: 30, finalVoyageDeclared: false });
+  });
+
+  it("preserves a declared final voyage on a wreck and rejects illegal age-state combinations", () => {
+    const lineage = new NavigatorLineageSystem();
+    for (let returnIndex = 0; returnIndex < 4; returnIndex++) lineage.advanceSuccessfulReturn();
+    lineage.declareFinalVoyage();
+    lineage.beginSuccession("wreck", 7);
+    expect(lineage.currentNavigator).toMatchObject({
+      state: "lost",
+      ageYears: 50,
+      finalVoyageDeclared: true,
+    });
+
+    const invalid = jsonClone(migrateBaselineNavigatorLineage(1));
+    (invalid.navigators[0] as { ageYears: number }).ageYears = 55;
+    expect(() => parseNavigatorLineageSnapshot(invalid)).toThrow(/declared final voyage/);
   });
 
   it("migrates a baseline wreck hold without prematurely creating the next navigator", () => {
@@ -63,6 +157,8 @@ describe("NavigatorLineageSystem", () => {
       successionReason: "wreck",
       endedBySuccessionKey: "navigator-succession:v1:wreck:12",
       createdBySuccessionKey: null,
+      ageYears: 30,
+      finalVoyageDeclared: false,
     }]);
     expect(migrated.pendingSuccession).toEqual({
       key: "navigator-succession:v1:wreck:12",
@@ -91,6 +187,8 @@ describe("NavigatorLineageSystem", () => {
       generation: 2,
       state: "active",
       createdBySuccessionKey: begun.transition.key,
+      ageYears: 30,
+      finalVoyageDeclared: false,
     });
     expect(lineage.completeSuccession(begun.transition.key).status).toBe("already-completed");
     expect(lineage.beginSuccession("wreck", 1).status).toBe("already-completed");
@@ -100,6 +198,7 @@ describe("NavigatorLineageSystem", () => {
 
   it("distinguishes safe retirement while retaining every historical navigator", () => {
     const lineage = new NavigatorLineageSystem(8);
+    for (let returnIndex = 0; returnIndex < 4; returnIndex++) lineage.advanceSuccessfulReturn();
     const retirement = lineage.beginSuccession("retirement", 8);
 
     expect(lineage.currentNavigator).toMatchObject({
@@ -155,7 +254,7 @@ describe("NavigatorLineageSystem", () => {
     lineage.completeSuccession(first.transition.key);
     const valid = jsonClone(lineage.snapshot());
 
-    const corruptions: Array<(snapshot: NavigatorLineageSnapshotV1) => void> = [
+    const corruptions: Array<(snapshot: NavigatorLineageSnapshotV2) => void> = [
       (snapshot) => { (snapshot.navigators[1] as { id: string }).id = "navigator:v1:g7"; },
       (snapshot) => { (snapshot.navigators[1] as { generation: number }).generation = 4; },
       (snapshot) => { (snapshot.navigators[0] as { state: string }).state = "active"; },

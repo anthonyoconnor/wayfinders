@@ -1,8 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-1.4` batch is complete and accepted. Further
-implementation requires a new authorization.
+ordered `GP-0.1` through `GP-2.2` work is complete and accepted. Work is
+paused before `GP-2.3`; further implementation requires a new authorization.
 
 ## Roadmap model
 
@@ -58,15 +58,19 @@ The current build already provides:
   provisional-to-returned records;
 - wreck rollback, persistent wrecks and exactly-once generation advancement
   per resolved wreck;
+- versioned navigator identities, exact-return voyage aging and safe
+  retirement with exactly-once succession;
 - schema-validated IndexedDB autosave, a stable manual checkpoint and exact
   ship/camera restoration;
 - functional developer graphics, developer controls, diagnostics and the
   performance foundation.
 
-The generation implementation is currently a counter plus wreck-driven
-succession. Discoveries are descriptive records and do not yet create active
-resources or a tribe economy. Save/load is functional infrastructure rather
-than a complete player-facing game-management flow.
+Generation is backed by a versioned navigator lineage with distinct active,
+retired and lost records. Exact-dock voyage returns drive aging, while wreck
+and safe-retirement transitions share one idempotent succession authority.
+Discoveries are descriptive records and do not yet create active resources or
+a tribe economy. Save/load is functional infrastructure rather than a complete
+player-facing game-management flow.
 
 ## Cross-cutting gameplay gates
 
@@ -318,7 +322,7 @@ full pipeline passes 182 tests across 20 files plus typecheck and production
 build.
 
 - Give each navigator a stable ID and lifecycle state.
-- Centralize succession reasons such as wreck and later retirement.
+- Centralize succession reasons such as wreck and retirement.
 - Preserve the four-second wreck sequence and inherited world state.
 
 Acceptance gate: every succession creates exactly one navigator/generation;
@@ -327,14 +331,31 @@ migrate into a valid first navigator.
 
 #### GP-2.2 — Explorer aging and safe retirement
 
-Status: proposed.
+Status: accepted.
 
-- Advance age through meaningful voyage events rather than wall-clock time.
-- Before implementation, approve the exact age-bearing events, increments,
-  warning threshold, retirement threshold and any final-voyage choice.
-- Warn the player before retirement and resolve retirement only at a safe
-  boundary, never unexpectedly mid-voyage.
-- Reuse the succession pipeline while distinguishing retirement from wreck.
+Acceptance evidence (2026-07-13): each navigator starts at age 30 and advances
+five years only when an active expedition completes at the exact home dock.
+The fourth successful return reaches age 50 and opens a dock-only choice:
+retire safely now or declare one final voyage. Immediate retirement creates
+one age-30 successor; a safe fifth return reaches age 55, commits the voyage
+and then creates one age-30 successor. A final-voyage wreck wins at age 50 and
+uses the unchanged four-second wreck presentation and succession path. Idle
+time, reload, inactive docking, travel time and distance never age the
+navigator. Schema V6 adds the V2 lineage age/final-voyage contract and migrates
+V5 lineage V1 records. The accessible retirement ribbon appears only at the
+dock; sailing has no permanent age HUD. The full pipeline passes 190 tests
+across 21 files plus typecheck and production build. Browser acceptance covers
+the age-50 choice, immediate retirement, checkpoint restoration, the declared
+final-voyage safe return and a clean warning/error console.
+
+- Advance age only on an active expedition's exact-dock successful return:
+  start at 30 and add five years per return.
+- At age 50 after four returns, require either safe retirement or one declared
+  final voyage before sailing can resume.
+- Retire immediately at 50 or after a safe fifth return at 55, creating exactly
+  one age-30 successor through the shared succession authority.
+- Let a wreck during the final voyage take precedence at age 50 and preserve
+  the existing four-second wreck sequence.
 
 Acceptance gate: idling and reload do not age an explorer; the player can plan
 a final voyage; retirement advances generation exactly once and preserves the
@@ -816,10 +837,12 @@ authorized ordered batch:
    benefit with developer graphics, unless that start gate is explicitly
    reapproved.
 
-Later product approvals are recorded now but do not block GP-0/GP-1:
+Additional product decisions are recorded here for later milestones:
 
-- GP-2.2 must define the exact age-bearing events, thresholds and retirement
-  agency before aging implementation.
+- GP-2.2 is confirmed and accepted: navigators start at 30, gain five years
+  only on active-expedition exact-dock returns, choose at 50 after four returns,
+  and either retire safely or take one final voyage to a safe retirement at 55;
+  a final-voyage wreck takes precedence at age 50.
 - GP-3 must define the minimal tribe vocabulary, settlement transactions,
   tuning values and maximum recovery bound before economy implementation.
 - GP-4 proposes an optional ending plus continued play after the last idol;

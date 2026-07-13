@@ -14,15 +14,18 @@ import {
 } from "../exploration/FishingShoalContracts";
 import {
   NavigatorLineageValidationError,
-  migrateBaselineNavigatorLineage,
-  parseNavigatorLineageSnapshot,
+  migrateBaselineNavigatorLineageV1,
+  migrateNavigatorLineageV1ToV2,
+  parseNavigatorLineageSnapshotV1,
+  parseNavigatorLineageSnapshotV2,
   type NavigatorLineageSnapshotV1,
+  type NavigatorLineageSnapshotV2,
 } from "../lineage/NavigatorLineageSystem";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
 export const ACCEPTED_BASELINE_SAVE_SCHEMA_VERSION = 1 as const;
-export const SAVE_SCHEMA_VERSION = 5 as const;
+export const SAVE_SCHEMA_VERSION = 6 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -142,7 +145,13 @@ export type SaveGameV5<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRec
     navigatorLineage: NavigatorLineageSnapshotV1;
   };
 
-export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV5<TDiscovery>;
+export type SaveGameV6<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> =
+  Omit<SaveGameV5<TDiscovery>, "schemaVersion" | "navigatorLineage"> & {
+    schemaVersion: 6;
+    navigatorLineage: NavigatorLineageSnapshotV2;
+  };
+
+export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV6<TDiscovery>;
 
 type SaveMigration = (value: unknown) => unknown;
 
@@ -155,6 +164,7 @@ const SAVE_MIGRATIONS: ReadonlyMap<number, SaveMigration> = new Map<number, Save
   [2, migrateSaveGameV2ToV3],
   [3, migrateSaveGameV3ToV4],
   [4, migrateSaveGameV4ToV5],
+  [5, migrateSaveGameV5ToV6],
 ]);
 
 export interface KnowledgeCell {
@@ -411,7 +421,7 @@ export function migrateSaveGame(value: unknown): SaveGame {
     schemaVersion = migratedVersion;
   }
 
-  return parseSaveGameV5(current);
+  return parseSaveGameV6(current);
 }
 
 /** Main load entrypoint; retained under the established API name. */
@@ -620,7 +630,7 @@ export function parseSaveGameV5(value: unknown): SaveGameV5 {
 
   let navigatorLineage: NavigatorLineageSnapshotV1;
   try {
-    navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
+    navigatorLineage = parseNavigatorLineageSnapshotV1(root.navigatorLineage);
   } catch (error) {
     if (error instanceof NavigatorLineageValidationError) {
       fail(error.message, `save.${error.path}`);
@@ -657,6 +667,29 @@ export function parseSaveGameV5(value: unknown): SaveGameV5 {
   }
 
   return value as SaveGameV5;
+}
+
+/** Validates the GP-2.2 schema with voyage-event aging fields. */
+export function parseSaveGameV6(value: unknown): SaveGameV6 {
+  const root = record(value, "save");
+  const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
+  if (schemaVersion !== 6) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+
+  const { navigatorLineage: _navigatorLineage, ...previous } = root;
+  const lineageV1 = parseNavigatorLineageSnapshotV1({
+    ...(record(root.navigatorLineage, "save.navigatorLineage")),
+    contractVersion: 1,
+  });
+  parseSaveGameV5({ ...previous, schemaVersion: 5, navigatorLineage: lineageV1 });
+  try {
+    parseNavigatorLineageSnapshotV2(root.navigatorLineage);
+  } catch (error) {
+    if (error instanceof NavigatorLineageValidationError) {
+      fail(error.message, `save.${error.path}`);
+    }
+    throw error;
+  }
+  return value as SaveGameV6;
 }
 
 export function isSaveGame(value: unknown): boolean {
@@ -723,10 +756,19 @@ function migrateSaveGameV4ToV5(value: unknown): SaveGameV5 {
   return {
     ...previous,
     schemaVersion: 5,
-    navigatorLineage: migrateBaselineNavigatorLineage(
+    navigatorLineage: migrateBaselineNavigatorLineageV1(
       previous.generation,
       previous.expedition.pendingRespawn?.wreckId ?? null,
     ),
+  };
+}
+
+function migrateSaveGameV5ToV6(value: unknown): SaveGameV6 {
+  const previous = structuredClone(parseSaveGameV5(value));
+  return {
+    ...previous,
+    schemaVersion: 6,
+    navigatorLineage: migrateNavigatorLineageV1ToV2(previous.navigatorLineage),
   };
 }
 

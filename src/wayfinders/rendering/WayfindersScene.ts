@@ -58,6 +58,8 @@ interface BrowserDebugApi {
   fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
   surveyFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
   leaveFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
+  retireNavigator: () => boolean;
+  declareFinalVoyage: () => boolean;
 }
 
 export interface PersistenceBootState {
@@ -99,6 +101,7 @@ export class WayfindersScene extends Phaser.Scene {
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private debugGraphics!: Phaser.GameObjects.Graphics;
   private domAbort?: AbortController;
+  private developerToolsAbort?: AbortController;
   private readonly eventUnsubscribers: Array<() => void> = [];
   private gameHost?: HTMLElement;
   private gameStatus?: HTMLElement;
@@ -111,6 +114,10 @@ export class WayfindersScene extends Phaser.Scene {
   private surveyRibbonCase?: HTMLElement;
   private surveyButton?: HTMLButtonElement;
   private leaveButton?: HTMLButtonElement;
+  private retirementRibbon?: HTMLElement;
+  private retirementRibbonCopy?: HTMLElement;
+  private retireButton?: HTMLButtonElement;
+  private finalVoyageButton?: HTMLButtonElement;
   private dismissedFishingShoalId?: string;
   private surveyActionUntil = Number.NEGATIVE_INFINITY;
   private teleportOnClick = false;
@@ -147,6 +154,7 @@ export class WayfindersScene extends Phaser.Scene {
   private pendingReturnedDiscoveryNames: string[] = [];
   private pendingReturnedFishingLeadCount = 0;
   private pendingReturnedFishingSurveyQualities: string[] = [];
+  private pendingRetirementSummary?: string;
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
   private lastSaveSerializationMs = 0;
@@ -208,8 +216,10 @@ export class WayfindersScene extends Phaser.Scene {
     this.eventUnsubscribers.push(onPrototypeConfigChanged((sections) => {
       if (sections.has("overlays")) this.simulation.refreshRiskOverlays();
     }));
+    this.domAbort = new AbortController();
     this.mountDeveloperTools();
     this.mountSurveyRibbon();
+    this.mountRetirementRibbon();
     this.installBrowserDebugApi();
     this.bindSimulationEvents();
     this.syncPresentation(true);
@@ -356,6 +366,7 @@ export class WayfindersScene extends Phaser.Scene {
     );
     this.cargoRenderer.sync(this.simulation.ship.provisions);
     this.syncSurveyRibbon();
+    this.syncRetirementRibbon();
     const diagnosticsDirty = this.lastDiagnosticsRevision !== this.simulation.revision
       || this.lastDiagnosticsOverlayRevision !== this.simulation.overlaysRevision;
     const diagnosticsDue = force || (
@@ -390,6 +401,9 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.generation = String(this.simulation.generation);
       host.dataset.navigatorId = this.simulation.currentNavigator.id;
       host.dataset.navigatorState = this.simulation.currentNavigator.state;
+      host.dataset.navigatorAge = String(this.simulation.navigatorAgeYears);
+      host.dataset.finalVoyageDeclared = String(this.simulation.finalVoyageDeclared);
+      host.dataset.retirementDecisionRequired = String(this.simulation.retirementDecisionRequired);
       host.dataset.lineageNavigators = String(this.simulation.navigatorLineage.length);
       host.dataset.successfulReturns = String(this.simulation.successfulReturns);
       host.dataset.failedExpeditions = String(this.simulation.failedExpeditions);
@@ -408,8 +422,16 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.persistenceStatus = this.persistenceStatus;
       host.dataset.wreckPresentation = String(this.simulation.wreckPresentationActive);
       host.dataset.respawnSeconds = this.simulation.respawnSecondsRemaining.toFixed(3);
-      host.dataset.lifecyclePhase = this.simulation.wreckPresentationActive ? "wreck-hold" : "active";
-      host.dataset.inputSuppressed = String(this.simulation.wreckPresentationActive);
+      host.dataset.lifecyclePhase = this.simulation.wreckPresentationActive
+        ? "wreck-hold"
+        : this.simulation.retirementDecisionRequired
+          ? "retirement-choice"
+          : this.simulation.finalVoyageDeclared
+            ? "final-voyage"
+            : "active";
+      host.dataset.inputSuppressed = String(
+        this.simulation.wreckPresentationActive || this.simulation.retirementDecisionRequired,
+      );
       host.dataset.pendingWreckId = String(this.simulation.pendingWreckId ?? "");
       host.dataset.stranded = String(this.simulation.stranded);
       host.dataset.overlaysRevision = String(this.simulation.overlaysRevision);
@@ -471,7 +493,11 @@ export class WayfindersScene extends Phaser.Scene {
       this.lastDiagnosticsAt = this.time.now;
     }
     if (diagnosticsDue && this.gameStatus) {
-      const message = this.simulation.wreckPresentationActive
+      const message = this.simulation.retirementDecisionRequired
+        ? "Navigator age 50 - choose safe retirement or one final voyage"
+        : this.simulation.finalVoyageDeclared && this.simulation.atDock
+        ? "Final voyage declared - depart when ready"
+        : this.simulation.wreckPresentationActive
         ? `Ship wrecked · next generation departs in ${this.simulation.respawnSecondsRemaining.toFixed(1)}s`
         : this.simulation.stranded
         ? "Developer zero-cargo state · add a bundle or force a wreck"
@@ -514,9 +540,9 @@ export class WayfindersScene extends Phaser.Scene {
   private mountDeveloperTools(): void {
     const slot = document.querySelector<HTMLDivElement>("#scene-tools-slot");
     if (!slot) return;
-    this.domAbort?.abort();
-    this.domAbort = new AbortController();
-    const signal = this.domAbort.signal;
+    this.developerToolsAbort?.abort();
+    this.developerToolsAbort = new AbortController();
+    const signal = this.developerToolsAbort.signal;
 
     slot.innerHTML = `
       <div class="sandbox-tools">
@@ -667,6 +693,61 @@ export class WayfindersScene extends Phaser.Scene {
     this.leaveButton = ribbon.querySelector<HTMLButtonElement>("[data-survey-action='leave']") ?? undefined;
     this.surveyButton?.addEventListener("click", () => this.performFishingShoalSurvey(), { signal });
     this.leaveButton?.addEventListener("click", () => this.performFishingShoalLeave(), { signal });
+  }
+
+  private mountRetirementRibbon(): void {
+    const host = this.gameHost;
+    const signal = this.domAbort?.signal;
+    if (!host || !signal) return;
+
+    const ribbon = document.createElement("section");
+    ribbon.className = "survey-ribbon retirement-ribbon";
+    ribbon.hidden = true;
+    ribbon.setAttribute("aria-label", "Navigator retirement decision");
+    ribbon.innerHTML = `
+      <div>
+        <strong>Safe harbour - age 50</strong>
+        <span data-retirement-copy>The navigator may retire safely or undertake one final voyage.</span>
+      </div>
+      <div class="survey-ribbon__actions">
+        <button data-retirement-action="retire" type="button">Retire now</button>
+        <button data-retirement-action="final" type="button">Take one final voyage</button>
+      </div>`;
+    host.append(ribbon);
+    this.retirementRibbon = ribbon;
+    this.retirementRibbonCopy = ribbon.querySelector<HTMLElement>("[data-retirement-copy]") ?? undefined;
+    this.retireButton = ribbon.querySelector<HTMLButtonElement>("[data-retirement-action='retire']") ?? undefined;
+    this.finalVoyageButton = ribbon.querySelector<HTMLButtonElement>("[data-retirement-action='final']") ?? undefined;
+    this.retireButton?.addEventListener("click", () => this.performRetirement(), { signal });
+    this.finalVoyageButton?.addEventListener("click", () => this.performFinalVoyageDeclaration(), { signal });
+  }
+
+  private syncRetirementRibbon(): void {
+    const ribbon = this.retirementRibbon;
+    if (!ribbon) return;
+    const visible = this.simulation.atDock && this.simulation.retirementDecisionRequired;
+    ribbon.hidden = !visible;
+    if (visible && this.retirementRibbonCopy) {
+      this.retirementRibbonCopy.textContent =
+        "Four returned voyages are secured. Retire safely, or risk one final expedition before the chart passes on.";
+    }
+  }
+
+  private performRetirement(): boolean {
+    const retired = this.simulation.retireNavigator();
+    if (!retired) return false;
+    this.syncRetirementRibbon();
+    this.requestLifecycleSave();
+    return true;
+  }
+
+  private performFinalVoyageDeclaration(): boolean {
+    const declared = this.simulation.declareFinalVoyage();
+    if (!declared) return false;
+    this.log("The navigator declared one final voyage; retirement follows the next safe return.");
+    this.syncRetirementRibbon();
+    this.requestLifecycleSave();
+    return true;
   }
 
   private syncSurveyRibbon(): void {
@@ -1141,6 +1222,8 @@ export class WayfindersScene extends Phaser.Scene {
       })),
       surveyFishingShoal: () => this.performFishingShoalSurvey(),
       leaveFishingShoal: () => this.performFishingShoalLeave(),
+      retireNavigator: () => this.performRetirement(),
+      declareFinalVoyage: () => this.performFinalVoyageDeclaration(),
     };
     this.browserDebugApi = api;
     window.__WAYFINDERS__ = api;
@@ -1171,6 +1254,22 @@ export class WayfindersScene extends Phaser.Scene {
         this.log(
           `Expedition returned: ${supportedTileCount} Personal tiles and ${closedUnknownTileCount} enclosed Unknown tiles became Supported.`,
         );
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("navigatorAged", ({ ageYears, retirementChoiceRequired }) => {
+        if (retirementChoiceRequired) {
+          this.log(`Navigator reached age ${ageYears}; choose safe retirement or one final voyage.`);
+        }
+      }),
+      this.simulation.events.on("navigatorRetired", ({ ageYears, finalVoyage, nextGeneration }) => {
+        const summary = `NAVIGATOR RETIRES AT ${ageYears}\nGENERATION ${nextGeneration} TAKES THE HELM`;
+        if (finalVoyage) {
+          this.pendingRetirementSummary = summary;
+          this.scheduleReturnCue();
+        } else {
+          this.showLifecycleCue(summary, "#eadb9f", 4_200);
+        }
+        this.log(`Navigator retired safely at age ${ageYears}; generation ${nextGeneration} took the helm.`);
         this.requestLifecycleSave();
       }),
       this.simulation.events.on("shipWrecked", ({ generation }) => {
@@ -1299,7 +1398,28 @@ export class WayfindersScene extends Phaser.Scene {
       const fishingSurveyQualities = this.pendingReturnedFishingSurveyQualities.splice(0);
       const returned = this.returnCuePending;
       this.returnCuePending = false;
-      if (!returned && names.length === 0 && fishingLeadCount === 0 && fishingSurveyQualities.length === 0) return;
+      const retirementSummary = this.pendingRetirementSummary;
+      this.pendingRetirementSummary = undefined;
+      if (
+        !returned
+        && names.length === 0
+        && fishingLeadCount === 0
+        && fishingSurveyQualities.length === 0
+        && !retirementSummary
+      ) return;
+
+      if (retirementSummary) {
+        const findingCount = names.length + fishingLeadCount + fishingSurveyQualities.length;
+        const findings = findingCount > 0
+          ? `${findingCount} RETURNED FINDING${findingCount === 1 ? "" : "S"}\n`
+          : "";
+        this.showLifecycleCue(
+          `FINAL CHART RETURNED\n${findings}ROUTE SUPPORTED - PROVISIONS REPLENISHED\n${retirementSummary}`,
+          "#eadb9f",
+          5_000,
+        );
+        return;
+      }
 
       if (names.length > 0 || fishingLeadCount > 0 || fishingSurveyQualities.length > 0) {
         const discoveryLine = names.length === 1
@@ -1375,6 +1495,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   private destroyBindings(): void {
     this.domAbort?.abort();
+    this.developerToolsAbort?.abort();
     this.gameHost = undefined;
     this.gameStatus = undefined;
     this.provisionOutput = undefined;
@@ -1387,6 +1508,11 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveyRibbonCase = undefined;
     this.surveyButton = undefined;
     this.leaveButton = undefined;
+    this.retirementRibbon?.remove();
+    this.retirementRibbon = undefined;
+    this.retirementRibbonCopy = undefined;
+    this.retireButton = undefined;
+    this.finalVoyageButton = undefined;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.knowledgeOverlay.destroy();
     this.riskOverlay.destroy();

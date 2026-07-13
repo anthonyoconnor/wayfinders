@@ -7,13 +7,14 @@ This is the starting point for a new development session.
 The current implementation is the accepted starting point. It includes
 developer tooling, home waters, exploration knowledge, provision-aware risk
 and return, expedition inheritance, deterministic discoveries, cross-session
-persistence and the performance foundation.
+persistence, versioned navigator succession, exact-return aging, safe
+retirement and the performance foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
-`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-2.1` work is
-complete and accepted. The active authorization continues without pauses
-through `GP-2.2`, `GP-2.3` and `GP-3.1`.
+`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-2.2` work is
+complete and accepted. The user explicitly requested a pause after `GP-2.2`;
+`GP-2.3` and `GP-3.1` are not currently authorized.
 
 ## Run and verify
 
@@ -35,12 +36,14 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 182 automated tests pass across 20 files.
+- 190 automated tests pass across 21 files.
 - The production Vite build passes.
 - Browser tests cover discovery and fishing return, returned-lead upgrade,
   autosave reload, manual checkpoint restore, exact ship/camera restoration,
   the home-linked fishing-ground cue, wreck-hold reload, generation
-  advancement, save clearing, and a clean console.
+  advancement, save clearing, the age-50 retirement choice, checkpoint-restored
+  choice actions, immediate retirement, a declared final-voyage safe return,
+  and a clean warning/error console.
 - The Phaser bundle-size warning remains informational.
 
 ## Current playable foundation
@@ -95,13 +98,24 @@ Current verification baseline:
   provisions.
 - Only the exact home dock commits an active expedition and replenishes the
   current ship. Docking without an active expedition also replenishes.
-- Successful return keeps the same generation.
+- Ordinary successful returns keep the same generation. A declared final
+  voyage commits normally at the dock and then retires the navigator.
 - Exhausting provisions outside Supported water immediately reverts the failed
   expedition's Personal knowledge and creates a wreck that persists across
   reloads and later voyages until explicit world regeneration.
 - Each navigator has a stable versioned ID and an `active`, `retired` or `lost`
   lifecycle record. Wreck and retirement share one deterministic succession
   contract while remaining distinct reasons.
+- Navigators start at age 30 and gain exactly five years only when an active
+  expedition returns to the exact home dock. Idle time, travel time, distance,
+  reload and docking without an active expedition do not age them.
+- The fourth successful return reaches age 50 and suppresses sailing until the
+  player chooses **Retire now** or **Take one final voyage** at the dock.
+  Immediate retirement creates one age-30 successor. A safe fifth return
+  reaches age 55, commits the voyage and creates one age-30 successor.
+- A wreck during the declared final voyage takes precedence at age 50. It uses
+  the same four-second lost-navigator succession path and cannot also retire
+  or duplicate the successor.
 - The lost ship remains visible and uncontrollable for four seconds. The
   outgoing navigator is already recorded as lost during that hold; completion
   then respawns a supplied ship at the dock and creates exactly one successor.
@@ -138,10 +152,11 @@ Current verification baseline:
   reload and intentionally replenishes only on the next dock or respawn
   allocation; unused cases never stack.
 - Schema-versioned saves persist the authoritative ship, provisions,
-  expedition/generation state, knowledge and stamps, runtime wrecks, pending
-  wreck holds, provisional/returned discoveries and provisional/returned
-  fishing records. Fishing connectivity and its path are derived after load,
-  never serialized.
+  expedition/generation state, navigator lineage, age and final-voyage choice,
+  knowledge and stamps, runtime wrecks, pending wreck holds,
+  provisional/returned discoveries and provisional/returned fishing records.
+  Schema V6 owns lineage contract V2 and migrates V5 lineage V1 records.
+  Fishing connectivity and its path are derived after load, never serialized.
 - Base terrain and island descriptors regenerate from the saved seed and world
   configuration. Visibility, forward range and return paths rebuild on load.
 - Reload uses a rolling IndexedDB autosave. **Save checkpoint** and
@@ -163,6 +178,9 @@ Current verification baseline:
 - A connected returned fishing survey shows an unmistakable double-diamond,
   cardinal-ray developer beacon and home-linked label. Disconnected returned
   surveys retain their ordinary returned mark.
+- At age 50, an accessible dock-only retirement ribbon presents **Retire now**
+  and **Take one final voyage**. It remains actionable after checkpoint load;
+  navigator age is not a permanent sailing HUD.
 - Developer tools provide seed regeneration, island inspection, water-tile
   teleport, provision/wreck controls, overlay toggles, live configuration,
   autosave status and checkpoint controls.
@@ -220,11 +238,10 @@ Current verification baseline:
 - Gameplay track: discovery rewards, settlements and resources are records
   only. The complete `GP-1` fishing survey loop ends at a derived connected
   returned-ground cue; authoritative fishing activation/output, tribe
-  economics, explorer aging, lineage achievements and idols are not yet
-  implemented.
-- Gameplay track: navigator identity and succession are authoritative, but
-  voyage-based aging, safe retirement and lineage achievements remain in the
-  active GP-2.2/GP-2.3 batch.
+  economics, lineage achievements and idols are not yet implemented.
+- Gameplay track: navigator identity, succession, voyage-based aging and safe
+  retirement are authoritative. The achievement chronicle remains proposed as
+  `GP-2.3`.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
   player-facing saved-game model has not been chosen.
 - `GP-3`: there are no fishing boats, trade vessels or
@@ -235,27 +252,27 @@ Current verification baseline:
   baseline. Touch-first sailing is not implemented, and representative
   mid-range mobile rendering/performance validation remains outstanding.
 
-## Authorized continuation
+## Paused checkpoint
 
-`GP-2.1` is accepted. The current user-authorized batch continues directly
-through `GP-2.2`, `GP-2.3` and `GP-3.1`; there is no permission pause between
-those milestones.
+`GP-2.2` is accepted. Per the user's instruction, implementation is paused
+before `GP-2.3`; neither `GP-2.3` nor `GP-3.1` has active authorization.
 
-The completed batch is:
+The completed milestones are:
 
 1. `GP-0.1` — accepted: baseline-save fixtures and an explicit migration chain;
 2. `GP-0.2` — accepted: versioned GP-1 integration boundaries;
 3. `GP-1.1` — accepted: deterministic fishing-shoal definitions and clues;
 4. `GP-1.2` — accepted: the one-case Survey / Leave action and interaction cue;
 5. `GP-1.3` — accepted: exact-dock returned leads/surveys and wreck rollback;
-6. `GP-1.4` — accepted: derived Supported-water home-connection proof and cue.
-7. `GP-2.1` — accepted: stable navigator identity and idempotent succession.
+6. `GP-1.4` — accepted: derived Supported-water home-connection proof and cue;
+7. `GP-2.1` — accepted: stable navigator identity and idempotent succession;
+8. `GP-2.2` — accepted: exact-return aging, safe retirement and final-voyage
+   wreck precedence.
 
-The next in-progress gameplay milestone is `GP-2.2`, voyage-event aging and
-safe retirement, followed by `GP-2.3` and `GP-3.1` under the same authorization.
+The next proposed gameplay milestone is `GP-2.3`, the achievement chronicle.
+It requires renewed authorization. `GP-3.1` remains untouched.
 
-The first product acceptance target is the complete `GP-1` survey loop. The
-graphics track remains deferred until `GP-3.2` is accepted, proving the
+The graphics track remains deferred until `GP-3.2` is accepted, proving the
 survey-to-active-fishing and visible tribe-benefit loop with developer
 graphics, unless that gate is explicitly reapproved.
 

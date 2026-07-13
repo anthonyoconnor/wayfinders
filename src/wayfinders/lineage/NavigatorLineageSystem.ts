@@ -1,5 +1,13 @@
-export const NAVIGATOR_LINEAGE_CONTRACT_VERSION = 1 as const;
+export const NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1 = 1 as const;
+export const NAVIGATOR_LINEAGE_CONTRACT_VERSION_V2 = 2 as const;
+export const NAVIGATOR_LINEAGE_CONTRACT_VERSION = NAVIGATOR_LINEAGE_CONTRACT_VERSION_V2;
 export const NAVIGATOR_ID_VERSION = 1 as const;
+export const NAVIGATOR_SUCCESSION_KEY_VERSION = 1 as const;
+
+export const NAVIGATOR_STARTING_AGE_YEARS = 30 as const;
+export const NAVIGATOR_SUCCESSFUL_RETURN_AGE_INCREMENT_YEARS = 5 as const;
+export const NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS = 50 as const;
+export const NAVIGATOR_RETIREMENT_AGE_YEARS = 55 as const;
 
 const navigatorIdBrand: unique symbol = Symbol("NavigatorId");
 const navigatorSuccessionKeyBrand: unique symbol = Symbol("NavigatorSuccessionKey");
@@ -68,9 +76,51 @@ export interface NavigatorSuccessionTransitionV1 {
 }
 
 export interface NavigatorLineageSnapshotV1 {
-  contractVersion: typeof NAVIGATOR_LINEAGE_CONTRACT_VERSION;
+  contractVersion: typeof NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1;
   navigators: readonly Readonly<NavigatorRecordV1>[];
   pendingSuccession: Readonly<NavigatorSuccessionTransitionV1> | null;
+}
+
+interface NavigatorAgingFieldsV2 {
+  ageYears: number;
+  finalVoyageDeclared: boolean;
+}
+
+export interface ActiveNavigatorRecordV2 extends ActiveNavigatorRecordV1, NavigatorAgingFieldsV2 {}
+export interface RetiredNavigatorRecordV2 extends RetiredNavigatorRecordV1, NavigatorAgingFieldsV2 {}
+export interface LostNavigatorRecordV2 extends LostNavigatorRecordV1, NavigatorAgingFieldsV2 {}
+
+export type NavigatorRecordV2 =
+  | ActiveNavigatorRecordV2
+  | RetiredNavigatorRecordV2
+  | LostNavigatorRecordV2;
+
+export interface NavigatorLineageSnapshotV2 {
+  contractVersion: typeof NAVIGATOR_LINEAGE_CONTRACT_VERSION_V2;
+  navigators: readonly Readonly<NavigatorRecordV2>[];
+  pendingSuccession: Readonly<NavigatorSuccessionTransitionV1> | null;
+}
+
+export interface NavigatorAgingReadModel {
+  navigatorId: NavigatorId;
+  ageYears: number;
+  finalVoyageDeclared: boolean;
+  retirementChoiceRequired: boolean;
+  retirementRequired: boolean;
+}
+
+export interface NavigatorSuccessfulReturnResult {
+  status: "advanced";
+  previousAgeYears: number;
+  ageYears: number;
+  retirementChoiceRequired: boolean;
+  retirementRequired: boolean;
+  navigator: Readonly<ActiveNavigatorRecordV2>;
+}
+
+export interface NavigatorFinalVoyageDeclarationResult {
+  status: "declared" | "already-declared";
+  navigator: Readonly<ActiveNavigatorRecordV2>;
 }
 
 export type NavigatorSuccessionBeginResult =
@@ -81,13 +131,13 @@ export type NavigatorSuccessionBeginResult =
   | {
       status: "already-completed";
       transition: Readonly<NavigatorSuccessionTransitionV1>;
-      navigator: Readonly<NavigatorRecordV1>;
+      navigator: Readonly<NavigatorRecordV2>;
     };
 
 export interface NavigatorSuccessionCompleteResult {
   status: "completed" | "already-completed";
   transition: Readonly<NavigatorSuccessionTransitionV1>;
-  navigator: Readonly<NavigatorRecordV1>;
+  navigator: Readonly<NavigatorRecordV2>;
 }
 
 export class NavigatorLineageValidationError extends RangeError {
@@ -126,7 +176,7 @@ export function createNavigatorSuccessionKey(
 ): NavigatorSuccessionKey {
   if (!isSuccessionReason(reason)) throw new RangeError(`Unsupported navigator succession reason ${String(reason)}`);
   positiveSafeInteger(resolutionId, "resolutionId");
-  return `navigator-succession:v${NAVIGATOR_LINEAGE_CONTRACT_VERSION}:${reason}:${resolutionId}` as NavigatorSuccessionKey;
+  return `navigator-succession:v${NAVIGATOR_SUCCESSION_KEY_VERSION}:${reason}:${resolutionId}` as NavigatorSuccessionKey;
 }
 
 export function parseNavigatorSuccessionKey(value: unknown): ParsedNavigatorSuccessionKey | undefined {
@@ -144,7 +194,7 @@ export function parseNavigatorSuccessionKey(value: unknown): ParsedNavigatorSucc
 }
 
 export function isCurrentNavigatorSuccessionKey(value: unknown): value is NavigatorSuccessionKey {
-  return parseNavigatorSuccessionKey(value)?.version === NAVIGATOR_LINEAGE_CONTRACT_VERSION;
+  return parseNavigatorSuccessionKey(value)?.version === NAVIGATOR_SUCCESSION_KEY_VERSION;
 }
 
 /**
@@ -155,18 +205,60 @@ export function isCurrentNavigatorSuccessionKey(value: unknown): value is Naviga
 export function migrateBaselineNavigatorLineage(
   generation: number,
   pendingWreckId: number | null = null,
-): NavigatorLineageSnapshotV1 {
+): NavigatorLineageSnapshotV2 {
   const lineage = new NavigatorLineageSystem(generation);
   if (pendingWreckId !== null) lineage.beginSuccession("wreck", pendingWreckId);
   return lineage.snapshot();
 }
 
+/** Reconstructs the frozen GP-2.1 fragment required while parsing schema V5. */
+export function migrateBaselineNavigatorLineageV1(
+  generation: number,
+  pendingWreckId: number | null = null,
+): NavigatorLineageSnapshotV1 {
+  positiveSafeInteger(generation, "generation");
+  const active: ActiveNavigatorRecordV1 = {
+    id: createNavigatorId(generation),
+    generation,
+    state: "active",
+    createdBySuccessionKey: null,
+  };
+  if (pendingWreckId === null) {
+    return Object.freeze({
+      contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1,
+      navigators: Object.freeze([freezeNavigator(active)]),
+      pendingSuccession: null,
+    });
+  }
+
+  const key = createNavigatorSuccessionKey("wreck", pendingWreckId);
+  const lost = freezeNavigator<LostNavigatorRecordV1>({
+    ...active,
+    state: "lost",
+    successionReason: "wreck",
+    endedBySuccessionKey: key,
+  });
+  const transition = freezeTransition({
+    key,
+    reason: "wreck",
+    resolutionId: pendingWreckId,
+    fromNavigatorId: active.id,
+    fromGeneration: generation,
+    nextGeneration: positiveSafeIncrement(generation, "generation"),
+  });
+  return Object.freeze({
+    contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1,
+    navigators: Object.freeze([lost]),
+    pendingSuccession: transition,
+  });
+}
+
 /** Validates and defensively copies a persisted navigator-lineage fragment. */
-export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageSnapshotV1 {
+export function parseNavigatorLineageSnapshotV1(value: unknown): NavigatorLineageSnapshotV1 {
   const root = record(value, "navigatorLineage");
-  if (root.contractVersion !== NAVIGATOR_LINEAGE_CONTRACT_VERSION) {
+  if (root.contractVersion !== NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1) {
     fail(
-      `must use contract version ${NAVIGATOR_LINEAGE_CONTRACT_VERSION}`,
+      `must use contract version ${NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1}`,
       "navigatorLineage.contractVersion",
     );
   }
@@ -290,15 +382,73 @@ export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageS
   }
 
   return Object.freeze({
-    contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION,
+    contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1,
     navigators: Object.freeze(navigators),
     pendingSuccession,
   });
 }
 
+/** Adds deterministic aging defaults without inventing pre-feature service time. */
+export function migrateNavigatorLineageV1ToV2(value: unknown): NavigatorLineageSnapshotV2 {
+  const previous = parseNavigatorLineageSnapshotV1(value);
+  return parseNavigatorLineageSnapshotV2({
+    contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION_V2,
+    navigators: previous.navigators.map((navigator) => ({
+      ...navigator,
+      ageYears: NAVIGATOR_STARTING_AGE_YEARS,
+      finalVoyageDeclared: false,
+    })),
+    pendingSuccession: previous.pendingSuccession,
+  });
+}
+
+/** Validates the current GP-2.2 lineage fragment while preserving V1 identity. */
+export function parseNavigatorLineageSnapshotV2(value: unknown): NavigatorLineageSnapshotV2 {
+  const root = record(value, "navigatorLineage");
+  if (root.contractVersion !== NAVIGATOR_LINEAGE_CONTRACT_VERSION_V2) {
+    fail(
+      `must use contract version ${NAVIGATOR_LINEAGE_CONTRACT_VERSION_V2}`,
+      "navigatorLineage.contractVersion",
+    );
+  }
+  const persistedNavigators = root.navigators;
+  if (!Array.isArray(persistedNavigators)) {
+    fail("must contain a navigator array", "navigatorLineage.navigators");
+  }
+
+  const structural = parseNavigatorLineageSnapshotV1({
+    contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1,
+    navigators: persistedNavigators,
+    pendingSuccession: root.pendingSuccession,
+  });
+  const navigators = structural.navigators.map((navigator, index) => {
+    const path = `navigatorLineage.navigators[${index}]`;
+    const persisted = record(persistedNavigators[index], path);
+    const ageYears = navigatorAge(persisted.ageYears, `${path}.ageYears`);
+    const finalVoyageDeclared = boolean(
+      persisted.finalVoyageDeclared,
+      `${path}.finalVoyageDeclared`,
+    );
+    validateAgingCombination(navigator.state, ageYears, finalVoyageDeclared, path);
+    return freezeNavigator({
+      ...navigator,
+      ageYears,
+      finalVoyageDeclared,
+    } as NavigatorRecordV2);
+  });
+  return Object.freeze({
+    contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION_V2,
+    navigators: Object.freeze(navigators),
+    pendingSuccession: structural.pendingSuccession,
+  });
+}
+
+/** Current-contract parser alias. Schema V5 must call the explicit V1 parser. */
+export const parseNavigatorLineageSnapshot = parseNavigatorLineageSnapshotV2;
+
 /** Pure owner of one active navigator and the lineage's immutable history. */
 export class NavigatorLineageSystem {
-  private navigatorsValue: readonly Readonly<NavigatorRecordV1>[];
+  private navigatorsValue: readonly Readonly<NavigatorRecordV2>[];
   private pendingSuccessionValue: Readonly<NavigatorSuccessionTransitionV1> | null = null;
 
   constructor(generation = 1) {
@@ -308,6 +458,8 @@ export class NavigatorLineageSystem {
         generation,
         state: "active",
         createdBySuccessionKey: null,
+        ageYears: NAVIGATOR_STARTING_AGE_YEARS,
+        finalVoyageDeclared: false,
       }),
     ]);
   }
@@ -318,16 +470,16 @@ export class NavigatorLineageSystem {
     return system;
   }
 
-  get navigators(): readonly Readonly<NavigatorRecordV1>[] {
+  get navigators(): readonly Readonly<NavigatorRecordV2>[] {
     return this.navigatorsValue;
   }
 
   /** The latest record, including the outgoing navigator during a succession hold. */
-  get currentNavigator(): Readonly<NavigatorRecordV1> {
+  get currentNavigator(): Readonly<NavigatorRecordV2> {
     return this.navigatorsValue[this.navigatorsValue.length - 1];
   }
 
-  get activeNavigator(): Readonly<ActiveNavigatorRecordV1> | undefined {
+  get activeNavigator(): Readonly<ActiveNavigatorRecordV2> | undefined {
     const current = this.currentNavigator;
     return current.state === "active" ? current : undefined;
   }
@@ -338,6 +490,65 @@ export class NavigatorLineageSystem {
 
   get generation(): number {
     return this.currentNavigator.generation;
+  }
+
+  get aging(): Readonly<NavigatorAgingReadModel> {
+    const navigator = this.currentNavigator;
+    const active = navigator.state === "active";
+    return Object.freeze({
+      navigatorId: navigator.id,
+      ageYears: navigator.ageYears,
+      finalVoyageDeclared: navigator.finalVoyageDeclared,
+      retirementChoiceRequired: active
+        && navigator.ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
+        && !navigator.finalVoyageDeclared,
+      retirementRequired: active
+        && navigator.ageYears === NAVIGATOR_RETIREMENT_AGE_YEARS,
+    });
+  }
+
+  advanceSuccessfulReturn(): NavigatorSuccessfulReturnResult {
+    const active = this.requireActiveNavigator();
+    if (
+      active.ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
+      && !active.finalVoyageDeclared
+    ) {
+      throw new RangeError("Navigator must retire or declare a final voyage before another return");
+    }
+    if (active.ageYears >= NAVIGATOR_RETIREMENT_AGE_YEARS) {
+      throw new RangeError("Navigator has reached the retirement threshold");
+    }
+    const previousAgeYears = active.ageYears;
+    const ageYears = previousAgeYears + NAVIGATOR_SUCCESSFUL_RETURN_AGE_INCREMENT_YEARS;
+    const navigator = freezeNavigator<ActiveNavigatorRecordV2>({ ...active, ageYears });
+    this.replaceActiveNavigator(navigator);
+    const aging = this.aging;
+    return Object.freeze({
+      status: "advanced",
+      previousAgeYears,
+      ageYears,
+      retirementChoiceRequired: aging.retirementChoiceRequired,
+      retirementRequired: aging.retirementRequired,
+      navigator,
+    });
+  }
+
+  declareFinalVoyage(): NavigatorFinalVoyageDeclarationResult {
+    const active = this.requireActiveNavigator();
+    if (active.finalVoyageDeclared) {
+      return Object.freeze({ status: "already-declared", navigator: active });
+    }
+    if (active.ageYears !== NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS) {
+      throw new RangeError(
+        `A final voyage may be declared only at age ${NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS}`,
+      );
+    }
+    const navigator = freezeNavigator<ActiveNavigatorRecordV2>({
+      ...active,
+      finalVoyageDeclared: true,
+    });
+    this.replaceActiveNavigator(navigator);
+    return Object.freeze({ status: "declared", navigator });
   }
 
   beginSuccession(
@@ -364,6 +575,7 @@ export class NavigatorLineageSystem {
 
     const active = this.activeNavigator;
     if (!active) throw new RangeError("Navigator lineage has no active navigator to succeed");
+    this.validateSuccessionChoice(active, reason);
     if (!Number.isSafeInteger(active.generation + 1)) {
       throw new RangeError("No safe navigator generation remains");
     }
@@ -419,13 +631,15 @@ export class NavigatorLineageSystem {
       generation: pending.nextGeneration,
       state: "active",
       createdBySuccessionKey: pending.key,
+      ageYears: NAVIGATOR_STARTING_AGE_YEARS,
+      finalVoyageDeclared: false,
     });
     this.navigatorsValue = Object.freeze([...this.navigatorsValue, navigator]);
     this.pendingSuccessionValue = null;
     return Object.freeze({ status: "completed", transition: pending, navigator });
   }
 
-  snapshot(): NavigatorLineageSnapshotV1 {
+  snapshot(): NavigatorLineageSnapshotV2 {
     return Object.freeze({
       contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION,
       navigators: this.navigatorsValue,
@@ -434,14 +648,17 @@ export class NavigatorLineageSystem {
   }
 
   restore(value: unknown): void {
-    const parsed = parseNavigatorLineageSnapshot(value);
+    const root = record(value, "navigatorLineage");
+    const parsed = root.contractVersion === NAVIGATOR_LINEAGE_CONTRACT_VERSION_V1
+      ? migrateNavigatorLineageV1ToV2(value)
+      : parseNavigatorLineageSnapshotV2(value);
     this.navigatorsValue = parsed.navigators;
     this.pendingSuccessionValue = parsed.pendingSuccession;
   }
 
   private completedTransition(key: NavigatorSuccessionKey): {
     transition: Readonly<NavigatorSuccessionTransitionV1>;
-    navigator: Readonly<NavigatorRecordV1>;
+    navigator: Readonly<NavigatorRecordV2>;
   } | undefined {
     const successorIndex = this.navigatorsValue.findIndex((record) => record.createdBySuccessionKey === key);
     if (successorIndex <= 0) return undefined;
@@ -463,6 +680,44 @@ export class NavigatorLineageSystem {
       }),
       navigator: successor,
     };
+  }
+
+  private requireActiveNavigator(): Readonly<ActiveNavigatorRecordV2> {
+    const active = this.activeNavigator;
+    if (!active) throw new RangeError("Navigator lineage has no active navigator");
+    return active;
+  }
+
+  private replaceActiveNavigator(navigator: Readonly<ActiveNavigatorRecordV2>): void {
+    this.navigatorsValue = Object.freeze([
+      ...this.navigatorsValue.slice(0, -1),
+      navigator,
+    ]);
+  }
+
+  private validateSuccessionChoice(
+    active: Readonly<ActiveNavigatorRecordV2>,
+    reason: NavigatorSuccessionReason,
+  ): void {
+    if (reason === "retirement") {
+      const safeRetirement = active.ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
+        && !active.finalVoyageDeclared;
+      const finalRetirement = active.ageYears === NAVIGATOR_RETIREMENT_AGE_YEARS
+        && active.finalVoyageDeclared;
+      if (!safeRetirement && !finalRetirement) {
+        throw new RangeError("Navigator is not at a legal retirement boundary");
+      }
+      return;
+    }
+    if (
+      active.ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
+      && !active.finalVoyageDeclared
+    ) {
+      throw new RangeError("Navigator must resolve the retirement choice before a wreck succession");
+    }
+    if (active.ageYears >= NAVIGATOR_RETIREMENT_AGE_YEARS) {
+      throw new RangeError("Navigator must retire after the returned final voyage");
+    }
   }
 }
 
@@ -518,6 +773,48 @@ function isSuccessionReason(value: unknown): value is NavigatorSuccessionReason 
   return value === "wreck" || value === "retirement";
 }
 
+function navigatorAge(value: unknown, path: string): number {
+  if (
+    !Number.isSafeInteger(value)
+    || (value as number) < NAVIGATOR_STARTING_AGE_YEARS
+    || (value as number) > NAVIGATOR_RETIREMENT_AGE_YEARS
+    || ((value as number) - NAVIGATOR_STARTING_AGE_YEARS)
+      % NAVIGATOR_SUCCESSFUL_RETURN_AGE_INCREMENT_YEARS !== 0
+  ) {
+    fail(
+      `must be a five-year progression from ${NAVIGATOR_STARTING_AGE_YEARS} through ${NAVIGATOR_RETIREMENT_AGE_YEARS}`,
+      path,
+    );
+  }
+  return value as number;
+}
+
+function validateAgingCombination(
+  state: NavigatorLifecycleState,
+  ageYears: number,
+  finalVoyageDeclared: boolean,
+  path: string,
+): void {
+  if (!finalVoyageDeclared) {
+    if (ageYears === NAVIGATOR_RETIREMENT_AGE_YEARS) {
+      fail("age 55 requires a declared final voyage", `${path}.finalVoyageDeclared`);
+    }
+    return;
+  }
+  if (state === "active" && (
+    ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS
+    || ageYears === NAVIGATOR_RETIREMENT_AGE_YEARS
+  )) return;
+  if (state === "retired" && ageYears === NAVIGATOR_RETIREMENT_AGE_YEARS) return;
+  if (state === "lost" && ageYears === NAVIGATOR_RETIREMENT_WARNING_AGE_YEARS) return;
+  fail("is inconsistent with navigator age and lifecycle state", `${path}.finalVoyageDeclared`);
+}
+
+function boolean(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") fail("must be a boolean", path);
+  return value;
+}
+
 function record(value: unknown, path: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) fail("must be an object", path);
   return value as Record<string, unknown>;
@@ -526,6 +823,11 @@ function record(value: unknown, path: string): Record<string, unknown> {
 function positiveSafeInteger(value: unknown, path: string): number {
   if (!Number.isSafeInteger(value) || (value as number) <= 0) fail("must be a positive safe integer", path);
   return value as number;
+}
+
+function positiveSafeIncrement(value: number, path: string): number {
+  if (!Number.isSafeInteger(value + 1)) fail("cannot be incremented safely", path);
+  return value + 1;
 }
 
 function fail(message: string, path: string): never {
