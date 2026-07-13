@@ -1,9 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-1.4` batch is authorized; `GP-0.1` through
-`GP-1.3` are accepted, and the remaining batch minor proceeds in dependency
-order without a renewed permission pause.
+ordered `GP-0.1` through `GP-1.4` batch is complete and accepted. Further
+implementation requires a new authorization.
 
 ## Roadmap model
 
@@ -263,7 +262,23 @@ remain unchanged.
 
 #### GP-1.4 — Returned-ground cue and connectivity proof
 
-Status: proposed.
+Status: accepted.
+
+Acceptance evidence (2026-07-12): the exact saved-world `homeReturnTile` and
+seed-derived opportunity `serviceAnchor` are the connectivity endpoints. A
+cached flood uses passable Supported cells only, cardinal movement and a fixed
+north/east/south/west tie-break; both endpoints must themselves qualify. The
+world exposes a dedicated Supported-topology revision, so Personal knowledge,
+visibility and ordinary frames do not rebuild the search. Only a connected
+returned survey enters the derived activation-eligible set. It receives a
+double-diamond beacon, glow ring, four cardinal rays and explicit home-linked
+label; a disconnected returned survey keeps its ordinary returned mark, and
+leads/provisional surveys cannot structurally request the cue. Connectivity and
+paths are derived after load and never enter schema V4. The full pipeline passes
+173 tests across 19 files plus typecheck and production build. Fresh-browser
+validation loaded the GP-1.3 returned survey, rebuilt one connection, showed the
+beacon, preserved it across manual checkpoint reload and produced no console
+warnings or errors.
 
 - Define an opportunity service anchor and a deterministic home-connected
   Supported-water eligibility check.

@@ -25,6 +25,8 @@ export class WorldGrid {
   knowledgeVersion = 0;
   terrainVersion = 0;
   visibilityVersion = 0;
+  /** Advances only when passable Supported-water connectivity can change. */
+  supportedTopologyVersion = 0;
 
   constructor(
     readonly width = prototypeConfig.world.width,
@@ -140,12 +142,15 @@ export class WorldGrid {
       && chunk.sightBlocked[index] === sightBlocked
     ) return false;
 
+    const supportedPassabilityChanged = chunk.knowledge[index] === KnowledgeState.Supported
+      && chunk.movementBlocked[index] !== movementBlocked;
     chunk.terrain[index] = terrain;
     chunk.movementBlocked[index] = movementBlocked;
     chunk.sightBlocked[index] = sightBlocked;
     this.refreshSupportedPersonalBoundaryNear(this.index(x, y));
     chunk.markDirty();
     this.terrainVersion++;
+    if (supportedPassabilityChanged) this.supportedTopologyVersion++;
     return true;
   }
 
@@ -184,6 +189,12 @@ export class WorldGrid {
       this.removeKnowledgeIndex(worldIndex, previousKnowledge);
       this.addKnowledgeIndex(worldIndex, knowledge);
       this.refreshSupportedPersonalBoundaryNear(worldIndex);
+      if (
+        chunk.movementBlocked[index] === 0
+        && (previousKnowledge === KnowledgeState.Supported || knowledge === KnowledgeState.Supported)
+      ) {
+        this.supportedTopologyVersion++;
+      }
     }
     chunk.markKnowledgeDirty();
     this.knowledgeVersion++;
@@ -216,6 +227,7 @@ export class WorldGrid {
     }
 
     const dirtyChunks = new Set<WorldChunk>();
+    let supportedTopologyChanged = false;
     this.knowledgeCounts.fill(0);
     this.personalKnowledgeIndices.clear();
     this.supportedKnowledgeIndices.clear();
@@ -225,6 +237,12 @@ export class WorldGrid {
       const state = knowledge[index] as KnowledgeState;
       const stamp = expeditionStamps[index];
       if (chunk.knowledge[localIndex] !== state || chunk.expeditionStamp[localIndex] !== stamp) {
+        const previousState = chunk.knowledge[localIndex] as KnowledgeState;
+        if (
+          chunk.movementBlocked[localIndex] === 0
+          && previousState !== state
+          && (previousState === KnowledgeState.Supported || state === KnowledgeState.Supported)
+        ) supportedTopologyChanged = true;
         chunk.knowledge[localIndex] = state;
         chunk.expeditionStamp[localIndex] = stamp;
         dirtyChunks.add(chunk);
@@ -236,6 +254,7 @@ export class WorldGrid {
     this.rebuildSupportedPersonalBoundaries();
     for (const chunk of dirtyChunks) chunk.markKnowledgeDirty();
     this.knowledgeVersion++;
+    if (supportedTopologyChanged) this.supportedTopologyVersion++;
     return true;
   }
 
@@ -299,6 +318,7 @@ export class WorldGrid {
     this.refreshSupportedPersonalBoundaryNear(this.index(x, y));
     chunk.markDirty();
     this.terrainVersion++;
+    if (chunk.knowledge[index] === KnowledgeState.Supported) this.supportedTopologyVersion++;
     return true;
   }
 
@@ -433,6 +453,7 @@ export class WorldGrid {
     this.terrainVersion++;
     this.knowledgeVersion++;
     this.visibilityVersion++;
+    this.supportedTopologyVersion++;
   }
 
   forEachTile(visitor: (x: number, y: number, index: number) => void): void {

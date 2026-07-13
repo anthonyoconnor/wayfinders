@@ -7,10 +7,12 @@ type FishingShoalState = FishingShoalReadModel["state"];
 
 interface FishingShoalView {
   container: Phaser.GameObjects.Container;
+  connectivityCue: Phaser.GameObjects.Graphics;
   marker: Phaser.GameObjects.Graphics;
   badge: Phaser.GameObjects.Text;
   label: Phaser.GameObjects.Text;
   renderedState?: FishingShoalState;
+  renderedHomeConnected?: boolean;
 }
 
 interface MarkerStyle {
@@ -81,7 +83,13 @@ export class FishingShoalRenderer {
       const position = gridToWorld(record.tile, prototypeConfig.navigation.tileSize);
       view.container.setPosition(position.x, position.y);
 
-      if (view.renderedState !== record.state) this.redraw(view, record.state);
+      const homeConnected = record.state === "returned-survey" && record.homeConnected;
+      if (
+        view.renderedState !== record.state
+        || view.renderedHomeConnected !== homeConnected
+      ) {
+        this.redraw(view, record.state, homeConnected);
+      }
       view.label.setText(this.labelFor(record));
     }
   }
@@ -110,11 +118,13 @@ export class FishingShoalRenderer {
     const view = this.viewPool.pop() ?? this.createView();
     view.container.setActive(true).setVisible(true).setName(id);
     view.renderedState = undefined;
+    view.renderedHomeConnected = undefined;
     this.viewsById.set(id, view);
     return view;
   }
 
   private createView(): FishingShoalView {
+    const connectivityCue = this.scene.add.graphics();
     const marker = this.scene.add.graphics();
     const badge = this.scene.add.text(0, 0, "F?", {
       align: "center",
@@ -132,14 +142,76 @@ export class FishingShoalRenderer {
       stroke: "#041419",
       strokeThickness: 4,
     }).setOrigin(0.5, 0);
-    const container = this.scene.add.container(0, 0, [marker, badge, label]).setDepth(43);
-    return { container, marker, badge, label };
+    const container = this.scene.add.container(0, 0, [connectivityCue, marker, badge, label]).setDepth(43);
+    return { container, connectivityCue, marker, badge, label };
   }
 
-  private redraw(view: FishingShoalView, state: FishingShoalState): void {
+  private redraw(view: FishingShoalView, state: FishingShoalState, homeConnected: boolean): void {
     const size = prototypeConfig.navigation.tileSize;
     const style = MARKER_STYLES[state];
     const radius = size * 0.28;
+
+    view.connectivityCue.clear().setVisible(homeConnected);
+    if (homeConnected) {
+      const beaconRadius = radius * 1.78;
+      const rayInner = radius * 1.98;
+      const rayOuter = radius * 2.48;
+      const rayHalfWidth = Math.max(2, size * 0.055);
+
+      // A double-diamond beacon and four solid rays make the home link
+      // recognizable independently of label text or colour perception.
+      view.connectivityCue.lineStyle(5, 0x66ff9d, 0.18);
+      view.connectivityCue.strokeCircle(0, 0, beaconRadius * 1.05);
+      view.connectivityCue.lineStyle(2, 0x66ff9d, 1);
+      view.connectivityCue.beginPath();
+      view.connectivityCue.moveTo(0, -beaconRadius);
+      view.connectivityCue.lineTo(beaconRadius, 0);
+      view.connectivityCue.lineTo(0, beaconRadius);
+      view.connectivityCue.lineTo(-beaconRadius, 0);
+      view.connectivityCue.closePath();
+      view.connectivityCue.strokePath();
+      view.connectivityCue.lineStyle(1, 0xd5ffe2, 0.86);
+      view.connectivityCue.beginPath();
+      view.connectivityCue.moveTo(0, -beaconRadius * 0.82);
+      view.connectivityCue.lineTo(beaconRadius * 0.82, 0);
+      view.connectivityCue.lineTo(0, beaconRadius * 0.82);
+      view.connectivityCue.lineTo(-beaconRadius * 0.82, 0);
+      view.connectivityCue.closePath();
+      view.connectivityCue.strokePath();
+      view.connectivityCue.fillStyle(0x66ff9d, 1);
+      view.connectivityCue.fillTriangle(
+        -rayHalfWidth,
+        -rayInner,
+        rayHalfWidth,
+        -rayInner,
+        0,
+        -rayOuter,
+      );
+      view.connectivityCue.fillTriangle(
+        rayInner,
+        -rayHalfWidth,
+        rayOuter,
+        0,
+        rayInner,
+        rayHalfWidth,
+      );
+      view.connectivityCue.fillTriangle(
+        -rayHalfWidth,
+        rayInner,
+        0,
+        rayOuter,
+        rayHalfWidth,
+        rayInner,
+      );
+      view.connectivityCue.fillTriangle(
+        -rayInner,
+        -rayHalfWidth,
+        -rayInner,
+        rayHalfWidth,
+        -rayOuter,
+        0,
+      );
+    }
 
     view.marker.clear();
     view.marker.fillStyle(0x04191e, 0.88);
@@ -159,6 +231,7 @@ export class FishingShoalRenderer {
     view.label.setColor(style.labelColor);
     view.container.setAlpha(style.alpha);
     view.renderedState = state;
+    view.renderedHomeConnected = homeConnected;
   }
 
   private labelFor(record: Readonly<FishingShoalReadModel>): string {
@@ -172,7 +245,9 @@ export class FishingShoalRenderer {
       case "surveyed":
         return `SURVEYED - ${record.quality.toUpperCase()}\n${record.clue.label}`;
       case "returned-survey":
-        return `RETURNED SURVEY - ${record.quality.toUpperCase()}\n${record.clue.label}`;
+        return record.homeConnected
+          ? `HOME-LINKED FISHING GROUND\n${record.quality.toUpperCase()} - ${record.clue.label}`
+          : `RETURNED SURVEY - ${record.quality.toUpperCase()}\n${record.clue.label}`;
     }
   }
 }

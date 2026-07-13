@@ -255,6 +255,10 @@ export class GameSimulation {
     return this.fishingShoalSystem.activationEligible;
   }
 
+  get fishingShoalConnectivityBuildCount(): number {
+    return this.fishingShoalSystem.connectivityBuildCount;
+  }
+
   get fishingShoalReadModels(): readonly Readonly<FishingShoalReadModel>[] {
     return this.fishingShoalSystem.readModels();
   }
@@ -415,6 +419,7 @@ export class GameSimulation {
         this.generated.seed,
         this.generated.landmarks.homeReturnTile,
       ),
+      this.generated.landmarks.homeReturnTile,
     );
     this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
@@ -636,6 +641,7 @@ export class GameSimulation {
         generated.landmarks.homeReturnTile,
         parsed.world.contentVersions.fishingShoals,
       ),
+      generated.landmarks.homeReturnTile,
     );
     try {
       restoredFishingShoals.restore(

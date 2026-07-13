@@ -129,6 +129,7 @@ export class WayfindersScene extends Phaser.Scene {
   private lastFishingShoalRecordsRevision = -1;
   private lastFishingShoalVisibilityVersion = -1;
   private lastFishingShoalKnowledgeVersion = -1;
+  private lastFishingShoalSupportedTopologyVersion = -1;
   private persistenceEnabled: boolean;
   private autosaveProtected: boolean;
   private persistenceStatus: PersistenceBootState["status"];
@@ -333,11 +334,13 @@ export class WayfindersScene extends Phaser.Scene {
       || this.lastFishingShoalRecordsRevision !== this.simulation.fishingShoalRecordsRevision
       || this.lastFishingShoalVisibilityVersion !== this.simulation.world.visibilityVersion
       || this.lastFishingShoalKnowledgeVersion !== this.simulation.world.knowledgeVersion
+      || this.lastFishingShoalSupportedTopologyVersion !== this.simulation.world.supportedTopologyVersion
     ) {
       this.fishingShoalRenderer.sync(this.simulation.fishingShoalReadModels);
       this.lastFishingShoalRecordsRevision = this.simulation.fishingShoalRecordsRevision;
       this.lastFishingShoalVisibilityVersion = this.simulation.world.visibilityVersion;
       this.lastFishingShoalKnowledgeVersion = this.simulation.world.knowledgeVersion;
+      this.lastFishingShoalSupportedTopologyVersion = this.simulation.world.supportedTopologyVersion;
     }
     this.wreckRenderer.updateViewport(this.cameras.main);
     this.discoveryRenderer.updateViewport(this.cameras.main);
@@ -395,6 +398,7 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.fishingShoalProvisional = String(this.simulation.provisionalFishingShoals.length);
       host.dataset.fishingShoalReturned = String(this.simulation.returnedFishingShoals.length);
       host.dataset.fishingShoalActivationEligible = String(this.simulation.activationEligibleFishingShoals.length);
+      host.dataset.fishingShoalConnectivityBuilds = String(this.simulation.fishingShoalConnectivityBuildCount);
       host.dataset.fishingShoalVisible = String(this.simulation.fishingShoalReadModels.length);
       host.dataset.surveyCases = String(this.simulation.surveyCasesRemaining);
       host.dataset.fishingShoalInteraction = this.simulation.fishingShoalInteraction?.id ?? "";
@@ -409,6 +413,7 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.riskBudget = this.simulation.forwardRange.budget.toFixed(3);
       host.dataset.simulationRevision = String(this.simulation.revision);
       host.dataset.knowledgeVersion = String(this.simulation.world.knowledgeVersion);
+      host.dataset.supportedTopologyVersion = String(this.simulation.world.supportedTopologyVersion);
       host.dataset.visibilityVersion = String(this.simulation.world.visibilityVersion);
       const timing = this.frameTiming.snapshot();
       host.dataset.frameP50Ms = timing.p50Ms.toFixed(2);

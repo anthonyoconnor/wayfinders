@@ -1,5 +1,6 @@
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
+import type { GridPoint } from "../core/types";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
   FISHING_SHOAL_INTERACTION_RANGE_TILES,
@@ -16,6 +17,7 @@ import {
   type FishingShoalReturnedSurveyReadModel,
   type FishingShoalSurveyedReadModel,
 } from "./FishingShoalContracts";
+import { SupportedConnectivitySystem } from "./SupportedConnectivitySystem";
 
 export interface FishingShoalObservation {
   found: readonly Readonly<FishingShoalProvisionalRecordV1>[];
@@ -35,11 +37,14 @@ export class FishingShoalSystem {
   private returnedCache: ReadonlyArray<Readonly<FishingShoalReturnedRecordV1>> = Object.freeze([]);
   private recordsDirty = false;
   private recordsRevisionValue = 0;
+  private readonly supportedConnectivity: SupportedConnectivitySystem;
 
   constructor(
     private readonly world: WorldGrid,
     readonly definitions: readonly Readonly<FishingShoalDefinition>[],
+    homeReturnTile: Readonly<GridPoint>,
   ) {
+    this.supportedConnectivity = new SupportedConnectivitySystem(world, homeReturnTile);
     for (const definition of definitions) {
       if (this.definitionById.has(definition.id)) throw new RangeError(`Duplicate fishing shoal ${definition.id}`);
       this.definitionById.set(definition.id, definition);
@@ -57,7 +62,15 @@ export class FishingShoalSystem {
   }
 
   get activationEligible(): readonly Readonly<FishingShoalReturnedRecordV1>[] {
-    return this.returned.filter(({ state }) => state === "survey");
+    return Object.freeze(this.returned.filter((record) => {
+      if (record.state !== "survey") return false;
+      const definition = this.definitionById.get(record.id);
+      return definition !== undefined && this.isHomeConnected(definition);
+    }));
+  }
+
+  get connectivityBuildCount(): number {
+    return this.supportedConnectivity.buildCount;
   }
 
   get recordsRevision(): number {
@@ -291,7 +304,7 @@ export class FishingShoalSystem {
           clue: definition.clue,
           state: "returned-survey",
           quality: definition.quality,
-          homeConnected: false,
+          homeConnected: this.isHomeConnected(definition),
         };
         models.push(model);
         continue;
@@ -338,6 +351,13 @@ export class FishingShoalSystem {
   private markRecordsChanged(): void {
     this.recordsDirty = true;
     this.recordsRevisionValue++;
+  }
+
+  private isHomeConnected(definition: Readonly<FishingShoalDefinition>): boolean {
+    return this.supportedConnectivity.isConnected(
+      definition.serviceAnchor,
+      this.world.supportedTopologyVersion,
+    );
   }
 
   private refreshRecordCaches(): void {

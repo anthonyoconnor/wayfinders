@@ -9,6 +9,7 @@ import {
 } from "../src/wayfinders/exploration/FishingShoalContracts";
 import { FishingShoalSystem } from "../src/wayfinders/exploration/FishingShoalSystem";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
 
 beforeEach(() => resetPrototypeConfig());
@@ -100,7 +101,11 @@ describe("fishing-shoal sighting lifecycle", () => {
       generated.seed,
       generated.landmarks.homeReturnTile,
     );
-    const system = new FishingShoalSystem(generated.grid, definitions);
+    const system = new FishingShoalSystem(
+      generated.grid,
+      definitions,
+      generated.landmarks.homeReturnTile,
+    );
     const definition = definitions[0];
     const index = generated.grid.index(definition.tile.x, definition.tile.y);
     const beforeKnowledgeVersion = generated.grid.knowledgeVersion;
@@ -178,7 +183,11 @@ describe("one-case fishing-shoal survey action", () => {
       generated.seed,
       generated.landmarks.homeReturnTile,
     );
-    const system = new FishingShoalSystem(generated.grid, definitions);
+    const system = new FishingShoalSystem(
+      generated.grid,
+      definitions,
+      generated.landmarks.homeReturnTile,
+    );
     const first = definitions[0];
     const second = definitions[1];
     system.observeCurrentSight(8, 3, [
@@ -240,6 +249,9 @@ describe("one-case fishing-shoal survey action", () => {
     });
     expect(system.provisional.find(({ id }) => id === first.id)?.state).toBe("surveyed");
     expect(system.surveyCasesRemaining).toBe(0);
+    const provisionalSurveyModel = system.readModels().find(({ id }) => id === first.id);
+    expect(provisionalSurveyModel).toMatchObject({ state: "surveyed", quality: first.quality });
+    expect(provisionalSurveyModel).not.toHaveProperty("homeConnected");
 
     const revisionAfterSurvey = system.recordsRevision;
     expect(system.applyInteraction({
@@ -324,8 +336,9 @@ describe("returned fishing-shoal lifecycle", () => {
     expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
     const returnedLead = structuredClone(simulation.returnedFishingShoals[0]);
     expect(returnedLead).toMatchObject({ id: target.id, state: "lead" });
-    expect(simulation.fishingShoalReadModels.find(({ id }) => id === target.id))
-      .toMatchObject({ state: "returned-lead" });
+    const returnedLeadModel = simulation.fishingShoalReadModels.find(({ id }) => id === target.id);
+    expect(returnedLeadModel).toMatchObject({ state: "returned-lead" });
+    expect(returnedLeadModel).not.toHaveProperty("homeConnected");
 
     expect(simulation.teleport(target.tile)).toBe(true);
     expect(simulation.expeditionActive).toBe(false);
@@ -398,10 +411,13 @@ describe("returned fishing-shoal lifecycle", () => {
     expect(simulation.fishingShoalReadModels.find(({ id }) => id === target.id)).toMatchObject({
       state: "returned-survey",
       quality: target.quality,
-      homeConnected: false,
+      homeConnected: true,
     });
+    expect(simulation.activationEligibleFishingShoals).toEqual([terminalRecord]);
 
     const autosaveRecord = simulation.createSave();
+    expect(autosaveRecord.fishingShoals.returned[0]).not.toHaveProperty("homeConnected");
+    expect(JSON.stringify(autosaveRecord)).not.toContain("homeConnected");
     const checkpointRecord = structuredClone(autosaveRecord);
     const autosaveRestored = new GameSimulation();
     const checkpointRestored = new GameSimulation();
@@ -437,5 +453,47 @@ describe("returned fishing-shoal lifecycle", () => {
     expect(autosaveRestored.returnedFishingShoals).toEqual(beforeRepeat);
     expect(autosaveRestored.createSave().fishingShoals.returned).toEqual(autosaveRecord.fishingShoals.returned);
     expect(replayReports).toBe(0);
+  });
+});
+
+describe("returned-ground Supported connectivity", () => {
+  it("derives connection and activation from exact topology without serializing or rebuilding on unrelated changes", () => {
+    const world = new WorldGrid(5, 2, 5);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const id = createFishingShoalId(0);
+    const system = new FishingShoalSystem(
+      world,
+      [{
+        id,
+        contentVersion: 1,
+        tile: { x: 4, y: 0 },
+        serviceAnchor: { x: 4, y: 0 },
+        quality: "steady",
+        clue: { kind: "seabirds", intensity: 2, label: "Circling seabirds" },
+      }],
+      { x: 0, y: 0 },
+    );
+    system.restore([], [{ id, state: "survey", expeditionId: 1, generation: 1 }]);
+
+    expect(system.readModels()).toEqual([
+      expect.objectContaining({ id, state: "returned-survey", homeConnected: false }),
+    ]);
+    expect(system.activationEligible).toEqual([]);
+    expect(system.connectivityBuildCount).toBe(1);
+
+    world.setVisibleNow(4, 0, true);
+    world.setKnowledge(0, 1, KnowledgeState.Personal, 2);
+    expect(system.readModels()[0]).toMatchObject({ homeConnected: false });
+    expect(system.connectivityBuildCount).toBe(1);
+
+    for (let x = 0; x <= 4; x++) world.setKnowledge(x, 0, KnowledgeState.Supported);
+    expect(system.readModels()[0]).toMatchObject({ homeConnected: true });
+    expect(system.activationEligible).toEqual([expect.objectContaining({ id, state: "survey" })]);
+    expect(system.connectivityBuildCount).toBe(2);
+
+    world.setKnowledge(2, 0, KnowledgeState.Personal, 3);
+    expect(system.readModels()[0]).toMatchObject({ homeConnected: false });
+    expect(system.activationEligible).toEqual([]);
+    expect(system.connectivityBuildCount).toBe(3);
   });
 });

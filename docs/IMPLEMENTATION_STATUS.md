@@ -11,9 +11,8 @@ persistence and the performance foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
-`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-1.4` batch is in
-progress. `GP-0.1` through `GP-1.3` are accepted; `GP-1.4` is the remaining
-authorized minor.
+`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-1.4` batch is
+complete and accepted. No later milestone is authorized.
 
 ## Run and verify
 
@@ -35,10 +34,11 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 166 automated tests pass across 18 files.
+- 173 automated tests pass across 19 files.
 - The production Vite build passes.
-- Browser tests cover discovery return, autosave reload, manual checkpoint
-  restore, exact ship/camera restoration, wreck-hold reload, generation
+- Browser tests cover discovery and fishing return, returned-lead upgrade,
+  autosave reload, manual checkpoint restore, exact ship/camera restoration,
+  the home-linked fishing-ground cue, wreck-hold reload, generation
   advancement, save clearing, and a clean console.
 - The Phaser bundle-size warning remains informational.
 
@@ -122,7 +122,9 @@ Current verification baseline:
   return commits a terminal returned survey with stable quality. Returned
   surveys remain idempotent through revisit, repeat input, dock, wreck,
   autosave and checkpoint reload and are the sole later-activation eligible
-  state.
+  lifecycle state. Actual activation eligibility is derived only when the
+  returned survey's exact service anchor has a cardinal, passable Supported
+  connection to the exact home-return tile.
 - A temporary proximity ribbon presents clue text, the current one-case
   allocation and explicit Survey / Leave buttons. `F` surveys, `Escape` leaves,
   and ordinary pointer/contextual-touch activation uses the same authoritative
@@ -131,7 +133,9 @@ Current verification baseline:
   allocation; unused cases never stack.
 - Schema-versioned saves persist the authoritative ship, provisions,
   expedition/generation state, knowledge and stamps, runtime wrecks, pending
-  wreck holds, and provisional/returned discoveries.
+  wreck holds, provisional/returned discoveries and provisional/returned
+  fishing records. Fishing connectivity and its path are derived after load,
+  never serialized.
 - Base terrain and island descriptors regenerate from the saved seed and world
   configuration. Visibility, forward range and return paths rebuild on load.
 - Reload uses a rolling IndexedDB autosave. **Save checkpoint** and
@@ -150,6 +154,9 @@ Current verification baseline:
   replenishment information into one five-second cue. A return without a
   discovery uses a 3.5-second route/replenishment cue; lifecycle text never
   overlaps itself.
+- A connected returned fishing survey shows an unmistakable double-diamond,
+  cardinal-ray developer beacon and home-linked label. Disconnected returned
+  surveys retain their ordinary returned mark.
 - Developer tools provide seed regeneration, island inspection, water-tile
   teleport, provision/wreck controls, overlay toggles, live configuration,
   autosave status and checkpoint controls.
@@ -173,6 +180,9 @@ Current verification baseline:
 - Knowledge, risk and persistent-marker presentation is viewport culled or
   version driven. Successful return repaints only knowledge-changed water
   chunks instead of rebuilding the complete static world.
+- Supported connectivity caches one deterministic flood by a dedicated
+  topology revision; Personal knowledge, visibility and ordinary frames do not
+  rebuild it.
 - Browser backdrop blurs were removed from always-on overlays to avoid
   recompositing the WebGL canvas.
 
@@ -202,9 +212,10 @@ Current verification baseline:
 ## Known limits
 
 - Gameplay track: discovery rewards, settlements and resources are records
-  only. Fishing shoals now reach terminal returned leads/surveys; the derived
-  Supported-water home-connection cue remains for `GP-1.4`. Tribe economics,
-  explorer aging, lineage achievements and idols are not yet implemented.
+  only. The complete `GP-1` fishing survey loop ends at a derived connected
+  returned-ground cue; authoritative fishing activation/output, tribe
+  economics, explorer aging, lineage achievements and idols are not yet
+  implemented.
 - Gameplay track: the current generation is a wreck-driven counter rather than
   a complete navigator/aging/succession model.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
@@ -219,21 +230,22 @@ Current verification baseline:
 
 ## Proposed continuation
 
-No implementation should begin until the user authorizes a named roadmap minor
-or ordered batch. An authorized batch remains in force through its final named
-minor. Complete, verify and record each acceptance gate, then continue into the
-next minor without stopping for renewed permission. Pause only when the batch is
-complete, the user intervenes, or continuing requires a new product decision,
-expanded scope or authority, or an unresolved external blocker.
+The authorized `GP-0.1` through `GP-1.4` batch is complete. No further
+implementation should begin until the user authorizes another named roadmap
+minor or ordered batch. An authorized batch remains in force through its final
+named minor without renewed permission pauses.
 
-The proposed sequence begins with:
+The completed batch is:
 
 1. `GP-0.1` — accepted: baseline-save fixtures and an explicit migration chain;
 2. `GP-0.2` — accepted: versioned GP-1 integration boundaries;
 3. `GP-1.1` — accepted: deterministic fishing-shoal definitions and clues;
 4. `GP-1.2` — accepted: the one-case Survey / Leave action and interaction cue;
 5. `GP-1.3` — accepted: exact-dock returned leads/surveys and wreck rollback;
-6. `GP-1.4` — add the derived Supported-water home-connection cue.
+6. `GP-1.4` — accepted: derived Supported-water home-connection proof and cue.
+
+The next proposed gameplay milestone is `GP-2.1`, the navigator and succession
+model. It is not authorized by completion of this batch.
 
 Navigator and general route contracts remain deferred to their owning minors.
 

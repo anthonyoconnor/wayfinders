@@ -229,6 +229,51 @@ describe("world foundations", () => {
     expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([]);
   });
 
+  it("revisions only topology changes that can alter passable Supported connectivity", () => {
+    const world = new WorldGrid(4, 1, 4);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const baseline = world.supportedTopologyVersion;
+
+    world.setKnowledge(0, 0, KnowledgeState.Personal, 1);
+    world.setExpeditionStamp(0, 0, 2);
+    world.setTerrain(0, 0, TerrainType.ShallowOcean);
+    world.setMovementBlocked(0, 0, true);
+    expect(world.supportedTopologyVersion).toBe(baseline);
+    world.setKnowledge(0, 0, KnowledgeState.Supported);
+    world.setKnowledge(0, 0, KnowledgeState.Unknown);
+    expect(world.supportedTopologyVersion).toBe(baseline);
+
+    world.setKnowledge(1, 0, KnowledgeState.Supported);
+    expect(world.supportedTopologyVersion).toBe(baseline + 1);
+    world.setTerrain(1, 0, TerrainType.ShallowOcean);
+    expect(world.supportedTopologyVersion).toBe(baseline + 1);
+    world.setMovementBlocked(1, 0, true);
+    expect(world.supportedTopologyVersion).toBe(baseline + 2);
+    world.setMovementBlocked(1, 0, false);
+    expect(world.supportedTopologyVersion).toBe(baseline + 3);
+    world.setKnowledge(1, 0, KnowledgeState.Unknown);
+    expect(world.supportedTopologyVersion).toBe(baseline + 4);
+
+    const knowledge = new Uint8Array(world.tileCount);
+    const stamps = new Uint32Array(world.tileCount);
+    knowledge[world.index(2, 0)] = KnowledgeState.Supported;
+    expect(world.replaceKnowledge(knowledge, stamps)).toBe(true);
+    expect(world.supportedTopologyVersion).toBe(baseline + 5);
+
+    world.setMovementBlocked(3, 0, true);
+    knowledge[world.index(3, 0)] = KnowledgeState.Supported;
+    expect(world.replaceKnowledge(knowledge, stamps)).toBe(true);
+    expect(world.supportedTopologyVersion).toBe(baseline + 5);
+    knowledge[world.index(3, 0)] = KnowledgeState.Unknown;
+    expect(world.replaceKnowledge(knowledge, stamps)).toBe(true);
+    expect(world.supportedTopologyVersion).toBe(baseline + 5);
+
+    stamps[world.index(0, 0)] = 3;
+    knowledge[world.index(0, 0)] = KnowledgeState.Personal;
+    expect(world.replaceKnowledge(knowledge, stamps)).toBe(true);
+    expect(world.supportedTopologyVersion).toBe(baseline + 5);
+  });
+
   it("creates a passable home dock, protected harbour approach, and supported home waters", () => {
     const generated = new WorldGenerator().generate(13_371);
     const { grid, landmarks } = generated;
