@@ -1,1863 +1,502 @@
-# Wayfinders Browser Prototype — Technical Design Document
+# Wayfinders technical design
 
-## World in Brief
+This document describes the implemented Milestone 4 foundation. The roadmap
+contains milestone history; this document contains current runtime behavior and
+constraints.
 
-The world once had larger landmasses, but tectonic subsidence, rising seas, and volcanic fragmentation left a planet of scattered islands and reefs. Humanity survived on these remnants, gradually mastering water collection, reef cultivation, boatbuilding, and local navigation.
+## 1. Design goals
 
-For generations, most communities remained isolated within their home waters, developing distinct cultures and incomplete understandings of the ocean. A few navigators eventually began making uncertain open-water crossings, but routes were rarely dependable or widely shared.
+Wayfinders is a browser exploration prototype about leaving safe water,
+building knowledge through travel, deciding when to return, and passing a
+stronger chart to later voyages and generations.
 
-The game begins at a turning point: successive explorers are starting to convert dangerous personal voyages into inherited knowledge, creating the first lasting connections between distant island communities.
+The implementation follows these rules:
 
-### 0. Overall rules
-The game must be automatically testable by AI through the browser. 
-The user is not required to run it to prove it is working correctly.
-Use best judgement for decisions and do not get blocked.
-Track work that has been completed in a doc so it is not redone.
-Use git approprately to save logical groupings of work.
-At the end of each milestone all changes must be commited to git.
-concept art is provided in ../concept_art and can be used for direction when necessary.
-Minimal HUD should be used apart from developer tooling.
-Add new documents if necessary to helo with future development.
+1. Gameplay state is authoritative outside Phaser presentation objects.
+2. World generation, navigation and knowledge behavior are deterministic and
+   testable without a browser; persistence is schema-versioned and validated.
+3. Current sight may reveal visuals without discounting the cost of Unknown
+   travel.
+4. Only exact-dock return commits an expedition.
+5. Rendering never becomes a second gameplay-data source.
+6. Saves contain authoritative mutable state, not derived search/render data.
+7. Normal sailing work remains local, sparse or cached.
 
-## 1. Purpose
+## 2. Runtime architecture
 
-This document defines the implementation plan for the Wayfinders exploration prototype as a browser game built with Phaser and TypeScript. It assumes parts of an existing Phaser codebase will be reused where practical.
-
-The prototype must prove this loop:
-
-1. Leave supported water.
-2. Reveal unknown water around the ship.
-3. Create a broad personal-knowledge corridor.
-4. Consume provisions at different rates by knowledge state.
-5. Read forward travel range and return viability directly from world overlays.
-6. Return to the exact home dock before provisions are exhausted, or wreck outside Supported water.
-7. On return, convert only current expedition-stamped Personal knowledge to Supported water and replenish the ship without advancing the generation.
-8. On wreck, discard only the failed expedition's Personal knowledge, retain
-   and show a discoverable wreck for four seconds, then respawn at the dock
-   and advance the generation.
-9. Use inherited Supported routes to make later voyages easier within the current generated runtime.
-
-Systems outside this loop are excluded until the loop is playable and readable.
-
----
-
-## 2. Fixed Technical Decisions
-
-Use the following implementation decisions:
-
-- Runtime: browser
-- Framework: Phaser
-- Language: TypeScript
-- Renderer: Phaser WebGL
-- Player Controls: Keyboard navigation (WASD for ship movement)
-- Navigation grid: square grid
-- Navigation tile size: 32 × 32 world pixels
-- Art tile size: 16 × 16 pixels
-- Navigation-to-art ratio: one navigation tile contains 2 × 2 art tiles
-- Ship footprint: one navigation tile
-- Ship sight radius: five navigation tiles
-- World chunk size: 32 × 32 navigation tiles
-- Default non-home island count: 8
-- Island kinds: High Island, Low Cay, Atoll and Rocky Skerry
-- Island sizes: small, medium and large
-- Island descriptor identity: stable for a seed and configuration
-- Island random streams: separate deterministic placement, profile, shape and terrain namespaces
-- Unknown fog opacity: fully opaque over unrevealed terrain
-- Unknown-water provision cost: 1 per navigation-tile distance
-- Personal-water provision cost: 0.5 per navigation-tile distance
-- Supported-water provision cost: 0
-- Player movement: continuous visually, grid-sampled logically
-- Fog and overlays: generated from grid masks and rendered through Phaser textures and WebGL shaders
-- Pathfinding: Dijkstra search over the navigation grid
-- Successful-return tile: the exact generated home dock, not any Supported tile
-- Generation advancement: wreck only; successful return continues the same generation
-- Wreck presentation: four simulation seconds at the loss site before generation advancement and dock respawn
-- Milestone 3 persistence: routes, wrecks and generation state survive within the current generated runtime, but regeneration or browser reload resets them
-- Cross-session save format (Milestone 4): versioned JSON plus compact typed-array data
-
-
----
-
-## 3. Reuse Strategy for the Existing Phaser Project
-
-review ..\..\Ship Game Prototype\docs\Reusable_Systems.md when needed to determine if parts can be copied and reused or need to be created from scratch. The full project is located at ..\..\Ship Game Prototype. 
-Do not attempt to use anything in place. these are 2 separate projects and Ship Game Prototype should only be used to reduce development time by copying code into this project when sure it will save time.
----
-
-
-## 3A. Prototype Configuration and Runtime Tuning
-
-All gameplay tuning values must be defined in a single configuration module.
-
-No gameplay system may hardcode prototype constants.
-
-Example:
-
-```ts
-export const PrototypeConfig = {
-  navigation: {
-    tileSize: 32,
-    sightRadius: 5,
-    chunkSize: 32,
-  },
-
-  world: {
-    maxEnclosedUnknownTiles: 2,
-  },
-
-  islands: {
-    count: 8,
-    minRadius: 2,
-    maxRadius: 6,
-    apronWidth: 1.25,
-    minimumChannelWidth: 11,
-    homeClearance: 2,
-    edgeMargin: 6,
-    placementAttempts: 64,
-    edgeNoise: 0.24,
-    safeCorridorHalfWidth: 2,
-    highIslandWeight: 1,
-    lowCayWeight: 1,
-    atollWeight: 1,
-    rockySkerryWeight: 1,
-  },
-
-  provisions: {
-    startingBundles: 12,
-    supportedCost: 0,
-    personalCost: 0.5,
-    unknownCost: 1,
-  },
-
-  returnRisk: {
-    comfortable: 3,
-    warning: 1,
-    critical: 0,
-  },
-
-  overlays: {
-    fogNoise: 0.18,
-    fogBlend: 0.12,
-    forwardOverlayOpacity: 0.55,
-    returnOverlayOpacity: 0.35,
-    forwardConeHalfAngleDegrees: 60,
-    returnPathPadding: 1,
-  },
-
-  movement: {
-    shipSpeed: 2.5,
-    turnRate: 180,
-  },
-
-  simulation: {
-    fixedStepMs: 1000 / 30,
-    maxFrameDeltaMs: 100,
-    wreckPresentationSeconds: 4,
-  },
-};
-```
-
-### Runtime tuning
-
-The prototype must include a developer settings panel that allows live adjustment of gameplay values without recompiling.
-
-The panel should expose at least:
-
-- Sight radius
-- Starting provisions
-- Supported, Personal and Unknown movement costs
-- Ship speed
-- Return-risk thresholds
-- Overlay opacity
-- Fog transition width
-- Fog noise strength
-
-Island-generation values remain in the same configuration module but take
-effect on regeneration rather than mutating an existing generated world. The
-Developer tools drawer provides **Inspect next island** to cycle through the
-stable descriptor list without exposing islands through normal play UI.
-
-Changing a value should automatically invalidate and rebuild only the affected systems.
-
-Examples:
-
-- Sight radius → rebuild visibility and overlays.
-- Movement costs → rebuild forward-range and return calculations.
-- Return thresholds → reclassify overlay colours only.
-- Shader values → update renderer uniforms only.
-
-The following values must never appear as hardcoded literals outside the configuration module:
-
-- Navigation tile size
-- Sight radius
-- Chunk size
-- Provision costs
-- Starting provisions
-- Return-risk thresholds
-- Ship movement speed
-- Overlay opacity
-- Fog parameters
-- Wreck presentation duration
-- Island count, radii, apron, channels, home clearance, edge margin,
-  placement attempts, edge noise, safe corridor and kind weights
-
-
-
-## 3B. Developer Tools Architecture
-
-The project shall be designed from the beginning to support multiple development scenes built on the same engine, renderer and simulation. These tools do not need to be implemented immediately, but the architecture must not prevent them.
-
-### Principle
-
-There is a single Wayfinders application with multiple Phaser scenes.
-
-Example:
+The application is split into these domains:
 
 ```text
-BootScene
-MainMenuScene
-ExplorationScene
-AssetWorkshopScene
-ExplorationSandboxScene
+config/       live prototype configuration and validation
+core/         simulation owner, lifecycle events and fixed-step clock
+world/        chunked grid, tile data and deterministic generation
+navigation/   continuous ship movement and grid traversal
+exploration/  sight, knowledge, provisions, risk paths and discoveries
+persistence/  save schema validation and IndexedDB storage
+rendering/    Phaser world, ship, fog, overlays, markers and developer UI
 ```
 
-All scenes share:
+`GameSimulation` owns the generated world, ship, expedition lifecycle,
+knowledge, provisions, wrecks, discoveries and derived risk results. It has no
+Phaser dependency.
 
-- Asset loading
-- Rendering pipeline
-- Shader pipeline
-- Animation system
-- Camera implementation
-- Tile rendering
-- World simulation interfaces
+The Phaser scene adapter:
 
-The only difference between scenes is the user interface and the systems they expose.
+- converts keyboard movement and optional developer pointer commands into
+  simulation operations;
+- advances the fixed-step clock;
+- synchronizes renderers from simulation state;
+- owns camera behavior and screen-space UI;
+- connects browser persistence and developer controls;
+- never writes gameplay arrays directly.
 
-### Asset Workshop
+A typed event bus communicates lifecycle changes to presentation and
+persistence adapters.
 
-The Asset Workshop is a dedicated scene for creating and validating assets without loading the game.
+## 3. Configuration and timing
 
-Planned capabilities:
+One validated configuration object contains world, navigation, island,
+provision, risk, overlay, movement and simulation values. Developer controls
+may change supported live-tuning values; invalid complete configurations are
+rejected before mutation.
 
-- Browse assets by category
-- Preview sprite sheets
-- Preview animations
-- Rotate ships through all supported headings
-- Preview tile auto-tiling
-- Zoom and pan
-- Reload modified assets
-- Validate asset metadata (pivot, footprint, animation definitions)
+Important defaults:
 
-The workshop should instantiate the same game objects used by the main game wherever practical rather than displaying static images.
+- world: `96 × 96` navigation tiles;
+- chunk: `32 × 32` navigation tiles;
+- navigation tile: `32` world pixels;
+- current-sight radius: `5` tiles;
+- starting provisions: `12` bundles;
+- fixed simulation rate: `30` updates per second;
+- wreck presentation: `4` simulation seconds;
+- non-home islands: `8`.
 
-### Exploration Sandbox
+The clock caps unusually large frame deltas. When a wreck hold completes it
+drops buffered fixed substeps so held input cannot move the newly spawned ship
+on the same frame.
 
-The Exploration Sandbox is a dedicated scene for tuning gameplay systems.
+## 4. Coordinates and world data
 
-Planned capabilities:
+### Navigation coordinates
 
-- Place the ship anywhere
-- Paint Supported, Personal and Unknown water
-- Adjust prototype configuration values
-- View line of sight
-- View forward exploration range
-- View return viability
-- Inspect the next deterministic scattered island from a passable water tile
-- Instantly regenerate test worlds
+Integer `(tileX, tileY)` coordinates drive knowledge, terrain, cost and
+pathfinding.
 
-The sandbox uses the same simulation systems as the main game but presents them in an environment optimised for rapid iteration.
+### World coordinates
 
-### Architectural Requirement
-
-All gameplay systems must remain independent of Phaser scene logic so they can be reused unchanged by:
-
-- ExplorationScene
-- AssetWorkshopScene
-- ExplorationSandboxScene
-
-Future developer tools should consume the same simulation and rendering APIs as the game rather than implementing duplicate behaviour.
-
-
-## 4. Project Structure
-
-Add the following structure inside the existing source directory:
+Continuous pixel coordinates drive ship motion and rendering. The centre of a
+navigation tile is:
 
 ```text
-src/
-  tidebound/
-    config/
-      prototypeConfig.ts
-    core/
-      GameSimulation.ts
-      SimulationClock.ts
-      types.ts
-    world/
-      WorldGrid.ts
-      WorldChunk.ts
-      TileData.ts
-      CoordinateSystem.ts
-      SeededRandom.ts
-      IslandGenerator.ts
-      WorldGenerator.ts
-    exploration/
-      KnowledgeSystem.ts
-      VisibilitySystem.ts
-      ProvisionSystem.ts
-      ForwardRangeSystem.ts
-      ReturnPathSystem.ts
-      ExpeditionSystem.ts
-      WreckSystem.ts
-    navigation/
-      GridGraph.ts
-      Dijkstra.ts
-      PriorityQueue.ts
-      MovementSystem.ts
-    rendering/
-      TideboundScene.ts
-      WorldRenderer.ts
-      ShipRenderer.ts
-      OverlayRenderer.ts
-      MaskTexture.ts
-      shaders/
-        fog.frag
-        overlay.frag
-    persistence/
-      SaveGame.ts
-      SaveSerializer.ts
-      BrowserStorage.ts
-    integration/
-      ExistingGameBridge.ts
-      PhaserInputAdapter.ts
-      PhaserRenderAdapter.ts
-    debug/
-      DebugOverlay.ts
-      GridInspector.ts
-    tests/
-      visibility.test.ts
-      provisions.test.ts
-      returnPath.test.ts
-      expedition.test.ts
-      wreck.test.ts
+worldX = tileX × tileSize + tileSize / 2
+worldY = tileY × tileSize + tileSize / 2
 ```
 
-Keep existing project conventions where they differ only in naming or folder organization.
-
----
-
-## 5. Coordinate Systems
-
-Use three coordinate systems.
-
-### 5.1 Navigation coordinates
-
-Integer tile coordinates:
-
-```ts
-interface GridPoint {
-  x: number;
-  y: number;
-}
-```
-
-### 5.2 World coordinates
-
-Phaser world-space pixels:
-
-```ts
-worldX = gridX * 32 + 16;
-worldY = gridY * 32 + 16;
-```
-
-### 5.3 Art-tile coordinates
-
-```ts
-artX = gridX * 2;
-artY = gridY * 2;
-```
-
-Centralize conversion functions:
-
-```ts
-export const NAV_TILE_SIZE = 32;
-export const ART_TILE_SIZE = 16;
-
-export function gridToWorld(p: GridPoint): Phaser.Math.Vector2 {
-  return new Phaser.Math.Vector2(
-    p.x * NAV_TILE_SIZE + NAV_TILE_SIZE / 2,
-    p.y * NAV_TILE_SIZE + NAV_TILE_SIZE / 2
-  );
-}
-
-export function worldToGrid(x: number, y: number): GridPoint {
-  return {
-    x: Math.floor(x / NAV_TILE_SIZE),
-    y: Math.floor(y / NAV_TILE_SIZE),
-  };
-}
-```
-
-Only the Phaser integration layer may return Phaser types. The core simulation should return plain numeric structures.
-
----
-
-## 6. Tile Data Model
-
-Use compact numeric enums.
-
-```ts
-export const enum TerrainType {
-  DeepOcean = 0,
-  ShallowOcean = 1,
-  Reef = 2,
-  Rock = 3,
-  Land = 4,
-}
-
-export const enum KnowledgeState {
-  Unknown = 0,
-  Personal = 1,
-  Supported = 2,
-}
-```
-
-Store chunk tile data in typed arrays rather than one JavaScript object per tile.
-
-```ts
-export interface ChunkData {
-  terrain: Uint8Array;
-  knowledge: Uint8Array;
-  visibleNow: Uint8Array;
-  movementBlocked: Uint8Array;
-  sightBlocked: Uint8Array;
-  expeditionStamp: Uint32Array;
-  islandId: Int32Array;
-  resourceId: Int32Array;
-}
-```
-
-Tile index:
-
-```ts
-index = localY * CHUNK_SIZE + localX;
-```
-
-Use `expeditionStamp` to identify which personal tiles belong to the current expedition. This allows failed-expedition knowledge to be reverted without scanning historical expedition data.
-
-Generated non-home islands use stable descriptors separate from per-tile
-terrain:
-
-```ts
-enum IslandKind {
-  HighIsland = "high-island",
-  LowCay = "low-cay",
-  Atoll = "atoll",
-  RockySkerry = "rocky-skerry",
-}
-
-enum IslandSize {
-  Small = "small",
-  Medium = "medium",
-  Large = "large",
-}
-
-interface GeneratedIsland {
-  id: number;
-  kind: IslandKind;
-  size: IslandSize;
-  center: GridPoint;
-  radiusX: number;
-  radiusY: number;
-  outerRadius: number;
-  rotation: number;
-  shapeSeed: number;
-  bounds: { minX: number; minY: number; maxX: number; maxY: number };
-}
-```
-
-The home island uses ID `0`; default non-home descriptors use stable IDs
-`1` through `8`. `islandId` links painted terrain back to its descriptor.
-Generated island descriptors still contain no names, rewards, settlements,
-resources or `DiscoveryRecord` state. Milestone 4 attaches that content in a
-separate deterministic catalog keyed by `islandId`; it does not repaint base
-tile resource IDs.
-
----
-
-## 7. Chunking
-
-Each chunk contains:
-
-```ts
-const CHUNK_SIZE = 32;
-const TILES_PER_CHUNK = 1024;
-```
-
-Chunk key:
-
-```ts
-`${chunkX},${chunkY}`
-```
-
-Maintain three chunk states:
-
-- Loaded: tile data exists in memory
-- Active: simulation updates are allowed
-- Visible: rendering objects are present
-
-Keep active:
-
-- the ship’s current chunk;
-- the eight adjacent chunks;
-- chunks touched by the current expedition;
-- chunks needed by the current return calculation.
-
-Unload distant, unchanged generated chunks. Retain modified chunk data for the
-current generated runtime before unloading. Cross-session persistence is added
-in Milestone 4.
-
----
-
-## 8. World Generation
-
-For the prototype, use a deterministic seed, a fixed home region and a
-bounded procedural scatter of non-home islands.
-
-The starting world must contain:
-
-- one home island;
-- supported water around the home island;
-- an uneven gray-to-black boundary;
-- open unknown water beyond the boundary;
-- eight non-home islands in the default configuration;
-- High Island, Low Cay, Atoll and Rocky Skerry kinds;
-- small, medium and large size bands;
-- stable island IDs and descriptors for the same seed and configuration;
-- configured home exclusion, world margins and minimum inter-island channels;
-- a fully open eastbound corridor from the home dock;
-- passable ocean connectivity from the dock to all four world edges;
-- no island names, rewards, settlements, resource records or generic
-  discovery records.
-
-Generation sequence:
-
-1. Fill the world with deep ocean.
-2. Place the fixed home island, harbour and exact return dock.
-3. Add the home shallow-water and reef band.
-4. Paint and noise-distort the starting Supported-water mask.
-5. Build all non-home profiles from the profile namespace before placement.
-6. Guarantee that the default descriptor set represents all four kinds and
-   all three size bands, then use configured weights for remaining profiles.
-7. Assign stable IDs, radii, rotation and shape seed independently of placement.
-8. Place the first profile near the configured legacy obstacle distance, then
-   place remaining profiles largest-first using the placement namespace.
-9. Reject candidates which violate world margins, home exclusion, the full
-   eastbound safe corridor or minimum channel width.
-10. After the configured bounded attempt count, use a deterministic full-grid
-    fallback scan or fail with an actionable configuration error.
-11. Paint each footprint from its separate shape and terrain namespaces using
-    Land, Rock, Reef and ShallowOcean tiles appropriate to its kind.
-12. Carve a deterministic cardinally connected channel from every atoll lagoon
-    to open ocean.
-13. Set stable `islandId` values, authoritative terrain collision and sight
-    blocking, and initial Unknown knowledge.
-14. Flood-fill passable water from the dock and require reachability to the
-    north, east, south and west world edges and every atoll centre.
-15. Create developer-art palettes and decoration from the descriptors and
-    terrain without adding discovery metadata.
-
-The supported boundary is gameplay data, not a rendered gradient. Rendering derives the gradient from it.
-
-Use separate deterministic namespaces for placement, descriptor profile,
-shape and terrain sampling. Future Milestone 4 discovery placement must use a
-different namespace so adding names, rewards or records cannot move, resize or
-repaint the Milestone 3 island set. Do not use `Math.random()` or iteration
-order as a source of island identity.
-
----
-
-## 9. Phaser Scene Design
-
-Use one main exploration scene:
-
-```ts
-export class TideboundScene extends Phaser.Scene {
-  private simulation!: GameSimulation;
-  private worldRenderer!: WorldRenderer;
-  private overlayRenderer!: OverlayRenderer;
-  private shipRenderer!: ShipRenderer;
-
-  create(): void;
-  update(time: number, delta: number): void;
-}
-```
-
-Scene responsibilities:
-
-- receive Phaser lifecycle events;
-- read input;
-- advance the simulation;
-- synchronize render objects;
-- update camera;
-- display development diagnostics.
-
-The scene must not contain exploration rules, pathfinding rules, or provision calculations.
-
----
-
-## 10. Simulation Clock
-
-Use a fixed simulation step.
-
-```ts
-const FIXED_STEP_MS = 1000 / 30;
-```
-
-Accumulate frame delta and run the simulation at 30 updates per second.
-
-```ts
-accumulator += Math.min(delta, 100);
-
-while (accumulator >= FIXED_STEP_MS) {
-  simulation.update(FIXED_STEP_MS / 1000, input);
-  accumulator -= FIXED_STEP_MS;
-}
-```
-
-Render every Phaser frame using interpolated state.
-
-This keeps provision use, movement and discovery independent of frame rate.
-
----
-
-## 11. Ship Movement
-
-The ship has continuous world position and one logical navigation tile.
-
-```ts
-interface ShipState {
-  worldX: number;
-  worldY: number;
-  heading: number;
-  speed: number;
-  currentTileX: number;
-  currentTileY: number;
-  provisions: number;
-  provisionAccumulator: number;
-}
-```
-
-Movement process:
-
-1. Read steering input.
-2. Update heading.
-3. Calculate proposed world-space movement.
-4. Test the navigation tiles touched by the ship centre.
-5. Reject movement into blocked tiles.
-6. Apply movement.
-7. Detect navigation-tile transitions.
-8. Trigger exploration updates on tile transition.
-9. Accumulate provision cost from actual world distance.
-
-The ship sprite may be larger than 32 × 32 pixels. Collision and simulation use only its centre tile in the prototype.
-
-Do not snap the sprite to tile centres.
-
----
-
-## 12. Visibility System
-
-Use a precomputed circular set of offsets for a radius of five tiles.
-
-```ts
-interface VisibilityOffset {
-  dx: number;
-  dy: number;
-  distanceSquared: number;
-}
-```
-
-On entering a new navigation tile:
-
-1. Clear the previous `visibleNow` set.
-2. For every radius offset:
-   - find the target tile;
-   - perform grid line-of-sight;
-   - mark the tile visible when unobstructed.
-3. Convert visible Unknown tiles to Personal.
-4. Stamp converted tiles with the current expedition ID.
-5. Mark affected chunks dirty for mask regeneration.
-
-Use Bresenham grid traversal for line-of-sight.
-
-Ocean does not block sight. Land, tall cliffs and designated weather obstacles may block sight.
-
-The currently visible five-tile area is always rendered in full colour, including newly revealed unknown water.
-
----
-
-## 13. Personal Trail
-
-Do not maintain a separate line or path geometry.
-
-The personal trail is the connected collection of tiles whose knowledge state is Personal.
-
-Movement creates the corridor through overlapping visibility discs.
-
-When diagonal or curved movement leaves visual gaps, fill them by applying visibility at every crossed navigation tile using grid traversal between the previous and current tile.
-
----
-
-## 14. Provision System
-
-Store provisions as an integer number of physical bundles plus a fractional travel accumulator.
-
-```ts
-const COST_SUPPORTED = 0;
-const COST_PERSONAL = 0.5;
-const COST_UNKNOWN = 1;
-```
-
-For every movement segment:
-
-1. Determine the knowledge state at the segment midpoint.
-2. Convert pixel distance to navigation-tile distance.
-3. Multiply by the state cost.
-4. Add to `provisionAccumulator`.
-5. Remove a physical provision bundle each time the accumulator reaches one.
-
-```ts
-tileDistance = pixelDistance / NAV_TILE_SIZE;
-cost = tileDistance * knowledgeCost;
-```
-
-```ts
-while (ship.provisionAccumulator >= 1 && ship.provisions > 0) {
-  ship.provisionAccumulator -= 1;
-  ship.provisions -= 1;
-  events.emit("provisionConsumed");
-}
-```
-
-Supported travel does not increase the accumulator.
-
-Entering visible water that was Unknown at the start of the movement segment is charged at Unknown cost. Retracing it later is charged at Personal cost.
-
-Replenishment always sets `ship.provisions` to
-`PrototypeConfig.provisions.startingBundles` and resets
-`ship.provisionAccumulator` to zero. It is not equivalent to adding the
-difference in whole bundles.
-
-After natural travel consumption, record whether provisions crossed from a
-positive bundle count to zero. If that transition occurs outside Supported
-water, begin the wreck transition during the same fixed simulation step.
-Direct developer changes to the provision count do not by themselves begin a
-wreck. If the same movement step enters the exact home dock, dock resolution
-takes precedence over wreck onset.
-
----
-
-## 15. Expedition State
-
-```ts
-interface ExpeditionState {
-  id: number;
-  active: boolean;
-  personalTileCount: number;
-}
-
-interface RuntimeInheritanceState {
-  generation: number;
-  wrecks: WreckRecord[];
-}
-
-interface WreckRecord {
-  id: number;
-  expeditionId: number;
-  generation: number;
-  worldX: number;
-  worldY: number;
-  tileX: number;
-  tileY: number;
-  heading: number;
-  discovered: boolean;
-}
-
-interface PendingRespawnState {
-  expeditionId: number;
-  generation: number;
-  forgottenTiles: number;
-  wreck: WreckRecord;
-  remainingSeconds: number;
-}
-```
-
-Keep expedition ID and generation as separate counters. Increment the
-expedition ID after every successful return or wreck so stamps cannot be reused.
-Increment the generation only after a wreck.
-
-Start an expedition when normal movement leaves Supported water. Re-entering
-Supported water anywhere other than the home dock does not complete it.
-
-Successful return occurs only when the ship's logical centre enters the exact
-generated `homeReturnTile` at the home dock. Include crossed/entered tiles in
-the check so a large fixed step cannot skip the dock.
-
-Resolve movement in this order:
-
-1. Apply movement and capture provision cost from pre-observation knowledge.
-2. Apply the provision charge.
-3. Apply visibility and Personal-knowledge updates.
-4. Resolve an active expedition's exact-dock return, if the dock was entered.
-5. Otherwise resolve a natural zero-provision wreck outside Supported water.
-6. Recalculate visibility and risk overlays once from the resolved state.
-
-On successful return:
-
-1. Find tiles which are both Personal and stamped with the current expedition ID.
-2. Convert only those tiles to Supported.
-3. Clear their expedition stamps to zero.
-4. Leave Personal tiles owned by any other expedition unchanged.
-5. Run the single successful-return Unknown-pocket cleanup described below.
-6. Mark the expedition inactive and increment the expedition ID.
-7. Replenish the configured starting bundles and clear the fractional accumulator.
-8. Keep the same generation and ship at the home dock.
-9. Redraw Supported-water presentation and recalculate overlays.
-
-The cleanup is a deliberately narrow knowledge-topology correction. After the
-Personal-to-Supported commit, inspect only 8-connected Unknown components
-adjacent to tiles committed by that return. Fill a component with Supported
-knowledge only when all of these conditions hold:
-
-- its size is at most `world.maxEnclosedUnknownTiles` (two by default; zero
-  disables the pass);
-- no component tile touches a world edge; and
-- every 8-neighbour outside the component is Supported.
-
-Run one pass only and clear filled tiles' expedition stamps to zero. The pass
-may read knowledge state and world bounds, but it must not inspect terrain,
-collision, resources or hidden island data. It runs only after a successful
-commit. Wreck rollback/revert never invokes it, so a failed voyage cannot turn
-Unknown water into inherited knowledge.
-
-Entering the exact home dock without an active expedition also replenishes the
-configured starting bundles and clears the accumulator. It does not change the
-expedition ID or generation, and it should not repeatedly emit replenishment
-events while the ship remains full at the dock.
-
-On wreck onset:
-
-1. Create one `WreckRecord` at the ship's final pre-respawn position. Its identity, location, expedition and generation are immutable; only `discovered` may change.
-2. Find tiles which are both Personal and stamped with the failed expedition ID.
-3. Convert only those tiles to Unknown and clear their stamps to zero.
-4. Preserve all previously Supported knowledge and earlier wreck records.
-5. Mark the expedition inactive, set the lost ship's speed and provisions to
-   zero, and begin `PendingRespawnState` with the configured four-second hold.
-6. Freeze current sight at the loss site, render the wreck marker, keep the old
-   generation authoritative and suppress movement, teleport, provision edits,
-   repeated forced wrecks and visibility refreshes.
-7. Advance the hold using fixed simulation steps rather than wall-clock timers.
-
-When the hold reaches four seconds:
-
-1. Clear loss-site visibility and advance the expedition ID and generation
-   exactly once.
-2. Create a new ship at the exact home dock with configured starting bundles,
-   a zero fractional accumulator, zero speed and dock-centred visibility.
-3. Recalculate all overlays from the dock state and centre the camera on the
-   replacement ship.
-4. Discard timer overshoot and buffered fixed substeps so held input cannot move
-   the new ship during the completion frame.
-
-During the four-second hold, frozen current sight deliberately shows the new
-wreck marker without marking it discovered. Wreck completion clears that
-visibility, so the marker is then hidden by Unknown fog until a later
-generation brings it into current line of sight. Discovering it changes the
-marker's `discovered` flag but does not restore the failed expedition's
-Personal knowledge. The discovered flag remains set through later runtime
-voyages and wrecks even when the marker leaves current sight.
-
-Supported routes and `ShipwreckState` objects persist across later expeditions
-and wrecks in the current generated runtime. Explicit regeneration resets them.
-From Milestone 4 onward, browser reload restores them from the hydrated save.
-
----
-
-## 16. Forward Exploration Range
-
-The forward calculation answers:
-
-> Which currently unknown cells can the ship reach with the provisions it has now?
-
-Run a cost-limited Dijkstra search from the ship’s current tile.
-
-Traversal cost:
-
-```ts
-Supported = 0
-Personal = 0.5
-Unknown = 1
-```
-
-Include terrain movement modifiers only when the terrain is currently known. Unknown cells use the constant Unknown cost and reveal no terrain information.
-
-Stop expanding when accumulated cost exceeds:
-
-```ts
-ship.provisions - ship.provisionAccumulator
-```
-
-Keep the complete logical result for diagnostics, but derive a separate thin
-presentation frontier. For provision budget `B` and configured Unknown cost
-`U > 0`, display only reachable Unknown cells in the outermost Unknown-cost
-band:
-
-```ts
-B - U < minimumCost && minimumCost <= B
-```
-
-Require `U` to be positive; free Unknown travel has no finite provision
-frontier. This puts the cue at the true maximum reach immediately, instead of
-growing outward from current sight. During travel
-through equal-cost Unknown water, moving one step reduces the remaining path
-cost and provision budget by the same amount, so the frontier should normally
-remain anchored to the same world cells. Knowledge, cost or route changes can
-legitimately reshape it.
-
-Clip presentation membership to a cone centred on the ship heading (zero
-degrees east, positive rotation south). The default half-angle is 60 degrees,
-for a 120-degree total cone. Keep the full logical result cached so a heading
-change can reclip only the sparse terminal band without rerunning Dijkstra.
-Turning rotates the visible arc; straight equal-cost travel retains the
-world-anchored limit.
-
-Output one logical and one presentation mask value per tile:
-
-```ts
-0 = not displayed
-1 = reachable unknown
-```
-
-Display only Unknown cells.
-
-Do not display a heading value, safety level, terrain or discoveries.
-
-Recalculate when:
-
-- the ship enters a tile;
-- provisions change;
-- heading changes (presentation reclip only);
-- knowledge changes;
-- a blocking tile changes.
-
----
-
-## 17. Return Cost Calculation
-
-The return calculation answers:
-
-> What is the cheapest currently known route from the ship to Supported water?
-
-Run a targeted multi-source Dijkstra:
-
-1. Add all relevant Supported boundary tiles to the priority queue with cost zero.
-2. Traverse passable Personal tiles and passable currently visible Unknown
-   tiles. Current sight is known to the player even though outward water is not
-   committed to Personal until it falls behind the ship.
-3. Exclude unseen Unknown tiles and blocked terrain.
-4. Stop when the ship tile is settled; its cost and parent chain are final.
-5. Reconstruct one deterministic minimum-cost path from the ship to the first
-   Supported root.
-
-Traversal costs:
-
-```ts
-Supported = 0
-Personal = 0.5
-currently visible Unknown = configured Unknown cost (default 1)
-unseen Unknown = blocked
-```
-
-Do not flood the interior zero-cost Supported component. Supported boundary
-cells are roots and the route terminates at the first one reached.
-
----
-
-## 18. Return Margin and Colours
-
-For the ship's selected route:
-
-```ts
-returnMargin =
-  availableProvisionUnits - returnCost[ship];
-```
-
-Available provision units:
-
-```ts
-ship.provisions - ship.provisionAccumulator
-```
-
-Use these fixed thresholds:
-
-```ts
-returnMargin >= 3.0  => pale yellow
-returnMargin >= 1.0  => yellow
-returnMargin >= 0.0  => orange
-returnMargin < 0.0   => red
-```
-
-Apply the selected state uniformly to the full route. Comfortable and warning
-states share the yellow colour family but use different intensity/pattern
-treatment; critical is orange and impossible is red.
-
-Expand the core path by `returnPathPadding` cardinal steps through passable
-Personal or currently visible water. The default is one tile. Padding cannot
-cross blocked terrain, unseen Unknown water or Supported water. Unrelated
-Personal branches remain uncoloured.
-
-Red means the selected known route cannot currently reach Supported water with
-the remaining provisions.
-
-It does not assert that no undiscovered alternative exists.
-
----
-
-## 19. Mask Textures
-
-Create one mask texture for each system:
-
-- knowledge mask;
-- current visibility mask;
-- forward range mask;
-- return-risk mask.
-
-Create masks at navigation-grid resolution for each active chunk.
-
-Use `Phaser.Textures.CanvasTexture` or a WebGL texture update path supported by the installed Phaser version.
-
-Mask channel values:
-
-### Knowledge mask
-
-```text
-0   Supported
-140 Personal
-255 Unknown
-```
-
-### Visibility mask
-
-```text
-0   not currently visible
-255 currently visible
-```
-
-### Forward range mask
-
-```text
-0   outside range
-255 reachable Unknown
-```
-
-### Return mask
-
-```text
-0   outside the selected route corridor
-64  comfortable yellow
-128 warning yellow
-192 critical orange
-255 impossible red
-```
-
-Update only dirty chunks.
-
-Do not recreate texture objects every update. Reuse textures and replace pixel data.
-
----
-
-## 20. Overlay Rendering
-
-Render overlays using full-chunk quads aligned with world coordinates.
-
-Rendering order:
-
-1. base ocean;
-2. terrain;
-3. world objects;
-4. knowledge/fog treatment;
-5. current-visibility clearing;
-6. forward-range overlay;
-7. return-risk overlay;
-8. ship;
-9. wake and particles;
-10. optional accessibility treatment.
-
-The ship renders above overlays so it remains readable.
-
-### Knowledge treatment
-
-- Supported: unmodified base scene
-- Personal: desaturated and slightly darkened
-- Unknown: near-black, fully opaque fog
-
-Unknown interiors use alpha `1` so high-contrast land, rock, reef and island
-decoration cannot silhouette through. Bilinear smoothing and blur apply only at
-knowledge boundaries. Forward-range treatment may appear over Unknown fog but
-must never reveal base terrain or island descriptors.
-
-### Current visibility
-
-The visibility mask removes Unknown fog, Personal desaturation, forward-range
-contours and return-risk colour in the five-tile sight area. A visible tile is
-rendered like Supported water because the player can directly inspect it. This
-does not mutate knowledge or discount travel: visible Unknown and Personal
-water retain their configured movement costs.
-
-### Forward range
-
-Render only thin pale segmented contour edges over Unknown fog on the
-maximum-reach frontier. Draw an edge only where the adjacent cardinal tile is
-outside the full logical reach mask. Do not fill frontier tiles and do not draw
-radial walls at the clipped ends of the heading cone. Anchor the segment phase
-in world coordinates so chunk seams are continuous. Do not reveal the base
-scene.
-
-### Return risk
-
-Tint only the selected padded route corridor according to the ship's single
-return-risk state. The corridor may cross currently visible Unknown water to
-connect the ship to its Personal trail; it never enters unseen Unknown water.
-Suppress the tint wherever current visibility is set, while retaining those
-tiles in the logical route and cost calculation.
-
----
-
-## 21. Shader Requirements
-
-Use world-space UVs so effects do not move when the camera moves.
-
-Apply:
-
-- bilinear mask sampling;
-- `smoothstep` around mask thresholds;
-- two-octave low-frequency noise to boundary coordinates;
-- subtle animated fine noise for water-like movement.
-
-Noise distortion must remain small enough that an overlay never implies reachability more than approximately half a navigation tile beyond the calculated mask.
-
-Shader inputs:
-
-```glsl
-uniform sampler2D uKnowledgeMask;
-uniform sampler2D uVisibilityMask;
-uniform sampler2D uForwardMask;
-uniform sampler2D uReturnMask;
-uniform vec2 uWorldOrigin;
-uniform vec2 uWorldSize;
-uniform float uTime;
-```
-
-The source of truth remains the discrete grid. Shaders only change presentation.
-
-Phaser supports shader Game Objects and WebGL shader uniforms; implement using the shader/pipeline mechanism available in the installed project version rather than changing framework versions solely for this feature.
-
----
-
-## 22. Camera
-
-Use the existing camera implementation where possible.
-
-Required behaviour:
-
-- follow the ship smoothly;
-- preserve pixel-art sampling;
-- permit a limited zoom range;
-- avoid revealing unknown terrain through camera background or unloaded chunks;
-- cull distant chunks.
-
-Use integer camera rounding only when it does not introduce visible ship jitter. Keep ship movement smooth.
-
----
-
-## 23. Isometric Presentation
-
-The simulation remains a square top-down grid even when art is drawn in an isometric style.
-
-Do not use Phaser’s isometric tile coordinates for gameplay calculations.
-
-Render art with isometric-looking sprites, raised cliffs and diagonal shorelines while retaining Cartesian world positions.
-
-This avoids coupling pathfinding and visibility to diamond-grid projection.
-
-Depth sort objects by world Y:
-
-```ts
-displayObject.setDepth(worldY + depthOffset);
-```
-
-Ocean and overlay chunk quads remain flat.
-
----
-
-## 24. Terrain Rendering
-
-Use Phaser Tilemaps for static art layers when this matches the existing code.
-
-Recommended layers:
-
-- deep ocean;
-- shallow ocean;
-- shoreline;
-- land;
-- cliffs;
-- structures;
-- decorations.
-
-Gameplay terrain is not read back from rendered tilemap layers. Both rendering and gameplay are generated from the same world-generation source data.
-
-This prevents art edits from silently changing navigation rules.
-
-For Milestone 3, each `IslandKind` uses a distinct generated developer-art
-palette and minimal terrain decoration:
-
-- High Island: land-dominant mass with darker high ground and sparse simple vegetation marks;
-- Low Cay: low, narrow sand/land form with broad shallow-water apron;
-- Atoll: reef ring and shallow lagoon with a deterministic navigable passage;
-- Rocky Skerry: rock-dominant silhouette with sparse land and reef fringe.
-
-These palettes and marks communicate terrain composition only. Milestone 4
-adds deterministic names and functional chart pins without replacing these
-developer-art terrain layers. Production presentation is deferred to
-Milestone 5 by project-owner decision.
-
----
-
-## 25. Discoveries
-
-Generic discoveries are implemented in Milestone 4. The runtime wreck markers
-created by Milestone 3 use `ShipwreckState` and remain separate from this
-provisional-discovery lifecycle.
-
-Likewise, `GeneratedIsland` descriptors remain deterministic base terrain,
-not `DiscoveryRecord` objects. `DiscoverySystem` derives one separate catalog
-definition per non-home island from the world seed, stable island ID and an
-independent discovery namespace. Names and content therefore cannot perturb
-island placement, shape or terrain.
-
-```ts
-export const enum DiscoveryType {
-  Island,
-  Settlement,
-  FishingGround,
-  Anchorage,
-  ReefPassage,
-  HistoricWreck,
-  Resource,
-}
-```
-
-A generic discovery is detected when any of its reveal tiles becomes currently visible.
-
-Store it as provisional during the expedition.
-
-```ts
-interface DiscoveryRecord {
-  id: number;
-  type: DiscoveryType;
-  islandId: number;
-  name: string;
-  rewardId: string;
-  rewardLabel: string;
-  detail: string;
-  tileX: number;
-  tileY: number;
-  returned: boolean;
-  expeditionId: number;
-  generation: number;
-  settlementId?: string;
-  resourceId?: number;
-}
-```
-
-Detection reads only the final current-sight set, not the broader union of
-tiles observed at crossed movement centres. A visible generated-island tile
-creates the record only while an expedition is active. Repeated sight cannot
-duplicate it.
-
-Only successful return at the exact home dock marks it returned and allows
-later world effects. A wreck removes provisional records owned by that failed
-expedition while earlier returned records remain. Active provisional records
-are saved so a mid-expedition reload cannot erase a discovery already seen.
-
-Milestone 4 uses a developer chart pin and name/reward label. Returned and
-provisional states are visually distinct; production art remains Milestone 5.
-
----
-
-## 26. NPC Ships
-
-NPC ships are deferred until the exploration loop works.
-
-The first NPC implementation should only visualize established support:
-
-- spawn on Supported water;
-- follow precomputed Supported paths;
-- never enter Personal or Unknown water;
-- use the same tile passability rules;
-- use simple interpolation between path nodes.
-
-NPC traffic is cosmetic in the first implementation.
-
----
-
-## 27. Save Format
-
-Cross-session persistence is implemented in Milestone 4 through IndexedDB.
-Explicit world regeneration remains a deliberate fresh-world reset, while a
-browser reload hydrates the saved state before Phaser starts.
-
-```ts
-interface SaveGame {
-  schemaVersion: 1;
-  savedAt: number;
-  world: {
-    seed: number;
-    generatorVersion: 1;
-    generationConfig: GenerationConfigV1;
-  };
-  generation: number;
-  expedition: {
-    id: number;
-    active: boolean;
-    successfulReturns: number;
-    failedExpeditions: number;
-    pendingRespawn: PendingRespawnSaveState | null;
-  };
-  ship: ShipState;
-  knowledge: { encoding: "non-unknown-runs-v1"; runs: KnowledgeRun[] };
-  wrecks: ShipwreckState[];
-  discoveries: {
-    provisional: DiscoveryRecord[];
-    returned: DiscoveryRecord[];
-  };
-  terrainPatches: [];
-}
-```
-
-Serialize typed arrays as compressed base64 or run-length encoded numeric arrays.
-
-Save:
-
-- ship state;
-- provision state;
-- knowledge states;
+### Chunk storage
+
+`WorldGrid` owns `WorldChunk` instances. Each chunk uses typed arrays for:
+
+- terrain;
+- knowledge;
+- current visibility;
+- movement blocking;
+- sight blocking;
 - expedition stamps;
-- generation and current expedition state;
-- runtime-created wreck records and their discovered state;
-- returned discoveries;
-- active provisional discoveries;
-- reserved terrain modifications and persistent objects when later schemas
-  introduce runtime terrain edits.
+- island IDs;
+- resource IDs.
 
-Do not save derived overlays or pathfinding output. Rebuild them on load.
+The bounded prototype world is generated eagerly and its chunks remain loaded.
+Static render objects are camera culled; mutable overlay textures update only
+for dirty chunks and affected neighbors.
 
-Do not serialize unchanged Milestone 3 island descriptors or base island
-terrain. Reconstruct them from the saved world seed and generation-versioned
-configuration, then apply only saved terrain modifications and Milestone 4
-discovery records keyed by stable island ID.
+Maintained sets and counters provide Personal, Supported and visible indices
+without scanning the full world during normal updates.
 
-`IndexedDbSaveStore` writes each structured-clone key atomically. The
-`autosave` key is rolling reload state; the `checkpoint` key changes only via
-the developer **Save checkpoint** control and is restored by **Load checkpoint**.
-Loading a checkpoint immediately makes it the new autosave baseline. Normal
-dirty autosave state is saved on a 750 ms throttle, lifecycle events request an
-immediate serialized write, and page hide requests a best-effort flush.
-Malformed current-schema state is cleared and recovers to a fresh world.
-Unsupported future schema/generator versions are preserved with autosave
-disabled. Storage failure never prevents unsaved play.
+## 5. Deterministic world generation
 
----
+The seed and generation-affecting configuration produce:
 
-## 28. Event Model
+- home island and harbour;
+- exact return dock;
+- noisy Supported-water boundary;
+- deterministic base terrain;
+- eight non-home island descriptors and painted terrain;
+- a clear dock departure corridor;
+- passable open ocean connected to all four world edges.
 
-Use a typed event bus between simulation and presentation.
+Non-home island descriptors have stable numeric IDs plus kind, size, centre,
+radii, rotation, shape seed and bounds. Placement, profile, shape, terrain and
+discovery content use separate deterministic namespaces so changing names or
+visual content cannot move an island.
 
-Required events:
+The implemented island kinds are High Island, Low Cay, Atoll and Rocky Skerry.
+Atolls receive a deterministic navigable passage. Placement enforces margins,
+home clearance and minimum channels before the open-ocean flood validation.
 
-```ts
+Base island descriptors contain geometry and terrain identity only. Mutable
+discovery state is stored separately and references the stable island ID.
+
+## 6. Movement and collision
+
+The ship has continuous world position, heading and speed plus its current
+navigation tile.
+
+WASD and arrow keys provide turning and forward/reverse thrust. Movement traces
+every navigation tile crossed by the continuous line segment, stops before the
+first blocked tile and emits entered-tile information in order.
+
+Terrain is authoritative:
+
+- deep and shallow ocean are passable;
+- reef, rock and land are blocked;
+- rock and land block sight;
+- render layers are never sampled for collision.
+
+Provision charging is prepared from the movement segments before visibility
+or knowledge updates. Entering water that was Unknown at the start of the
+segment therefore pays Unknown cost even if the movement reveals it.
+
+## 7. Visibility and knowledge
+
+### Current sight
+
+Visibility uses a Euclidean-radius disc and line traversal against sight
+blockers. A blocking tile remains visible; tiles behind it do not.
+
+For a movement update, visibility is evaluated at every crossed navigation
+centre. The final centre becomes `visibleNow`; the union of crossed-centre
+observations is available for trail creation. This prevents holes during fast
+or diagonal travel.
+
+### Implemented knowledge rule
+
+Normal sailing does **not** convert every currently visible Unknown water tile
+to Personal immediately.
+
+- Passable water at and ahead of the current ship position remains Unknown.
+- When the ship leaves a navigation centre, a broad perpendicular strip around
+  that departed centre becomes expedition-stamped Personal knowledge.
+- Visible blocked landmarks may become Personal immediately because they are
+  not traversable and cannot discount an outward route.
+- Existing Personal and Supported knowledge never downgrade through sight.
+
+This produces the intended asymmetry: outward travel through current sight
+costs the full Unknown rate, while the route behind the ship can be retraced at
+the lower Personal rate.
+
+Developer teleport is intentionally different: it converts Unknown tiles in
+the complete destination sight disc to expedition-stamped Personal knowledge
+for inspection, but never reveals a connecting line between origin and
+destination. Developer sight-radius tuning refreshes the current disc with the
+same full-disc knowledge rule.
+
+### Visual treatment
+
+- Unknown outside current sight is near-black and hides terrain/content.
+- Personal outside current sight is grey remembered water.
+- Supported is full colour.
+- Anything in current sight uses full world colour regardless of its underlying
+  knowledge state.
+
+Rendering a tile in full colour inside current sight does not itself change its
+knowledge or travel cost. Sight still drives discovery and wreck detection and
+the documented blocked-landmark and developer-tool knowledge rules. Movement
+cost and return calculations always use the authoritative Unknown, Personal or
+Supported value.
+
+## 8. Provisions
+
+The ship stores an integer number of physical bundles and a fractional travel
+accumulator.
+
+Default cost per navigation tile:
+
+```text
+Supported = 0
+Personal  = 0.5
+Unknown   = 1
+```
+
+Available provision units are:
+
+```text
+budget = ship.provisions - ship.provisionAccumulator
+```
+
+The accumulator represents the already-used fraction of the next physical
+bundle. It is cleared when the ship replenishes.
+
+The visible cargo rack represents whole bundles. Numerical values remain in
+developer diagnostics rather than normal player UI.
+
+## 9. Forward and return guidance
+
+### Forward reach
+
+`ForwardRangeSystem` runs a cost-limited Dijkstra search from the ship with the
+current provision budget. Still-Unknown blockers are treated as Unknown water
+for prediction so hidden terrain cannot be inferred from the overlay.
+
+The full logical result is cached. Presentation includes only reachable
+Unknown cells in the outermost Unknown-cost band:
+
+```text
+budget - unknownCost < minimumCost <= budget
+```
+
+That terminal band is clipped to a heading-centred cone. Turning reclips the
+cached candidates without rerunning the logical search. Rendering draws only
+segmented outward contour edges; tile interiors and artificial cone-end walls
+remain transparent.
+
+### Return route
+
+`ReturnPathSystem` finds one minimum-provision-cost route from the ship to the
+first reachable Supported tile. The connection may cross passable Unknown
+water only while it is in current sight, then follows known Personal water.
+
+`ReturnPathSystem` adds configurable cardinal passable padding around that
+route without crossing unseen Unknown, blocked or Supported tiles. The
+renderer draws the resulting corridor and does not colour unrelated Personal
+branches.
+
+One risk level applies to the whole corridor according to remaining margin:
+
+- comfortable/clear: pale or stronger yellow;
+- critical: orange;
+- selected known route exceeds available provisions: red crosshatch.
+
+When no known route exists, there is no corridor to draw.
+
+All risk and Personal-grey presentation is suppressed inside current sight.
+
+## 10. Expedition lifecycle
+
+An expedition starts when normal movement crosses from Supported into
+non-Supported water. It remains active if the ship later reaches Supported
+water away from home.
+
+### Successful return
+
+Only the generated home return dock resolves success:
+
+1. Teleport the ship to the exact dock centre.
+2. Commit Personal tiles carrying the active expedition stamp to Supported.
+3. Run one bounded knowledge-only cleanup for tiny enclosed Unknown pockets.
+4. Commit provisional discoveries owned by that expedition.
+5. Replenish provisions and clear fractional use.
+6. Advance the expedition ID while keeping the same generation.
+
+Docking without an active expedition replenishes supplies but does not change
+generation or return counts.
+
+### Failure and wreck
+
+Natural exhaustion outside Supported water and the developer force-wreck tool
+use the same failure path:
+
+1. Record a runtime wreck at the exact ship position and heading.
+2. Revert the active expedition's Personal tiles to Unknown.
+3. Remove that expedition's provisional discoveries.
+4. Freeze the empty ship at the loss site for four simulation seconds.
+5. Clear loss-site visibility at completion.
+6. Spawn a supplied ship at the home dock.
+7. Advance expedition ID and generation exactly once.
+
+Timer overshoot is discarded. Successful return on a final-bundle docking step
+takes precedence over wreck creation.
+
+Runtime wrecks remain hidden by fog after respawn until a later generation sees
+them. Their `discovered` state then persists independently of knowledge loss.
+
+## 11. Discoveries
+
+`DiscoverySystem` derives one content definition for every non-home island from
+the seed and stable island ID. Definitions include:
+
+- numeric discovery and island identity;
+- type;
+- generated name;
+- reward ID, label and description;
+- optional settlement or resource metadata.
+
+Detection reads only the final current-sight set during an active expedition.
+Crossed-but-no-longer-visible observations cannot create a discovery.
+
+Records are expedition-owned and provisional until exact-dock return. A wreck
+deletes only the failed expedition's provisional records. Returned records
+remain through later voyages and generations.
+
+Generated historic-wreck discoveries are content records. They are never added
+to the runtime player-wreck collection and use a distinct marker.
+
+Current discovery rewards are descriptive records only. Economy and settlement
+effects are deferred.
+
+## 12. Persistence
+
+### Save boundary
+
+Schema version 1 stores:
+
+- save and world-generator versions;
+- seed and generation-affecting configuration;
+- ship position, heading, provisions and accumulator;
+- expedition ID, active state, generation and counters;
+- optional pending wreck hold;
+- all non-Unknown knowledge as canonical run-length encoded state/stamp runs;
+- runtime wrecks and discovered flags;
+- provisional and returned discovery records;
+- an empty reserved terrain-patch list.
+
+The save does not contain base terrain, generated island descriptors,
+visibility, range masks, return paths, renderer state or caches.
+
+Restore validates structure before mutating the running simulation, regenerates
+the deterministic base world, applies authoritative mutable state, rebuilds
+knowledge indices, recalculates visibility and paths, and restores the exact
+ship position.
+
+### Browser storage
+
+IndexedDB contains two atomic records:
+
+- `autosave`: rolling reload state;
+- `checkpoint`: stable manual state written only by **Save checkpoint**.
+
+Autosave is throttled during continuous play, requested immediately at
+lifecycle boundaries, and flushed best-effort when the page hides. Startup
+hydrates autosave before Phaser starts, avoiding a default-world flash or
+accidental overwrite.
+
+**Load checkpoint** waits for an in-flight autosave, restores the checkpoint,
+snaps the smoothed camera to the restored ship and writes that state as the new
+autosave baseline. **Clear saves** removes both records without mutating the
+currently running simulation.
+
+Malformed current-schema autosaves are cleared and recover to a fresh world.
+Unsupported newer schema/generator versions are preserved with autosave
+disabled. Unexpected load failures also preserve stored data. Storage failure
+does not prevent unsaved play.
+
+Explicit seed regeneration is not load; it intentionally resets runtime
+inheritance and writes a new autosave after state changes.
+
+## 13. Rendering
+
+The game uses WebGL through Phaser.
+
+- Static ocean and terrain use generated Phaser Graphics grouped into
+  camera-culled world chunks.
+- Knowledge and risk overlays use reusable chunk-sized CanvasTextures.
+- Knowledge, visibility and sparse risk candidate changes invalidate only
+  affected chunks and required neighbors.
+- No texture is allocated per simulation frame.
+- The ship, runtime wrecks and discoveries are separate renderers above world
+  and fog layers.
+- The cargo rack and lifecycle cues are screen-space presentation.
+
+Discovery-sighted messages remain for five seconds. Exact-dock return with one
+or more committed discoveries combines discovery commitment, Supported-route
+growth and replenishment into one five-second message. A return without a
+discovery uses a 3.5-second route/replenishment cue. Only one lifecycle cue may
+exist at a time.
+
+The camera follows the ship smoothly during play. World regeneration and
+checkpoint restore are discontinuities, so the camera snaps to the
+authoritative ship before smoothing resumes.
+
+Current developer art communicates terrain and mechanics only. Production
+assets must retain the same navigation, identity and depth contracts.
+
+## 14. Events and developer interfaces
+
+Implemented simulation events:
+
+```text
 shipEnteredTile
+shipTeleported
 knowledgeChanged
 provisionConsumed
+provisionsChanged
+shipReplenished
 returnStateChanged
-discoveryFound
 expeditionStarted
 expeditionReturned
-expeditionFailed
-shipReplenished
 shipWrecked
 generationAdvanced
 wreckDiscovered
+expeditionFailed
+discoveryFound
+discoveriesReturned
+discoveriesLost
 worldRegenerated
-chunkDirty
+gameLoaded
 ```
 
-Lifecycle event payloads must include enough immutable context for renderers
-and browser tests:
-
-```ts
-expeditionReturned: { expeditionId, generation, supportedTileCount, closedUnknownTileCount }
-shipReplenished: { generation, bundles, reason: "return" | "dock" | "respawn" }
-shipWrecked: { wreckId, expeditionId, generation, tileX, tileY, worldX, worldY }
-generationAdvanced: { previousGeneration, generation, reason: "wreck" }
-wreckDiscovered: { wreckId, generation, tileX, tileY }
-expeditionFailed: { expeditionId, generation, forgottenTiles, nextGeneration, wreck }
-```
-
-When a final bundle is spent on the step which enters the exact home dock,
-emit successful-return and replenishment events, not wreck events. A wreck
-emits `shipWrecked` at onset. Four simulation seconds later, completion emits
-`generationAdvanced`, respawn replenishment and `expeditionFailed`, in that
-order. No completion event is emitted during the hold.
-
-Renderers respond to events or dirty flags. They must not poll the entire world every frame.
-
----
-
-## 29. Debug Tools
-
-The development build must provide toggles for:
-
-- navigation grid;
-- chunk boundaries;
-- terrain passability;
-- knowledge state;
-- sight radius;
-- forward search cost;
-- return cost;
-- return margin;
-- parent directions;
-- active chunks;
-- current expedition stamps;
-- active expedition ID and generation;
-- island IDs, kinds, sizes, bounds and placement-clearance diagnostics;
-- runtime wreck records and discovered state.
-- wreck-transition phase, remaining hold time, input suppression and pending wreck ID.
-
-Debug visuals may be numeric and tile-based. Release visuals must hide them.
-
-Add deterministic controls:
-
-- reset expedition;
-- add/remove provisions;
-- teleport to tile;
-- **Inspect next island**, cycling stable descriptor order and teleporting to a
-  passable inspection point within or immediately beside its footprint;
-- force successful return;
-- force wreck;
-- enter the home dock without an active expedition;
-- reveal hidden discovery;
-- reveal a runtime wreck;
-- regenerate from seed.
-
-Developer provision removal does not automatically trigger a wreck; use the
-force-wreck control when testing failure directly. Regeneration resets runtime
-routes, wreck records, expedition state and generation to seed defaults.
-
----
-
-## 30. Tests
-
-Core systems must be testable without Phaser.
-
-Required unit tests:
-
-### Visibility
-
-- reveals all unobstructed cells within radius;
-- does not reveal beyond radius;
-- respects blockers;
-- fills crossed tiles during fast movement.
-
-### Scattered islands
-
-- the default configuration produces eight non-home descriptors with IDs `1` through `8`;
-- the same seed and configuration reproduce identical descriptors, island IDs and painted terrain;
-- all four kinds and all three size bands appear in the default descriptor set;
-- descriptor identity remains stable when placement order is optimized largest-first;
-- placement, profile, shape and terrain namespaces are deterministic and independent;
-- islands respect configured world margins, home exclusion and minimum channel width;
-- the complete eastbound corridor from the home dock remains clear;
-- a dock-centred passable-water flood reaches all four world edges;
-- painted Land, Rock and Reef tiles use authoritative movement and sight rules;
-- island tiles begin Unknown and contain no names, rewards, settlements, resource IDs or generic discovery records;
-- Unknown fog interiors are fully opaque and range overlays reveal no island terrain;
-- bounded placement attempts use deterministic fallback or return an actionable configuration error;
-- **Inspect next island** cycles stable descriptor order and chooses passable inspection points.
-
-### Provisions
-
-- supported movement costs zero;
-- unknown movement costs one per tile;
-- personal movement costs half per tile;
-- current visibility changes no movement cost;
-- partial movement accumulates correctly;
-- frame rate does not affect cost.
-
-### Forward range
-
-- includes reachable Unknown cells;
-- excludes cells beyond provision budget;
-- does not reveal hidden terrain costs;
-- updates after provision consumption;
-- presents only cells in the outermost Unknown-cost band
-  `budget - unknownCost < minimumCost <= budget`, with positive Unknown cost;
-- clips presentation to `overlays.forwardConeHalfAngleDegrees` around ship
-  heading and rotates it without recalculating logical costs;
-- appears at the true maximum-reach limit immediately and normally remains
-  world-anchored during equal-cost Unknown travel;
-- renders transparent tile interiors with thin segmented outward edges, no
-  radial cone walls and continuous dash phase across chunk seams;
-- suppresses presentation inside current sight without changing logical reach;
-- clears stale frontier pixels when ship position, provisions, knowledge or
-  blocking state changes.
-
-### Return path
-
-- chooses the cheapest known route;
-- excludes unseen Unknown;
-- uses Personal at half cost;
-- reaches the nearest Supported region;
-- permits currently visible passable Unknown only as the connection from the
-  ship to its Personal trail;
-- suppresses route tint inside current sight without changing route cost;
-- reconstructs one deterministic minimum-cost path;
-- pads only through adjacent passable Personal/currently-visible water;
-- excludes unrelated Personal branches, blocked terrain, unseen Unknown and
-  Supported water from the coloured corridor;
-- gives every corridor tile the same state derived from the ship's margin;
-- changes the whole corridor atomically across yellow, orange and red states;
-- discovers shorter alternate known paths and clears stale route pixels.
-
-### Expedition
-
-- an expedition starts when normal movement leaves Supported water;
-- Supported water away from home neither completes the expedition nor replenishes provisions;
-- only entering the exact home dock completes an active expedition;
-- successful return converts only Personal tiles carrying the current expedition stamp to Supported and clears those stamps;
-- after that commit, one knowledge-only pass fills an 8-connected Unknown
-  component only if it is non-edge, fully Supported-bounded and no larger than
-  `world.maxEnclosedUnknownTiles` (two by default, zero disables);
-- successful-return cleanup does not inspect terrain or resources and never
-  runs on wreck/revert;
-- successful return replenishes configured starting bundles, clears the fractional accumulator and keeps the same generation;
-- entering the dock without an active expedition replenishes supplies without changing expedition ID or generation;
-- a final bundle spent on the docking step resolves as success rather than wreck;
-- natural supply exhaustion outside Supported water begins exactly one immediate wreck transition;
-- wreck onset keeps the same ship, position, heading and generation authoritative for 3.999 seconds;
-- movement and mutating developer controls cannot alter the wreck hold;
-- the 4.000-second boundary advances generation and respawns exactly once;
-- large timer deltas discard overshoot rather than moving the new dock ship;
-- regeneration cancels a pending respawn without delayed completion events;
-- natural and forced wrecks use the same transition;
-- a wreck reverts only failed-expedition Personal tiles and clears their stamps;
-- previous Supported knowledge and earlier wreck records remain after a later wreck;
-- a wreck marker is recorded at the pre-respawn position and becomes discoverable by later generations;
-- a wreck respawns a fully supplied ship at the dock and advances the generation exactly once;
-- successful return never advances the generation;
-- zero provisions in Supported water do not cause a wreck;
-- runtime routes and wrecks survive later expeditions, reset on explicit
-  regeneration, and survive browser reload from Milestone 4 onward;
-- browser automation receives lifecycle events in the documented order.
-
-### Milestone 4 persistence
-
-- save/load preserves Supported routes, wreck records, generation and discovered wreck state;
-- generic discoveries remain provisional until exact-dock return;
-- returned discoveries survive a browser reload;
-- derived visibility and pathfinding output is rebuilt rather than serialized.
-
----
-
-## 31. Performance Budgets
-
-Target:
-
-- 60 rendered frames per second on a mid-range mobile browser;
-- 30 fixed simulation updates per second;
-- no more than 8 ms average JavaScript simulation time per rendered frame;
-- no full-world overlay rebuilds during normal movement;
-- no per-tile JavaScript object allocation in hot loops;
-- no new texture allocation when masks update;
-- no pathfinding on every render frame.
-
-Pathfinding should run only after tile, knowledge or blocking changes.
-Provision-only changes reclassify cached forward groups and the current return
-corridor without a new search.
-
-The Milestone 3 implementation keeps normal sailing work proportional to the
-local explored area rather than total world area:
-
-- static terrain is recorded in camera-culled chunk graphics over one ocean
-  rectangle;
-- fog, forward-range and return-risk masks use reusable chunk-sized textures,
-  and only chunks affected by sparse knowledge, visibility or risk candidates
-  are redrawn and uploaded;
-- visibility clearing, diagnostics, knowledge counts, expedition resolution
-  and return-boundary discovery use maintained index sets and counters;
-- Dijkstra searches reuse typed cost, parent, visited, settled-node and numeric
-  heap buffers; return search stops when the ship is settled, then reconstructs
-  and pads only that route;
-- provision-only changes reclassify cached forward cost groups and the sparse
-  return corridor without rerunning path searches.
-
-Scattered-island profile construction, bounded placement, terrain painting and
-four-edge flood validation run only during world generation or regeneration.
-They must not execute during the normal movement loop. Placement attempts are
-bounded by configuration before deterministic fallback scanning.
-
-If Dijkstra exceeds the budget:
-
-1. restrict the calculation to the connected explored region;
-2. cache supported components;
-3. reuse typed arrays;
-4. reuse the priority queue;
-5. move calculations to a Web Worker only after profiling confirms the need.
-
-Do not begin with a Web Worker.
-
-The current measured simulation work remains below budget at `192 x 192`, so a
-Web Worker is intentionally deferred. Generation and initial static rendering
-may still scale with total area because they run only on load or regeneration.
-
----
-
-## 32. Browser and Mobile Requirements
-
-- Use pointer input so mouse and touch share one path.
-- Prevent accidental page scrolling over the game canvas.
-- Pause the simulation when the page is hidden.
-- Cap unusually large frame deltas after tab restoration.
-- Resize using the existing Phaser scale configuration.
-- Keep masks and chunk textures below browser texture-size limits.
-- Test Safari on iOS, Chrome on Android and desktop Chromium.
-- Do not rely on filesystem APIs.
-- In Milestone 4, persist saves through browser storage. Milestone 3 does not write runtime inheritance state to storage.
-- Provide a WebGL-unavailable error screen rather than a partial Canvas fallback because the prototype depends on overlay shaders.
-
----
-
-## 33. Accessibility
-
-The overlay must not rely on hue alone.
-
-Add an accessibility mode using:
-
-- comfortable pale yellow: no pattern;
-- warning yellow: sparse diagonal dashes;
-- critical orange: denser diagonal dashes;
-- impossible red: crosshatch or pulse.
-
-The neutral forward range uses a dotted boundary and no risk pattern.
-
-Physical provisions remain visible on the ship.
-
-Do not add a permanent numerical HUD to normal play.
-
----
-
-## 34. Implementation Milestones
-
-### Milestone 1 — Existing Project Integration
-
-- Run the existing Phaser project.
-- Record the installed Phaser version.
-- Identify reusable bootstrap, scenes, input, assets and camera code.
-- Add the `tidebound` module without changing current behaviour.
-- Add unit-test execution for core TypeScript.
-
-Completion condition: an empty Wayfinders scene runs through the existing build and deployment path.
-
-### Milestone 2 — Grid and Ship
-
-- Implement world/grid coordinate conversions.
-- Implement typed-array chunks.
-- Add passable ocean and blocked land.
-- Move one ship continuously.
-- Track its current navigation tile.
-- Add debug grid and chunk display.
-
-Completion condition: the ship moves smoothly while all logical positions remain correct.
-
-### Milestone 3 — Knowledge and Fog
-
-- Implement Supported, Personal and Unknown states.
-- Add five-tile visibility.
-- Add personal-trail creation.
-- Render gray personal water and black unknown fog.
-- Add irregular, smoothed boundaries.
-
-Completion condition: movement through black water produces a broad personal corridor while the area around the ship remains fully visible.
-
-### Milestone 4 — Provisions
-
-- Implement distance-based provision consumption.
-- Add physical provision objects to the vessel.
-- Animate removal when consumed.
-- Apply three fixed knowledge costs.
-
-Completion condition: travelling out and returning through the same corridor consumes the expected asymmetric cost.
-
-### Milestone 5 — Range Overlays
-
-- Implement forward-range Dijkstra.
-- Implement multi-source return Dijkstra.
-- Generate forward and return mask textures.
-- Add yellow-family, orange and red return states.
-- Add accessibility patterns.
-
-Completion condition: the player can visually identify both remaining forward reach and whether the known return route remains viable.
-
-### Milestone 5.1 — Overlay Readability Rework (roadmap Milestone 3.1)
-
-- Restrict forward presentation to the outermost reachable Unknown-cost band
-  at the true maximum-reach limit while retaining the full logical provision
-  calculation.
-- Clip that band to the configurable forward heading cone and render it as a
-  thin segmented outward contour rather than filled tiles.
-- Reconstruct one minimum-cost ship-to-Supported route.
-- Pad that route through passable known/currently-visible water only.
-- Apply one yellow, orange or red risk family to the complete corridor.
-- Remove coloured risk treatment from unrelated Personal water.
-
-Completion condition: the player sees one coherent route-home decision and a
-thin, normally world-anchored maximum-reach frontier without map-wide coloured
-blocks.
-
-### Milestone 6 — Expedition Resolution (completes roadmap Milestone 3)
-
-- Generate the default eight stable non-home island descriptors.
-- Represent High Island, Low Cay, Atoll and Rocky Skerry kinds across small,
-  medium and large sizes.
-- Preserve home exclusion, world margins, minimum channels, the full eastbound
-  safe corridor and passable-water connectivity to all four world edges.
-- Render island kinds with generated developer art while fully opaque Unknown
-  fog hides unrevealed terrain.
-- Exclude island names, rewards, settlements, resources and discovery records.
-- Start expedition on leaving Supported water.
-- Track current expedition-stamped Personal tiles separately from generation.
-- Resolve successful return only at the exact home dock.
-- Convert only current expedition-stamped Personal tiles to Supported and clear their stamps.
-- After a successful commit, fill only tiny non-edge, fully Supported-bounded
-  Unknown knowledge pockets according to `world.maxEnclosedUnknownTiles`.
-- Never run pocket cleanup during wreck rollback, and never inspect hidden
-  terrain or resources to decide whether to fill.
-- Replenish at the dock while keeping the same generation after success.
-- Replenish on entering the dock without an active expedition.
-- Begin the wreck transition immediately on natural supply exhaustion outside Supported water.
-- Revert only failed-expedition Personal tiles to Unknown while preserving earlier Supported routes.
-- Create a discoverable runtime wreck marker.
-- Hold the visible wreck at the loss site with input suppressed for four seconds.
-- Respawn a fully supplied ship at the dock and advance generation only when the hold completes.
-- Retain routes and wrecks until regeneration or browser reload.
-
-Completion condition: repeated voyages expand the runtime world only after
-safe exact-dock return, while wrecks discard unreturned knowledge, leave a
-discoverable marker and advance a fully supplied next generation.
-
-### Milestone 7 — Discoveries and Cross-Session Persistence (roadmap Milestone 4)
-
-Status: complete in the current implementation; awaiting user playtest.
-
-- Generic provisional discoveries are generated from stable island IDs.
-- Discoveries commit only on exact-dock return and are lost on wreck.
-- Saves preserve Supported routes, active Personal stamps, wrecks, generation
-  state, pending wreck holds, provisional and returned discoveries.
-- Browser reload restores the inherited world before Phaser starts and
-  rebuilds all derived sight/range/path state.
-
-Completion condition: the runtime inheritance state proven in Milestone 6
-survives across browser sessions.
-
-### Milestone 8 — Prototype Content
-
-- Add home island.
-- Add fishing ground.
-- Add an anchorage or authored historic-wreck discovery distinct from runtime player wrecks.
-- Add return presentation.
-- Add basic sound and movement feedback.
-
-Completion condition: the full exploration loop can be played repeatedly for evaluation.
-
----
-
-## 35. Prototype Review-Gate Acceptance Criteria
-
-The following list records the historical roadmap Milestone 3 review gate. It
-is complete and must not be reapplied as Milestone 4 work:
-
-1. The browser game loads through the existing Phaser project.
-2. The ship is visually smooth but logically occupies one navigation tile.
-3. Unknown water is black and hides all content.
-4. The five-tile sight area is shown in normal Supported-style colour with no
-   knowledge-grey or risk tint, while underlying knowledge and travel cost stay unchanged.
-5. Travel creates a broad Personal corridor.
-6. Personal water is gray after leaving current sight.
-7. Physical provisions visibly diminish.
-8. Unknown travel costs twice as much as retracing Personal water.
-9. Supported travel costs nothing.
-10. The neutral overlay shows a thin segmented outward contour only for the
-    outermost reachable Unknown-cost band inside the configured forward
-    heading cone. It normally stays world-anchored during equal-cost Unknown
-    travel, rotates when the ship turns and does not fill tile interiors.
-11. The return overlay communicates viability on one minimum-cost route to Supported water.
-12. Yellow, orange and red appear only on that route and its passable configured padding.
-13. Red means the minimum-cost known return exceeds the remaining provisions.
-14. An expedition begins only after leaving Supported water.
-15. Entering Supported water away from home neither completes nor replenishes the expedition.
-16. Entering the exact home dock successfully returns an active expedition.
-17. Successful return converts only current expedition-stamped Personal knowledge to Supported and clears those stamps.
-18. Successful return fills only configured-size, non-edge, fully
-    Supported-bounded Unknown knowledge pockets; zero disables the pass, and
-    wreck/revert never invokes it.
-19. Successful return restores configured starting bundles, clears fractional provision use and keeps the same generation.
-20. Entering the home dock without an active expedition also replenishes supplies without changing generation.
-21. Natural supply exhaustion outside Supported water immediately begins a wreck transition unless the same step successfully enters the dock.
-22. Wreck removes only failed-expedition Personal knowledge; previous Supported knowledge survives.
-23. Wreck leaves a world marker which a later generation can discover.
-24. The wreck remains visibly at the loss site with input suppressed and the old generation authoritative for four seconds.
-25. Wreck completion respawns a fully provisioned ship at the dock and advances generation exactly once.
-26. Successful return never advances generation.
-27. Supported routes and wrecks survive later expeditions and wrecks in the same generated runtime.
-28. Regeneration or browser reload resets runtime routes, wrecks and generation before Milestone 4 persistence exists.
-29. Normal exploration contains no numerical resource bar or route forecast.
-30. The prototype maintains the performance targets on desktop and mobile browsers.
-31. The default configuration generates eight non-home islands with stable IDs and descriptors.
-32. Regenerating the same seed reproduces island kind, size, centre, radii, rotation, shape seed, bounds and painted terrain.
-33. High Island, Low Cay, Atoll and Rocky Skerry kinds and small, medium and large sizes all appear in the default set.
-34. Islands respect configured home exclusion, world margins and minimum channel width.
-35. The complete eastbound home-dock corridor remains clear and passable ocean reaches all four world edges.
-36. Fully opaque Unknown fog prevents terrain or decoration from silhouetting before reveal.
-37. Revealed islands use functional developer art and authoritative terrain collision and sight blocking.
-38. Milestone 3 islands have no names, rewards, settlements, resource records or generic discovery records.
-39. Developer tools can inspect the stable descriptor list using **Inspect next island**.
-
-Milestone 4 is complete when save/load preserves Supported routes, wreck
-records, generation state, discovered wreck state and returned generic
-discoveries across browser sessions. That engineering condition is implemented;
-the remaining gate is the Milestone 4 user playtest.
-
----
-
-## 36. Official Phaser References
-
-Implementation should use the documentation matching the Phaser version installed in the existing project.
-
-Relevant official documentation areas:
-
-- Phaser API documentation
-- Phaser Tilemaps
-- Phaser Shader Game Objects and WebGL shaders
-- Phaser camera and scene systems
-- Phaser development-environment guidance
-
-Do not copy examples blindly across major Phaser versions. Confirm every rendering or shader API against the installed version before implementation.
+Developer UI capabilities:
+
+- regenerate from a seed;
+- inspect generated islands in stable ID order;
+- teleport by water-tile coordinate or click;
+- add/remove bundles and force a wreck;
+- save/load a manual checkpoint and clear browser saves;
+- toggle navigation grid, current sight, forward reach and return viability;
+- tune supported live configuration values.
+
+The browser automation interface exposes snapshot, teleport, provision,
+wreck, regeneration, overlay and checkpoint operations. Canvas data attributes
+provide stable diagnostic values for browser checks.
+
+## 15. Performance constraints
+
+Targets remain 60 rendered frames per second and 30 fixed simulation updates
+per second on intended hardware.
+
+The current implementation avoids full-world work during normal sailing:
+
+- visibility clears only the previous visible set;
+- knowledge state uses maintained sparse sets and counts;
+- expedition commit/revert touches only owned indices;
+- Dijkstra systems reuse typed buffers and numeric heaps;
+- provision-only changes reclassify cached results where possible;
+- return rendering processes one sparse route/corridor;
+- overlay uploads are dirty-chunk local;
+- static render chunks are camera culled.
+
+World generation, placement and open-ocean validation scale with world area but
+run only at generation/restore time. Desktop probes at doubled world dimensions
+remain within the fixed-update budget. Representative mid-range mobile testing
+is still required; no Web Worker is justified without new profiling evidence.
+
+## 16. Testing and platform state
+
+The automated suite covers configuration, deterministic generation, movement,
+visibility, knowledge asymmetry, provisions, forward/return calculations,
+overlay invalidation, island navigation, expedition success/failure, Unknown
+pocket cleanup, discoveries, save validation and persistence round trips.
+
+Browser verification covers WebGL startup, controls, discovery cues, combined
+return presentation, rolling reload, stable manual checkpoints, exact
+ship/camera restoration, pending wreck reload, save clearing and console health.
+
+Desktop keyboard/pointer play is the validated target. Responsive resize is
+implemented. Touch-first sailing and representative iOS/Android performance
+are not yet validated and belong to later hardening.
+
+## 17. Milestone 5 boundary
+
+Milestone 5 may add production assets, asset resolution, fishing boats, trade
+vessels, Supported-route traffic and environmental polish.
+
+It must not change these foundation contracts without an explicit design and
+save migration:
+
+- deterministic world and stable island/discovery IDs;
+- terrain-authoritative movement and sight;
+- outward/current-sight knowledge asymmetry;
+- exact-dock commitment;
+- provision and return-cost semantics;
+- four-second wreck lifecycle;
+- authoritative save boundary;
+- rolling autosave and stable checkpoint behavior.

@@ -1,46 +1,41 @@
 # Wayfinders browser prototype
 
-Playable Phaser/TypeScript exploration prototype, completed through Milestone
-3.1 and paused for user playtesting at the Risk, Return and Inheritance review
-gate. Successful expeditions resolve only at the exact home dock, convert the
-current Personal route to Supported water, replenish supplies and continue the
-same generation. Running out of supplies outside Supported water leaves a
-discoverable wreck and discards the failed Personal route. After a four-second
-wreck presentation at the loss site, a fully supplied ship respawns at home
-and the generation advances.
+Wayfinders is a playable Phaser and TypeScript exploration prototype. Milestones 0-4 are complete: the project now has a stable foundation for sailing, charting water, managing provisions, returning discoveries, inheriting supported knowledge across generations, and saving progress between browser sessions.
 
-The Milestone 3.1 presentation shows return risk only on one padded
-minimum-cost route from the ship to Supported water. Forward reach is a thin
-segmented frontier at the ship's true maximum range, clipped to a 120-degree
-cone ahead of its current heading rather than circling the map. A successful return also closes tiny, fully
-Supported-bounded Unknown pockets; a wreck never performs that cleanup.
+The current build includes:
 
-Every seed also produces a stable set of eight non-home islands in the default
-configuration. High Islands, Low Cays, Atolls and Rocky Skerries appear across
-small, medium and large sizes, remain fully concealed by opaque Unknown fog
-until revealed, and use developer art only. They are unnamed terrain rather
-than Milestone 4 discovery or reward records.
+- deterministic chunked worlds with varied islands;
+- exact-tile dock departures and successful returns;
+- outward and return provision costs with route-focused risk guidance;
+- Unknown, Personal and Supported water knowledge states;
+- four-second wreck presentation, persistent wreck sites and generational respawning;
+- deterministic discoveries with carried, returned and lost states; and
+- IndexedDB autosaves plus a separate manual save checkpoint.
+
+Production assets and the broader living-world presentation are Milestone 5 work. The current developer assets remain intentional until that milestone.
+
+## Run locally
 
 ```powershell
 npm.cmd install
 npm.cmd run dev
 ```
 
-Open `http://127.0.0.1:5173/`. Use WASD or the arrow keys to sail, and the mouse wheel or Q/E to zoom.
+Open `http://127.0.0.1:5173/`. Use WASD or the arrow keys to sail, the mouse wheel or Q/E to zoom, and the on-screen developer tools to inspect or regenerate the deterministic world.
 
-The Developer tools drawer includes **Inspect next island** for cycling through
-the seed's stable island descriptors from passable inspection points.
+Reloading the page restores the latest autosave. **Save checkpoint** records a stable manual checkpoint, and **Load checkpoint** restores the ship and world to that recorded state.
 
-Supported routes, wrecks and generation state persist for the current generated
-runtime. Regenerating the world or reloading the browser resets them; save/load
-and cross-session persistence remain Milestone 4 work.
-
-See [docs/MILESTONE_3_PLAYTEST.md](docs/MILESTONE_3_PLAYTEST.md) for the playtest route, overlay meanings, developer controls and review questions. See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for milestone completion and the decision log.
-
-Verification commands:
+## Verify
 
 ```powershell
-npm.cmd run typecheck
-npm.cmd test
-npm.cmd run build
+npm.cmd run check
 ```
+
+The clean verification pipeline runs type checking, the automated test suite and the production build.
+
+## Project documentation
+
+- [Implementation status](docs/IMPLEMENTATION_STATUS.md) is the starting point for a new development session.
+- [Technical design](docs/Wayfinders_Technical_Design.md) describes the implemented architecture and gameplay rules.
+- [Prototype milestones](docs/Wayfinders_Prototype_Milestones.md) records completed scope and the next milestone.
+- [Asset pipeline](docs/Wayfinders_Asset_Pipeline.md) records the planned Milestone 5 production-asset direction.
