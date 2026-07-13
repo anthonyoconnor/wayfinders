@@ -2,17 +2,16 @@
 
 This is the starting point for a new development session.
 
-## Continuation point
+## Accepted baseline
 
-Milestones 0 through 4 and the Milestone 4.1 performance foundation are
-complete. The current foundation includes
+The current implementation is the accepted starting point. It includes
 developer tooling, home waters, exploration knowledge, provision-aware risk
-and return, expedition inheritance, deterministic discoveries, and
-cross-session persistence.
+and return, expedition inheritance, deterministic discoveries, cross-session
+persistence and the performance foundation.
 
-Do not reimplement completed milestones or restore the obsolete source
-namespace. The next product scope is Milestone 5: production asset integration
-and a living world on Supported routes.
+Do not reimplement the baseline or restore the obsolete source namespace.
+Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
+`Wayfinders_Roadmap.md`. No forward minor milestone is approved or started.
 
 ## Run and verify
 
@@ -140,10 +139,11 @@ Current verification baseline:
   developer automation API, including rolling frame percentiles, long-frame
   counts, dropped simulation time and save-serialization timing.
 
-### Milestone 4.1 performance foundation
+### Performance foundation
 
 - Runtime modules now live under `src/wayfinders`; obsolete internal namespace
-  and scene names are removed before asset work expands the codebase.
+  and scene names are removed before subsequent gameplay and presentation
+  expansion.
 - The deterministic simulation remains at 30 updates per second while the ship
   and camera target interpolate at render rate.
 - Save dirtiness is independent from presentation dirtiness. Canonical
@@ -183,26 +183,38 @@ Current verification baseline:
 
 ## Known limits
 
-- Production art and the asset resolver are not implemented.
-- Discovery rewards, settlements and resources are records only; they do not
-  yet drive an economy or simulation.
-- There are no fishing boats, trade vessels or Supported-route traffic.
-- Environmental audio and production polish are not implemented.
+- Gameplay track: discovery rewards, settlements and resources are records
+  only; fishing shoals, surveying, tribe economics, explorer aging, lineage
+  achievements and idols are not implemented.
+- Gameplay track: the current generation is a wreck-driven counter rather than
+  a complete navigator/aging/succession model.
+- Gameplay track: autosave and a stable manual checkpoint exist, but a final
+  player-facing saved-game model has not been chosen.
+- `GP-3`: there are no fishing boats, trade vessels or
+  Supported-route traffic.
+- `GR-*`: production art, the asset resolver, asset tooling,
+  environmental audio and production polish are not implemented.
 - Default and doubled-world save/range probes pass the performance hardening
-  baseline; representative mid-range mobile validation remains outstanding.
+  baseline. Touch-first sailing is not implemented, and representative
+  mid-range mobile rendering/performance validation remains outstanding.
 
-## Next actions — Milestone 5
+## Proposed continuation
 
-1. Define the first production asset contracts and semantic IDs for the player
-   ship, home waters and one representative island set.
-2. Add an asset resolver without changing gameplay terrain, navigation,
-   discoveries or save identity.
-3. Replace developer visuals incrementally and review them in the running game.
-4. Add fishing boats, trade vessels and simple traffic restricted to Supported
-   routes.
-5. Add environmental polish and validate performance on representative mobile
-   hardware.
+No implementation should begin until the first roadmap gate is confirmed.
+The proposed sequence begins with:
+
+1. `GP-0.1` — establish baseline-save fixtures and an explicit migration chain;
+2. `GP-0.2` — freeze shared opportunity, survey, navigator, route and integration
+   contracts; and
+3. `GP-1.1` — add deterministic fishing-shoal definitions and clues using
+   developer graphics.
+
+The first product acceptance target is the complete `GP-1` survey loop. The
+graphics track remains deferred until `GP-3.2` is accepted, proving the
+survey-to-active-fishing and visible tribe-benefit loop with developer
+graphics, unless that gate is explicitly reapproved.
 
 See `Wayfinders_Technical_Design.md` for the current implementation model,
-`Wayfinders_Prototype_Milestones.md` for scope, and
-`Wayfinders_Asset_Pipeline.md` for the Milestone 5 asset direction.
+`Wayfinders_Roadmap.md` for proposed scope and sequencing,
+`Wayfinders_Economy_Design.md` for gameplay direction, and
+`Wayfinders_Asset_Pipeline.md` for the deferred graphics direction.

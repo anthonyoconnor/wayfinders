@@ -1,6 +1,6 @@
-# Wayfinders Milestone 5 asset direction
+# Wayfinders graphics and asset-pipeline direction
 
-Status: planned, not implemented.
+Status: deferred design reference, not implemented.
 
 This document records only the constraints needed to begin production asset
 work. It does not claim that an asset workshop, manifest generator or asset
@@ -8,11 +8,23 @@ build commands already exist.
 
 ## Goal
 
-Replace developer art incrementally while preserving the completed exploration,
-navigation, discovery, persistence and performance foundation.
+Replace developer art incrementally while preserving the accepted exploration,
+navigation, discovery, persistence and performance baseline and the gameplay
+contracts accepted before graphics integration.
 
 Production art must improve readability and atmosphere without becoming a new
 source of gameplay truth.
+
+The forward roadmap separates graphics work from gameplay work:
+
+- `GR-0` keeps developer graphics as the functional gameplay fallback;
+- `GR-1` introduces the minimal semantic asset runtime;
+- `GR-2` adds viewing and candidate-creation tooling; and
+- `GR-3` applies production presentation in reviewed families.
+
+The proposed start gate for `GR-1` is acceptance of `GP-3.2`: fishing grounds
+must first complete the survey, return and visible tribe-benefit loop using
+developer graphics. Changing that gate requires explicit roadmap approval.
 
 ## Foundation contracts
 
@@ -71,8 +83,8 @@ the initial asset family proves the contracts useful.
 
 ## Proposed source and runtime layout
 
-This layout is a Milestone 5 proposal; create it only as the corresponding
-pipeline is implemented.
+This layout is a graphics-roadmap proposal; create it only as the corresponding
+`GR-*` minor is implemented.
 
 ```text
 assets-src/
@@ -143,10 +155,13 @@ existing saved world's visuals require an explicit content-version decision.
 
 ## First implementation slice
 
+Begin only after the roadmap's graphics start gate and semantic gameplay
+contracts are accepted. This slice corresponds to `GR-1`.
+
 Build the smallest end-to-end asset path:
 
 1. Define semantic IDs and origin/footprint contracts for the player ship,
-   dock, ocean and one representative island family.
+   dock, ocean, one representative island family, a shoal and a fishing skiff.
 2. Add a minimal manifest, loader and resolver.
 3. Render developer and candidate assets through the same factory.
 4. Review them at normal camera zoom under fog, Personal-grey and risk overlays.
@@ -154,14 +169,16 @@ Build the smallest end-to-end asset path:
 6. Measure draw calls, texture memory and frame timing before expanding the
    asset set.
 
-Do not begin by building a large workshop or automated atlas pipeline. Add
-those tools after repeated manual work demonstrates which automation is needed.
+Do not begin by building a large workshop or automated atlas pipeline. `GR-2`
+starts with a runtime-faithful viewer and candidate intake workflow; add typed
+IDs or atlas automation only after repeated manual work demonstrates which
+automation is needed.
 
-## Future workshop requirements
+## Asset viewer and creation-tool requirements
 
-If a dedicated asset workshop is justified, it should use the same Phaser
-renderer, camera, runtime asset factories and rendering/texture paths as the
-game. Useful views are:
+When `GR-2` is approved, its viewer and candidate-intake tools should use the
+same Phaser renderer, camera, runtime asset factories and rendering/texture
+paths as the game. Useful views are:
 
 - asset browser by ID, theme, family and lifecycle state;
 - ship heading/animation preview at expected zoom levels;

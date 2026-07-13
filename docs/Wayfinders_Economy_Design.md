@@ -6,9 +6,9 @@ Wayfinders uses a community-backed economy and a lineage-wide relic collection t
 
 Routine activity is automatic and visible in the world. The player's economic choices happen at a few meaningful moments: how much community support to take on a voyage, whether to spend limited survey or salvage capacity on an uncertain lead, and when to return with what they have found. A failed expedition materially hinders the next generation, but inherited routes and a minimum recovery expedition prevent a death spiral. A finite set of rare idols provides a long-term exploration goal across the entire lineage.
 
-This document is a future economy design direction. It does not change the accepted Milestones 0–4 implementation by itself. Milestone 5 may add visual traffic on Supported routes, while resource commitments, survey costs and generational recovery require a separately approved economy milestone.
+This document is a future economy and legacy-goal direction beyond the accepted implementation baseline. The forward roadmap proves fishing and survey gameplay with developer graphics before tribe economics, idols and production-asset replacement. Nothing in this document is implemented or approved merely by being described here.
 
-![Economy UI direction: dockside loading, an in-world survey prompt, and automatic fishing activity after return](mockups/wayfinders-economy-ui-mockup.png)
+![Economy UI direction: dockside loading, an in-world survey prompt, and automatic fishing activity after return](<../concept_art/wayfinders exploration ui concept sheet.png>)
 
 ## 1. Purpose
 
@@ -72,16 +72,17 @@ Early trade should communicate connection and prosperity, not become a buy-low, 
 
 ## 4. Discovery lifecycle
 
-Every economic opportunity moves through a clear state:
+Every economic opportunity moves through a clear, branching state:
 
 1. **Latent** — it exists in the seeded or world-generated simulation but is not known to the player.
-2. **Sighted** — the player notices an environmental clue, such as birds, disturbed water, debris or a reef opening.
-3. **Investigated** — the player spends expedition capacity to survey, test, salvage or chart it. The result becomes a provisional personal record.
-4. **Returned** — exact-dock return makes the report or object inherited knowledge.
-5. **Active** — the community uses the opportunity automatically, where route and capacity conditions allow.
-6. **Developed** — later growth may make its effects more visible through extra boats, dock facilities or settlement change.
+2. **Sighted/provisional** — the player notices an environmental clue, such as birds, disturbed water, debris or a reef opening.
+3. **Investigated/provisional** — the player spends expedition capacity to survey, test, salvage or chart it. The result belongs to the current expedition.
+4. **Returned lead** — an unsurveyed sighting is safely reported at the exact dock. It becomes an inherited lead but grants no economic benefit.
+5. **Returned survey or object** — exact-dock return makes an investigated report or recovered object inherited knowledge and eligible for later use.
+6. **Active** — the tribe or a connected community uses the returned opportunity automatically, where route and capacity conditions allow.
+7. **Developed** — later growth may make its effects more visible through extra boats, dock facilities or settlement change.
 
-A provisional sighting or investigation belongs to the current expedition. If the explorer wrecks before returning, the report and its economic benefit are lost with them. The physical opportunity may still exist in the world, but it is no longer inherited knowledge.
+A provisional sighting or investigation belongs to the current expedition. If the explorer wrecks before returning, it is lost with them. The physical opportunity remains in the deterministic world and can be found again. A returned lead survives but stays inactive until a later navigator investigates it and safely returns the result.
 
 ## 5. Legacy goals: idols and historical records
 
@@ -181,7 +182,7 @@ The first player-facing version should use a few readable commitments rather tha
 | Deep-water | Greater range and more survey or salvage capacity | Draws on reserve, delays some growth or reduces visible activity |
 | Recovery | Smaller but practical allocation after a major loss | The community is rebuilding after a failed investment |
 
-The exact numbers are tuning values, not normal-play UI. The accepted prototype currently uses physical provision bundles and a fixed resupply model. This future system may introduce different allocations only after save compatibility, balance and playtest plans are approved.
+The exact numbers are tuning values, not normal-play UI. The accepted baseline currently uses physical provision bundles and a fixed resupply model. A future gameplay minor may introduce different allocations only after save compatibility, balance and playtest plans are approved.
 
 ### 6.3 Capacity trade-offs
 
@@ -346,29 +347,39 @@ Do not start with a large list of commodities, dynamic price simulation, manual 
 
 Do not make idols a generic sale item, a compulsory source of raw power or a random collectible hidden in ordinary water. They are finite, meaningful relics tied to surveyable points of interest.
 
-## 14. Phased implementation
+## 14. Roadmap placement
 
-### Milestone 5: visual living world
+The active roadmap is defined in `Wayfinders_Roadmap.md`. This design maps to it as follows.
 
-Milestone 5 can safely begin with the currently planned fishing boats and trade vessels travelling only on Supported routes. This phase proves readability, traffic performance and production-art integration. It should not yet change the accepted provision, return, wreck or save rules.
+### GP-1: fishing grounds and survey work
 
-### Future economy and legacy-goal milestone: community support and discovery work
+Begin with deterministic fishing-shoal clues, limited survey cases, an explicit **Survey / Leave** choice, branching returned-lead/returned-survey records and one clear developer cue proving Supported connectivity. Authoritative tribe activation and output wait for GP-3. Use developer graphics and do not introduce tribe reserves, production assets, salvage or idols in the first vertical slice.
 
-After Milestone 5 traffic is readable and performant, introduce:
+### GP-2: explorers, generations and lineage history
 
-1. community support state and a protected recovery floor;
-2. dockside voyage commitment choices;
-3. survey and salvage cases;
-4. deterministic sea-resource leads and one-off wreck examination;
-5. provisional-to-returned economic records;
-6. deterministic idol registry, clue state, recovery state and archive records;
-7. automatic activation of fishing and trade activity;
-8. recovery after failure;
-9. save migration and deterministic tests.
+Add persistent navigator identity, voyage-based aging, safe retirement and the achievement chronicle used to credit later economic discoveries and idols. The existing wreck-driven generation counter is the starting point, not the finished model.
 
-### Later living-world expansion
+### GP-3: tribe economy, support and recovery
 
-Only after the basic loop is enjoyable should the game add richer settlement needs, multiple competing routes, specialist equipment, named navigators, aging, families, reputation or a deeper trade simulation.
+After survey work is understood, introduce tribe support state, a protected recovery floor, automatic activation and output from returned fishing grounds, dockside voyage commitments, Supported-only fishing activity, wreck setback/recovery and later automatic exchange with connected communities. Economic time settles on voyage events and never requires real-time waiting.
+
+`GP-3.2` is the proposed earliest gate for isolated graphics-platform work: the complete survey → return → visible tribe benefit loop must first work with developer graphics.
+
+### GP-4: idols, archive and optional completion
+
+Add the deterministic idol registry, clue and survey state, salvage/cargo rules, recoverable wreck loss, home archive and navigator credit. Returning every idol unlocks an optional completion ending while allowing continued play.
+
+### GP-5 and the cross-cutting persistence gate
+
+Every gameplay minor includes save migration and deterministic round-trip tests. GP-5 later turns the working autosave/checkpoint foundation into the confirmed player-facing new/save/load experience and hardens long multi-generation continuity.
+
+### Graphics track
+
+Production asset IDs, the resolver, asset viewing/creation tooling and production passes belong to the separate `GR-*` track. Developer graphics remain the gameplay fallback. Production replacement begins only after its roadmap start gate is explicitly approved.
+
+### Later expansion
+
+Only after the basic loop is enjoyable should the game add richer settlement needs, multiple competing routes, specialist equipment, family trees, inheritable traits, reputation, politics or a deeper trade simulation.
 
 ## 15. Validation criteria
 
@@ -387,7 +398,7 @@ The economy design is successful only if playtests show all of the following:
 - Routine automatic traffic makes Supported waters feel alive without obscuring navigation, fog, risk overlays or performance.
 - Normal play remains free of a permanent numerical economy HUD.
 
-## 16. Open decisions for later discussion
+## 16. Roadmap approval gates and later decisions
 
 - Should a recovery allocation be a fixed lower supply level, a changing percentage of community capacity, or both?
 - How much uncertainty should visual clues communicate before a player spends a survey case?
@@ -397,4 +408,4 @@ The economy design is successful only if playtests show all of the following:
 - Does the player need a dedicated map or logbook outside the world view, or is a temporary personal mark plus returned world markers sufficient?
 - What is the appropriate idol count for the default world and for larger future worlds?
 - Should all remaining idols have equal mystery, or should partial charts and archive clues gradually narrow the search?
-- Should completing the idol set reveal a final historical truth, trigger a world celebration, unlock an optional ending, or combine those outcomes?
+- The roadmap proposes that returning the final idol marks the game complete, presents a historical revelation or world celebration, and offers **End the lineage** or **Continue exploring**. The exact presentation and permanence of that choice still require approval.

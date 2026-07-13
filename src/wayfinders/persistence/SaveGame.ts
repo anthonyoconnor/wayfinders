@@ -29,8 +29,9 @@ export interface GenerationConfigV1 {
 }
 
 /**
- * Structural persistence shape for Milestone 4 discoveries. The simulation can
- * later use its canonical DiscoveryRecord as the SaveGame generic argument.
+ * Structural persistence shape for accepted-baseline discoveries. The
+ * simulation can later use its canonical DiscoveryRecord as the SaveGame
+ * generic argument.
  */
 export interface DiscoverySaveRecord {
   id: number;
@@ -83,7 +84,10 @@ export interface SaveGameV1<TDiscovery extends DiscoverySaveRecord = DiscoverySa
     provisional: TDiscovery[];
     returned: TDiscovery[];
   };
-  /** Reserved for a later schema; Milestone 4 has no runtime terrain edits. */
+  /**
+   * Reserved for a later schema; the accepted baseline has no runtime terrain
+   * edits.
+   */
   terrainPatches: [];
 }
 

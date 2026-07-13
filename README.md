@@ -1,6 +1,10 @@
 # Wayfinders browser prototype
 
-Wayfinders is a playable Phaser and TypeScript exploration prototype. Milestones 0-4 and the pre-asset performance foundation are complete: the project now has a stable base for sailing, charting water, managing provisions, returning discoveries, inheriting supported knowledge across generations, and saving progress between browser sessions.
+Wayfinders is a playable Phaser and TypeScript exploration prototype. The
+current implementation is the accepted gameplay and performance baseline: it
+provides a stable base for sailing, charting water, managing provisions,
+returning discoveries, inheriting Supported knowledge across generations and
+saving progress between browser sessions.
 
 The current build includes:
 
@@ -12,9 +16,16 @@ The current build includes:
 - deterministic discoveries with carried, returned and lost states; and
 - IndexedDB autosaves plus a separate manual save checkpoint.
 
-The runtime also includes interpolated ship presentation, viewport-culled chunk overlays, cached save encoding, incremental return-route rendering and frame-time diagnostics so Milestone 5 assets can be added without replacing the gameplay foundation.
+The runtime also includes interpolated ship presentation, viewport-culled
+chunk overlays, cached save encoding, incremental return-route rendering and
+frame-time diagnostics so gameplay, living-world and presentation work can
+extend the foundation without replacing it.
 
-Production assets and the broader living-world presentation are Milestone 5 work. The current developer assets remain intentional until that milestone.
+Developer graphics remain intentional throughout the gameplay roadmap.
+Production asset infrastructure, tooling and art replacement are a separate
+graphics track. Its proposed start gate is acceptance of `GP-3.2`, after the
+survey-to-returned-shoal loop produces a visible tribe benefit with developer
+graphics.
 
 ## Run locally
 
@@ -47,5 +58,6 @@ The clean verification pipeline runs type checking, the automated test suite and
 
 - [Implementation status](docs/IMPLEMENTATION_STATUS.md) is the starting point for a new development session.
 - [Technical design](docs/Wayfinders_Technical_Design.md) describes the implemented architecture and gameplay rules.
-- [Prototype milestones](docs/Wayfinders_Prototype_Milestones.md) records completed scope and the next milestone.
-- [Asset pipeline](docs/Wayfinders_Asset_Pipeline.md) records the planned Milestone 5 production-asset direction.
+- [Development roadmap](docs/Wayfinders_Roadmap.md) treats the current build as the accepted baseline and proposes major gameplay and graphics milestones.
+- [Economy and legacy design](docs/Wayfinders_Economy_Design.md) describes surveying, tribe support, inheritance and the idol completion goal.
+- [Asset pipeline](docs/Wayfinders_Asset_Pipeline.md) records the deferred production-graphics direction.

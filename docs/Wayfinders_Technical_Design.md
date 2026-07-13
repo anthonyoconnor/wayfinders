@@ -1,8 +1,8 @@
 # Wayfinders technical design
 
-This document describes the implemented Milestone 4.1 foundation. The roadmap
-contains milestone history; this document contains current runtime behavior and
-constraints.
+This document describes the accepted implementation baseline. The roadmap
+contains proposed future sequencing; this document contains current runtime
+behavior and constraints.
 
 ## 1. Design goals
 
@@ -50,8 +50,8 @@ The Phaser scene adapter:
 - connects browser persistence and developer controls;
 - never writes gameplay arrays directly.
 
-The obsolete source namespace and scene identity have been removed. New
-Milestone 5 modules must use the Wayfinders namespace.
+The obsolete source namespace and scene identity have been removed. All new
+roadmap modules must use the Wayfinders namespace.
 
 A typed event bus communicates lifecycle changes to presentation and
 persistence adapters.
@@ -334,8 +334,9 @@ remain through later voyages and generations.
 Generated historic-wreck discoveries are content records. They are never added
 to the runtime player-wreck collection and use a distinct marker.
 
-Current discovery rewards are descriptive records only. Economy and settlement
-effects are deferred.
+Current discovery rewards are descriptive records only. Economy, settlement,
+survey and activation effects are absent from the baseline and require an
+approved gameplay minor plus save migration.
 
 ## 12. Persistence
 
@@ -417,8 +418,9 @@ The camera follows the interpolated ship smoothly during play. World regeneratio
 checkpoint restore are discontinuities, so the camera snaps to the
 authoritative ship before smoothing resumes.
 
-Current developer art communicates terrain and mechanics only. Production
-assets must retain the same navigation, identity and depth contracts.
+Current developer art communicates terrain and mechanics only and remains
+intentional throughout gameplay validation. Future production assets must
+retain the same navigation, identity and depth contracts.
 
 ## 14. Events and developer interfaces
 
@@ -499,16 +501,25 @@ return presentation, rolling reload, stable manual checkpoints, exact
 ship/camera restoration, pending wreck reload, save clearing and console health.
 
 Desktop keyboard/pointer play is the validated target. Responsive resize is
-implemented. Touch-first sailing and representative iOS/Android performance
-are not yet validated and belong to later hardening.
+implemented. Touch-first sailing is not implemented and requires a separately
+approved gameplay/platform input minor. Contextual actions receive input checks
+with their gameplay minor; representative mobile rendering, loading and
+performance validation belongs to later graphics/platform hardening.
 
-## 17. Milestone 5 boundary
+## 17. Baseline extension and compatibility boundary
 
-Milestone 5 may add production assets, asset resolution, fishing boats, trade
-vessels, Supported-route traffic and environmental polish.
+The forward roadmap may add opportunity surveying, tribe economics, navigator
+aging, lineage records, idols, save/load experience, Supported-route activity,
+production assets and environmental polish. These are proposed extensions, not
+implemented baseline behavior.
 
-It must not change these foundation contracts without an explicit design and
-save migration:
+Presentation-only extensions may preserve the current save shape when they add
+no authoritative state. Gameplay extensions must define deterministic identity,
+event ordering, persistence ownership, migration and recovery behavior before
+integration.
+
+No roadmap work may change these foundation contracts without an explicit
+design decision and, where authoritative state is affected, a save migration:
 
 - deterministic world and stable island/discovery IDs;
 - terrain-authoritative movement and sight;
@@ -518,3 +529,8 @@ save migration:
 - four-second wreck lifecycle;
 - authoritative save boundary;
 - rolling autosave and stable checkpoint behavior.
+
+Central integration files are serialized merge gates. New pure systems,
+renderers and tests may be developed in parallel against frozen contracts, but
+one integration owner must wire simulation lifecycle, events, save migration,
+scene input and autosave behavior at each acceptance gate.
