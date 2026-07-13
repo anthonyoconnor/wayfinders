@@ -12,7 +12,8 @@ persistence and the performance foundation.
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
 `Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-1.4` batch is in
-progress. `GP-0.1` is accepted; later batch minors are not yet accepted.
+progress. `GP-0.1` and `GP-0.2` are accepted; later batch minors are not yet
+accepted.
 
 ## Run and verify
 
@@ -34,7 +35,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 149 automated tests pass across 16 files.
+- 153 automated tests pass across 17 files.
 - The production Vite build passes.
 - Browser tests cover discovery return, autosave reload, manual checkpoint
   restore, exact ship/camera restoration, wreck-hold reload, generation

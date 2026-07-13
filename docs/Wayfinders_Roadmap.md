@@ -110,7 +110,15 @@ persists correctly.
 
 #### GP-0.2 — Versioned integration boundaries
 
-Status: proposed.
+Status: accepted.
+
+Acceptance evidence (2026-07-12): contract version one fixes the fishing-shoal
+ID/content namespace, clue and quality vocabulary, hidden-versus-revealed
+renderer read models, Survey/Leave commands and results, authoritative record
+fragments and persistence ownership. The boundary introduces no navigator,
+cargo, tribe, achievement or general-route contract. The full pipeline passes
+153 tests across 17 files plus typecheck and production build; the contract
+module adds no runtime loop work.
 
 Establish only the boundaries needed by GP-1; authorization of later minors in
 the same batch does not widen this gate:
