@@ -15,13 +15,15 @@ import { ReturnPathSystem, type ReturnPathResult } from "../exploration/ReturnPa
 import { VisibilitySystem } from "../exploration/VisibilitySystem";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
 import {
+  SAVE_SCHEMA_VERSION,
+  WORLD_GENERATOR_VERSION,
   applyGenerationConfig,
   captureGenerationConfig,
   decodeKnowledgeRuns,
   encodeWorldKnowledgeRuns,
   parseSaveGame,
   type KnowledgeRun,
-  type SaveGameV1,
+  type SaveGame,
 } from "../persistence/SaveGame";
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import { WorldGenerator } from "../world/WorldGenerator";
@@ -443,13 +445,13 @@ export class GameSimulation {
     this.revision++;
   }
 
-  createSave(): SaveGameV1<DiscoveryRecord> {
+  createSave(): SaveGame<DiscoveryRecord> {
     return {
-      schemaVersion: 1,
+      schemaVersion: SAVE_SCHEMA_VERSION,
       savedAt: Date.now(),
       world: {
         seed: this.generated.seed,
-        generatorVersion: 1,
+        generatorVersion: WORLD_GENERATOR_VERSION,
         generationConfig: captureGenerationConfig(this.config),
       },
       generation: this.currentGeneration,
@@ -487,7 +489,7 @@ export class GameSimulation {
    * are regenerated, while sight, movement caches and risk paths are rebuilt.
    */
   restoreSave(value: unknown): void {
-    const parsed = parseSaveGame(value) as SaveGameV1<DiscoveryRecord>;
+    const parsed = parseSaveGame(value) as SaveGame<DiscoveryRecord>;
     const currentGenerationConfig = captureGenerationConfig(this.config);
     const savedGenerationConfig = captureGenerationConfig(applyGenerationConfig(
       parsed.world.generationConfig,

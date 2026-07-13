@@ -1,0 +1,945 @@
+{
+  "dockedReturned": {
+    "schemaVersion": 1,
+    "savedAt": 1000,
+    "world": {
+      "seed": 13371,
+      "generatorVersion": 1,
+      "generationConfig": {
+        "navigation": {
+          "tileSize": 32,
+          "chunkSize": 32
+        },
+        "world": {
+          "width": 96,
+          "height": 96,
+          "homeIslandRadius": 4,
+          "supportedWaterRadius": 14,
+          "supportedBoundaryNoise": 2.5,
+          "supportedNoiseScale": 7,
+          "shallowWaterRadius": 7,
+          "hiddenObstacleRadius": 2,
+          "hiddenObstacleDistance": 24
+        },
+        "islands": {
+          "count": 8,
+          "minRadius": 2,
+          "maxRadius": 6,
+          "apronWidth": 1.25,
+          "minimumChannelWidth": 11,
+          "homeClearance": 2,
+          "edgeMargin": 6,
+          "placementAttempts": 64,
+          "edgeNoise": 0.24,
+          "safeCorridorHalfWidth": 2,
+          "highIslandWeight": 1,
+          "lowCayWeight": 1,
+          "atollWeight": 1,
+          "rockySkerryWeight": 1
+        }
+      }
+    },
+    "generation": 1,
+    "expedition": {
+      "id": 2,
+      "active": false,
+      "successfulReturns": 1,
+      "failedExpeditions": 0,
+      "pendingRespawn": null
+    },
+    "ship": {
+      "worldX": 1712,
+      "worldY": 1552,
+      "heading": 0,
+      "speed": 0,
+      "currentTileX": 53,
+      "currentTileY": 48,
+      "provisions": 12,
+      "provisionAccumulator": 0
+    },
+    "knowledge": {
+      "encoding": "non-unknown-runs-v1",
+      "runs": [
+        [
+          3305,
+          5,
+          2,
+          0
+        ],
+        [
+          3400,
+          8,
+          2,
+          0
+        ],
+        [
+          3412,
+          5,
+          2,
+          0
+        ],
+        [
+          3496,
+          18,
+          2,
+          0
+        ],
+        [
+          3591,
+          20,
+          2,
+          0
+        ],
+        [
+          3686,
+          21,
+          2,
+          0
+        ],
+        [
+          3782,
+          22,
+          2,
+          0
+        ],
+        [
+          3877,
+          23,
+          2,
+          0
+        ],
+        [
+          3972,
+          25,
+          2,
+          0
+        ],
+        [
+          4067,
+          27,
+          2,
+          0
+        ],
+        [
+          4163,
+          28,
+          2,
+          0
+        ],
+        [
+          4258,
+          29,
+          2,
+          0
+        ],
+        [
+          4354,
+          29,
+          2,
+          0
+        ],
+        [
+          4450,
+          30,
+          2,
+          0
+        ],
+        [
+          4546,
+          30,
+          2,
+          0
+        ],
+        [
+          4642,
+          30,
+          2,
+          0
+        ],
+        [
+          4738,
+          30,
+          2,
+          0
+        ],
+        [
+          4834,
+          29,
+          2,
+          0
+        ],
+        [
+          4930,
+          29,
+          2,
+          0
+        ],
+        [
+          5026,
+          28,
+          2,
+          0
+        ],
+        [
+          5122,
+          27,
+          2,
+          0
+        ],
+        [
+          5218,
+          26,
+          2,
+          0
+        ],
+        [
+          5314,
+          24,
+          2,
+          0
+        ],
+        [
+          5411,
+          22,
+          2,
+          0
+        ],
+        [
+          5507,
+          21,
+          2,
+          0
+        ],
+        [
+          5604,
+          19,
+          2,
+          0
+        ],
+        [
+          5701,
+          18,
+          2,
+          0
+        ],
+        [
+          5798,
+          16,
+          2,
+          0
+        ],
+        [
+          5898,
+          12,
+          2,
+          0
+        ],
+        [
+          5997,
+          8,
+          2,
+          0
+        ],
+        [
+          6096,
+          3,
+          2,
+          0
+        ],
+        [
+          6799,
+          1,
+          2,
+          0
+        ],
+        [
+          6892,
+          7,
+          2,
+          0
+        ],
+        [
+          6987,
+          9,
+          2,
+          0
+        ],
+        [
+          7083,
+          9,
+          2,
+          0
+        ],
+        [
+          7179,
+          9,
+          2,
+          0
+        ],
+        [
+          7274,
+          11,
+          2,
+          0
+        ],
+        [
+          7371,
+          9,
+          2,
+          0
+        ],
+        [
+          7467,
+          9,
+          2,
+          0
+        ],
+        [
+          7571,
+          1,
+          2,
+          0
+        ]
+      ]
+    },
+    "wrecks": [],
+    "discoveries": {
+      "provisional": [],
+      "returned": [
+        {
+          "id": 2,
+          "islandId": 2,
+          "type": 1,
+          "name": "Star Rest",
+          "detail": "A anchorage with people willing to support later voyages.",
+          "rewardId": "welcome-anchorage",
+          "rewardLabel": "anchorage welcome",
+          "settlementId": "anchorage:2",
+          "tileX": 79,
+          "tileY": 75,
+          "returned": true,
+          "expeditionId": 1,
+          "generation": 1
+        }
+      ]
+    },
+    "terrainPatches": []
+  },
+  "activeProvisional": {
+    "schemaVersion": 1,
+    "savedAt": 2000,
+    "world": {
+      "seed": 13371,
+      "generatorVersion": 1,
+      "generationConfig": {
+        "navigation": {
+          "tileSize": 32,
+          "chunkSize": 32
+        },
+        "world": {
+          "width": 96,
+          "height": 96,
+          "homeIslandRadius": 4,
+          "supportedWaterRadius": 14,
+          "supportedBoundaryNoise": 2.5,
+          "supportedNoiseScale": 7,
+          "shallowWaterRadius": 7,
+          "hiddenObstacleRadius": 2,
+          "hiddenObstacleDistance": 24
+        },
+        "islands": {
+          "count": 8,
+          "minRadius": 2,
+          "maxRadius": 6,
+          "apronWidth": 1.25,
+          "minimumChannelWidth": 11,
+          "homeClearance": 2,
+          "edgeMargin": 6,
+          "placementAttempts": 64,
+          "edgeNoise": 0.24,
+          "safeCorridorHalfWidth": 2,
+          "highIslandWeight": 1,
+          "lowCayWeight": 1,
+          "atollWeight": 1,
+          "rockySkerryWeight": 1
+        }
+      }
+    },
+    "generation": 1,
+    "expedition": {
+      "id": 1,
+      "active": true,
+      "successfulReturns": 0,
+      "failedExpeditions": 0,
+      "pendingRespawn": null
+    },
+    "ship": {
+      "worldX": 1232,
+      "worldY": 528,
+      "heading": 0,
+      "speed": 0,
+      "currentTileX": 38,
+      "currentTileY": 16,
+      "provisions": 12,
+      "provisionAccumulator": 0
+    },
+    "knowledge": {
+      "encoding": "non-unknown-runs-v1",
+      "runs": [
+        [
+          1094,
+          1,
+          1,
+          1
+        ],
+        [
+          1187,
+          7,
+          1,
+          1
+        ],
+        [
+          1282,
+          9,
+          1,
+          1
+        ],
+        [
+          1378,
+          9,
+          1,
+          1
+        ],
+        [
+          1474,
+          9,
+          1,
+          1
+        ],
+        [
+          1569,
+          11,
+          1,
+          1
+        ],
+        [
+          1666,
+          9,
+          1,
+          1
+        ],
+        [
+          1762,
+          9,
+          1,
+          1
+        ],
+        [
+          1858,
+          5,
+          1,
+          1
+        ],
+        [
+          1865,
+          2,
+          1,
+          1
+        ],
+        [
+          1955,
+          5,
+          1,
+          1
+        ],
+        [
+          2054,
+          1,
+          1,
+          1
+        ],
+        [
+          3305,
+          5,
+          2,
+          0
+        ],
+        [
+          3400,
+          8,
+          2,
+          0
+        ],
+        [
+          3412,
+          5,
+          2,
+          0
+        ],
+        [
+          3496,
+          18,
+          2,
+          0
+        ],
+        [
+          3591,
+          20,
+          2,
+          0
+        ],
+        [
+          3686,
+          21,
+          2,
+          0
+        ],
+        [
+          3782,
+          22,
+          2,
+          0
+        ],
+        [
+          3877,
+          23,
+          2,
+          0
+        ],
+        [
+          3972,
+          25,
+          2,
+          0
+        ],
+        [
+          4067,
+          27,
+          2,
+          0
+        ],
+        [
+          4163,
+          28,
+          2,
+          0
+        ],
+        [
+          4258,
+          29,
+          2,
+          0
+        ],
+        [
+          4354,
+          29,
+          2,
+          0
+        ],
+        [
+          4450,
+          30,
+          2,
+          0
+        ],
+        [
+          4546,
+          30,
+          2,
+          0
+        ],
+        [
+          4642,
+          30,
+          2,
+          0
+        ],
+        [
+          4738,
+          30,
+          2,
+          0
+        ],
+        [
+          4834,
+          29,
+          2,
+          0
+        ],
+        [
+          4930,
+          29,
+          2,
+          0
+        ],
+        [
+          5026,
+          28,
+          2,
+          0
+        ],
+        [
+          5122,
+          27,
+          2,
+          0
+        ],
+        [
+          5218,
+          26,
+          2,
+          0
+        ],
+        [
+          5314,
+          24,
+          2,
+          0
+        ],
+        [
+          5411,
+          22,
+          2,
+          0
+        ],
+        [
+          5507,
+          21,
+          2,
+          0
+        ],
+        [
+          5604,
+          19,
+          2,
+          0
+        ],
+        [
+          5701,
+          18,
+          2,
+          0
+        ],
+        [
+          5798,
+          16,
+          2,
+          0
+        ],
+        [
+          5898,
+          12,
+          2,
+          0
+        ],
+        [
+          5997,
+          8,
+          2,
+          0
+        ],
+        [
+          6096,
+          3,
+          2,
+          0
+        ]
+      ]
+    },
+    "wrecks": [],
+    "discoveries": {
+      "provisional": [
+        {
+          "id": 3,
+          "islandId": 3,
+          "type": 4,
+          "name": "North Mere",
+          "detail": "A navigable passage through the reef.",
+          "rewardId": "reef-passage",
+          "rewardLabel": "charted reef passage",
+          "tileX": 38,
+          "tileY": 16,
+          "returned": false,
+          "expeditionId": 1,
+          "generation": 1
+        }
+      ],
+      "returned": []
+    },
+    "terrainPatches": []
+  },
+  "pendingWreck": {
+    "schemaVersion": 1,
+    "savedAt": 3000,
+    "world": {
+      "seed": 13371,
+      "generatorVersion": 1,
+      "generationConfig": {
+        "navigation": {
+          "tileSize": 32,
+          "chunkSize": 32
+        },
+        "world": {
+          "width": 96,
+          "height": 96,
+          "homeIslandRadius": 4,
+          "supportedWaterRadius": 14,
+          "supportedBoundaryNoise": 2.5,
+          "supportedNoiseScale": 7,
+          "shallowWaterRadius": 7,
+          "hiddenObstacleRadius": 2,
+          "hiddenObstacleDistance": 24
+        },
+        "islands": {
+          "count": 8,
+          "minRadius": 2,
+          "maxRadius": 6,
+          "apronWidth": 1.25,
+          "minimumChannelWidth": 11,
+          "homeClearance": 2,
+          "edgeMargin": 6,
+          "placementAttempts": 64,
+          "edgeNoise": 0.24,
+          "safeCorridorHalfWidth": 2,
+          "highIslandWeight": 1,
+          "lowCayWeight": 1,
+          "atollWeight": 1,
+          "rockySkerryWeight": 1
+        }
+      }
+    },
+    "generation": 1,
+    "expedition": {
+      "id": 1,
+      "active": false,
+      "successfulReturns": 0,
+      "failedExpeditions": 1,
+      "pendingRespawn": {
+        "expeditionId": 1,
+        "generation": 1,
+        "forgottenTiles": 79,
+        "wreckId": 1,
+        "remainingSeconds": 2.5
+      }
+    },
+    "ship": {
+      "worldX": 144,
+      "worldY": 144,
+      "heading": 0,
+      "speed": 0,
+      "currentTileX": 4,
+      "currentTileY": 4,
+      "provisions": 0,
+      "provisionAccumulator": 0
+    },
+    "knowledge": {
+      "encoding": "non-unknown-runs-v1",
+      "runs": [
+        [
+          3305,
+          5,
+          2,
+          0
+        ],
+        [
+          3400,
+          8,
+          2,
+          0
+        ],
+        [
+          3412,
+          5,
+          2,
+          0
+        ],
+        [
+          3496,
+          18,
+          2,
+          0
+        ],
+        [
+          3591,
+          20,
+          2,
+          0
+        ],
+        [
+          3686,
+          21,
+          2,
+          0
+        ],
+        [
+          3782,
+          22,
+          2,
+          0
+        ],
+        [
+          3877,
+          23,
+          2,
+          0
+        ],
+        [
+          3972,
+          25,
+          2,
+          0
+        ],
+        [
+          4067,
+          27,
+          2,
+          0
+        ],
+        [
+          4163,
+          28,
+          2,
+          0
+        ],
+        [
+          4258,
+          29,
+          2,
+          0
+        ],
+        [
+          4354,
+          29,
+          2,
+          0
+        ],
+        [
+          4450,
+          30,
+          2,
+          0
+        ],
+        [
+          4546,
+          30,
+          2,
+          0
+        ],
+        [
+          4642,
+          30,
+          2,
+          0
+        ],
+        [
+          4738,
+          30,
+          2,
+          0
+        ],
+        [
+          4834,
+          29,
+          2,
+          0
+        ],
+        [
+          4930,
+          29,
+          2,
+          0
+        ],
+        [
+          5026,
+          28,
+          2,
+          0
+        ],
+        [
+          5122,
+          27,
+          2,
+          0
+        ],
+        [
+          5218,
+          26,
+          2,
+          0
+        ],
+        [
+          5314,
+          24,
+          2,
+          0
+        ],
+        [
+          5411,
+          22,
+          2,
+          0
+        ],
+        [
+          5507,
+          21,
+          2,
+          0
+        ],
+        [
+          5604,
+          19,
+          2,
+          0
+        ],
+        [
+          5701,
+          18,
+          2,
+          0
+        ],
+        [
+          5798,
+          16,
+          2,
+          0
+        ],
+        [
+          5898,
+          12,
+          2,
+          0
+        ],
+        [
+          5997,
+          8,
+          2,
+          0
+        ],
+        [
+          6096,
+          3,
+          2,
+          0
+        ]
+      ]
+    },
+    "wrecks": [
+      {
+        "id": 1,
+        "generation": 1,
+        "expeditionId": 1,
+        "worldX": 144,
+        "worldY": 144,
+        "tileX": 4,
+        "tileY": 4,
+        "heading": 0,
+        "discovered": false
+      }
+    ],
+    "discoveries": {
+      "provisional": [],
+      "returned": []
+    },
+    "terrainPatches": []
+  }
+}

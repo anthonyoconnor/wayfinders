@@ -269,7 +269,7 @@ describe("save-game validation", () => {
 
   it("distinguishes unsupported schema and generator versions from corrupt data", () => {
     const futureSchema = makeValidSave() as SaveGameV1 & { schemaVersion: number };
-    futureSchema.schemaVersion = 2;
+    futureSchema.schemaVersion = SAVE_SCHEMA_VERSION + 1;
     expect(() => parseSaveGame(futureSchema)).toThrow(UnsupportedSaveSchemaVersionError);
 
     const futureGenerator = makeValidSave() as SaveGameV1 & { world: { generatorVersion: number } };

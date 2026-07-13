@@ -8,6 +8,7 @@ import type { ShipState, ShipwreckState } from "../core/types";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
+export const ACCEPTED_BASELINE_SAVE_SCHEMA_VERSION = 1 as const;
 export const SAVE_SCHEMA_VERSION = 1 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
@@ -59,11 +60,12 @@ export interface PendingRespawnSaveState {
 }
 
 export interface SaveGameV1<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> {
-  schemaVersion: typeof SAVE_SCHEMA_VERSION;
+  /** Historical discriminator: never tie a frozen schema type to the latest version constant. */
+  schemaVersion: 1;
   savedAt: number;
   world: {
     seed: number;
-    generatorVersion: typeof WORLD_GENERATOR_VERSION;
+    generatorVersion: 1;
     generationConfig: GenerationConfigV1;
   };
   generation: number;
@@ -92,6 +94,14 @@ export interface SaveGameV1<TDiscovery extends DiscoverySaveRecord = DiscoverySa
 }
 
 export type SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> = SaveGameV1<TDiscovery>;
+
+type SaveMigration = (value: unknown) => unknown;
+
+/**
+ * Adjacent schema migrations keyed by their source version. New authoritative
+ * state adds one real step here; missing steps fail closed instead of guessing.
+ */
+const SAVE_MIGRATIONS: ReadonlyMap<number, SaveMigration> = new Map();
 
 export interface KnowledgeCell {
   state: KnowledgeState;
@@ -312,16 +322,53 @@ export function validateKnowledgeRuns(tileCount: number, value: unknown): assert
   }
 }
 
-export function parseSaveGame(value: unknown): SaveGameV1 {
+/**
+ * Loads any supported historical schema through explicit adjacent migrations,
+ * then validates the canonical current schema. Migration steps must be pure;
+ * callers may retain the original record when preserving browser storage.
+ */
+export function migrateSaveGame(value: unknown): SaveGame {
+  let current = value;
+  let schemaVersion = readSaveSchemaVersion(current);
+  if (
+    schemaVersion < ACCEPTED_BASELINE_SAVE_SCHEMA_VERSION
+    || schemaVersion > SAVE_SCHEMA_VERSION
+  ) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+
+  while (schemaVersion < SAVE_SCHEMA_VERSION) {
+    const migration = SAVE_MIGRATIONS.get(schemaVersion);
+    if (!migration) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+    const migrated = migration(current);
+    const migratedVersion = readSaveSchemaVersion(migrated);
+    if (migratedVersion !== schemaVersion + 1) {
+      fail(
+        `migration from version ${schemaVersion} must produce version ${schemaVersion + 1}`,
+        "save.schemaVersion",
+      );
+    }
+    current = migrated;
+    schemaVersion = migratedVersion;
+  }
+
+  return parseSaveGameV1(current);
+}
+
+/** Main load entrypoint; retained under the established API name. */
+export function parseSaveGame(value: unknown): SaveGame {
+  return migrateSaveGame(value);
+}
+
+/** Validates the immutable accepted-baseline schema without migrating it. */
+export function parseSaveGameV1(value: unknown): SaveGameV1 {
   const root = record(value, "save");
   const schemaVersion = integer(root.schemaVersion, "save.schemaVersion");
-  if (schemaVersion !== SAVE_SCHEMA_VERSION) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
+  if (schemaVersion !== 1) throw new UnsupportedSaveSchemaVersionError(schemaVersion);
 
   nonNegativeFinite(root.savedAt, "save.savedAt");
   const world = record(root.world, "save.world");
   const seed = safeInteger(world.seed, "save.world.seed");
   const generatorVersion = integer(world.generatorVersion, "save.world.generatorVersion");
-  if (generatorVersion !== WORLD_GENERATOR_VERSION) {
+  if (generatorVersion !== 1) {
     throw new UnsupportedWorldGeneratorVersionError(generatorVersion);
   }
   const generationConfig = validateGenerationConfig(world.generationConfig, seed);
@@ -391,6 +438,26 @@ export function isSaveGame(value: unknown): value is SaveGameV1 {
   } catch {
     return false;
   }
+}
+
+export type SaveGameCompatibility = "loadable" | "unsupported-newer" | "invalid";
+
+/** Classifies a stored slot without mutating or replacing it. */
+export function classifySaveGame(value: unknown): SaveGameCompatibility {
+  try {
+    migrateSaveGame(value);
+    return "loadable";
+  } catch (error) {
+    if (
+      error instanceof UnsupportedSaveSchemaVersionError
+      && error.version > SAVE_SCHEMA_VERSION
+    ) return "unsupported-newer";
+    return "invalid";
+  }
+}
+
+function readSaveSchemaVersion(value: unknown): number {
+  return integer(record(value, "save").schemaVersion, "save.schemaVersion");
 }
 
 function validateGenerationConfig(value: unknown, seed: number): GenerationConfigV1 {

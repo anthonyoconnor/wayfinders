@@ -11,6 +11,7 @@ import { FrameTimingMonitor } from "../core/FrameTimingMonitor";
 import { SimulationClock } from "../core/SimulationClock";
 import type { MovementInput } from "../core/types";
 import type { SaveStore } from "../persistence/IndexedDbSaveStore";
+import { classifySaveGame } from "../persistence/SaveGame";
 import { worldToGrid } from "../world/CoordinateSystem";
 import type { GeneratedIsland } from "../world/IslandGenerator";
 import { KnowledgeState } from "../world/TileData";
@@ -736,6 +737,13 @@ export class WayfindersScene extends Phaser.Scene {
 
   private async saveCheckpoint(): Promise<boolean> {
     try {
+      const existing = await this.checkpointStore.load();
+      if (existing !== undefined && classifySaveGame(existing) === "unsupported-newer") {
+        this.checkpointAvailable = true;
+        this.updatePersistenceOutputs();
+        this.log("The manual checkpoint uses a newer save schema and was preserved. Clear saves before replacing it.");
+        return false;
+      }
       const tile = this.simulation.snapshot().tile;
       await this.checkpointStore.save(this.simulation.createSave());
       this.checkpointAvailable = true;

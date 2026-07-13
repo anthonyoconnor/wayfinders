@@ -73,7 +73,15 @@ than a complete player-facing game-management flow.
 
 #### GP-0.1 — Save evolution and migration
 
-Status: proposed.
+Status: accepted.
+
+Acceptance evidence (2026-07-12): immutable raw accepted-baseline V1 fixtures
+cover docked return, active expedition and pending-wreck states. All load paths
+use one fail-closed adjacent-version migration dispatcher; migration and restore
+are input-preserving and idempotent, unsupported newer records remain protected,
+and autosave/checkpoint storage remains one lineage with two atomic records. The
+full pipeline passes 149 tests across 16 files plus typecheck and production
+build. Migration runs only at load boundaries and adds no movement-loop work.
 
 Before new authoritative gameplay state is integrated:
 
