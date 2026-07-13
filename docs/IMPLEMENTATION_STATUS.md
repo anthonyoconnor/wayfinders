@@ -11,7 +11,8 @@ persistence and the performance foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
-`Wayfinders_Roadmap.md`. No forward minor milestone is approved or started.
+`Wayfinders_Roadmap.md`. No forward minor milestone has been authorized,
+started or accepted.
 
 ## Run and verify
 
@@ -200,14 +201,23 @@ Current verification baseline:
 
 ## Proposed continuation
 
-No implementation should begin until the first roadmap gate is confirmed.
+No implementation should begin until the user authorizes a named roadmap minor
+or ordered batch. An authorized batch remains in force through its final named
+minor. Complete, verify and record each acceptance gate, then continue into the
+next minor without stopping for renewed permission. Pause only when the batch is
+complete, the user intervenes, or continuing requires a new product decision,
+expanded scope or authority, or an unresolved external blocker.
+
 The proposed sequence begins with:
 
 1. `GP-0.1` — establish baseline-save fixtures and an explicit migration chain;
-2. `GP-0.2` — freeze shared opportunity, survey, navigator, route and integration
-   contracts; and
+2. `GP-0.2` — freeze only GP-1 opportunity identity, survey commands/results,
+   persistence ownership, renderer read models and single-owner integration
+   boundaries; and
 3. `GP-1.1` — add deterministic fishing-shoal definitions and clues using
    developer graphics.
+
+Navigator and general route contracts remain deferred to their owning minors.
 
 The first product acceptance target is the complete `GP-1` survey loop. The
 graphics track remains deferred until `GP-3.2` is accepted, proving the

@@ -1,7 +1,7 @@
 # Wayfinders development roadmap
 
 Status: proposed. The current implementation is the accepted baseline; no
-forward roadmap minor is approved or started.
+forward roadmap minor has been authorized, started or accepted.
 
 ## Roadmap model
 
@@ -13,14 +13,24 @@ numbering system for future work. Forward planning uses three labels:
 - **GR-x.y** — graphics, asset-pipeline and production-presentation gates.
 
 A minor milestone is complete only when its behavior, persistence, tests,
-readability and performance criteria are accepted. A major milestone closes
-only when all required minor gates are accepted.
+readability and performance criteria pass and its acceptance evidence is
+recorded. A major milestone closes only when all required minor gates pass.
 
-Before an approved minor starts, its implementation plan records measurable
-baseline and regression budgets appropriate to that work (for example frame
-time, memory, load time, traffic count or bounded recovery voyages). The
-roadmap intentionally does not invent target numbers before representative
-work exists to measure.
+Authorization and acceptance are distinct. The user may authorize one minor or
+an explicitly ordered batch of named minors. Every batch member is authorized
+up front, but integration and acceptance remain dependency ordered. Complete,
+verify and record each minor's acceptance gate, then continue immediately into
+the next named minor without asking for renewed permission. A failed check is
+work to resolve within the authorized scope, not a new authorization boundary.
+Work pauses only when the batch is complete, the user intervenes, or continuing
+requires a new product decision, expanded scope or authority, or an unresolved
+external blocker.
+
+Before each authorized minor starts, including every member of an authorized
+batch, its implementation plan records measurable baseline and regression
+budgets appropriate to that work (for example frame time, memory, load time,
+traffic count or bounded recovery voyages). The roadmap intentionally does not
+invent target numbers before representative work exists to measure.
 
 Developer graphics remain intentional throughout gameplay development and
 remain the fallback after production assets exist. No rendered pixel, sprite
@@ -31,8 +41,9 @@ community. **Community** is the broader design term and may also describe
 remote settlements. Code and save contracts must not use the terms
 interchangeably.
 
-This roadmap records proposed sequencing. It does not authorize implementation
-until the next minor milestone is explicitly confirmed.
+This roadmap records proposed sequencing and authorizes no work by itself.
+Implementation starts only when the user explicitly authorizes a named minor or
+ordered batch of minors.
 
 ## Accepted baseline
 
@@ -93,7 +104,8 @@ persists correctly.
 
 Status: proposed.
 
-Establish only the boundaries needed by the first approved work:
+Establish only the boundaries needed by GP-1; authorization of later minors in
+the same batch does not widen this gate:
 
 - ownership of stable ID namespaces, content versions and migrations;
 - authoritative-versus-derived state rules;
@@ -102,14 +114,14 @@ Establish only the boundaries needed by the first approved work:
 - single-owner integration boundaries for simulation, persistence and scene
   wiring.
 
-Cargo, tribe, navigator, achievement, route, idol and graphics contracts are
-approved and versioned at their owning GP/GR minor rather than designed in full
-up front.
+Cargo, tribe, navigator, achievement, general route, idol and graphics
+contracts remain deferred to their owning GP/GR minor. Batch authorization of
+those later minors does not pull their contract design into GP-0.2.
 
-Acceptance gate: GP-1's opportunity identity, survey command, persistence
-ownership and renderer read model are explicit, versioned and sufficient for
-separate pure-module work. This is an engineering gate, not player-facing
-feature completion.
+Acceptance gate: GP-1's opportunity identity, survey command/result types,
+persistence ownership, renderer read models and narrowly required integration
+boundaries are explicit, versioned and sufficient for separate pure-module
+work. This is an engineering gate, not player-facing feature completion.
 
 ## Gameplay track
 
@@ -159,16 +171,31 @@ Status: proposed.
   - latent → sighted/provisional → returned lead when reported safely without
     surveying; a returned lead is inherited but inactive;
   - latent → sighted/provisional → surveyed/provisional → returned survey when
-    the investigation is safely reported.
+    the investigation is safely reported;
+  - returned lead → surveyed/provisional upgrade → returned survey when it is
+    investigated on a later expedition and safely reported. Until exact-dock
+    return, the committed returned lead remains the rollback state, so a
+    wreck discards only the provisional upgrade and leaves the returned lead
+    intact.
+- Treat a returned survey as terminal and idempotent for GP-1. Later sightings,
+  survey input, docking and wreck resolution leave its record and deterministic
+  outcome unchanged; they do not consume another case, create provisional state
+  or duplicate its return commit or report.
 - Add distinct faint provisional and returned-lead marks plus a concise
   automatic dock report.
 - Commit only at the exact home dock; remove a failed expedition's provisional
-  surveys without deleting the deterministic opportunity.
+  state without deleting the deterministic opportunity or any prior returned
+  state.
 
 Acceptance gate: clue, provisional sighting, returned lead, provisional survey
-and returned survey are distinct; only a returned survey is eligible for later
-activation; wreck loss and reload are correct at every state; existing
-provision, route-growth, wreck and generation rules remain unchanged.
+and returned survey are distinct; a later survey of a returned lead commits
+only on exact-home-dock return and a wreck restores the same returned lead; a
+returned survey is terminal and idempotent across revisits, repeat input,
+dock/wreck handling and repeated autosave/manual-checkpoint round trips from a
+record containing that state, with no additional case consumption, reroll, or
+duplicate record, report or commit; only a returned survey is eligible for
+later activation; existing provision, route-growth, wreck and generation rules
+remain unchanged.
 
 #### GP-1.4 — Returned-ground cue and connectivity proof
 
@@ -571,8 +598,10 @@ that missing control scheme implicitly.
 ## Dependencies and safe parallel work
 
 The graph shows acceptance dependencies, not authorization for concurrent
-integration. Only explicitly approved minors may start. Parallel work is
-limited to the pure modules/read models described after the graph.
+integration. A minor may be authorized individually or within an ordered batch,
+but it may be integrated or accepted only after all incoming acceptance
+dependencies pass. Batch authorization waives neither dependency order nor the
+safe-parallel-work limits below.
 
 ```mermaid
 flowchart LR
@@ -621,8 +650,9 @@ flowchart LR
     GP43 --> GP5
 ```
 
-Work that may proceed in parallel only after its relevant minor and minimal
-versioned contracts are approved:
+Work may proceed in parallel only after its relevant minor is authorized,
+individually or within a batch, and its minimal versioned contracts are
+accepted:
 
 | Workstream | Safe parallel boundary | Integration gate |
 | --- | --- | --- |
@@ -679,15 +709,17 @@ each minor is planned; they are not permanent product rules.
 
 ## Decisions awaiting confirmation
 
-Immediate roadmap approvals required before GP-0/GP-1 implementation:
+Immediate product decisions required before GP-0/GP-1 may be authorized,
+individually or as an ordered batch:
 
 1. Accept the Baseline plus `GP-*`/`GR-*` major-and-minor roadmap model.
 2. Choose whether the storage architecture remains one active lineage plus a
    checkpoint (recommended first scope) or must support multiple named games.
 3. GP-1 begins with fishing shoals, one fixed survey case per new expedition
    allocation and developer art.
-4. A safely returned but unsurveyed sighting becomes a persistent lead but
-   grants no benefit; a wreck loses the provisional sighting.
+4. A safely returned but unsurveyed sighting becomes an inactive persistent
+   lead that can be surveyed later. A wreck loses only the current expedition's
+   provisional state and preserves any earlier returned lead.
 5. GR-1 may start only after GP-3.2 proves survey → return → visible tribe
    benefit using developer graphics.
 
@@ -704,5 +736,8 @@ Later product approvals are recorded now but do not block GP-0/GP-1:
 
 Recommended delivery rule: parallel feature agents own disjoint new
 modules/tests, while one integration owner changes shared lifecycle, save and
-scene files at each gate. Reconfirm the file ownership map in every approved
-minor's implementation plan.
+scene files within each minor. Reconfirm the file ownership map in every
+authorized minor's implementation plan. In an authorized batch, record each
+minor's acceptance evidence and continue directly to the next included minor
+when its gate and dependencies pass; do not request renewed permission between
+batch members.
