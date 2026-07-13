@@ -3,17 +3,17 @@ import {
   patchPrototypeConfig,
   prototypeConfig,
   resetPrototypeConfig,
-} from "./tidebound/config/prototypeConfig";
-import { GameSimulation, SaveRestoreError } from "./tidebound/core/GameSimulation";
-import { IndexedDbSaveStore } from "./tidebound/persistence/IndexedDbSaveStore";
+} from "./wayfinders/config/prototypeConfig";
+import { GameSimulation, SaveRestoreError } from "./wayfinders/core/GameSimulation";
+import { IndexedDbSaveStore } from "./wayfinders/persistence/IndexedDbSaveStore";
 import {
   applyGenerationConfig,
   parseSaveGame,
   SaveValidationError,
   UnsupportedSaveSchemaVersionError,
   UnsupportedWorldGeneratorVersionError,
-} from "./tidebound/persistence/SaveGame";
-import { TideboundScene, type PersistenceBootState } from "./tidebound/rendering/TideboundScene";
+} from "./wayfinders/persistence/SaveGame";
+import { WayfindersScene, type PersistenceBootState } from "./wayfinders/rendering/WayfindersScene";
 import "./styles.css";
 
 type ShellState = "starting" | "ready" | "error";
@@ -194,7 +194,7 @@ try {
   }
 
   wayfindersGame = createWayfindersGame([
-    new TideboundScene(simulation, saveStore, checkpointStore, persistenceBoot),
+    new WayfindersScene(simulation, saveStore, checkpointStore, persistenceBoot),
   ]);
   window.dispatchEvent(
     new CustomEvent("wayfinders:shell-ready", {

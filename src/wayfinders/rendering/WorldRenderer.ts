@@ -5,6 +5,7 @@ import { IslandKind, type GeneratedIsland } from "../world/IslandGenerator";
 import { seededValue } from "../world/SeededRandom";
 import { KnowledgeState, TerrainType } from "../world/TileData";
 import type { GeneratedWorld } from "../world/WorldGenerator";
+import type { WorldChunk } from "../world/WorldChunk";
 
 const COLORS = {
   ocean: 0x082f40,
@@ -118,6 +119,8 @@ export class WorldRenderer {
   private readonly homeStructures: Phaser.GameObjects.Graphics;
   private readonly labels: Phaser.GameObjects.Text[] = [];
   private chunks: ChunkView[] = [];
+  private lastWorld?: GeneratedWorld["grid"];
+  private observedKnowledgeRevisions = new WeakMap<WorldChunk, number>();
   private destroyed = false;
 
   constructor(private readonly scene: Phaser.Scene) {
@@ -134,6 +137,8 @@ export class WorldRenderer {
     const size = prototypeConfig.navigation.tileSize;
     const islandsById = new Map(generated.islands.map((island) => [island.id, island]));
     this.clear();
+    this.lastWorld = grid;
+    this.observedKnowledgeRevisions = new WeakMap();
 
     this.ocean
       .setSize(grid.width * size, grid.height * size)
@@ -216,6 +221,31 @@ export class WorldRenderer {
       strokeThickness: 4,
     }).setOrigin(0.5).setDepth(10);
     this.labels.push(label);
+    for (const chunk of grid.getLoadedChunks()) {
+      this.observedKnowledgeRevisions.set(chunk, chunk.knowledgeRevision);
+    }
+  }
+
+  /** Repaints only water layers whose authoritative knowledge changed since the last world render. */
+  refreshKnowledge(generated: GeneratedWorld): number {
+    if (this.destroyed) return 0;
+    if (this.lastWorld !== generated.grid) {
+      this.render(generated);
+      return this.chunks.length;
+    }
+
+    const islandsById = new Map(generated.islands.map((island) => [island.id, island]));
+    const columns = Math.ceil(generated.grid.width / generated.grid.chunkSize);
+    let refreshed = 0;
+    for (const worldChunk of generated.grid.getLoadedChunks()) {
+      if (this.observedKnowledgeRevisions.get(worldChunk) === worldChunk.knowledgeRevision) continue;
+      const view = this.chunks[worldChunk.chunkY * columns + worldChunk.chunkX];
+      if (!view) continue;
+      this.redrawWaterLayer(generated, view, islandsById);
+      this.observedKnowledgeRevisions.set(worldChunk, worldChunk.knowledgeRevision);
+      refreshed++;
+    }
+    return refreshed;
   }
 
   destroy(): void {
@@ -271,6 +301,51 @@ export class WorldRenderer {
     chunk.layers[name] = layer;
     chunk.renderers.push(layer);
     return layer;
+  }
+
+  private redrawWaterLayer(
+    generated: GeneratedWorld,
+    chunk: ChunkView,
+    islandsById: ReadonlyMap<number, GeneratedIsland>,
+  ): void {
+    chunk.layers.water?.clear();
+    chunk.layers.waves?.clear();
+    const { grid } = generated;
+    const size = prototypeConfig.navigation.tileSize;
+    const startX = chunk.chunkX * grid.chunkSize;
+    const startY = chunk.chunkY * grid.chunkSize;
+    const endX = Math.min(grid.width, startX + grid.chunkSize);
+    const endY = Math.min(grid.height, startY + grid.chunkSize);
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        const tile = grid.getTile(x, y);
+        const supported = tile.knowledge === KnowledgeState.Supported;
+        const island = islandsById.get(tile.islandId);
+        const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
+        let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
+        if (tile.terrain === TerrainType.ShallowOcean) {
+          waterColor = supported ? palette.shallowSupported : palette.shallow;
+        }
+        const px = (x - startX) * size;
+        const py = (y - startY) * size;
+        if (waterColor !== COLORS.ocean) {
+          const water = this.getLayer(chunk, "water");
+          water.fillStyle(waterColor, 1);
+          water.fillRect(px, py, size + 1, size + 1);
+        }
+        if ((x + y) % 2 === 0 && tile.terrain !== TerrainType.Land) {
+          const waves = this.getLayer(chunk, "waves");
+          const waveOffset = seededValue(generated.seed + 503, x, y) * size * 0.24;
+          waves.lineStyle(1, COLORS.wave, supported ? 0.2 : 0.12);
+          waves.beginPath();
+          waves.moveTo(px + size * 0.2 + waveOffset, py + size * 0.52);
+          waves.lineTo(px + size * 0.45 + waveOffset, py + size * 0.46);
+          waves.lineTo(px + size * 0.7 + waveOffset, py + size * 0.52);
+          waves.strokePath();
+        }
+      }
+    }
   }
 
   private drawCoastTile(
@@ -382,5 +457,7 @@ export class WorldRenderer {
     this.chunks = [];
     for (const label of this.labels) label.destroy();
     this.labels.length = 0;
+    this.lastWorld = undefined;
+    this.observedKnowledgeRevisions = new WeakMap();
   }
 }

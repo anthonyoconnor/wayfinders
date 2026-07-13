@@ -5,6 +5,7 @@ import type { WorldChunk } from "../world/WorldChunk";
 import type { WorldGrid } from "../world/WorldGrid";
 import { KnowledgeState } from "../world/TileData";
 import { addPaddedChunkNeighbours } from "./OverlayChunkInvalidation";
+import { createCameraCulledImage } from "./CameraCulledImage";
 
 interface MaskChunkView {
   image: Phaser.GameObjects.Image;
@@ -109,11 +110,18 @@ export class KnowledgeOverlayRenderer {
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     texture.add("chunk", 0, paddingPixels, paddingPixels, chunkPixels, chunkPixels);
     const displayPixels = chunk.size * prototypeConfig.navigation.tileSize;
-    const image = this.scene.add.image(
+    const image = createCameraCulledImage(
+      this.scene,
       chunk.chunkX * displayPixels,
       chunk.chunkY * displayPixels,
       textureKey,
       "chunk",
+      {
+        left: chunk.chunkX * displayPixels,
+        right: (chunk.chunkX + 1) * displayPixels + 1,
+        top: chunk.chunkY * displayPixels,
+        bottom: (chunk.chunkY + 1) * displayPixels + 1,
+      },
     ).setOrigin(0)
       // A one-world-pixel overlap prevents sub-pixel camera scaling from
       // exposing the boundary between independently filtered chunk quads.

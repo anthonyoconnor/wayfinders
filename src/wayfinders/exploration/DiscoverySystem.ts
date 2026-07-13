@@ -166,6 +166,11 @@ export class DiscoverySystem {
   private readonly definitionByIsland = new Map<number, DiscoveryDefinition>();
   private readonly provisionalById = new Map<number, DiscoveryRecord>();
   private readonly returnedById = new Map<number, DiscoveryRecord>();
+  private provisionalCache: ReadonlyArray<Readonly<DiscoveryRecord>> = Object.freeze([]);
+  private returnedCache: ReadonlyArray<Readonly<DiscoveryRecord>> = Object.freeze([]);
+  private allRecordsCache: ReadonlyArray<Readonly<DiscoveryRecord>> = Object.freeze([]);
+  private recordsDirty = false;
+  private recordsRevisionValue = 0;
 
   constructor(
     private readonly world: WorldGrid,
@@ -177,15 +182,23 @@ export class DiscoverySystem {
   }
 
   get provisional(): readonly Readonly<DiscoveryRecord>[] {
-    return [...this.provisionalById.values()].sort((left, right) => left.id - right.id);
+    this.refreshRecordCaches();
+    return this.provisionalCache;
   }
 
   get returned(): readonly Readonly<DiscoveryRecord>[] {
-    return [...this.returnedById.values()].sort((left, right) => left.id - right.id);
+    this.refreshRecordCaches();
+    return this.returnedCache;
   }
 
   get allRecords(): readonly Readonly<DiscoveryRecord>[] {
-    return [...this.returned, ...this.provisional];
+    this.refreshRecordCaches();
+    return this.allRecordsCache;
+  }
+
+  /** Changes only when the provisional/returned record collections change. */
+  get recordsRevision(): number {
+    return this.recordsRevisionValue;
   }
 
   observeCurrentSight(
@@ -195,8 +208,7 @@ export class DiscoverySystem {
   ): DiscoveryObservation {
     const firstVisibleByIsland = new Map<number, number>();
     for (const index of visibleIndices) {
-      const point = this.world.pointFromIndex(index);
-      const islandId = this.world.getTile(point.x, point.y).islandId;
+      const islandId = this.world.getIslandIdAtIndex(index);
       if (islandId <= 0 || firstVisibleByIsland.has(islandId)) continue;
       firstVisibleByIsland.set(islandId, index);
     }
@@ -218,6 +230,7 @@ export class DiscoverySystem {
       found.push(record);
     }
     found.sort((left, right) => left.id - right.id);
+    if (found.length > 0) this.markRecordsChanged();
     return { found };
   }
 
@@ -231,6 +244,7 @@ export class DiscoverySystem {
       committed.push(returned);
     }
     committed.sort((left, right) => left.id - right.id);
+    if (committed.length > 0) this.markRecordsChanged();
     return committed;
   }
 
@@ -242,6 +256,7 @@ export class DiscoverySystem {
       lost.push(record);
     }
     lost.sort((left, right) => left.id - right.id);
+    if (lost.length > 0) this.markRecordsChanged();
     return lost;
   }
 
@@ -253,6 +268,7 @@ export class DiscoverySystem {
     this.returnedById.clear();
     for (const record of returned) this.restoreRecord(record, true);
     for (const record of provisional) this.restoreRecord(record, false);
+    this.markRecordsChanged();
   }
 
   private restoreRecord(saved: DiscoveryRecord, returned: boolean): void {
@@ -263,7 +279,7 @@ export class DiscoverySystem {
     if (!this.world.inBounds(saved.tileX, saved.tileY)) {
       throw new RangeError(`Discovery ${saved.id} is outside the regenerated world`);
     }
-    if (this.world.getTile(saved.tileX, saved.tileY).islandId !== saved.islandId) {
+    if (this.world.getIslandId(saved.tileX, saved.tileY) !== saved.islandId) {
       throw new RangeError(`Discovery ${saved.id} marker does not belong to its regenerated island`);
     }
     if (!Number.isInteger(saved.expeditionId) || saved.expeditionId <= 0 || saved.expeditionId > 0xffff_ffff) {
@@ -284,5 +300,20 @@ export class DiscoverySystem {
       generation: saved.generation,
     };
     (returned ? this.returnedById : this.provisionalById).set(record.id, record);
+  }
+
+  private markRecordsChanged(): void {
+    this.recordsDirty = true;
+    this.recordsRevisionValue++;
+  }
+
+  private refreshRecordCaches(): void {
+    if (!this.recordsDirty) return;
+    this.provisionalCache = Object.freeze([...this.provisionalById.values()]
+      .sort((left, right) => left.id - right.id));
+    this.returnedCache = Object.freeze([...this.returnedById.values()]
+      .sort((left, right) => left.id - right.id));
+    this.allRecordsCache = Object.freeze([...this.returnedCache, ...this.provisionalCache]);
+    this.recordsDirty = false;
   }
 }

@@ -13,6 +13,8 @@ export class WorldChunk {
   dirty = true;
   modified = false;
   revision = 0;
+  /** Advances only for knowledge or expedition-stamp mutations. */
+  knowledgeRevision = 0;
 
   constructor(
     readonly chunkX: number,
@@ -45,5 +47,10 @@ export class WorldChunk {
     this.dirty = true;
     this.modified ||= modified;
     this.revision++;
+  }
+
+  markKnowledgeDirty(modified = true): void {
+    this.markDirty(modified);
+    this.knowledgeRevision++;
   }
 }

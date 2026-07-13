@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { resetPrototypeConfig } from "../src/tidebound/config/prototypeConfig";
-import { GameSimulation } from "../src/tidebound/core/GameSimulation";
-import type { GeneratedIsland } from "../src/tidebound/world/IslandGenerator";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
+import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
+import type { GeneratedIsland } from "../src/wayfinders/world/IslandGenerator";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
@@ -40,6 +40,63 @@ function knowledgeSignature(simulation: GameSimulation): number[] {
 }
 
 describe("GameSimulation save/load", () => {
+  it("tracks authoritative persistence changes separately from presentation changes", () => {
+    const simulation = new GameSimulation();
+    const initialSaveRevision = simulation.saveRevision;
+    const initialPresentationRevision = simulation.revision;
+
+    simulation.update({ turn: 0, throttle: 1 }, simulation.config.simulation.fixedStepMs / 1_000);
+    expect(simulation.saveRevision).toBe(initialSaveRevision + 1);
+    // In-tile movement used to be invisible to autosave dirtiness.
+    expect(simulation.revision).toBe(initialPresentationRevision);
+
+    const afterMovement = simulation.saveRevision;
+    simulation.refreshRiskOverlays();
+    simulation.setDebugVisibility("navigationGrid", true);
+    expect(simulation.saveRevision).toBe(afterMovement);
+
+    const beforeHeading = simulation.saveRevision;
+    simulation.update({ turn: 1, throttle: 0 }, simulation.config.simulation.fixedStepMs / 1_000);
+    expect(simulation.saveRevision).toBe(beforeHeading + 1);
+
+    expect(simulation.teleport({ x: 4, y: 4 })).toBe(true);
+    expect(simulation.forceWreck()).toBe(true);
+    const beforeWreckHold = simulation.saveRevision;
+    simulation.update({ turn: 0, throttle: 0 }, 0.25);
+    expect(simulation.saveRevision).toBe(beforeWreckHold + 1);
+  });
+
+  it("caches canonical knowledge by world identity and version without sharing mutable snapshots", () => {
+    const simulation = new GameSimulation();
+    const chunkRead = vi.spyOn(simulation.world, "getChunk");
+    const first = simulation.createSave();
+    expect(chunkRead).toHaveBeenCalled();
+
+    chunkRead.mockClear();
+    simulation.setProvisions(simulation.ship.provisions - 1);
+    chunkRead.mockClear();
+    const second = simulation.createSave();
+    expect(chunkRead).not.toHaveBeenCalled();
+    expect(second.knowledge.runs).not.toBe(first.knowledge.runs);
+    expect(second.knowledge.runs[0]).not.toBe(first.knowledge.runs[0]);
+
+    const originalLength = second.knowledge.runs[0][1];
+    (first.knowledge.runs[0] as unknown as number[])[1] = originalLength + 100;
+    expect(simulation.createSave().knowledge.runs[0][1]).toBe(originalLength);
+
+    const supportedIndex = simulation.world.getSupportedKnowledgeIndices().values().next().value;
+    expect(supportedIndex).toBeTypeOf("number");
+    simulation.world.setKnowledgeAtIndex(supportedIndex as number, 0, 0);
+    chunkRead.mockClear();
+    simulation.createSave();
+    expect(chunkRead).toHaveBeenCalled();
+
+    simulation.regenerate(simulation.generated.seed + 1);
+    const regeneratedRead = vi.spyOn(simulation.world, "getChunk");
+    simulation.createSave();
+    expect(regeneratedRead).toHaveBeenCalled();
+  });
+
   it("round-trips inherited routes, wrecks, generations and discoveries", () => {
     const original = new GameSimulation();
     expect(original.teleport(inspectionTile(original, original.generated.islands[1]))).toBe(true);

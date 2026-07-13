@@ -49,6 +49,19 @@ export class DiscoveryRenderer {
     }
   }
 
+  updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
+    const margin = prototypeConfig.navigation.tileSize * 3;
+    const view = camera.worldView;
+    for (const { container } of this.views.values()) {
+      container.setVisible(
+        container.x >= view.left - margin
+        && container.x <= view.right + margin
+        && container.y >= view.top - margin
+        && container.y <= view.bottom + margin,
+      );
+    }
+  }
+
   destroy(): void {
     for (const view of this.views.values()) view.container.destroy(true);
     this.views.clear();

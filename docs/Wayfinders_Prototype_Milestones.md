@@ -2,7 +2,8 @@
 
 ## Current position
 
-Milestones 0 through 4 are complete and accepted. The project has a solid
+Milestones 0 through 4 are complete and accepted, and the pre-asset Milestone
+4.1 performance foundation is implemented. The project has a solid
 playable foundation, and Milestone 5 is the next development milestone.
 
 Developer art was intentional through Milestone 4. Production asset work begins
@@ -86,6 +87,21 @@ seed; visibility and path calculations rebuild instead of being serialized.
 
 Success condition met: the inherited world survives browser sessions and
 discoveries provide additional expedition goals.
+
+### Milestone 4.1 — Performance foundation
+
+Status: complete.
+
+Delivered cached and versioned save serialization, dedicated persistence
+dirtiness, reusable route buffers, incremental Supported-water rendering,
+viewport-culling overlays and persistent markers, render-rate ship/camera
+interpolation, frame-hitch telemetry, throttled diagnostics and the final
+Wayfinders source namespace.
+
+Success condition met: normal sailing no longer performs recurring full-world
+save scans or renderer reconciliation, successful return does not rebuild the
+entire world, and the renderer exposes a stable boundary for Milestone 5 assets
+and animations.
 
 ## Next milestone
 

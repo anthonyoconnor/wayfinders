@@ -23,6 +23,8 @@ export interface ForwardRangeResult {
   candidateIndices: readonly number[];
   /** Active cells in the outermost Unknown-water cost band. */
   presentationCandidateIndices: readonly number[];
+  /** Advances only when the logical reachable mask changes. */
+  logicalRevision: number;
 }
 
 interface ForwardBudgetGroup {
@@ -37,6 +39,9 @@ interface ForwardBudgetCache {
   originX: number;
   originY: number;
   presentationHeading: number;
+  headingCosine: number;
+  headingSine: number;
+  coneCosine: number;
 }
 
 export class ForwardRangeSystem {
@@ -77,6 +82,28 @@ export class ForwardRangeSystem {
   }
 
   calculate(ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">): ForwardRangeResult {
+    return this.calculateResult(ship);
+  }
+
+  /**
+   * Recalculates after a tile/knowledge change while retaining the two
+   * world-sized masks. This is the hot-path counterpart to `calculate` for
+   * long-lived simulations.
+   */
+  recalculate(
+    result: ForwardRangeResult,
+    ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">,
+  ): ForwardRangeResult {
+    if (!this.budgetCaches.has(result)) {
+      throw new Error("Forward range result was not calculated by this system");
+    }
+    return this.calculateResult(ship, result);
+  }
+
+  private calculateResult(
+    ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">,
+    reusable?: ForwardRangeResult,
+  ): ForwardRangeResult {
     if (!this.world.inBounds(ship.currentTileX, ship.currentTileY)) {
       throw new RangeError("Ship tile is outside the world");
     }
@@ -96,8 +123,18 @@ export class ForwardRangeSystem {
       forEachNeighbor: this.forEachSearchNeighbor,
     });
 
-    const mask = new Uint8Array(this.world.tileCount);
-    const presentationMask = new Uint8Array(this.world.tileCount);
+    const mask = reusable?.mask.length === this.world.tileCount
+      ? reusable.mask
+      : new Uint8Array(this.world.tileCount);
+    const presentationMask = reusable?.presentationMask.length === this.world.tileCount
+      ? reusable.presentationMask
+      : new Uint8Array(this.world.tileCount);
+    if (reusable && mask === reusable.mask) {
+      for (const index of reusable.candidateIndices) mask[index] = 0;
+    }
+    if (reusable && presentationMask === reusable.presentationMask) {
+      for (const index of reusable.presentationCandidateIndices) presentationMask[index] = 0;
+    }
     const indicesByCost = new Map<number, number[]>();
     const candidateIndices: number[] = [];
     let reachableCount = 0;
@@ -118,7 +155,7 @@ export class ForwardRangeSystem {
     const groups = [...indicesByCost]
       .sort(([leftCost], [rightCost]) => leftCost - rightCost)
       .map(([cost, indices]) => ({ cost, indices }));
-    const forwardResult: ForwardRangeResult = {
+    const nextValues: ForwardRangeResult = {
       mask,
       presentationMask,
       costs: result.costs,
@@ -129,7 +166,11 @@ export class ForwardRangeSystem {
       coneHalfAngleDegrees: this.config.overlays.forwardConeHalfAngleDegrees,
       candidateIndices,
       presentationCandidateIndices: [],
+      logicalRevision: reusable ? reusable.logicalRevision + 1 : 1,
     };
+    const forwardResult = reusable ?? nextValues;
+    if (reusable) Object.assign(reusable, nextValues);
+    const radians = presentationHeading * Math.PI / 180;
     this.budgetCaches.set(forwardResult, {
       groups,
       activeGroupCount: groups.length,
@@ -137,6 +178,9 @@ export class ForwardRangeSystem {
       originX: ship.currentTileX,
       originY: ship.currentTileY,
       presentationHeading,
+      headingCosine: Math.cos(radians),
+      headingSine: Math.sin(radians),
+      coneCosine: Math.cos(this.config.overlays.forwardConeHalfAngleDegrees * Math.PI / 180),
     });
     this.refreshPresentationFrontier(forwardResult, this.budgetCaches.get(forwardResult)!);
     return forwardResult;
@@ -155,7 +199,7 @@ export class ForwardRangeSystem {
     }
 
     result.budget = budget;
-    cache.presentationHeading = this.normalizeHeading(ship.heading);
+    this.setPresentationHeading(cache, this.normalizeHeading(ship.heading));
     result.presentationHeading = cache.presentationHeading;
     let changed = false;
 
@@ -180,7 +224,9 @@ export class ForwardRangeSystem {
         changed = true;
       }
     }
-    return this.refreshPresentationFrontier(result, cache) || changed;
+    const presentationChanged = this.refreshPresentationFrontier(result, cache);
+    if (changed) result.logicalRevision++;
+    return presentationChanged || changed;
   }
 
   /** Reclips only the sparse terminal band; turning never reruns Dijkstra. */
@@ -189,7 +235,7 @@ export class ForwardRangeSystem {
     if (!cache) throw new Error("Forward range result was not calculated by this system");
     const heading = this.normalizeHeading(ship.heading);
     if (heading === cache.presentationHeading) return false;
-    cache.presentationHeading = heading;
+    this.setPresentationHeading(cache, heading);
     result.presentationHeading = heading;
     return this.refreshPresentationFrontier(result, cache);
   }
@@ -207,15 +253,19 @@ export class ForwardRangeSystem {
       provisions: ship.provisions,
       provisionAccumulator: ship.provisionAccumulator,
     });
-    let changed = false;
-    for (const index of result.candidateIndices) {
-      if (result.mask[index] !== refreshed.mask[index]) changed = true;
-      result.mask[index] = refreshed.mask[index];
+    let changed = result.reachableCount !== refreshed.reachableCount;
+    if (!changed) {
+      for (const index of result.candidateIndices) {
+        if (result.mask[index] === refreshed.mask[index]) continue;
+        changed = true;
+        break;
+      }
     }
-    for (const index of refreshed.candidateIndices) {
-      if (result.mask[index] !== refreshed.mask[index]) changed = true;
-      result.mask[index] = refreshed.mask[index];
-    }
+    // Clear the previous sparse domain before applying the new one. In
+    // particular, cells which became known or unreachable must not survive an
+    // expansion merely because they are absent from the refreshed candidates.
+    for (const index of result.candidateIndices) result.mask[index] = 0;
+    for (const index of refreshed.candidateIndices) result.mask[index] = 1;
     if (result.presentationCandidateIndices.length !== refreshed.presentationCandidateIndices.length) {
       changed = true;
     } else {
@@ -226,9 +276,7 @@ export class ForwardRangeSystem {
       }
     }
     for (const index of result.presentationCandidateIndices) result.presentationMask[index] = 0;
-    for (const index of refreshed.presentationCandidateIndices) {
-      result.presentationMask[index] = refreshed.presentationMask[index];
-    }
+    for (const index of refreshed.presentationCandidateIndices) result.presentationMask[index] = 1;
 
     result.costs.set(refreshed.costs);
     result.budget = refreshed.budget;
@@ -238,6 +286,7 @@ export class ForwardRangeSystem {
     result.coneHalfAngleDegrees = refreshed.coneHalfAngleDegrees;
     result.candidateIndices = refreshed.candidateIndices;
     result.presentationCandidateIndices = refreshed.presentationCandidateIndices;
+    if (changed) result.logicalRevision++;
     const refreshedCache = this.budgetCaches.get(refreshed)!;
     this.budgetCaches.set(result, refreshedCache);
     this.budgetCaches.delete(refreshed);
@@ -259,9 +308,16 @@ export class ForwardRangeSystem {
     const bandWidth = this.config.provisions.unknownCost;
     const minimumCost = result.budget - bandWidth;
 
-    for (const group of cache.groups) {
-      if (group.cost > result.budget) break;
-      if (group.cost <= minimumCost) continue;
+    let lower = 0;
+    let upper = cache.activeGroupCount;
+    while (lower < upper) {
+      const middle = (lower + upper) >>> 1;
+      if (cache.groups[middle].cost <= minimumCost) lower = middle + 1;
+      else upper = middle;
+    }
+
+    for (let groupIndex = lower; groupIndex < cache.activeGroupCount; groupIndex++) {
+      const group = cache.groups[groupIndex];
       for (const index of group.indices) {
         if (this.isInsidePresentationCone(index, cache)) next.push(index);
       }
@@ -288,12 +344,21 @@ export class ForwardRangeSystem {
     const y = Math.floor(index / this.world.width);
     const dx = x - cache.originX;
     const dy = y - cache.originY;
-    const distance = Math.hypot(dx, dy);
-    if (distance === 0) return true;
-    const radians = cache.presentationHeading * Math.PI / 180;
-    const forwardDot = dx * Math.cos(radians) + dy * Math.sin(radians);
-    const minimumDot = distance * Math.cos(this.config.overlays.forwardConeHalfAngleDegrees * Math.PI / 180);
-    return forwardDot >= minimumDot - 1e-10;
+    const distanceSquared = dx * dx + dy * dy;
+    if (distanceSquared === 0) return true;
+    const forwardDot = dx * cache.headingCosine + dy * cache.headingSine;
+    const thresholdSquared = distanceSquared * cache.coneCosine * cache.coneCosine;
+    if (cache.coneCosine >= 0) {
+      return forwardDot >= -1e-10 && forwardDot * forwardDot >= thresholdSquared - 1e-10;
+    }
+    return forwardDot >= -1e-10 || forwardDot * forwardDot <= thresholdSquared + 1e-10;
+  }
+
+  private setPresentationHeading(cache: ForwardBudgetCache, heading: number): void {
+    cache.presentationHeading = heading;
+    const radians = heading * Math.PI / 180;
+    cache.headingCosine = Math.cos(radians);
+    cache.headingSine = Math.sin(radians);
   }
 
   private validateCone(): void {

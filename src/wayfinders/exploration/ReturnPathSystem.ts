@@ -98,6 +98,30 @@ export class ReturnPathSystem {
       "currentTileX" | "currentTileY" | "provisions" | "provisionAccumulator"
     >,
   ): ReturnPathResult {
+    return this.calculateResult(ship);
+  }
+
+  /** Recalculates a changed route while retaining its world-sized risk mask. */
+  recalculate(
+    result: ReturnPathResult,
+    ship: Pick<
+      ShipState,
+      "currentTileX" | "currentTileY" | "provisions" | "provisionAccumulator"
+    >,
+  ): ReturnPathResult {
+    if (!this.budgetCaches.has(result)) {
+      throw new Error("Return path result was not calculated by this system");
+    }
+    return this.calculateResult(ship, result);
+  }
+
+  private calculateResult(
+    ship: Pick<
+      ShipState,
+      "currentTileX" | "currentTileY" | "provisions" | "provisionAccumulator"
+    >,
+    reusable?: ReturnPathResult,
+  ): ReturnPathResult {
     if (!this.world.inBounds(ship.currentTileX, ship.currentTileY)) {
       throw new RangeError("Ship tile is outside the world");
     }
@@ -126,11 +150,16 @@ export class ReturnPathSystem {
     const showRisk = originKnowledge !== KnowledgeState.Supported;
     const riskLevel = showRisk ? this.classifyMargin(returnMargin) : ReturnRiskLevel.Hidden;
     const corridorIndices = hasKnownReturn && showRisk ? this.buildCorridor(pathIndices) : [];
-    const risk = new Uint8Array(this.world.tileCount);
+    const risk = reusable?.risk.length === this.world.tileCount
+      ? reusable.risk
+      : new Uint8Array(this.world.tileCount);
+    if (reusable && risk === reusable.risk) {
+      for (const index of reusable.corridorIndices) risk[index] = ReturnRiskLevel.Hidden;
+    }
     for (const index of corridorIndices) risk[index] = riskLevel;
     const riskCounts = this.countsFor(riskLevel, corridorIndices.length);
 
-    const returnResult: ReturnPathResult = {
+    const nextValues: ReturnPathResult = {
       ...search,
       risk,
       budget,
@@ -143,6 +172,8 @@ export class ReturnPathSystem {
       riskLevel,
       riskCounts,
     };
+    const returnResult = reusable ?? nextValues;
+    if (reusable) Object.assign(reusable, nextValues);
     this.budgetCaches.set(returnResult, { corridorIndices, returnCost, showRisk });
     return returnResult;
   }
@@ -225,9 +256,8 @@ export class ReturnPathSystem {
 
   private findSupportedBoundaryIndices(): number[] {
     this.boundaryWorkspace.clear();
-    for (const personalIndex of this.world.getPersonalKnowledgeIndices()) {
-      if (this.world.isMovementBlockedAtIndex(personalIndex)) continue;
-      this.graph.forEachCardinalNeighbor(personalIndex, this.collectSupportedNeighbor);
+    for (const supportedIndex of this.world.getSupportedPersonalBoundaryIndices()) {
+      this.boundaryWorkspace.add(supportedIndex);
     }
     for (const visibleIndex of this.world.getVisibleIndices()) {
       if (

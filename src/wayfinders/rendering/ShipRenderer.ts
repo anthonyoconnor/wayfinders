@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { prototypeConfig } from "../config/prototypeConfig";
-import type { ShipState } from "../core/types";
+import { interpolateShipPose, type ShipRenderPose } from "./ShipPose";
 
 /** Functional developer-art vessel with a readable heading and lightweight wake. */
 export class ShipRenderer {
@@ -34,12 +34,32 @@ export class ShipRenderer {
     this.container = scene.add.container(0, 0, [this.wake, this.hull]).setDepth(50);
   }
 
-  sync(state: Readonly<ShipState>, visible = true): void {
+  sync(state: Readonly<ShipRenderPose>, visible = true): void {
+    this.applyPose(state.worldX, state.worldY, state.heading, state.speed, visible);
+  }
+
+  syncInterpolated(
+    previous: Readonly<ShipRenderPose>,
+    current: Readonly<ShipRenderPose>,
+    alpha: number,
+    visible = true,
+  ): void {
+    const pose = interpolateShipPose(previous, current, alpha);
+    this.applyPose(
+      pose.worldX,
+      pose.worldY,
+      pose.heading,
+      pose.speed,
+      visible,
+    );
+  }
+
+  private applyPose(worldX: number, worldY: number, heading: number, speed: number, visible: boolean): void {
     this.container
       .setVisible(visible)
-      .setPosition(state.worldX, state.worldY)
-      .setRotation(Phaser.Math.DegToRad(state.heading));
-    const moving = Math.abs(state.speed) > prototypeConfig.navigation.tileSize * 0.05;
+      .setPosition(worldX, worldY)
+      .setRotation(Phaser.Math.DegToRad(heading));
+    const moving = Math.abs(speed) > prototypeConfig.navigation.tileSize * 0.05;
     this.wake.setVisible(moving);
     if (moving) {
       const pulse = 0.58 + Math.sin(this.scene.time.now * 0.008) * 0.16;

@@ -1,6 +1,6 @@
 # Wayfinders browser prototype
 
-Wayfinders is a playable Phaser and TypeScript exploration prototype. Milestones 0-4 are complete: the project now has a stable foundation for sailing, charting water, managing provisions, returning discoveries, inheriting supported knowledge across generations, and saving progress between browser sessions.
+Wayfinders is a playable Phaser and TypeScript exploration prototype. Milestones 0-4 and the pre-asset performance foundation are complete: the project now has a stable base for sailing, charting water, managing provisions, returning discoveries, inheriting supported knowledge across generations, and saving progress between browser sessions.
 
 The current build includes:
 
@@ -12,6 +12,8 @@ The current build includes:
 - deterministic discoveries with carried, returned and lost states; and
 - IndexedDB autosaves plus a separate manual save checkpoint.
 
+The runtime also includes interpolated ship presentation, viewport-culled chunk overlays, cached save encoding, incremental return-route rendering and frame-time diagnostics so Milestone 5 assets can be added without replacing the gameplay foundation.
+
 Production assets and the broader living-world presentation are Milestone 5 work. The current developer assets remain intentional until that milestone.
 
 ## Run locally
@@ -22,6 +24,14 @@ npm.cmd run dev
 ```
 
 Open `http://127.0.0.1:5173/`. Use WASD or the arrow keys to sail, the mouse wheel or Q/E to zoom, and the on-screen developer tools to inspect or regenerate the deterministic world.
+
+To run another instance on a different port, pass the port after `--`:
+
+```powershell
+npm.cmd run dev -- 5174
+```
+
+Then open `http://127.0.0.1:5174/`. An explicitly requested port will not silently fall back to another port if it is already occupied.
 
 Reloading the page restores the latest autosave. **Save checkpoint** records a stable manual checkpoint, and **Load checkpoint** restores the ship and world to that recorded state.
 

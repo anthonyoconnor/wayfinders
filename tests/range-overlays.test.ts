@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { ForwardRangeSystem } from "../src/tidebound/exploration/ForwardRangeSystem.ts";
-import { ReturnPathSystem, ReturnRiskLevel } from "../src/tidebound/exploration/ReturnPathSystem.ts";
-import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData.ts";
-import { WorldGrid } from "../src/tidebound/world/WorldGrid.ts";
+import { ForwardRangeSystem } from "../src/wayfinders/exploration/ForwardRangeSystem.ts";
+import { ReturnPathSystem, ReturnRiskLevel } from "../src/wayfinders/exploration/ReturnPathSystem.ts";
+import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 import { makeConfig, makeShip } from "./helpers.ts";
 
 function countMask(mask: Uint8Array): number {
@@ -124,6 +124,50 @@ it("reports a presentation-only change when expansion moves the frontier beyond 
   expect(result.frontierCount).toBe(0);
 });
 
+it("clears stale Unknown cells when an expanded search sees a changed knowledge graph", () => {
+  const world = new WorldGrid(7, 1, 4);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  const ship = shipAt(0, 0, 2);
+  const system = new ForwardRangeSystem(world, makeConfig());
+  const result = system.calculate(ship);
+  expect(result.mask[world.index(1, 0)]).toBe(1);
+  expect(result.mask[world.index(2, 0)]).toBe(1);
+
+  world.setKnowledge(1, 0, KnowledgeState.Supported);
+  world.setKnowledge(2, 0, KnowledgeState.Personal, 1);
+  ship.provisions = 4;
+  system.updateBudget(result, ship);
+
+  expect(result.mask[world.index(1, 0)]).toBe(0);
+  expect(result.mask[world.index(2, 0)]).toBe(0);
+  expect(result.reachableCount).toBe(countMask(result.mask));
+  expect(result.frontierCount).toBe(countMask(result.presentationMask));
+});
+
+it("reuses its world-sized masks when recalculating after a tile crossing", () => {
+  const world = new WorldGrid(9, 3, 4);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 1, KnowledgeState.Supported);
+  const ship = shipAt(1, 1, 4);
+  const system = new ForwardRangeSystem(world, makeConfig());
+  const result = system.calculate(ship);
+  const mask = result.mask;
+  const presentationMask = result.presentationMask;
+
+  world.setKnowledge(1, 1, KnowledgeState.Personal, 1);
+  ship.currentTileX = 2;
+  const recalculated = system.recalculate(result, ship);
+  const fresh = new ForwardRangeSystem(world, makeConfig()).calculate(ship);
+
+  expect(recalculated).toBe(result);
+  expect(recalculated.mask).toBe(mask);
+  expect(recalculated.presentationMask).toBe(presentationMask);
+  expect(recalculated.mask).toEqual(fresh.mask);
+  expect(recalculated.presentationMask).toEqual(fresh.presentationMask);
+  expect(recalculated.candidateIndices).toEqual(fresh.candidateIndices);
+});
+
 it("stops at known blockers without leaking hidden terrain into Unknown cost", () => {
   const config = makeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } });
   const world = new WorldGrid(5, 1, 3);
@@ -225,6 +269,33 @@ it("clips the terminal band to the configured cone ahead of the ship", () => {
   expect(result.mask[world.index(2, 5)]).toBe(1);
   expect(result.presentationHeading).toBe(0);
   expect(result.coneHalfAngleDegrees).toBe(60);
+});
+
+it("preserves cone boundaries at right, obtuse, and full-circle half angles", () => {
+  const world = new WorldGrid(11, 11, 6);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  const ship = shipAt(5, 5, 3);
+  ship.heading = 0;
+
+  const rightAngle = new ForwardRangeSystem(
+    world,
+    makeConfig({ overlays: { forwardConeHalfAngleDegrees: 90 } }),
+  ).calculate(ship);
+  expect(rightAngle.presentationMask[world.index(5, 2)]).toBe(1);
+  expect(rightAngle.presentationMask[world.index(2, 5)]).toBe(0);
+
+  const obtuse = new ForwardRangeSystem(
+    world,
+    makeConfig({ overlays: { forwardConeHalfAngleDegrees: 120 } }),
+  ).calculate(ship);
+  expect(obtuse.presentationMask[world.index(4, 3)]).toBe(1);
+  expect(obtuse.presentationMask[world.index(3, 4)]).toBe(0);
+
+  const fullCircle = new ForwardRangeSystem(
+    world,
+    makeConfig({ overlays: { forwardConeHalfAngleDegrees: 180 } }),
+  ).calculate(ship);
+  expect(fullCircle.presentationMask[world.index(2, 5)]).toBe(1);
 });
 
 it("rotates only the sparse presentation cone when heading changes", () => {
@@ -397,6 +468,27 @@ it("returns no coloured corridor when already safe or when no known route exists
   expect(countRisks(disconnected.risk)).toEqual({ comfortable: 0, warning: 0, critical: 0, impossible: 0 });
 });
 
+it("reuses its world-sized risk mask when recalculating after a tile crossing", () => {
+  const world = new WorldGrid(8, 1, 4);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  for (let x = 1; x <= 6; x++) world.setKnowledge(x, 0, KnowledgeState.Personal, 1);
+  const ship = shipAt(3, 0, 6);
+  const system = new ReturnPathSystem(world, makeConfig());
+  const result = system.calculate(ship);
+  const risk = result.risk;
+
+  ship.currentTileX = 5;
+  const recalculated = system.recalculate(result, ship);
+  const fresh = new ReturnPathSystem(world, makeConfig()).calculate(ship);
+
+  expect(recalculated).toBe(result);
+  expect(recalculated.risk).toBe(risk);
+  expect(recalculated.risk).toEqual(fresh.risk);
+  expect(recalculated.pathIndices).toEqual(fresh.pathIndices);
+  expect(recalculated.returnCost).toBe(fresh.returnCost);
+});
+
 it("uses sparse knowledge candidates and stops once the ship's shortest path is settled", () => {
   const world = new WorldGrid(40, 40, 8);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
@@ -405,6 +497,7 @@ it("uses sparse knowledge candidates and stops once the ship's shortest path is 
   world.setKnowledge(39, 39, KnowledgeState.Personal, 1);
   const pointSpy = vi.spyOn(world, "pointFromIndex");
   const tileScanSpy = vi.spyOn(world, "forEachTile");
+  const personalScanSpy = vi.spyOn(world, "getPersonalKnowledgeIndices");
 
   const result = new ReturnPathSystem(world, makeConfig()).calculate(shipAt(2, 0, 4));
 
@@ -419,5 +512,6 @@ it("uses sparse knowledge candidates and stops once the ship's shortest path is 
   expect(result.visited[world.index(3, 0)]).toBe(0);
   expect(pointSpy).not.toHaveBeenCalled();
   expect(tileScanSpy).not.toHaveBeenCalled();
+  expect(personalScanSpy).not.toHaveBeenCalled();
 });
 });

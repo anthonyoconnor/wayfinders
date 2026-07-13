@@ -7,13 +7,13 @@ import {
   prototypeConfig,
   resetPrototypeConfig,
   validatePrototypeConfig,
-} from "../src/tidebound/config/prototypeConfig";
-import { dijkstra, DijkstraWorkspace, reconstructDijkstraPath } from "../src/tidebound/navigation/Dijkstra";
-import { createShipStateAtGrid, MovementSystem } from "../src/tidebound/navigation/MovementSystem";
-import { gridToArt, gridToWorld, worldToGrid } from "../src/tidebound/world/CoordinateSystem";
-import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData";
-import { WorldGenerator } from "../src/tidebound/world/WorldGenerator";
-import { WorldGrid } from "../src/tidebound/world/WorldGrid";
+} from "../src/wayfinders/config/prototypeConfig";
+import { dijkstra, DijkstraWorkspace, reconstructDijkstraPath } from "../src/wayfinders/navigation/Dijkstra";
+import { createShipStateAtGrid, MovementSystem } from "../src/wayfinders/navigation/MovementSystem";
+import { gridToArt, gridToWorld, worldToGrid } from "../src/wayfinders/world/CoordinateSystem";
+import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
+import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import { makeConfig } from "./helpers";
 
 beforeEach(() => resetPrototypeConfig());
@@ -174,6 +174,61 @@ describe("world foundations", () => {
     expect(world.isSightBlocked(3, 3)).toBe(true);
   });
 
+  it("tracks per-chunk knowledge revisions independently from terrain changes", () => {
+    const world = new WorldGrid(4, 2, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const left = world.getChunk(0, 0)!;
+    const right = world.getChunk(1, 0)!;
+    const leftKnowledgeRevision = left.knowledgeRevision;
+    const rightKnowledgeRevision = right.knowledgeRevision;
+
+    world.setTerrain(0, 0, TerrainType.ShallowOcean);
+    expect(left.knowledgeRevision).toBe(leftKnowledgeRevision);
+    expect(right.knowledgeRevision).toBe(rightKnowledgeRevision);
+
+    world.setKnowledge(0, 0, KnowledgeState.Personal, 7);
+    expect(left.knowledgeRevision).toBe(leftKnowledgeRevision + 1);
+    expect(right.knowledgeRevision).toBe(rightKnowledgeRevision);
+
+    const knowledge = new Uint8Array(world.tileCount);
+    const stamps = new Uint32Array(world.tileCount);
+    knowledge[world.index(2, 0)] = KnowledgeState.Personal;
+    stamps[world.index(2, 0)] = 8;
+    expect(world.replaceKnowledge(knowledge, stamps)).toBe(true);
+    expect(left.knowledgeRevision).toBe(leftKnowledgeRevision + 2);
+    expect(right.knowledgeRevision).toBe(rightKnowledgeRevision + 1);
+  });
+
+  it("rejects knowledge and expedition-stamp combinations that cannot be persisted", () => {
+    const world = new WorldGrid(2, 1, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+
+    expect(() => world.setKnowledge(0, 0, KnowledgeState.Personal)).toThrow(
+      "Knowledge state 1 is incompatible with expedition stamp 0",
+    );
+    expect(() => world.setKnowledge(0, 0, KnowledgeState.Unknown, 7)).toThrow(
+      "Knowledge state 0 is incompatible with expedition stamp 7",
+    );
+    expect(world.getKnowledge(0, 0)).toBe(KnowledgeState.Unknown);
+    expect(world.getExpeditionStamp(0, 0)).toBe(0);
+  });
+
+  it("maintains the sparse Supported-to-Personal boundary through knowledge and collision changes", () => {
+    const world = new WorldGrid(5, 1, 5);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    world.setKnowledge(0, 0, KnowledgeState.Supported);
+    world.setKnowledge(1, 0, KnowledgeState.Personal, 3);
+    expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([world.index(0, 0)]);
+
+    world.setMovementBlocked(0, 0, true);
+    expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([]);
+    world.setMovementBlocked(0, 0, false);
+    expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([world.index(0, 0)]);
+
+    world.setKnowledge(1, 0, KnowledgeState.Supported);
+    expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([]);
+  });
+
   it("creates a passable home dock, protected harbour approach, and supported home waters", () => {
     const generated = new WorldGenerator().generate(13_371);
     const { grid, landmarks } = generated;
@@ -210,6 +265,21 @@ describe("navigation foundations", () => {
     expect(ship.worldX).toBeCloseTo(64 - prototypeConfig.movement.collisionEpsilon, 6);
     expect(ship.speed).toBe(0);
     expect(result.enteredTiles).toEqual([]);
+  });
+
+  it("reuses the immutable idle result instead of allocating every fixed step", () => {
+    const world = new WorldGrid(3, 3, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const movement = new MovementSystem(world);
+    const ship = createShipStateAtGrid({ x: 1, y: 1 });
+
+    const first = movement.update(ship, { turn: 0, throttle: 0 }, 1 / 30);
+    const second = movement.update(ship, { turn: 0, throttle: 0 }, 1 / 30);
+
+    expect(second).toBe(first);
+    expect(Object.isFrozen(first)).toBe(true);
+    expect(Object.isFrozen(first.enteredTiles)).toBe(true);
+    expect(Object.isFrozen(first.segments)).toBe(true);
   });
 
   it("rejects non-finite movement input before mutating ship state", () => {
@@ -259,6 +329,19 @@ describe("navigation foundations", () => {
     expect(reconstructDijkstraPath(result, 2)).toEqual([0, 1, 2]);
     expect(result.visited[3]).toBe(0);
     expect(result.settledCount).toBe(3);
+  });
+
+  it("rejects invalid Dijkstra cost horizons", () => {
+    const run = (maxCost: number) => dijkstra({
+      nodeCount: 1,
+      starts: [0],
+      maxCost,
+      forEachNeighbor: () => undefined,
+    });
+
+    expect(() => run(-1)).toThrow("maxCost must be non-negative");
+    expect(() => run(Number.NaN)).toThrow("maxCost must be non-negative");
+    expect(run(Number.POSITIVE_INFINITY).costs[0]).toBe(0);
   });
 
   it("reuses numeric heap capacity and exposes sparse settled nodes", () => {

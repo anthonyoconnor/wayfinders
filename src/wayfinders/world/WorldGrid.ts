@@ -18,6 +18,7 @@ export class WorldGrid {
   private readonly knowledgeCounts: number[];
   private readonly personalKnowledgeIndices = new Set<number>();
   private readonly supportedKnowledgeIndices = new Set<number>();
+  private readonly supportedPersonalBoundaryIndices = new Set<number>();
   private readonly visibleIndices = new Set<number>();
   private readonly visibilityDirtyChunks = new Set<WorldChunk>();
 
@@ -60,6 +61,11 @@ export class WorldGrid {
 
   getSupportedKnowledgeIndices(): ReadonlySet<number> {
     return this.supportedKnowledgeIndices;
+  }
+
+  /** Passable Supported cells cardinally adjacent to passable Personal water. */
+  getSupportedPersonalBoundaryIndices(): ReadonlySet<number> {
+    return this.supportedPersonalBoundaryIndices;
   }
 
   getVisibleIndices(): ReadonlySet<number> {
@@ -137,6 +143,7 @@ export class WorldGrid {
     chunk.terrain[index] = terrain;
     chunk.movementBlocked[index] = movementBlocked;
     chunk.sightBlocked[index] = sightBlocked;
+    this.refreshSupportedPersonalBoundaryNear(this.index(x, y));
     chunk.markDirty();
     this.terrainVersion++;
     return true;
@@ -155,7 +162,18 @@ export class WorldGrid {
   setKnowledgeAtIndex(worldIndex: number, knowledge: KnowledgeState, expeditionStamp?: number): boolean {
     const chunk = this.chunkAtIndex(worldIndex);
     const index = this.localIndexFromWorldIndex(worldIndex);
-    const nextStamp = expeditionStamp ?? chunk.expeditionStamp[index];
+    const nextStamp = expeditionStamp
+      ?? (knowledge === KnowledgeState.Personal ? chunk.expeditionStamp[index] : 0);
+    if (knowledge !== KnowledgeState.Unknown && knowledge !== KnowledgeState.Personal && knowledge !== KnowledgeState.Supported) {
+      throw new RangeError(`Invalid knowledge state ${knowledge}`);
+    }
+    if (!Number.isInteger(nextStamp) || nextStamp < 0 || nextStamp > 0xffff_ffff) {
+      throw new RangeError(`Invalid expedition stamp ${nextStamp}`);
+    }
+    if (
+      (knowledge === KnowledgeState.Personal && nextStamp === 0)
+      || (knowledge !== KnowledgeState.Personal && nextStamp !== 0)
+    ) throw new RangeError(`Knowledge state ${knowledge} is incompatible with expedition stamp ${nextStamp}`);
     if (chunk.knowledge[index] === knowledge && chunk.expeditionStamp[index] === nextStamp) return false;
     const previousKnowledge = chunk.knowledge[index] as KnowledgeState;
     chunk.knowledge[index] = knowledge;
@@ -165,14 +183,60 @@ export class WorldGrid {
       this.knowledgeCounts[knowledge]++;
       this.removeKnowledgeIndex(worldIndex, previousKnowledge);
       this.addKnowledgeIndex(worldIndex, knowledge);
+      this.refreshSupportedPersonalBoundaryNear(worldIndex);
     }
-    chunk.markDirty();
+    chunk.markKnowledgeDirty();
     this.knowledgeVersion++;
     return true;
   }
 
   setKnowledge(x: number, y: number, knowledge: KnowledgeState, expeditionStamp?: number): boolean {
     return this.setKnowledgeAtIndex(this.index(x, y), knowledge, expeditionStamp);
+  }
+
+  /**
+   * Replaces persisted knowledge in one bulk operation. The input is validated
+   * before any live state changes, indexes/counts are rebuilt, and each affected
+   * chunk is invalidated at most once.
+   */
+  replaceKnowledge(knowledge: Uint8Array, expeditionStamps: Uint32Array): boolean {
+    if (knowledge.length !== this.tileCount || expeditionStamps.length !== this.tileCount) {
+      throw new RangeError(`Knowledge arrays must contain exactly ${this.tileCount} cells`);
+    }
+    for (let index = 0; index < this.tileCount; index++) {
+      const state = knowledge[index] as KnowledgeState;
+      const stamp = expeditionStamps[index];
+      if (state !== KnowledgeState.Unknown && state !== KnowledgeState.Personal && state !== KnowledgeState.Supported) {
+        throw new RangeError(`Invalid knowledge state ${state} at world index ${index}`);
+      }
+      if (
+        (state === KnowledgeState.Personal && stamp === 0)
+        || (state !== KnowledgeState.Personal && stamp !== 0)
+      ) throw new RangeError(`Invalid expedition stamp ${stamp} at world index ${index}`);
+    }
+
+    const dirtyChunks = new Set<WorldChunk>();
+    this.knowledgeCounts.fill(0);
+    this.personalKnowledgeIndices.clear();
+    this.supportedKnowledgeIndices.clear();
+    for (let index = 0; index < this.tileCount; index++) {
+      const chunk = this.chunkAtIndex(index);
+      const localIndex = this.localIndexFromWorldIndex(index);
+      const state = knowledge[index] as KnowledgeState;
+      const stamp = expeditionStamps[index];
+      if (chunk.knowledge[localIndex] !== state || chunk.expeditionStamp[localIndex] !== stamp) {
+        chunk.knowledge[localIndex] = state;
+        chunk.expeditionStamp[localIndex] = stamp;
+        dirtyChunks.add(chunk);
+      }
+      this.knowledgeCounts[state]++;
+      this.addKnowledgeIndex(index, state);
+    }
+    if (dirtyChunks.size === 0) return false;
+    this.rebuildSupportedPersonalBoundaries();
+    for (const chunk of dirtyChunks) chunk.markKnowledgeDirty();
+    this.knowledgeVersion++;
+    return true;
   }
 
   isVisibleNow(x: number, y: number): boolean {
@@ -232,6 +296,7 @@ export class WorldGrid {
     const value = blocked ? 1 : 0;
     if (chunk.movementBlocked[index] === value) return false;
     chunk.movementBlocked[index] = value;
+    this.refreshSupportedPersonalBoundaryNear(this.index(x, y));
     chunk.markDirty();
     this.terrainVersion++;
     return true;
@@ -270,9 +335,17 @@ export class WorldGrid {
 
   setExpeditionStamp(x: number, y: number, expeditionId: number): boolean {
     const { chunk, index } = this.locate(x, y);
+    if (!Number.isInteger(expeditionId) || expeditionId < 0 || expeditionId > 0xffff_ffff) {
+      throw new RangeError(`Invalid expedition stamp ${expeditionId}`);
+    }
+    const knowledge = chunk.knowledge[index] as KnowledgeState;
+    if (
+      (knowledge === KnowledgeState.Personal && expeditionId === 0)
+      || (knowledge !== KnowledgeState.Personal && expeditionId !== 0)
+    ) throw new RangeError(`Knowledge state ${knowledge} is incompatible with expedition stamp ${expeditionId}`);
     if (chunk.expeditionStamp[index] === expeditionId) return false;
     chunk.expeditionStamp[index] = expeditionId;
-    chunk.markDirty();
+    chunk.markKnowledgeDirty();
     this.knowledgeVersion++;
     return true;
   }
@@ -285,12 +358,32 @@ export class WorldGrid {
     return true;
   }
 
+  getIslandId(x: number, y: number): number {
+    const { chunk, index } = this.locate(x, y);
+    return chunk.islandId[index];
+  }
+
+  getIslandIdAtIndex(worldIndex: number): number {
+    const chunk = this.chunkAtIndex(worldIndex);
+    return chunk.islandId[this.localIndexFromWorldIndex(worldIndex)];
+  }
+
   setResourceId(x: number, y: number, resourceId: number): boolean {
     const { chunk, index } = this.locate(x, y);
     if (chunk.resourceId[index] === resourceId) return false;
     chunk.resourceId[index] = resourceId;
     chunk.markDirty();
     return true;
+  }
+
+  getResourceId(x: number, y: number): number {
+    const { chunk, index } = this.locate(x, y);
+    return chunk.resourceId[index];
+  }
+
+  getResourceIdAtIndex(worldIndex: number): number {
+    const chunk = this.chunkAtIndex(worldIndex);
+    return chunk.resourceId[this.localIndexFromWorldIndex(worldIndex)];
   }
 
   getTile(x: number, y: number): TileSnapshot {
@@ -323,13 +416,14 @@ export class WorldGrid {
         chunk.expeditionStamp.fill(0);
         chunk.islandId.fill(-1);
         chunk.resourceId.fill(-1);
-        chunk.markDirty();
+        chunk.markKnowledgeDirty();
       }
     }
     this.knowledgeCounts.fill(0);
     this.knowledgeCounts[knowledge] = this.tileCount;
     this.personalKnowledgeIndices.clear();
     this.supportedKnowledgeIndices.clear();
+    this.supportedPersonalBoundaryIndices.clear();
     if (knowledge !== KnowledgeState.Unknown) {
       const indices = knowledge === KnowledgeState.Personal
         ? this.personalKnowledgeIndices
@@ -401,5 +495,44 @@ export class WorldGrid {
   private removeKnowledgeIndex(worldIndex: number, knowledge: KnowledgeState): void {
     if (knowledge === KnowledgeState.Personal) this.personalKnowledgeIndices.delete(worldIndex);
     else if (knowledge === KnowledgeState.Supported) this.supportedKnowledgeIndices.delete(worldIndex);
+  }
+
+  private refreshSupportedPersonalBoundaryNear(worldIndex: number): void {
+    this.refreshSupportedPersonalBoundary(worldIndex);
+    const x = worldIndex % this.width;
+    const y = Math.floor(worldIndex / this.width);
+    if (x > 0) this.refreshSupportedPersonalBoundary(worldIndex - 1);
+    if (x + 1 < this.width) this.refreshSupportedPersonalBoundary(worldIndex + 1);
+    if (y > 0) this.refreshSupportedPersonalBoundary(worldIndex - this.width);
+    if (y + 1 < this.height) this.refreshSupportedPersonalBoundary(worldIndex + this.width);
+  }
+
+  private refreshSupportedPersonalBoundary(index: number): void {
+    if (
+      this.getKnowledgeAtIndex(index) !== KnowledgeState.Supported
+      || this.isMovementBlockedAtIndex(index)
+    ) {
+      this.supportedPersonalBoundaryIndices.delete(index);
+      return;
+    }
+
+    const x = index % this.width;
+    const y = Math.floor(index / this.width);
+    const adjacent = (x > 0 && this.isPassablePersonalIndex(index - 1))
+      || (x + 1 < this.width && this.isPassablePersonalIndex(index + 1))
+      || (y > 0 && this.isPassablePersonalIndex(index - this.width))
+      || (y + 1 < this.height && this.isPassablePersonalIndex(index + this.width));
+    if (adjacent) this.supportedPersonalBoundaryIndices.add(index);
+    else this.supportedPersonalBoundaryIndices.delete(index);
+  }
+
+  private rebuildSupportedPersonalBoundaries(): void {
+    this.supportedPersonalBoundaryIndices.clear();
+    for (const index of this.supportedKnowledgeIndices) this.refreshSupportedPersonalBoundary(index);
+  }
+
+  private isPassablePersonalIndex(index: number): boolean {
+    return this.getKnowledgeAtIndex(index) === KnowledgeState.Personal
+      && !this.isMovementBlockedAtIndex(index);
   }
 }

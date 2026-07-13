@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { resetPrototypeConfig } from "../src/tidebound/config/prototypeConfig";
-import { GameSimulation } from "../src/tidebound/core/GameSimulation";
+import { resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
+import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import {
   DiscoverySystem,
   DiscoveryType,
   generateDiscoveryDefinitions,
-} from "../src/tidebound/exploration/DiscoverySystem";
-import type { GeneratedIsland } from "../src/tidebound/world/IslandGenerator";
-import { WorldGenerator } from "../src/tidebound/world/WorldGenerator";
+} from "../src/wayfinders/exploration/DiscoverySystem";
+import type { GeneratedIsland } from "../src/wayfinders/world/IslandGenerator";
+import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
@@ -62,6 +62,37 @@ describe("deterministic discovery catalog", () => {
     expect(system.observeCurrentSight(1, 1, []).found).toHaveLength(0);
     expect(system.observeCurrentSight(1, 1, [revealIndex]).found).toHaveLength(1);
     expect(system.observeCurrentSight(1, 1, [revealIndex]).found).toHaveLength(0);
+  });
+
+  it("caches sorted record views and exposes a change revision", () => {
+    const generated = new WorldGenerator().generate();
+    const system = new DiscoverySystem(generated.grid, generated.seed, generated.islands);
+    const islandId = generated.islands[1].id;
+    let revealIndex = -1;
+    generated.grid.forEachTile((_x, _y, index) => {
+      if (revealIndex < 0 && generated.grid.getIslandIdAtIndex(index) === islandId) revealIndex = index;
+    });
+    expect(revealIndex).toBeGreaterThanOrEqual(0);
+
+    expect(system.recordsRevision).toBe(0);
+    expect(system.provisional).toBe(system.provisional);
+    expect(system.returned).toBe(system.returned);
+    expect(system.allRecords).toBe(system.allRecords);
+    expect(system.observeCurrentSight(1, 1, []).found).toHaveLength(0);
+    expect(system.recordsRevision).toBe(0);
+
+    expect(system.observeCurrentSight(1, 1, [revealIndex]).found).toHaveLength(1);
+    expect(system.recordsRevision).toBe(1);
+    const provisional = system.provisional;
+    const allProvisional = system.allRecords;
+    expect(system.provisional).toBe(provisional);
+    expect(system.allRecords).toBe(allProvisional);
+
+    expect(system.commitExpedition(1)).toHaveLength(1);
+    expect(system.recordsRevision).toBe(2);
+    expect(system.provisional).not.toBe(provisional);
+    expect(system.returned).toBe(system.returned);
+    expect(system.allRecords).not.toBe(allProvisional);
   });
 });
 

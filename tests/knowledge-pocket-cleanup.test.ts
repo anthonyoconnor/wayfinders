@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { KnowledgeSystem } from "../src/tidebound/exploration/KnowledgeSystem.ts";
-import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData.ts";
-import { WorldGrid } from "../src/tidebound/world/WorldGrid.ts";
+import { KnowledgeSystem } from "../src/wayfinders/exploration/KnowledgeSystem.ts";
+import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 import { makeConfig } from "./helpers.ts";
 
 function supportedWorld(width = 7, height = 7): WorldGrid {

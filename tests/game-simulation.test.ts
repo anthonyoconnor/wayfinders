@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { patchPrototypeConfig, resetPrototypeConfig } from "../src/tidebound/config/prototypeConfig";
-import { GameSimulation } from "../src/tidebound/core/GameSimulation";
-import { KnowledgeState } from "../src/tidebound/world/TileData";
+import { patchPrototypeConfig, resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
+import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
+import { KnowledgeState } from "../src/wayfinders/world/TileData";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());

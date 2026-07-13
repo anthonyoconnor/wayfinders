@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { makeConfig } from "./helpers.ts";
-import { IndexedDbSaveStore } from "../src/tidebound/persistence/IndexedDbSaveStore.ts";
+import { IndexedDbSaveStore } from "../src/wayfinders/persistence/IndexedDbSaveStore.ts";
 import {
   SAVE_SCHEMA_VERSION,
   WORLD_GENERATOR_VERSION,
@@ -11,12 +11,14 @@ import {
   captureGenerationConfig,
   decodeKnowledgeRuns,
   encodeKnowledgeRuns,
+  encodeWorldKnowledgeRuns,
   isSaveGame,
   parseSaveGame,
   validateKnowledgeRuns,
   type SaveGameV1,
-} from "../src/tidebound/persistence/SaveGame.ts";
-import { KnowledgeState } from "../src/tidebound/world/TileData.ts";
+} from "../src/wayfinders/persistence/SaveGame.ts";
+import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 
 function makeValidSave(): SaveGameV1 {
   const config = makeConfig();
@@ -129,6 +131,49 @@ describe("knowledge save encoding", () => {
       [2, 1, KnowledgeState.Supported, 0],
     ])).toThrow(/merged/);
   });
+
+  it("bulk-replaces validated knowledge with one invalidation per affected chunk", () => {
+    const world = new WorldGrid(5, 3, 2);
+    world.fill(0, KnowledgeState.Unknown);
+    const knowledge = new Uint8Array(world.tileCount);
+    const stamps = new Uint32Array(world.tileCount);
+    knowledge[0] = KnowledgeState.Supported;
+    knowledge[4] = KnowledgeState.Personal;
+    stamps[4] = 7;
+    const beforeVersion = world.knowledgeVersion;
+    const beforeChunkRevisions = world.getLoadedChunks().map((chunk) => chunk.revision);
+
+    expect(world.replaceKnowledge(knowledge, stamps)).toBe(true);
+    expect(world.knowledgeVersion).toBe(beforeVersion + 1);
+    expect(world.getKnowledgeAtIndex(0)).toBe(KnowledgeState.Supported);
+    expect(world.getKnowledgeAtIndex(4)).toBe(KnowledgeState.Personal);
+    expect(world.getExpeditionStampAtIndex(4)).toBe(7);
+    expect(world.getKnowledgeCount(KnowledgeState.Unknown)).toBe(world.tileCount - 2);
+    world.getLoadedChunks().forEach((chunk, index) => {
+      expect(chunk.revision - beforeChunkRevisions[index]).toBeLessThanOrEqual(1);
+    });
+
+    expect(world.replaceKnowledge(knowledge, stamps)).toBe(false);
+    expect(world.knowledgeVersion).toBe(beforeVersion + 1);
+
+    const invalid = knowledge.slice();
+    const invalidStamps = stamps.slice();
+    invalidStamps[0] = 2;
+    expect(() => world.replaceKnowledge(invalid, invalidStamps)).toThrow(/Invalid expedition stamp/);
+    expect(world.getKnowledgeAtIndex(0)).toBe(KnowledgeState.Supported);
+  });
+
+  it("encodes sparse chunks in canonical world-index order", () => {
+    const world = new WorldGrid(5, 3, 2);
+    expect(encodeWorldKnowledgeRuns(world)).toEqual([]);
+    world.setKnowledge(4, 2, KnowledgeState.Personal, 9);
+    world.setKnowledge(0, 0, KnowledgeState.Supported, 0);
+    world.setKnowledge(1, 0, KnowledgeState.Supported, 0);
+    expect(encodeWorldKnowledgeRuns(world)).toEqual([
+      [0, 2, KnowledgeState.Supported, 0],
+      [14, 1, KnowledgeState.Personal, 9],
+    ]);
+  });
 });
 
 describe("save-game validation", () => {
@@ -188,6 +233,40 @@ describe("save-game validation", () => {
     expect(parseSaveGame(save)).toBe(save);
   });
 
+  it("rejects moving or partially charged ships during a wreck hold", () => {
+    const makePendingSave = (): SaveGameV1 => {
+      const save = makeValidSave();
+      const wreck = save.wrecks[0];
+      save.generation = wreck.generation;
+      save.expedition.id = wreck.expeditionId;
+      save.expedition.pendingRespawn = {
+        expeditionId: wreck.expeditionId,
+        generation: wreck.generation,
+        forgottenTiles: 12,
+        wreckId: wreck.id,
+        remainingSeconds: 2,
+      };
+      Object.assign(save.ship, {
+        worldX: wreck.worldX,
+        worldY: wreck.worldY,
+        currentTileX: wreck.tileX,
+        currentTileY: wreck.tileY,
+        provisions: 0,
+        provisionAccumulator: 0,
+        speed: 0,
+      });
+      return save;
+    };
+
+    const moving = makePendingSave();
+    moving.ship.speed = 1;
+    expect(() => parseSaveGame(moving)).toThrow(/stopped/);
+
+    const partiallyCharged = makePendingSave();
+    partiallyCharged.ship.provisionAccumulator = 0.5;
+    expect(() => parseSaveGame(partiallyCharged)).toThrow(/fractional provision/);
+  });
+
   it("distinguishes unsupported schema and generator versions from corrupt data", () => {
     const futureSchema = makeValidSave() as SaveGameV1 & { schemaVersion: number };
     futureSchema.schemaVersion = 2;
@@ -227,6 +306,10 @@ describe("save-game validation", () => {
     };
     delete incompleteDiscovery.discoveries.returned[0].expeditionId;
     expect(() => parseSaveGame(incompleteDiscovery)).toThrow(/expeditionId/);
+
+    const futureWreck = makeValidSave();
+    futureWreck.wrecks[0].generation = futureWreck.generation + 1;
+    expect(() => parseSaveGame(futureWreck)).toThrow(/later than the current generation/);
   });
 });
 
@@ -234,5 +317,36 @@ describe("IndexedDbSaveStore", () => {
   it("reports unavailable browser storage without failing synchronously", async () => {
     const store = new IndexedDbSaveStore({ indexedDB: undefined });
     await expect(store.load()).rejects.toThrow(/IndexedDB is unavailable/);
+  });
+
+  it("closes a late connection after a blocked open has already failed", async () => {
+    const database = {
+      close: vi.fn(),
+      objectStoreNames: { contains: () => true },
+    } as unknown as IDBDatabase;
+    const request = { result: database } as IDBOpenDBRequest;
+    const indexedDB = { open: vi.fn(() => request) } as unknown as IDBFactory;
+    const store = new IndexedDbSaveStore({ indexedDB });
+
+    const load = store.load();
+    request.onblocked?.call(request, {} as IDBVersionChangeEvent);
+    await expect(load).rejects.toThrow(/blocked/);
+    request.onsuccess?.call(request, {} as Event);
+    expect(database.close).toHaveBeenCalledOnce();
+  });
+
+  it("rejects and closes a connection that lacks the configured object store", async () => {
+    const database = {
+      close: vi.fn(),
+      objectStoreNames: { contains: () => false },
+    } as unknown as IDBDatabase;
+    const request = { result: database } as IDBOpenDBRequest;
+    const indexedDB = { open: vi.fn(() => request) } as unknown as IDBFactory;
+    const store = new IndexedDbSaveStore({ indexedDB, objectStoreName: "missing" });
+
+    const load = store.load();
+    request.onsuccess?.call(request, {} as Event);
+    await expect(load).rejects.toThrow(/object store missing is missing/);
+    expect(database.close).toHaveBeenCalledOnce();
   });
 });

@@ -1,6 +1,6 @@
 # Wayfinders technical design
 
-This document describes the implemented Milestone 4 foundation. The roadmap
+This document describes the implemented Milestone 4.1 foundation. The roadmap
 contains milestone history; this document contains current runtime behavior and
 constraints.
 
@@ -24,7 +24,7 @@ The implementation follows these rules:
 
 ## 2. Runtime architecture
 
-The application is split into these domains:
+The application lives under `src/wayfinders` and is split into these domains:
 
 ```text
 config/       live prototype configuration and validation
@@ -49,6 +49,9 @@ The Phaser scene adapter:
 - owns camera behavior and screen-space UI;
 - connects browser persistence and developer controls;
 - never writes gameplay arrays directly.
+
+The obsolete source namespace and scene identity have been removed. New
+Milestone 5 modules must use the Wayfinders namespace.
 
 A typed event bus communicates lifecycle changes to presentation and
 persistence adapters.
@@ -109,8 +112,9 @@ The bounded prototype world is generated eagerly and its chunks remain loaded.
 Static render objects are camera culled; mutable overlay textures update only
 for dirty chunks and affected neighbors.
 
-Maintained sets and counters provide Personal, Supported and visible indices
-without scanning the full world during normal updates.
+Maintained sets, counters and the sparse Supported/Personal boundary provide
+Personal, Supported, visible and return-root indices without scanning the full
+world during normal updates.
 
 ## 5. Deterministic world generation
 
@@ -364,8 +368,11 @@ IndexedDB contains two atomic records:
 - `autosave`: rolling reload state;
 - `checkpoint`: stable manual state written only by **Save checkpoint**.
 
-Autosave is throttled during continuous play, requested immediately at
-lifecycle boundaries, and flushed best-effort when the page hides. Startup
+Autosave uses a dedicated authoritative `saveRevision`, is normally spaced to
+three seconds during continuous play, requested immediately at lifecycle
+boundaries, and flushed best-effort when the page hides. Knowledge runs are
+cached by world identity and knowledge version, so ship-only saves do not scan
+the world. Startup
 hydrates autosave before Phaser starts, avoiding a default-world flash or
 accidental overwrite.
 
@@ -388,12 +395,16 @@ The game uses WebGL through Phaser.
 
 - Static ocean and terrain use generated Phaser Graphics grouped into
   camera-culled world chunks.
-- Knowledge and risk overlays use reusable chunk-sized CanvasTextures.
+- Knowledge and risk overlays use reusable, viewport-culled chunk-sized
+  CanvasTextures.
 - Knowledge, visibility and sparse risk candidate changes invalidate only
   affected chunks and required neighbors.
+- Successful return redraws only water/wave layers in knowledge-changed chunks;
+  it does not destroy and rebuild the static world.
 - No texture is allocated per simulation frame.
-- The ship, runtime wrecks and discoveries are separate renderers above world
-  and fog layers.
+- The ship is interpolated between deterministic fixed steps. Runtime wrecks
+  and discoveries are separate, viewport-culled, version-driven renderers above
+  world and fog layers.
 - The cargo rack and lifecycle cues are screen-space presentation.
 
 Discovery-sighted messages remain for five seconds. Exact-dock return with one
@@ -402,7 +413,7 @@ growth and replenishment into one five-second message. A return without a
 discovery uses a 3.5-second route/replenishment cue. Only one lifecycle cue may
 exist at a time.
 
-The camera follows the ship smoothly during play. World regeneration and
+The camera follows the interpolated ship smoothly during play. World regeneration and
 checkpoint restore are discontinuities, so the camera snaps to the
 authoritative ship before smoothing resumes.
 
@@ -445,8 +456,10 @@ Developer UI capabilities:
 - tune supported live configuration values.
 
 The browser automation interface exposes snapshot, teleport, provision,
-wreck, regeneration, overlay and checkpoint operations. Canvas data attributes
-provide stable diagnostic values for browser checks.
+wreck, regeneration, overlay, checkpoint and performance operations. Canvas
+data attributes provide stable diagnostic values for browser checks, including
+frame percentiles, long frames, deliberately dropped simulation time and save
+serialization duration.
 
 ## 15. Performance constraints
 
@@ -457,12 +470,16 @@ The current implementation avoids full-world work during normal sailing:
 
 - visibility clears only the previous visible set;
 - knowledge state uses maintained sparse sets and counts;
+- return roots use an incrementally maintained sparse boundary;
 - expedition commit/revert touches only owned indices;
-- Dijkstra systems reuse typed buffers and numeric heaps;
+- Dijkstra systems reuse typed buffers, result masks and numeric heaps;
 - provision-only changes reclassify cached results where possible;
+- unchanged knowledge reuses cached canonical save runs;
 - return rendering processes one sparse route/corridor;
 - overlay uploads are dirty-chunk local;
-- static render chunks are camera culled.
+- static and overlay render chunks are camera culled;
+- discovery/wreck reconciliation is version driven;
+- diagnostics are capped rather than updated on every fixed step.
 
 World generation, placement and open-ocean validation scale with world area but
 run only at generation/restore time. Desktop probes at doubled world dimensions
@@ -474,7 +491,8 @@ is still required; no Web Worker is justified without new profiling evidence.
 The automated suite covers configuration, deterministic generation, movement,
 visibility, knowledge asymmetry, provisions, forward/return calculations,
 overlay invalidation, island navigation, expedition success/failure, Unknown
-pocket cleanup, discoveries, save validation and persistence round trips.
+pocket cleanup, discoveries, save validation, persistence round trips, save
+dirtiness, cached encoding, frame telemetry and ship interpolation.
 
 Browser verification covers WebGL startup, controls, discovery cues, combined
 return presentation, rolling reload, stable manual checkpoints, exact

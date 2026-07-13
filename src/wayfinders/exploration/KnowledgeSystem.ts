@@ -42,27 +42,34 @@ export class KnowledgeSystem {
     expeditionId: number,
   ): KnowledgeUpdate {
     if (update.crossedCenters.length < 2) return { changedIndices: [], changedCount: 0 };
-    const departedStrips = update.crossedCenters.slice(0, -1).map((center, index) => {
-      const next = update.crossedCenters[index + 1];
-      return { center, directionX: next.x - center.x, directionY: next.y - center.y };
-    });
-    const trailingIndices = update.observedIndices.filter((index) => {
-      const point = this.world.pointFromIndex(index);
+    const trailingIndices: number[] = [];
+    for (const index of update.observedIndices) {
       // Remember visible physical landmarks even when they are ahead; they are
       // never traversable and therefore cannot discount outward water travel.
-      if (this.world.isMovementBlocked(point.x, point.y)) return true;
-      return departedStrips.some(({ center, directionX, directionY }) => {
-        const along = (point.x - center.x) * directionX + (point.y - center.y) * directionY;
+      if (this.world.isMovementBlockedAtIndex(index)) {
+        trailingIndices.push(index);
+        continue;
+      }
+      const x = index % this.world.width;
+      const y = Math.floor(index / this.world.width);
+      for (let segment = 0; segment + 1 < update.crossedCenters.length; segment++) {
+        const center = update.crossedCenters[segment];
+        const next = update.crossedCenters[segment + 1];
+        const directionX = next.x - center.x;
+        const directionY = next.y - center.y;
+        const along = (x - center.x) * directionX + (y - center.y) * directionY;
         const segmentLengthSquared = directionX * directionX + directionY * directionY;
-        return along >= 0 && along < segmentLengthSquared;
-      });
-    });
+        if (along < 0 || along >= segmentLengthSquared) continue;
+        trailingIndices.push(index);
+        break;
+      }
+    }
     return this.revealIndices(trailingIndices, expeditionId);
   }
 
   revealIndices(indices: Iterable<number>, expeditionId: number): KnowledgeUpdate {
-    if (!Number.isInteger(expeditionId) || expeditionId < 0 || expeditionId > 0xffff_ffff) {
-      throw new RangeError("expeditionId must be an unsigned 32-bit integer");
+    if (!Number.isInteger(expeditionId) || expeditionId <= 0 || expeditionId > 0xffff_ffff) {
+      throw new RangeError("expeditionId must be a non-zero unsigned 32-bit integer");
     }
 
     const changedIndices: number[] = [];

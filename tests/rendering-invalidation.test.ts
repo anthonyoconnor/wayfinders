@@ -1,15 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
-import { prototypeConfig } from "../src/tidebound/config/prototypeConfig";
-import type { ForwardRangeResult } from "../src/tidebound/exploration/ForwardRangeSystem";
-import { ReturnRiskLevel, type ReturnPathResult } from "../src/tidebound/exploration/ReturnPathSystem";
+import { prototypeConfig } from "../src/wayfinders/config/prototypeConfig";
+import type { ForwardRangeResult } from "../src/wayfinders/exploration/ForwardRangeSystem";
+import { ReturnRiskLevel, type ReturnPathResult } from "../src/wayfinders/exploration/ReturnPathSystem";
 import {
   addCardinalChunkDependents,
   addPaddedChunkNeighbours,
-} from "../src/tidebound/rendering/OverlayChunkInvalidation";
-import { RiskOverlayRenderer } from "../src/tidebound/rendering/RiskOverlayRenderer";
-import type { WorldChunk } from "../src/tidebound/world/WorldChunk";
-import { WorldGrid } from "../src/tidebound/world/WorldGrid";
-import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData";
+} from "../src/wayfinders/rendering/OverlayChunkInvalidation";
+import { RiskOverlayRenderer } from "../src/wayfinders/rendering/RiskOverlayRenderer";
+import { createCameraCulledImage } from "../src/wayfinders/rendering/CameraCulledImage";
+import type { WorldChunk } from "../src/wayfinders/world/WorldChunk";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 
 vi.mock("phaser", () => ({
   default: { Textures: { FilterMode: { LINEAR: 0 } } },
@@ -111,6 +112,7 @@ function makeForward(
     coneHalfAngleDegrees: 45,
     candidateIndices: reachableIndices,
     presentationCandidateIndices: presentationIndices,
+    logicalRevision: 1,
   };
 }
 
@@ -133,6 +135,23 @@ const debugVisibility = {
   forwardRange: true,
   returnViability: true,
 };
+
+describe("camera-culled chunk images", () => {
+  it("keeps normal render flags and rejects images outside the camera world view", () => {
+    const image = { willRender: () => true };
+    const culled = createCameraCulledImage(
+      { add: { image: () => image } } as never,
+      0,
+      0,
+      "chunk",
+      undefined,
+      { left: 100, right: 200, top: 100, bottom: 200 },
+    );
+
+    expect(culled.willRender({ worldView: { left: 120, right: 160, top: 120, bottom: 160 } } as never)).toBe(true);
+    expect(culled.willRender({ worldView: { left: 0, right: 50, top: 0, bottom: 50 } } as never)).toBe(false);
+  });
+});
 
 function keys(chunks: ReadonlySet<WorldChunk>): string[] {
   return [...chunks]
@@ -238,6 +257,28 @@ describe("forward frontier rendering", () => {
 
     expect(texture(0, 0).refreshCount).toBe(leftRefreshes + 1);
     expect(texture(1, 0).refreshCount).toBe(rightRefreshes + 1);
+    expect(texture(0, 0).calls.some(({ x }) => x === 11)).toBe(true);
+  });
+
+  it("redraws same-count logical changes when a reusable result keeps its identity", () => {
+    const world = new WorldGrid(4, 1, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const frontier = world.index(1, 0);
+    const oldNeighbour = world.index(2, 0);
+    const replacement = world.index(3, 0);
+    const forward = makeForward(world, [frontier, oldNeighbour], [frontier]);
+    const { renderer, texture } = makeRendererHarness("reuse-topology-test");
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
+    const leftRefreshes = texture(0, 0).refreshCount;
+    expect(texture(0, 0).calls.some(({ x }) => x === 11)).toBe(false);
+
+    forward.mask[oldNeighbour] = 0;
+    forward.mask[replacement] = 1;
+    forward.candidateIndices = [frontier, replacement];
+    forward.logicalRevision++;
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 2);
+
+    expect(texture(0, 0).refreshCount).toBe(leftRefreshes + 1);
     expect(texture(0, 0).calls.some(({ x }) => x === 11)).toBe(true);
   });
 

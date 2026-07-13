@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { ForwardRangeSystem } from "../src/tidebound/exploration/ForwardRangeSystem.ts";
-import { createShipStateAtGrid } from "../src/tidebound/navigation/MovementSystem.ts";
-import { IslandKind, IslandSize } from "../src/tidebound/world/IslandGenerator.ts";
+import { ForwardRangeSystem } from "../src/wayfinders/exploration/ForwardRangeSystem.ts";
+import { createShipStateAtGrid } from "../src/wayfinders/navigation/MovementSystem.ts";
+import { IslandKind, IslandSize } from "../src/wayfinders/world/IslandGenerator.ts";
 import {
   KnowledgeState,
   TerrainType,
   terrainBlocksMovement,
   terrainBlocksSight,
-} from "../src/tidebound/world/TileData.ts";
-import { WorldGenerator } from "../src/tidebound/world/WorldGenerator.ts";
-import { WorldGrid } from "../src/tidebound/world/WorldGrid.ts";
+} from "../src/wayfinders/world/TileData.ts";
+import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator.ts";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 import { makeConfig } from "./helpers.ts";
 
 function islandTiles(world: ReturnType<WorldGenerator["generate"]>, islandId: number) {

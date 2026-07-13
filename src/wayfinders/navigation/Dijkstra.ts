@@ -94,6 +94,9 @@ export function dijkstra(options: DijkstraOptions): DijkstraResult {
   }
 
   const maxCost = options.maxCost ?? Number.POSITIVE_INFINITY;
+  if (Number.isNaN(maxCost) || maxCost < 0) {
+    throw new RangeError("maxCost must be non-negative");
+  }
   const workspace = options.workspace;
   const buffers = workspace?.prepare(nodeCount);
   const costs = buffers?.costs ?? new Float64Array(nodeCount);

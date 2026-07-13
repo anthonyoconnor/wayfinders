@@ -18,8 +18,9 @@ import {
   applyGenerationConfig,
   captureGenerationConfig,
   decodeKnowledgeRuns,
-  encodeKnowledgeRuns,
+  encodeWorldKnowledgeRuns,
   parseSaveGame,
+  type KnowledgeRun,
   type SaveGameV1,
 } from "../persistence/SaveGame";
 import type { GeneratedWorld } from "../world/WorldGenerator";
@@ -102,6 +103,12 @@ interface PendingRespawnState {
   remainingSeconds: number;
 }
 
+interface KnowledgeSaveCache {
+  world: WorldGrid;
+  knowledgeVersion: number;
+  runs: readonly KnowledgeRun[];
+}
+
 /** A structurally valid save conflicts with its regenerated authoritative world. */
 export class SaveRestoreError extends Error {
   constructor(message: string) {
@@ -127,6 +134,10 @@ export class GameSimulation {
   ship!: ShipState;
   lastMovement: MovementResult = NO_MOVEMENT;
   revision = 0;
+  /** Monotonic dirtiness key for authoritative state included in createSave(). */
+  saveRevision = 0;
+  /** Monotonic collection key for renderers that display permanent wrecks. */
+  wrecksRevision = 0;
   overlaysRevision = 0;
   lifecycleResolutionRevision = 0;
   forwardRange!: ForwardRangeResult;
@@ -147,6 +158,8 @@ export class GameSimulation {
   private failureCount = 0;
   private readonly shipwrecks: ShipwreckState[] = [];
   private pendingRespawn?: PendingRespawnState;
+  private knowledgeSaveCache?: KnowledgeSaveCache;
+  private riskResultsInitialized = false;
 
   constructor(readonly config: PrototypeConfig = prototypeConfig) {
     this.generator = new WorldGenerator(config);
@@ -197,6 +210,10 @@ export class GameSimulation {
     return this.discoverySystem.allRecords;
   }
 
+  get discoveryRecordsRevision(): number {
+    return this.discoverySystem.recordsRevision;
+  }
+
   get wreckPresentationActive(): boolean {
     return this.pendingRespawn !== undefined;
   }
@@ -223,6 +240,7 @@ export class GameSimulation {
 
   update(input: MovementInput, deltaSeconds: number): MovementResult {
     if (this.pendingRespawn) return this.advanceWreckPresentation(deltaSeconds);
+    const previousShip = { ...this.ship };
     const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     const previousHeading = this.ship.heading;
     const previousKnowledge = this.world.getKnowledge(previousTile.x, previousTile.y);
@@ -294,6 +312,7 @@ export class GameSimulation {
     if (movement.tileChanged || headingChanged || charge.consumedBundles > 0 || knowledgeChanged > 0 || lifecycleChanged) {
       this.revision++;
     }
+    if (this.shipSaveStateChanged(previousShip) || knowledgeChanged > 0 || lifecycleChanged) this.saveRevision++;
     return this.lastMovement;
   }
 
@@ -307,6 +326,7 @@ export class GameSimulation {
     this.returnCount = 0;
     this.failureCount = 0;
     this.shipwrecks.length = 0;
+    this.wrecksRevision++;
     this.pendingRespawn = undefined;
     this.ship = createShipStateAtGrid(
       this.generated.landmarks.dock,
@@ -320,6 +340,7 @@ export class GameSimulation {
     this.provisions = new ProvisionSystem(this.world, this.config);
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
+    this.riskResultsInitialized = false;
     this.discoverySystem = new DiscoverySystem(
       this.world,
       this.generated.seed,
@@ -330,6 +351,7 @@ export class GameSimulation {
     this.lastMovement = NO_MOVEMENT;
     this.lifecycleResolutionRevision++;
     this.revision++;
+    this.saveRevision++;
     this.events.emit("worldRegenerated", { seed: normalizedSeed });
   }
 
@@ -352,20 +374,28 @@ export class GameSimulation {
 
     this.recalculateRiskOverlays();
     this.revision++;
+    this.saveRevision++;
     if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
     return true;
   }
 
   refreshVisibility(): void {
     if (this.pendingRespawn) return;
+    const wasActiveExpedition = this.activeExpedition;
     const tile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
     const visibility = this.visibility.updateAt(tile);
     const knowledge = this.knowledge.applyVisibility(visibility, this.expeditionId);
-    this.observeDiscoveries();
-    this.discoverVisibleWrecks();
+    const discoveriesChanged = this.observeDiscoveries() > 0;
+    const wrecksChanged = this.discoverVisibleWrecks() > 0;
     this.recalculateRiskOverlays();
     this.revision++;
+    if (
+      knowledge.changedCount > 0
+      || discoveriesChanged
+      || wrecksChanged
+      || wasActiveExpedition !== this.activeExpedition
+    ) this.saveRevision++;
     if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
   }
 
@@ -382,6 +412,7 @@ export class GameSimulation {
 
     this.recalculateRiskOverlays();
     this.revision++;
+    this.saveRevision++;
   }
 
   addProvisions(delta: number): void {
@@ -397,6 +428,7 @@ export class GameSimulation {
     if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
     this.recalculateRiskOverlays();
     this.revision++;
+    this.saveRevision++;
     return true;
   }
 
@@ -439,10 +471,7 @@ export class GameSimulation {
       ship: { ...this.ship },
       knowledge: {
         encoding: "non-unknown-runs-v1",
-        runs: encodeKnowledgeRuns(this.world.tileCount, (index) => ({
-          state: this.world.getKnowledgeAtIndex(index),
-          expeditionStamp: this.world.getExpeditionStampAtIndex(index),
-        })),
+        runs: this.copyKnowledgeRunsForSave(),
       },
       wrecks: this.shipwrecks.map((wreck) => ({ ...wreck })),
       discoveries: {
@@ -470,14 +499,7 @@ export class GameSimulation {
 
     const generated = this.generator.generate(parsed.world.seed);
     const decoded = decodeKnowledgeRuns(generated.grid.tileCount, parsed.knowledge.runs);
-    for (let index = 0; index < generated.grid.tileCount; index++) {
-      generated.grid.setKnowledgeAtIndex(index, KnowledgeState.Unknown, 0);
-    }
-    for (let index = 0; index < generated.grid.tileCount; index++) {
-      const knowledge = decoded.knowledge[index] as KnowledgeState;
-      if (knowledge === KnowledgeState.Unknown) continue;
-      generated.grid.setKnowledgeAtIndex(index, knowledge, decoded.expeditionStamps[index]);
-    }
+    generated.grid.replaceKnowledge(decoded.knowledge, decoded.expeditionStamps);
 
     if (generated.grid.isMovementBlocked(parsed.ship.currentTileX, parsed.ship.currentTileY)) {
       throw new SaveRestoreError("Saved ship tile is blocked in the regenerated world");
@@ -517,6 +539,7 @@ export class GameSimulation {
     this.failureCount = parsed.expedition.failedExpeditions;
     this.shipwrecks.length = 0;
     this.shipwrecks.push(...restoredWrecks);
+    this.wrecksRevision++;
     this.pendingRespawn = pendingRespawn;
     this.ship = { ...parsed.ship };
     this.movement = new MovementSystem(this.world, this.config);
@@ -525,12 +548,14 @@ export class GameSimulation {
     this.provisions = new ProvisionSystem(this.world, this.config);
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
+    this.riskResultsInitialized = false;
     this.discoverySystem = restoredDiscoveries;
     this.visibility.updateAt({ x: this.ship.currentTileX, y: this.ship.currentTileY });
     this.lastMovement = NO_MOVEMENT;
     this.recalculateRiskOverlays();
     this.lifecycleResolutionRevision++;
     this.revision++;
+    this.saveRevision++;
     this.events.emit("gameLoaded", { schemaVersion: parsed.schemaVersion, seed: parsed.world.seed });
   }
 
@@ -638,8 +663,10 @@ export class GameSimulation {
     const expeditionId = this.expeditionId;
     const generation = this.currentGeneration;
     const lostShip = this.ship;
+    const wreckId = this.shipwrecks.reduce((maximum, wreck) => Math.max(maximum, wreck.id), 0) + 1;
+    if (!Number.isSafeInteger(wreckId)) throw new RangeError("No safe shipwreck identifier remains");
     const wreck: ShipwreckState = {
-      id: this.shipwrecks.length + 1,
+      id: wreckId,
       generation,
       expeditionId,
       worldX: lostShip.worldX,
@@ -650,6 +677,7 @@ export class GameSimulation {
       discovered: false,
     };
     this.shipwrecks.push(wreck);
+    this.wrecksRevision++;
     const reverted = this.knowledge.revertExpedition(expeditionId);
     const lostDiscoveries = this.discoverySystem.revertExpedition(expeditionId);
     const previousProvisions = lostShip.provisions;
@@ -702,6 +730,7 @@ export class GameSimulation {
 
     pending.remainingSeconds = Math.max(0, pending.remainingSeconds - deltaSeconds);
     if (pending.remainingSeconds <= 1e-9) this.completePendingRespawn(pending);
+    this.saveRevision++;
     return NO_MOVEMENT;
   }
 
@@ -785,10 +814,12 @@ export class GameSimulation {
     return this.world.getKnowledge(this.ship.currentTileX, this.ship.currentTileY) === KnowledgeState.Supported;
   }
 
-  private discoverVisibleWrecks(): void {
+  private discoverVisibleWrecks(): number {
+    let discoveredCount = 0;
     for (const wreck of this.shipwrecks) {
       if (wreck.discovered || !this.world.isVisibleNow(wreck.tileX, wreck.tileY)) continue;
       wreck.discovered = true;
+      discoveredCount++;
       this.events.emit("wreckDiscovered", {
         wreckId: wreck.id,
         generation: wreck.generation,
@@ -796,20 +827,56 @@ export class GameSimulation {
         tileY: wreck.tileY,
       });
     }
+    if (discoveredCount > 0) this.wrecksRevision++;
+    return discoveredCount;
   }
 
-  private observeDiscoveries(): void {
-    if (!this.activeExpedition || this.pendingRespawn) return;
+  private observeDiscoveries(): number {
+    if (!this.activeExpedition || this.pendingRespawn) return 0;
     const observation = this.discoverySystem.observeCurrentSight(
       this.expeditionId,
       this.currentGeneration,
     );
     for (const discovery of observation.found) this.events.emit("discoveryFound", discovery);
+    return observation.found.length;
+  }
+
+  private copyKnowledgeRunsForSave(): KnowledgeRun[] {
+    const world = this.world;
+    if (
+      !this.knowledgeSaveCache
+      || this.knowledgeSaveCache.world !== world
+      || this.knowledgeSaveCache.knowledgeVersion !== world.knowledgeVersion
+    ) {
+      this.knowledgeSaveCache = {
+        world,
+        knowledgeVersion: world.knowledgeVersion,
+        runs: encodeWorldKnowledgeRuns(world),
+      };
+    }
+    return this.knowledgeSaveCache.runs.map(([start, length, state, stamp]) => [start, length, state, stamp]);
+  }
+
+  private shipSaveStateChanged(previous: ShipState): boolean {
+    return previous.worldX !== this.ship.worldX
+      || previous.worldY !== this.ship.worldY
+      || previous.heading !== this.ship.heading
+      || previous.speed !== this.ship.speed
+      || previous.currentTileX !== this.ship.currentTileX
+      || previous.currentTileY !== this.ship.currentTileY
+      || previous.provisions !== this.ship.provisions
+      || previous.provisionAccumulator !== this.ship.provisionAccumulator;
   }
 
   private recalculateRiskOverlays(): void {
-    this.forwardRange = this.forwardRanges.calculate(this.ship);
-    this.returnPaths = this.returnPathing.calculate(this.ship);
+    if (this.riskResultsInitialized) {
+      this.forwardRange = this.forwardRanges.recalculate(this.forwardRange, this.ship);
+      this.returnPaths = this.returnPathing.recalculate(this.returnPaths, this.ship);
+    } else {
+      this.forwardRange = this.forwardRanges.calculate(this.ship);
+      this.returnPaths = this.returnPathing.calculate(this.ship);
+      this.riskResultsInitialized = true;
+    }
     this.overlaysRevision++;
     this.events.emit("returnStateChanged", undefined);
   }

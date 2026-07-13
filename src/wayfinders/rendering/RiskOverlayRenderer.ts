@@ -6,6 +6,7 @@ import { ReturnRiskLevel, type ReturnPathResult } from "../exploration/ReturnPat
 import type { WorldChunk } from "../world/WorldChunk";
 import type { WorldGrid } from "../world/WorldGrid";
 import { addCardinalChunkDependents } from "./OverlayChunkInvalidation";
+import { createCameraCulledImage } from "./CameraCulledImage";
 
 interface OverlayChunkView {
   forwardTexture: Phaser.Textures.CanvasTexture;
@@ -40,7 +41,7 @@ export class RiskOverlayRenderer {
   private lastReturning?: ReturnPathResult;
   private lastForwardPresentationCandidates: readonly number[] = [];
   private lastForwardCandidates: readonly number[] = [];
-  private lastForwardReachableCount = -1;
+  private lastForwardLogicalRevision = -1;
   private lastReturnCorridor: readonly number[] = [];
   private lastVisibleIndices: readonly number[] = [];
   private lastForwardVisible?: boolean;
@@ -72,7 +73,7 @@ export class RiskOverlayRenderer {
       this.lastReturning = undefined;
       this.lastForwardPresentationCandidates = [];
       this.lastForwardCandidates = [];
-      this.lastForwardReachableCount = -1;
+      this.lastForwardLogicalRevision = -1;
       this.lastReturnCorridor = [];
       this.lastVisibleIndices = [];
       this.lastForwardVisible = undefined;
@@ -88,7 +89,7 @@ export class RiskOverlayRenderer {
       || forward !== this.lastForward
       || returning !== this.lastReturning;
     const logicalForwardChanged = forward !== this.lastForward
-      || forward.reachableCount !== this.lastForwardReachableCount;
+      || forward.logicalRevision !== this.lastForwardLogicalRevision;
     const chunksChanged = chunks.length !== this.views.size;
     const debugChanged = debug.forwardRange !== this.lastForwardVisible
       || debug.returnViability !== this.lastReturnVisible;
@@ -163,7 +164,7 @@ export class RiskOverlayRenderer {
     this.lastForward = forward;
     this.lastReturning = returning;
     this.lastForwardCandidates = forward.candidateIndices;
-    this.lastForwardReachableCount = forward.reachableCount;
+    this.lastForwardLogicalRevision = forward.logicalRevision;
     this.lastForwardPresentationCandidates = forward.presentationCandidateIndices;
     this.lastReturnCorridor = returning.corridorIndices;
     this.lastVisibleIndices = [...world.getVisibleIndices()];
@@ -181,7 +182,7 @@ export class RiskOverlayRenderer {
     this.lastReturning = undefined;
     this.lastForwardPresentationCandidates = [];
     this.lastForwardCandidates = [];
-    this.lastForwardReachableCount = -1;
+    this.lastForwardLogicalRevision = -1;
     this.lastReturnCorridor = [];
     this.lastVisibleIndices = [];
     this.lastForwardVisible = undefined;
@@ -264,11 +265,17 @@ export class RiskOverlayRenderer {
     forwardTexture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     returnTexture.setFilter(Phaser.Textures.FilterMode.LINEAR);
 
-    const forwardImage = this.scene.add.image(worldX, worldY, forwardKey)
+    const worldBounds = {
+      left: worldX,
+      right: worldX + displayPixels,
+      top: worldY,
+      bottom: worldY + displayPixels,
+    };
+    const forwardImage = createCameraCulledImage(this.scene, worldX, worldY, forwardKey, undefined, worldBounds)
       .setOrigin(0)
       .setDisplaySize(displayPixels, displayPixels)
       .setDepth(37);
-    const returnImage = this.scene.add.image(worldX, worldY, returnKey)
+    const returnImage = createCameraCulledImage(this.scene, worldX, worldY, returnKey, undefined, worldBounds)
       .setOrigin(0)
       .setDisplaySize(displayPixels, displayPixels)
       .setDepth(38);

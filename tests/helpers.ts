@@ -3,8 +3,8 @@ import {
   type DeepPartial,
   type PrototypeConfig,
   type PrototypeConfigSection,
-} from "../src/tidebound/config/prototypeConfig.ts";
-import type { ShipState, TravelSegment } from "../src/tidebound/core/types.ts";
+} from "../src/wayfinders/config/prototypeConfig.ts";
+import type { ShipState, TravelSegment } from "../src/wayfinders/core/types.ts";
 
 export function makeConfig(patch: DeepPartial<PrototypeConfig> = {}): PrototypeConfig {
   const config: PrototypeConfig = {

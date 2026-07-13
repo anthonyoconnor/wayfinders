@@ -6,6 +6,7 @@ import {
 } from "../config/prototypeConfig";
 import type { ShipState, ShipwreckState } from "../core/types";
 import { KnowledgeState } from "../world/TileData";
+import type { WorldGrid } from "../world/WorldGrid";
 
 export const SAVE_SCHEMA_VERSION = 1 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
@@ -163,14 +164,90 @@ export function encodeKnowledgeRuns(
   tileCount: number,
   readCell: (index: number) => KnowledgeCell,
 ): KnowledgeRun[] {
+  let cachedIndex = -1;
+  let cachedCell: KnowledgeCell | undefined;
+  return encodeKnowledgeRunsFromReaders(
+    tileCount,
+    (index) => {
+      cachedIndex = index;
+      cachedCell = readCell(index);
+      return cachedCell.state;
+    },
+    (index) => {
+      if (cachedIndex !== index || !cachedCell) cachedCell = readCell(index);
+      return cachedCell.expeditionStamp;
+    },
+  );
+}
+
+/**
+ * Encodes a WorldGrid without allocating a temporary KnowledgeCell object for
+ * every tile. GameSimulation caches this canonical result by world identity and
+ * knowledgeVersion, so ordinary ship movement does not rescan the world.
+ */
+export function encodeWorldKnowledgeRuns(world: WorldGrid): KnowledgeRun[] {
+  const runs: KnowledgeRun[] = [];
+  let active: KnowledgeRun | undefined;
+  const chunkColumns = Math.ceil(world.width / world.chunkSize);
+
+  for (let y = 0; y < world.height; y++) {
+    const chunkY = Math.floor(y / world.chunkSize);
+    const localY = y % world.chunkSize;
+    for (let chunkX = 0; chunkX < chunkColumns; chunkX++) {
+      const chunk = world.getChunk(chunkX, chunkY);
+      const worldX = chunkX * world.chunkSize;
+      const cellsInChunkRow = Math.min(world.chunkSize, world.width - worldX);
+      if (!chunk) {
+        active = undefined;
+        continue;
+      }
+      const localOffset = localY * world.chunkSize;
+      const worldOffset = y * world.width + worldX;
+      for (let localX = 0; localX < cellsInChunkRow; localX++) {
+        const index = worldOffset + localX;
+        const state = chunk.knowledge[localOffset + localX] as KnowledgeState;
+        const expeditionStamp = chunk.expeditionStamp[localOffset + localX];
+        if (
+          state > KnowledgeState.Supported
+          || (state === KnowledgeState.Personal ? expeditionStamp === 0 : expeditionStamp !== 0)
+        ) assertKnowledgeCell(state, expeditionStamp, `knowledge[${index}]`);
+        if (state === KnowledgeState.Unknown) {
+          active = undefined;
+          continue;
+        }
+        if (
+          active
+          && active[0] + active[1] === index
+          && active[2] === state
+          && active[3] === expeditionStamp
+        ) {
+          const extended: KnowledgeRun = [active[0], active[1] + 1, active[2], active[3]];
+          runs[runs.length - 1] = extended;
+          active = extended;
+        } else {
+          active = [index, 1, state, expeditionStamp];
+          runs.push(active);
+        }
+      }
+    }
+  }
+  return runs;
+}
+
+function encodeKnowledgeRunsFromReaders(
+  tileCount: number,
+  readState: (index: number) => KnowledgeState,
+  readExpeditionStamp: (index: number) => number,
+): KnowledgeRun[] {
   assertPositiveInteger(tileCount, "tileCount");
   const runs: KnowledgeRun[] = [];
   let active: KnowledgeRun | undefined;
 
   for (let index = 0; index < tileCount; index++) {
-    const cell = readCell(index);
-    assertKnowledgeCell(cell.state, cell.expeditionStamp, `knowledge[${index}]`);
-    if (cell.state === KnowledgeState.Unknown) {
+    const state = readState(index);
+    const expeditionStamp = readExpeditionStamp(index);
+    assertKnowledgeCell(state, expeditionStamp, `knowledge[${index}]`);
+    if (state === KnowledgeState.Unknown) {
       active = undefined;
       continue;
     }
@@ -178,14 +255,14 @@ export function encodeKnowledgeRuns(
     if (
       active
       && active[0] + active[1] === index
-      && active[2] === cell.state
-      && active[3] === cell.expeditionStamp
+      && active[2] === state
+      && active[3] === expeditionStamp
     ) {
       const extended: KnowledgeRun = [active[0], active[1] + 1, active[2], active[3]];
       runs[runs.length - 1] = extended;
       active = extended;
     } else {
-      active = [index, 1, cell.state, cell.expeditionStamp];
+      active = [index, 1, state as KnowledgeState.Personal | KnowledgeState.Supported, expeditionStamp];
       runs.push(active);
     }
   }
@@ -263,6 +340,11 @@ export function parseSaveGame(value: unknown): SaveGameV1 {
   validateExpeditionKnowledge(knowledge.runs, expeditionId, expeditionActive);
 
   const wrecks = validateWrecks(root.wrecks, generationConfig);
+  for (let index = 0; index < wrecks.length; index++) {
+    if (wrecks[index].generation > generation) {
+      fail("cannot be later than the current generation", `save.wrecks[${index}].generation`);
+    }
+  }
   if (pendingRespawn) validatePendingWreck(pendingRespawn, wrecks, ship);
 
   const discoveries = record(root.discoveries, "save.discoveries");
@@ -432,6 +514,10 @@ function validatePendingWreck(
   }
   if (ship.currentTileX !== wreck.tileX || ship.currentTileY !== wreck.tileY) {
     fail("must remain at the pending wreck tile", "save.ship");
+  }
+  if (ship.speed !== 0) fail("must be stopped during a wreck hold", "save.ship.speed");
+  if (ship.provisionAccumulator !== 0) {
+    fail("must have no fractional provision charge during a wreck hold", "save.ship.provisionAccumulator");
   }
 }
 

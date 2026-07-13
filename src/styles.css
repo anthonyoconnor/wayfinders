@@ -133,7 +133,6 @@ a:focus-visible {
   color: var(--shell-muted);
   background: rgba(3, 17, 23, 0.72);
   box-shadow: 0 0.4rem 1.5rem rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(0.55rem);
   font-size: 0.68rem;
   line-height: 1.2;
   pointer-events: none;
@@ -208,7 +207,6 @@ a:focus-visible {
   border-radius: 999px;
   background: rgba(3, 17, 23, 0.78);
   box-shadow: 0 0.4rem 1.5rem rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(0.65rem);
 }
 
 .game-status {
@@ -253,7 +251,6 @@ a:focus-visible {
   color: var(--shell-ink);
   background: var(--shell-panel);
   box-shadow: 0 1rem 4rem rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(1rem);
   touch-action: pan-y;
 }
 

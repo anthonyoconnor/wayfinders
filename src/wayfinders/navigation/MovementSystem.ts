@@ -15,6 +15,14 @@ function wrapDegrees(value: number): number {
   return ((value % 360) + 360) % 360;
 }
 
+const NO_MOVEMENT_RESULT: MovementResult = Object.freeze({
+  movedDistancePixels: 0,
+  collided: false,
+  enteredTiles: Object.freeze([]) as unknown as GridPoint[],
+  segments: Object.freeze([]) as unknown as TravelSegment[],
+  tileChanged: false,
+});
+
 /** Returns every centre-point tile entered by a continuous world-space line. */
 export function traceWorldGridLine(
   fromX: number,
@@ -113,7 +121,7 @@ export class MovementSystem {
     const originalTile = { x: ship.currentTileX, y: ship.currentTileY };
 
     if (proposedDistance === 0) {
-      return { movedDistancePixels: 0, collided: false, enteredTiles: [], segments: [], tileChanged: false };
+      return NO_MOVEMENT_RESULT;
     }
 
     const traversal = traceWorldGridLine(fromX, fromY, proposedX, proposedY, this.config.navigation.tileSize);

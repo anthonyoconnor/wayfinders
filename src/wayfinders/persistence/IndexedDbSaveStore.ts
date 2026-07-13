@@ -18,7 +18,7 @@ const DEFAULT_DATABASE_VERSION = 1;
 const DEFAULT_OBJECT_STORE = "saveGames";
 const DEFAULT_SAVE_KEY = "autosave";
 
-/** Thin, simulation-independent IndexedDB adapter for one atomic autosave. */
+/** Thin, simulation-independent IndexedDB adapter for one atomic save slot. */
 export class IndexedDbSaveStore<T = unknown> implements SaveStore<T> {
   private readonly databaseName: string;
   private readonly databaseVersion: number;
@@ -27,6 +27,8 @@ export class IndexedDbSaveStore<T = unknown> implements SaveStore<T> {
   private readonly indexedDb: IDBFactory | undefined;
   private databasePromise?: Promise<IDBDatabase>;
   private database?: IDBDatabase;
+  private connectionEpoch = 0;
+  private rejectPendingOpen?: (reason: Error) => void;
 
   constructor(options: IndexedDbSaveStoreOptions = {}) {
     this.databaseName = options.databaseName ?? DEFAULT_DATABASE_NAME;
@@ -63,6 +65,9 @@ export class IndexedDbSaveStore<T = unknown> implements SaveStore<T> {
   }
 
   close(): void {
+    this.connectionEpoch++;
+    this.rejectPendingOpen?.(new Error("IndexedDB connection was closed while opening"));
+    this.rejectPendingOpen = undefined;
     this.database?.close();
     this.database = undefined;
     this.databasePromise = undefined;
@@ -73,10 +78,19 @@ export class IndexedDbSaveStore<T = unknown> implements SaveStore<T> {
     if (this.database) return Promise.resolve(this.database);
     if (this.databasePromise) return this.databasePromise;
 
-    this.databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
+    const epoch = this.connectionEpoch;
+    let settled = false;
+    const openPromise = new Promise<IDBDatabase>((resolve, reject) => {
+      const rejectOnce = (error: Error): void => {
+        if (settled) return;
+        settled = true;
+        if (this.rejectPendingOpen === rejectOnce) this.rejectPendingOpen = undefined;
+        reject(error);
+      };
+      this.rejectPendingOpen = rejectOnce;
       const request = this.indexedDb?.open(this.databaseName, this.databaseVersion);
       if (!request) {
-        reject(new Error("IndexedDB is unavailable"));
+        rejectOnce(new Error("IndexedDB is unavailable"));
         return;
       }
       request.onupgradeneeded = () => {
@@ -85,24 +99,40 @@ export class IndexedDbSaveStore<T = unknown> implements SaveStore<T> {
           database.createObjectStore(this.objectStoreName);
         }
       };
-      request.onerror = () => reject(request.error ?? new Error("Could not open IndexedDB"));
-      request.onblocked = () => reject(new Error("IndexedDB upgrade was blocked by another tab"));
+      request.onerror = () => rejectOnce(request.error ?? new Error("Could not open IndexedDB"));
+      request.onblocked = () => rejectOnce(new Error("IndexedDB upgrade was blocked by another tab"));
       request.onsuccess = () => {
         const database = request.result;
-        if (!database.objectStoreNames.contains(this.objectStoreName)) {
+        if (settled || epoch !== this.connectionEpoch) {
           database.close();
-          reject(new Error(`IndexedDB object store ${this.objectStoreName} is missing`));
           return;
         }
-        database.onversionchange = () => this.close();
+        if (!database.objectStoreNames.contains(this.objectStoreName)) {
+          database.close();
+          rejectOnce(new Error(`IndexedDB object store ${this.objectStoreName} is missing`));
+          return;
+        }
+        settled = true;
+        if (this.rejectPendingOpen === rejectOnce) this.rejectPendingOpen = undefined;
+        database.onversionchange = () => {
+          if (this.database === database) this.close();
+          else database.close();
+        };
+        database.onclose = () => {
+          if (this.database !== database) return;
+          this.database = undefined;
+          this.databasePromise = undefined;
+          this.connectionEpoch++;
+        };
         this.database = database;
         resolve(database);
       };
-    }).catch((error: unknown) => {
-      this.databasePromise = undefined;
-      throw error;
     });
-    return this.databasePromise;
+    this.databasePromise = openPromise;
+    void openPromise.catch(() => {
+      if (this.databasePromise === openPromise) this.databasePromise = undefined;
+    });
+    return openPromise;
   }
 }
 

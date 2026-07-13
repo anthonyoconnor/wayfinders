@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ProvisionSystem, availableProvisionUnits } from "../src/tidebound/exploration/ProvisionSystem.ts";
-import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData.ts";
-import { WorldGrid } from "../src/tidebound/world/WorldGrid.ts";
+import { ProvisionSystem, availableProvisionUnits } from "../src/wayfinders/exploration/ProvisionSystem.ts";
+import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 import { makeConfig, makeSegment, makeShip } from "./helpers.ts";
 
 function createWorld(state: KnowledgeState): WorldGrid {

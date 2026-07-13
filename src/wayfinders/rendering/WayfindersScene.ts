@@ -7,6 +7,7 @@ import {
   type PrototypeConfig,
 } from "../config/prototypeConfig";
 import { GameSimulation } from "../core/GameSimulation";
+import { FrameTimingMonitor } from "../core/FrameTimingMonitor";
 import { SimulationClock } from "../core/SimulationClock";
 import type { MovementInput } from "../core/types";
 import type { SaveStore } from "../persistence/IndexedDbSaveStore";
@@ -18,6 +19,7 @@ import { DiscoveryRenderer } from "./DiscoveryRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
 import { ShipRenderer } from "./ShipRenderer";
+import type { ShipRenderPose } from "./ShipPose";
 import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
 
@@ -44,6 +46,7 @@ interface BrowserDebugApi {
   saveNow: () => Promise<boolean>;
   loadSave: () => Promise<boolean>;
   clearSave: () => Promise<boolean>;
+  performance: () => ReturnType<FrameTimingMonitor["snapshot"]> & { lastSaveSerializationMs: number };
 }
 
 export interface PersistenceBootState {
@@ -63,10 +66,13 @@ const PALETTE = {
   sight: 0x78fff0,
 } as const;
 
-export class TideboundScene extends Phaser.Scene {
+const AUTOSAVE_INTERVAL_MS = 3_000;
+
+export class WayfindersScene extends Phaser.Scene {
   readonly simulation: GameSimulation;
 
   private readonly clock = new SimulationClock();
+  private readonly frameTiming = new FrameTimingMonitor();
   private readonly saveStore: SaveStore<unknown>;
   private readonly checkpointStore: SaveStore<unknown>;
   private readonly persistenceBoot: PersistenceBootState;
@@ -92,22 +98,31 @@ export class TideboundScene extends Phaser.Scene {
   private datasetGenerated?: GameSimulation["generated"];
   private lastDebugRevision = -1;
   private lastDebugOverlayRevision = -1;
+  private lastDebugVisible = false;
   private lastDiagnosticsRevision = -1;
   private lastDiagnosticsOverlayRevision = -1;
   private lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
+  private lastWrecksRevision = -1;
+  private lastWreckVisibilityVersion = -1;
+  private lastDiscoveryRecordsRevision = -1;
   private persistenceEnabled: boolean;
   private autosaveProtected: boolean;
   private persistenceStatus: PersistenceBootState["status"];
-  private lastSavedRevision = -1;
+  private lastSavedSaveRevision = -1;
   private lastSaveAt = Number.NEGATIVE_INFINITY;
   private saveInFlight?: Promise<boolean>;
   private saveQueued = false;
+  private clearInFlight?: Promise<boolean>;
+  private lifecycleSaveScheduled = false;
   private checkpointAvailable: boolean | undefined;
   private browserDebugApi?: BrowserDebugApi;
   private activeLifecycleCue?: Phaser.GameObjects.Text;
   private returnCueScheduled = false;
   private returnCuePending = false;
   private pendingReturnedDiscoveryNames: string[] = [];
+  private previousShipPose!: ShipRenderPose;
+  private currentShipPose!: ShipRenderPose;
+  private lastSaveSerializationMs = 0;
 
   constructor(
     simulation = new GameSimulation(),
@@ -115,7 +130,7 @@ export class TideboundScene extends Phaser.Scene {
     checkpointStore: SaveStore<unknown>,
     persistenceBoot: PersistenceBootState,
   ) {
-    super({ key: "TideboundScene" });
+    super({ key: "WayfindersScene" });
     this.simulation = simulation;
     this.saveStore = saveStore;
     this.checkpointStore = checkpointStore;
@@ -123,7 +138,7 @@ export class TideboundScene extends Phaser.Scene {
     this.persistenceEnabled = persistenceBoot.autosave;
     this.autosaveProtected = persistenceBoot.status === "incompatible";
     this.persistenceStatus = persistenceBoot.status;
-    if (persistenceBoot.status === "loaded") this.lastSavedRevision = simulation.revision;
+    if (persistenceBoot.status === "loaded") this.lastSavedSaveRevision = simulation.saveRevision;
   }
 
   create(): void {
@@ -134,6 +149,7 @@ export class TideboundScene extends Phaser.Scene {
     this.cargoRenderer = new CargoRenderer(this);
     this.discoveryRenderer = new DiscoveryRenderer(this);
     this.shipRenderer = new ShipRenderer(this);
+    this.resetShipPresentation(true);
     this.gridGraphics = this.add.graphics().setDepth(70);
     this.debugGraphics = this.add.graphics().setDepth(71);
     this.gameHost = document.querySelector<HTMLElement>("#game-host") ?? undefined;
@@ -185,10 +201,14 @@ export class TideboundScene extends Phaser.Scene {
     let keepAdvancing = true;
     this.clock.advance(delta, (deltaSeconds) => {
       const lifecycleRevision = this.simulation.lifecycleResolutionRevision;
+      this.previousShipPose = this.currentShipPose;
       this.simulation.update(movementInput, deltaSeconds);
+      this.currentShipPose = this.captureShipPose();
       keepAdvancing = lifecycleRevision === this.simulation.lifecycleResolutionRevision;
+      if (!keepAdvancing) this.previousShipPose = this.currentShipPose;
       return keepAdvancing;
     });
+    this.frameTiming.record(delta, this.clock.lastDroppedMs, document.visibilityState === "visible");
     this.syncPresentation();
     this.maybeAutosave(time);
   }
@@ -248,9 +268,27 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private syncPresentation(force = false): void {
-    this.shipRenderer.sync(this.simulation.ship, !this.simulation.wreckPresentationActive);
-    this.wreckRenderer.sync(this.simulation.wrecks, this.simulation.world);
-    this.discoveryRenderer.sync(this.simulation.discoveries);
+    this.shipRenderer.syncInterpolated(
+      this.previousShipPose,
+      this.currentShipPose,
+      this.clock.interpolationAlpha,
+      !this.simulation.wreckPresentationActive,
+    );
+    if (
+      force
+      || this.lastWrecksRevision !== this.simulation.wrecksRevision
+      || this.lastWreckVisibilityVersion !== this.simulation.world.visibilityVersion
+    ) {
+      this.wreckRenderer.sync(this.simulation.wrecks, this.simulation.world);
+      this.lastWrecksRevision = this.simulation.wrecksRevision;
+      this.lastWreckVisibilityVersion = this.simulation.world.visibilityVersion;
+    }
+    if (force || this.lastDiscoveryRecordsRevision !== this.simulation.discoveryRecordsRevision) {
+      this.discoveryRenderer.sync(this.simulation.discoveries);
+      this.lastDiscoveryRecordsRevision = this.simulation.discoveryRecordsRevision;
+    }
+    this.wreckRenderer.updateViewport(this.cameras.main);
+    this.discoveryRenderer.updateViewport(this.cameras.main);
     this.knowledgeOverlay.sync(this.simulation.world, this.simulation.generated.seed, force);
     this.riskOverlay.sync(
       this.simulation.world,
@@ -261,10 +299,16 @@ export class TideboundScene extends Phaser.Scene {
       force,
     );
     this.cargoRenderer.sync(this.simulation.ship.provisions);
-    const diagnosticsDue = force
-      || this.lastDiagnosticsRevision !== this.simulation.revision
-      || this.lastDiagnosticsOverlayRevision !== this.simulation.overlaysRevision
-      || this.time.now - this.lastDiagnosticsAt >= 100;
+    const diagnosticsDirty = this.lastDiagnosticsRevision !== this.simulation.revision
+      || this.lastDiagnosticsOverlayRevision !== this.simulation.overlaysRevision;
+    const diagnosticsDue = force || (
+      this.time.now - this.lastDiagnosticsAt >= 100
+      && (
+        diagnosticsDirty
+        || Math.abs(this.simulation.ship.speed) > 0
+        || this.simulation.wreckPresentationActive
+      )
+    );
     const host = this.gameHost;
     if (diagnosticsDue && host) {
       if (this.datasetGenerated !== this.simulation.generated) {
@@ -305,6 +349,14 @@ export class TideboundScene extends Phaser.Scene {
       host.dataset.simulationRevision = String(this.simulation.revision);
       host.dataset.knowledgeVersion = String(this.simulation.world.knowledgeVersion);
       host.dataset.visibilityVersion = String(this.simulation.world.visibilityVersion);
+      const timing = this.frameTiming.snapshot();
+      host.dataset.frameP50Ms = timing.p50Ms.toFixed(2);
+      host.dataset.frameP95Ms = timing.p95Ms.toFixed(2);
+      host.dataset.frameP99Ms = timing.p99Ms.toFixed(2);
+      host.dataset.frameMaxMs = timing.maxMs.toFixed(2);
+      host.dataset.longFrames = String(timing.longFrameCount);
+      host.dataset.droppedSimulationMs = timing.totalDroppedSimulationMs.toFixed(2);
+      host.dataset.lastSaveSerializationMs = this.lastSaveSerializationMs.toFixed(2);
     }
     if (document.documentElement.dataset.wayfindersReady !== "true") {
       document.documentElement.dataset.wayfindersReady = "true";
@@ -313,10 +365,14 @@ export class TideboundScene extends Phaser.Scene {
     const debugChanged = force
       || this.lastDebugRevision !== this.simulation.revision
       || this.lastDebugOverlayRevision !== this.simulation.overlaysRevision;
-    if (debugChanged) {
+    const debugVisible = this.simulation.debug.navigationGrid || this.simulation.debug.currentSight;
+    if (debugChanged && (debugVisible || this.lastDebugVisible)) {
       this.renderDebug();
+    }
+    if (debugChanged) {
       this.lastDebugRevision = this.simulation.revision;
       this.lastDebugOverlayRevision = this.simulation.overlaysRevision;
+      this.lastDebugVisible = debugVisible;
     }
 
     if (diagnosticsDue) {
@@ -615,9 +671,9 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private maybeAutosave(time: number): void {
-    if (!this.persistenceEnabled || this.lastSavedRevision === this.simulation.revision) return;
-    if (this.saveInFlight) return;
-    if (time - this.lastSaveAt < 750) return;
+    if (!this.persistenceEnabled || this.lastSavedSaveRevision === this.simulation.saveRevision) return;
+    if (this.saveInFlight || this.clearInFlight) return;
+    if (time - this.lastSaveAt < AUTOSAVE_INTERVAL_MS) return;
     void this.saveNow(false);
   }
 
@@ -627,6 +683,7 @@ export class TideboundScene extends Phaser.Scene {
       this.updatePersistenceOutputs();
       return Promise.resolve(false);
     }
+    if (this.clearInFlight) return Promise.resolve(false);
     if (this.saveInFlight) {
       this.saveQueued = true;
       return this.saveInFlight;
@@ -644,11 +701,17 @@ export class TideboundScene extends Phaser.Scene {
     try {
       do {
         this.saveQueued = false;
-        const revision = this.simulation.revision;
-        await this.saveStore.save(this.simulation.createSave());
-        this.lastSavedRevision = revision;
+        const saveRevision = this.simulation.saveRevision;
+        const serializationStarted = performance.now();
+        const save = this.simulation.createSave();
+        this.lastSaveSerializationMs = performance.now() - serializationStarted;
+        await this.saveStore.save(save);
+        this.lastSavedSaveRevision = saveRevision;
         this.lastSaveAt = this.time.now;
-      } while (this.saveQueued);
+      } while (
+        this.saveQueued
+        && this.lastSavedSaveRevision !== this.simulation.saveRevision
+      );
       this.persistenceStatus = "loaded";
       this.updatePersistenceOutputs();
       if (reportSuccess) this.log("Saved the inherited world to browser storage.");
@@ -707,7 +770,7 @@ export class TideboundScene extends Phaser.Scene {
         this.persistenceStatus = "loaded";
         // The loaded checkpoint becomes the new rolling autosave baseline so
         // a subsequent page reload resumes from the restored state.
-        this.lastSavedRevision = -1;
+        this.lastSavedSaveRevision = -1;
       }
       this.mountDeveloperTools();
       this.afterWorldChanged();
@@ -729,14 +792,26 @@ export class TideboundScene extends Phaser.Scene {
     }
   }
 
-  private async clearSaveFromStore(): Promise<boolean> {
+  private clearSaveFromStore(): Promise<boolean> {
+    if (this.clearInFlight) return this.clearInFlight;
+    const operation = this.performClearSave();
+    this.clearInFlight = operation;
+    void operation.finally(() => {
+      if (this.clearInFlight === operation) this.clearInFlight = undefined;
+    });
+    return operation;
+  }
+
+  private async performClearSave(): Promise<boolean> {
+    const saveRevisionAtRequest = this.simulation.saveRevision;
     try {
+      if (this.saveInFlight) await this.saveInFlight;
       await Promise.all([this.saveStore.clear(), this.checkpointStore.clear()]);
       this.persistenceEnabled = true;
       this.autosaveProtected = false;
       this.persistenceStatus = "new";
       this.checkpointAvailable = false;
-      this.lastSavedRevision = this.simulation.revision;
+      this.lastSavedSaveRevision = saveRevisionAtRequest;
       this.updatePersistenceOutputs();
       this.log("Cleared the browser autosave and manual checkpoint. The running world was not reset.");
       return true;
@@ -747,7 +822,12 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private requestLifecycleSave(): void {
-    queueMicrotask(() => void this.saveNow(false));
+    if (this.lifecycleSaveScheduled) return;
+    this.lifecycleSaveScheduled = true;
+    queueMicrotask(() => {
+      this.lifecycleSaveScheduled = false;
+      void this.saveNow(false);
+    });
   }
 
   private afterWorldChanged(): void {
@@ -759,6 +839,7 @@ export class TideboundScene extends Phaser.Scene {
     this.lastDiagnosticsRevision = -1;
     this.lastDiagnosticsOverlayRevision = -1;
     this.lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
+    this.resetShipPresentation(true);
     this.updateProvisionOutput();
     this.syncPresentation(true);
     // Camera follow deliberately uses smoothing during play. A restored or
@@ -843,6 +924,10 @@ export class TideboundScene extends Phaser.Scene {
       saveNow: () => this.saveCheckpoint(),
       loadSave: () => this.loadCheckpointFromStore(),
       clearSave: () => this.clearSaveFromStore(),
+      performance: () => ({
+        ...this.frameTiming.snapshot(),
+        lastSaveSerializationMs: this.lastSaveSerializationMs,
+      }),
     };
     this.browserDebugApi = api;
     window.__WAYFINDERS__ = api;
@@ -867,7 +952,7 @@ export class TideboundScene extends Phaser.Scene {
   private bindSimulationEvents(): void {
     this.eventUnsubscribers.push(
       this.simulation.events.on("expeditionReturned", ({ supportedTileCount, closedUnknownTileCount }) => {
-        this.renderWorld();
+        this.worldRenderer.refreshKnowledge(this.simulation.generated);
         this.returnCuePending = true;
         this.scheduleReturnCue();
         this.log(
@@ -889,6 +974,7 @@ export class TideboundScene extends Phaser.Scene {
         this.requestLifecycleSave();
       }),
       this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
+        this.resetShipPresentation(false);
         this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
         this.showLifecycleCue(
           `GENERATION ${nextGeneration} DEPARTS\nNEW SHIP AT HOME`,
@@ -933,6 +1019,9 @@ export class TideboundScene extends Phaser.Scene {
       }),
       this.simulation.events.on("worldRegenerated", () => {
         this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("shipTeleported", () => {
+        this.resetShipPresentation(true);
       }),
     );
   }
@@ -997,6 +1086,18 @@ export class TideboundScene extends Phaser.Scene {
     });
   }
 
+  private captureShipPose(): ShipRenderPose {
+    const { worldX, worldY, heading, speed } = this.simulation.ship;
+    return { worldX, worldY, heading, speed };
+  }
+
+  private resetShipPresentation(resetClock: boolean): void {
+    const pose = this.captureShipPose();
+    this.previousShipPose = pose;
+    this.currentShipPose = { ...pose };
+    if (resetClock) this.clock.reset();
+  }
+
   private destroyBindings(): void {
     this.domAbort?.abort();
     this.gameHost = undefined;
@@ -1026,13 +1127,13 @@ export class TideboundScene extends Phaser.Scene {
   }
 
   private readonly onPageHide = (): void => {
-    if (this.lastSavedRevision !== this.simulation.revision) void this.saveNow(false);
+    if (this.lastSavedSaveRevision !== this.simulation.saveRevision) void this.saveNow(false);
   };
 
   private readonly onVisibilityChange = (): void => {
     if (
       document.visibilityState === "hidden"
-      && this.lastSavedRevision !== this.simulation.revision
+      && this.lastSavedSaveRevision !== this.simulation.saveRevision
     ) void this.saveNow(false);
   };
 }

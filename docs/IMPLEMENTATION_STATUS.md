@@ -4,13 +4,14 @@ This is the starting point for a new development session.
 
 ## Continuation point
 
-Milestones 0 through 4 are complete. The current foundation includes
+Milestones 0 through 4 and the Milestone 4.1 performance foundation are
+complete. The current foundation includes
 developer tooling, home waters, exploration knowledge, provision-aware risk
 and return, expedition inheritance, deterministic discoveries, and
 cross-session persistence.
 
-The Milestone 4 baseline is commit `60e8892`. Do not reimplement completed
-milestones. The next product scope is Milestone 5: production asset integration
+Do not reimplement completed milestones or restore the obsolete source
+namespace. The next product scope is Milestone 5: production asset integration
 and a living world on Supported routes.
 
 ## Run and verify
@@ -21,6 +22,8 @@ npm.cmd run dev
 ```
 
 Open `http://127.0.0.1:5173/` in a WebGL-capable browser.
+To run concurrent instances, give each one a distinct port, for example
+`npm.cmd run dev -- 5174`, then open `http://127.0.0.1:5174/`.
 
 Run the complete automated pipeline with:
 
@@ -31,7 +34,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 119 automated tests pass across 13 files.
+- 144 automated tests pass across 15 files.
 - The production Vite build passes.
 - Browser tests cover discovery return, autosave reload, manual checkpoint
   restore, exact ship/camera restoration, wreck-hold reload, generation
@@ -134,7 +137,26 @@ Current verification baseline:
   teleport, provision/wreck controls, overlay toggles, live configuration,
   autosave status and checkpoint controls.
 - Browser diagnostics are exposed through canvas data attributes and the
-  developer automation API.
+  developer automation API, including rolling frame percentiles, long-frame
+  counts, dropped simulation time and save-serialization timing.
+
+### Milestone 4.1 performance foundation
+
+- Runtime modules now live under `src/wayfinders`; obsolete internal namespace
+  and scene names are removed before asset work expands the codebase.
+- The deterministic simulation remains at 30 updates per second while the ship
+  and camera target interpolate at render rate.
+- Save dirtiness is independent from presentation dirtiness. Canonical
+  knowledge runs are cached by knowledge version, normal autosaves are spaced
+  to three seconds, and lifecycle/checkpoint saves remain immediate.
+- Forward and return calculations retain their world-sized buffers. Return
+  roots use an incrementally maintained Supported/Personal boundary instead of
+  scanning all Personal water.
+- Knowledge, risk and persistent-marker presentation is viewport culled or
+  version driven. Successful return repaints only knowledge-changed water
+  chunks instead of rebuilding the complete static world.
+- Browser backdrop blurs were removed from always-on overlays to avoid
+  recompositing the WebGL canvas.
 
 ## Architecture constraints that remain in force
 
@@ -154,8 +176,10 @@ Current verification baseline:
 8. Explicit regeneration resets the world; browser reload restores it.
 9. Gameplay uses semantic terrain/content data. Production art must not become
    a second collision or navigation authority.
-10. Normal sailing work stays local or sparse. Generation may scale with world
-    area because it is off the movement loop.
+10. Normal sailing work stays local, sparse, cached or version driven.
+    Generation may scale with world area because it is off the movement loop.
+11. Production renderers must preserve viewport culling, incremental chunk
+    invalidation and pooled/batched entity presentation.
 
 ## Known limits
 
@@ -164,8 +188,8 @@ Current verification baseline:
   yet drive an economy or simulation.
 - There are no fishing boats, trade vessels or Supported-route traffic.
 - Environmental audio and production polish are not implemented.
-- Desktop performance is verified at the default and doubled world sizes;
-  mid-range mobile-device validation remains outstanding.
+- Default and doubled-world save/range probes pass the performance hardening
+  baseline; representative mid-range mobile validation remains outstanding.
 
 ## Next actions — Milestone 5
 

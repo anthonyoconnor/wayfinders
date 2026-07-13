@@ -6,6 +6,7 @@ import type { WorldGrid } from "../world/WorldGrid";
 interface WreckView {
   container: Phaser.GameObjects.Container;
   hull: Phaser.GameObjects.Graphics;
+  known: boolean;
 }
 
 /** Developer-art shipwreck markers retained across later generations. */
@@ -28,7 +29,23 @@ export class WreckRenderer {
       view.hull.setRotation(Phaser.Math.DegToRad(wreck.heading));
       const visibleNow = world.isVisibleNow(wreck.tileX, wreck.tileY);
       const known = visibleNow || wreck.discovered;
+      view.known = known;
       view.container.setVisible(known).setAlpha(visibleNow ? 1 : 0.72);
+    }
+  }
+
+  updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
+    const margin = prototypeConfig.navigation.tileSize * 3;
+    const cameraView = camera.worldView;
+    for (const view of this.views.values()) {
+      const { container } = view;
+      container.setVisible(
+        view.known
+        && container.x >= cameraView.left - margin
+        && container.x <= cameraView.right + margin
+        && container.y >= cameraView.top - margin
+        && container.y <= cameraView.bottom + margin,
+      );
     }
   }
 
@@ -64,7 +81,7 @@ export class WreckRenderer {
       strokeThickness: 3,
     }).setOrigin(0.5, 0);
     const container = this.scene.add.container(wreck.worldX, wreck.worldY, [hull, label]).setDepth(36);
-    const view = { container, hull };
+    const view = { container, hull, known: false };
     this.views.set(wreck.id, view);
     return view;
   }

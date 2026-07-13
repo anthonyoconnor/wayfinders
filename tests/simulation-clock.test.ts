@@ -1,9 +1,24 @@
-import { describe, expect, it } from "vitest";
-import { GameSimulation } from "../src/tidebound/core/GameSimulation";
-import { SimulationClock } from "../src/tidebound/core/SimulationClock";
+import { describe, expect, it, vi } from "vitest";
+import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
+import { SimulationClock } from "../src/wayfinders/core/SimulationClock";
 import { makeConfig } from "./helpers";
 
 describe("SimulationClock", () => {
+  it("reports real time discarded by the frame-delta safety cap", () => {
+    const clock = new SimulationClock(makeConfig({
+      simulation: { fixedStepMs: 20, maxFrameDeltaMs: 100 },
+    }));
+    const step = vi.fn();
+
+    expect(clock.advance(250, step)).toBe(5);
+    expect(clock.lastDroppedMs).toBe(150);
+    expect(clock.totalDroppedMs).toBe(150);
+
+    clock.reset();
+    expect(clock.lastDroppedMs).toBe(0);
+    expect(clock.totalDroppedMs).toBe(150);
+  });
+
   it("drops remaining fixed substeps when a lifecycle transition requests a stop", () => {
     const clock = new SimulationClock(makeConfig({
       simulation: { fixedStepMs: 20, maxFrameDeltaMs: 100 },

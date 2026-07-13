@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { KnowledgeSystem } from "../src/tidebound/exploration/KnowledgeSystem.ts";
-import { ReturnPathSystem } from "../src/tidebound/exploration/ReturnPathSystem.ts";
-import { traceGridCenters, VisibilitySystem } from "../src/tidebound/exploration/VisibilitySystem.ts";
-import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData.ts";
-import { WorldGrid } from "../src/tidebound/world/WorldGrid.ts";
+import { KnowledgeSystem } from "../src/wayfinders/exploration/KnowledgeSystem.ts";
+import { ReturnPathSystem } from "../src/wayfinders/exploration/ReturnPathSystem.ts";
+import { traceGridCenters, VisibilitySystem } from "../src/wayfinders/exploration/VisibilitySystem.ts";
+import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 import { makeConfig, makeShip } from "./helpers.ts";
 
 describe("VisibilitySystem and KnowledgeSystem", () => {

@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { patchPrototypeConfig, resetPrototypeConfig } from "../src/tidebound/config/prototypeConfig";
-import { GameSimulation } from "../src/tidebound/core/GameSimulation";
-import type { GridPoint } from "../src/tidebound/core/types";
-import { KnowledgeSystem } from "../src/tidebound/exploration/KnowledgeSystem";
-import { KnowledgeState, TerrainType } from "../src/tidebound/world/TileData";
-import { WorldGrid } from "../src/tidebound/world/WorldGrid";
+import { patchPrototypeConfig, resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
+import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
+import type { GridPoint } from "../src/wayfinders/core/types";
+import { KnowledgeSystem } from "../src/wayfinders/exploration/KnowledgeSystem";
+import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
@@ -81,6 +81,17 @@ describe("KnowledgeSystem expedition resolution", () => {
     expect(world.getKnowledgeAtIndex(1)).toBe(KnowledgeState.Supported);
     expect(world.getKnowledgeAtIndex(2)).toBe(KnowledgeState.Supported);
     expect(world.getKnowledgeAtIndex(21)).toBe(KnowledgeState.Supported);
+  });
+
+  it("rejects expedition zero so revealed knowledge always has a resolvable stamp", () => {
+    const world = new WorldGrid(2, 1, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const knowledge = new KnowledgeSystem(world);
+
+    expect(() => knowledge.revealIndices([0], 0)).toThrow(
+      "expeditionId must be a non-zero unsigned 32-bit integer",
+    );
+    expect(world.getKnowledgeAtIndex(0)).toBe(KnowledgeState.Unknown);
   });
 });
 
