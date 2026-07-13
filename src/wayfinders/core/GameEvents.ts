@@ -11,7 +11,11 @@ import type {
   WreckSurveyReportV1,
   WreckSurveyedResultV1,
 } from "../exploration/WreckSurveyContracts";
-import type { NavigatorId, NavigatorSuccessionReason } from "../lineage/NavigatorLineageSystem";
+import type {
+  NavigatorId,
+  NavigatorSuccessionReason,
+  NavigatorVoyageAchievementRecordV1,
+} from "../lineage/NavigatorLineageSystem";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
 
@@ -45,6 +49,8 @@ export interface GameEventMap {
     supportedTileCount: number;
     /** Enclosed Unknown tiles separately inferred by the return cleanup. */
     closedUnknownTileCount: number;
+    /** Immutable exact-dock achievement record stored in the navigator lineage. */
+    achievements: Readonly<NavigatorVoyageAchievementRecordV1>;
   };
   shipWrecked: {
     wreckId: number;

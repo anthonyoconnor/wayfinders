@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation.ts";
 import type { GridPoint } from "../src/wayfinders/core/types.ts";
-import { NAVIGATOR_VOYAGE_LIMIT } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
+import {
+  NAVIGATOR_VOYAGE_LIMIT,
+  type NavigatorVoyageAchievementRecordV1,
+} from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 import { SAVE_SCHEMA_VERSION, parseSaveGame } from "../src/wayfinders/persistence/SaveGame.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
 
@@ -31,6 +34,7 @@ describe("four-journey navigator tenure", () => {
       voyagesRemaining: number;
       tenureCompleted: boolean;
       generation: number;
+      achievements: Readonly<NavigatorVoyageAchievementRecordV1>;
     }> = [];
     const generations: Array<{ previousGeneration: number; generation: number; reason: string }> = [];
     const tenures: Array<{ generation: number; completedVoyages: number; nextGeneration: number }> = [];
@@ -80,6 +84,19 @@ describe("four-journey navigator tenure", () => {
       successionReason: "tenure",
       completedVoyages: 4,
     });
+    expect(simulation.navigatorLineage[0].successfulVoyages).toHaveLength(4);
+    expect(simulation.navigatorLineage[0].successfulVoyages.map((voyage) => ({
+      voyageNumber: voyage.voyageNumber,
+      expeditionId: voyage.expeditionId,
+    }))).toEqual([
+      { voyageNumber: 1, expeditionId: 1 },
+      { voyageNumber: 2, expeditionId: 2 },
+      { voyageNumber: 3, expeditionId: 3 },
+      { voyageNumber: 4, expeditionId: 4 },
+    ]);
+    expect(returns.every(({ achievements }, index) => (
+      achievements === simulation.navigatorLineage[0].successfulVoyages[index]
+    ))).toBe(true);
     expect(simulation.currentNavigator).toMatchObject({
       generation: 2,
       state: "active",
@@ -242,13 +259,13 @@ describe("four-journey navigator tenure", () => {
     const active = new GameSimulation();
     const activeSave = structuredClone(active.createSave());
     (activeSave.navigatorLineage.navigators[0] as { completedVoyages: number }).completedVoyages = 4;
-    expect(() => parseSaveGame(activeSave)).toThrow(/less than 4/);
+    expect(() => parseSaveGame(activeSave)).toThrow(/length|less than 4/);
 
     const completed = new GameSimulation();
     for (let voyage = 0; voyage < 4; voyage++) returnOneExpedition(completed);
     const completedSave = structuredClone(completed.createSave());
     (completedSave.navigatorLineage.navigators[0] as { completedVoyages: number }).completedVoyages = 3;
-    expect(() => parseSaveGame(completedSave)).toThrow(/completed tenure/);
+    expect(() => parseSaveGame(completedSave)).toThrow(/length|completed tenure/);
 
     const wrecked = new GameSimulation();
     expect(wrecked.teleport(findUnknownWater(wrecked))).toBe(true);

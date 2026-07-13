@@ -43,7 +43,8 @@ import {
   NavigatorLineageSystem,
   createNavigatorId,
   type NavigatorGenerationHandoverV1,
-  type NavigatorRecordV3,
+  type NavigatorRecordV4,
+  type NavigatorVoyageAchievementInputV1,
 } from "../lineage/NavigatorLineageSystem";
 import {
   SAVE_SCHEMA_VERSION,
@@ -111,8 +112,8 @@ export interface SimulationSnapshot {
     pendingWreckId: number | null;
     pendingGenerationHandover: Readonly<NavigatorGenerationHandoverV1> | null;
   };
-  navigator: Readonly<NavigatorRecordV3>;
-  lineage: readonly Readonly<NavigatorRecordV3>[];
+  navigator: Readonly<NavigatorRecordV4>;
+  lineage: readonly Readonly<NavigatorRecordV4>[];
   wrecks: readonly Readonly<ShipwreckState>[];
   discoveries: {
     available: number;
@@ -228,11 +229,11 @@ export class GameSimulation {
     return this.lineage.generation;
   }
 
-  get currentNavigator(): Readonly<NavigatorRecordV3> {
+  get currentNavigator(): Readonly<NavigatorRecordV4> {
     return this.lineage.currentNavigator;
   }
 
-  get navigatorLineage(): readonly Readonly<NavigatorRecordV3>[] {
+  get navigatorLineage(): readonly Readonly<NavigatorRecordV4>[] {
     return this.lineage.navigators;
   }
 
@@ -1036,9 +1037,18 @@ export class GameSimulation {
     const returnedDiscoveries = this.discoverySystem.commitExpedition(expeditionId);
     const returnedFishingShoals = this.fishingShoalSystem.commitExpedition(expeditionId);
     const returnedWreckSurveys = this.commitWreckSurveys(expeditionId);
+    const achievements: NavigatorVoyageAchievementInputV1 = {
+      expeditionId,
+      supportedTileCount: committed.changedCount - (committed.closedUnknownCount ?? 0),
+      closedUnknownTileCount: committed.closedUnknownCount ?? 0,
+      discoveryIds: returnedDiscoveries.map(({ id }) => id).sort((left, right) => left - right),
+      fishingLeadIds: returnedFishingShoals.leads.map(({ id }) => id).sort(),
+      fishingSurveyIds: returnedFishingShoals.surveys.map(({ id }) => id).sort(),
+      wreckIds: returnedWreckSurveys.map(({ wreckId }) => wreckId).sort((left, right) => left - right),
+    };
     this.activeExpedition = false;
     this.advanceExpeditionId();
-    const voyage = this.lineage.completeSuccessfulVoyage();
+    const voyage = this.lineage.completeSuccessfulVoyage(achievements);
     const previousProvisions = this.ship.provisions;
     const previousAccumulator = this.ship.provisionAccumulator;
     this.ship.provisions = this.config.provisions.startingBundles;
@@ -1061,8 +1071,9 @@ export class GameSimulation {
       voyageNumber: voyage.completedVoyages,
       voyagesRemaining: voyage.remainingVoyages,
       tenureCompleted: voyage.tenureCompleted,
-      supportedTileCount: committed.changedCount - (committed.closedUnknownCount ?? 0),
-      closedUnknownTileCount: committed.closedUnknownCount ?? 0,
+      supportedTileCount: voyage.voyage.supportedTileCount,
+      closedUnknownTileCount: voyage.voyage.closedUnknownTileCount,
+      achievements: voyage.voyage,
     });
     if (returnedDiscoveries.length > 0) {
       this.events.emit("discoveriesReturned", {

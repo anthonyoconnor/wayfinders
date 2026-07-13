@@ -165,6 +165,7 @@ describe("fishing-shoal sighting lifecycle", () => {
       id: target.id,
       state: "lead",
     })]);
+    expect(returned.currentNavigator.successfulVoyages[0].fishingLeadIds).toEqual([target.id]);
     expect(returned.activationEligibleFishingShoals).toHaveLength(0);
 
     const wrecked = new GameSimulation();
@@ -391,6 +392,7 @@ describe("returned fishing-shoal lifecycle", () => {
       id: target.id,
       state: "survey",
     })]);
+    expect(restoredUpgrade.currentNavigator.successfulVoyages[0].fishingSurveyIds).toEqual([target.id]);
     expect(restoredUpgrade.activationEligibleFishingShoals).toHaveLength(1);
   });
 
@@ -411,6 +413,7 @@ describe("returned fishing-shoal lifecycle", () => {
     expect(returnReports).toBe(1);
     const terminalRecord = structuredClone(simulation.returnedFishingShoals[0]);
     expect(terminalRecord).toMatchObject({ id: target.id, state: "survey" });
+    expect(simulation.currentNavigator.successfulVoyages[0].fishingSurveyIds).toEqual([target.id]);
     expect(simulation.fishingShoalReadModels.find(({ id }) => id === target.id)).toMatchObject({
       state: "returned-survey",
       quality: target.quality,

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { makeConfig } from "./helpers.ts";
 import { IndexedDbSaveStore } from "../src/wayfinders/persistence/IndexedDbSaveStore.ts";
 import { createFishingShoalId } from "../src/wayfinders/exploration/FishingShoalContracts.ts";
-import { NavigatorLineageSystem } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
+import {
+  NavigatorLineageSystem,
+  type NavigatorVoyageAchievementInputV1,
+} from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 import {
   SAVE_SCHEMA_VERSION,
   WORLD_GENERATOR_VERSION,
@@ -32,6 +35,51 @@ function makeLineage(generation: number, pendingWreckId?: number) {
   }
   if (pendingWreckId !== undefined) lineage.beginSuccession("wreck", pendingWreckId);
   return lineage.snapshot();
+}
+
+function makeVoyage(
+  expeditionId: number,
+  overrides: Partial<NavigatorVoyageAchievementInputV1> = {},
+): NavigatorVoyageAchievementInputV1 {
+  return {
+    expeditionId,
+    supportedTileCount: 0,
+    closedUnknownTileCount: 0,
+    discoveryIds: [],
+    fishingLeadIds: [],
+    fishingSurveyIds: [],
+    wreckIds: [],
+    ...overrides,
+  };
+}
+
+function makeValidLineage() {
+  const lineage = new NavigatorLineageSystem();
+  lineage.completeSuccessfulVoyage(makeVoyage(1));
+  lineage.completeSuccessfulVoyage(makeVoyage(2, { discoveryIds: [1] }));
+  const wreck = lineage.beginSuccession("wreck", 1);
+  lineage.completeSuccession(wreck.transition.key);
+  return lineage.snapshot();
+}
+
+function makePendingValidLineage(wreckId: number) {
+  const lineage = new NavigatorLineageSystem();
+  lineage.completeSuccessfulVoyage(makeVoyage(1));
+  lineage.completeSuccessfulVoyage(makeVoyage(2, { discoveryIds: [1] }));
+  lineage.beginSuccession("wreck", wreckId);
+  return lineage.snapshot();
+}
+
+function addSuccessfulVoyage(
+  save: SaveGame,
+  overrides: Partial<NavigatorVoyageAchievementInputV1> = {},
+): number {
+  const expeditionId = save.expedition.id;
+  const lineage = NavigatorLineageSystem.fromSnapshot(save.navigatorLineage);
+  lineage.completeSuccessfulVoyage(makeVoyage(expeditionId, overrides));
+  save.navigatorLineage = lineage.snapshot();
+  save.expedition.id = expeditionId === 0xffff_ffff ? 1 : expeditionId + 1;
+  return expeditionId;
 }
 
 function makeValidSave(): SaveGame {
@@ -98,7 +146,7 @@ function makeValidSave(): SaveGame {
       }],
     },
     fishingShoals: { provisional: [], returned: [] },
-    navigatorLineage: makeLineage(2),
+    navigatorLineage: makeValidLineage(),
     terrainPatches: [],
   };
 }
@@ -236,16 +284,15 @@ describe("save-game validation", () => {
 
   it("accepts active-expedition Personal knowledge and provisional discoveries", () => {
     const save = makeValidSave();
-    save.expedition.id = 7;
     save.expedition.active = true;
-    save.knowledge.runs.push([10, 2, KnowledgeState.Personal, 7]);
+    save.knowledge.runs.push([10, 2, KnowledgeState.Personal, save.expedition.id]);
     save.discoveries.provisional.push({
       id: 2,
       type: 6,
       tileX: 30,
       tileY: 31,
       islandId: 2,
-      expeditionId: 7,
+      expeditionId: save.expedition.id,
       generation: 2,
       returned: false,
       name: "Salt Reach",
@@ -304,18 +351,23 @@ describe("save-game validation", () => {
     expect(parseSaveGame(provisional)).toBe(provisional);
 
     const returned = makeValidSave();
-    returned.navigatorLineage = structuredClone(returned.navigatorLineage);
-    (returned.navigatorLineage.navigators[1] as { completedVoyages: number }).completedVoyages = 1;
+    const returnExpeditionId = addSuccessfulVoyage(returned, { wreckIds: [1] });
     returned.wrecks[0].survey = {
       state: "returned",
-      expeditionId: 2,
+      expeditionId: returnExpeditionId,
       generation: returned.generation,
     };
     expect(parseSaveGame(returned)).toBe(returned);
 
     const noCompletedSurveyVoyage = structuredClone(returned);
-    (noCompletedSurveyVoyage.navigatorLineage.navigators[1] as { completedVoyages: number }).completedVoyages = 0;
-    expect(() => parseSaveGame(noCompletedSurveyVoyage)).toThrow(/completed voyage/);
+    const current = noCompletedSurveyVoyage.navigatorLineage.navigators[1] as {
+      completedVoyages: number;
+      successfulVoyages: unknown[];
+    };
+    current.completedVoyages = 0;
+    current.successfulVoyages = [];
+    noCompletedSurveyVoyage.expedition.id = returnExpeditionId;
+    expect(() => parseSaveGame(noCompletedSurveyVoyage)).toThrow(/credited|completed voyage/);
 
     const undiscovered = structuredClone(provisional);
     undiscovered.wrecks[0].discovered = false;
@@ -437,32 +489,45 @@ describe("save-game validation", () => {
     expect(() => parseSaveGame(sharedCase)).toThrow(/one-case allocation/);
 
     const duplicateReturnedCase = makeValidSave();
+    const duplicateCaseExpeditionId = addSuccessfulVoyage(duplicateReturnedCase, {
+      fishingSurveyIds: [createFishingShoalId(0)],
+    });
     duplicateReturnedCase.navigatorLineage = structuredClone(duplicateReturnedCase.navigatorLineage);
-    (duplicateReturnedCase.navigatorLineage.navigators[1] as { completedVoyages: number }).completedVoyages = 1;
+    const duplicateVoyage = duplicateReturnedCase.navigatorLineage.navigators[1]
+      .successfulVoyages[0] as { wreckIds: number[] };
+    duplicateVoyage.wreckIds = [1];
     duplicateReturnedCase.wrecks[0].survey = {
       state: "returned",
-      expeditionId: 2,
+      expeditionId: duplicateCaseExpeditionId,
       generation: 2,
     };
     duplicateReturnedCase.fishingShoals.returned.push({
       id: createFishingShoalId(0),
       state: "survey",
-      expeditionId: 2,
+      expeditionId: duplicateCaseExpeditionId,
       generation: 2,
     });
     expect(() => parseSaveGame(duplicateReturnedCase)).toThrow(/one survey case/);
 
-    const futureReturnedCase = structuredClone(duplicateReturnedCase);
-    futureReturnedCase.fishingShoals.returned = [];
-    if (futureReturnedCase.wrecks[0].survey.state !== "returned") throw new Error("Expected returned survey");
-    futureReturnedCase.wrecks[0].survey.expeditionId = 3;
-    expect(() => parseSaveGame(futureReturnedCase)).toThrow(/completed voyage/);
+    const futureReturnedCase = makeValidSave();
+    const wreckReportExpeditionId = addSuccessfulVoyage(futureReturnedCase, { wreckIds: [1] });
+    futureReturnedCase.wrecks[0].survey = {
+      state: "returned",
+      expeditionId: wreckReportExpeditionId + 1,
+      generation: 2,
+    };
+    expect(() => parseSaveGame(futureReturnedCase)).toThrow(/this navigator and voyage|completed voyage/);
   });
 
   it("permits only the returned-lead plus provisional-survey upgrade overlap", () => {
     const returned = makeValidSave();
+    const fishingShoalId = createFishingShoalId(0);
+    returned.navigatorLineage = structuredClone(returned.navigatorLineage);
+    const leadVoyage = returned.navigatorLineage.navigators[0]
+      .successfulVoyages[1] as { fishingLeadIds: string[] };
+    leadVoyage.fishingLeadIds = [fishingShoalId];
     returned.fishingShoals.returned.push({
-      id: createFishingShoalId(0),
+      id: fishingShoalId,
       state: "lead",
       expeditionId: 2,
       generation: 1,
@@ -471,9 +536,18 @@ describe("save-game validation", () => {
     const terminal = structuredClone(returned);
     terminal.fishingShoals.returned[0].state = "survey";
     terminal.fishingShoals.returned[0].generation = 2;
-    terminal.navigatorLineage = structuredClone(terminal.navigatorLineage);
-    (terminal.navigatorLineage.navigators[1] as { completedVoyages: number }).completedVoyages = 1;
+    const terminalExpeditionId = addSuccessfulVoyage(terminal, {
+      fishingSurveyIds: [terminal.fishingShoals.returned[0].id],
+    });
+    terminal.fishingShoals.returned[0].expeditionId = terminalExpeditionId;
     expect(parseSaveGame(terminal)).toBe(terminal);
+
+    const leadAfterSurvey = structuredClone(terminal);
+    const priorLead = leadAfterSurvey.navigatorLineage.navigators[0]
+      .successfulVoyages[1] as { fishingLeadIds: string[] };
+    priorLead.fishingLeadIds = [];
+    addSuccessfulVoyage(leadAfterSurvey, { fishingLeadIds: [fishingShoalId] });
+    expect(() => parseSaveGame(leadAfterSurvey)).toThrow(/precede the returned fishing survey/);
 
     const upgrade = structuredClone(returned);
     upgrade.expedition.active = true;
@@ -514,7 +588,7 @@ describe("save-game validation", () => {
       wreckId: wreck.id,
       remainingSeconds: 3.999,
     };
-    save.navigatorLineage = makeLineage(wreck.generation, wreck.id);
+    save.navigatorLineage = makePendingValidLineage(wreck.id);
     Object.assign(save.ship, {
       worldX: wreck.worldX,
       worldY: wreck.worldY,
@@ -539,7 +613,7 @@ describe("save-game validation", () => {
         wreckId: wreck.id,
         remainingSeconds: 2,
       };
-      save.navigatorLineage = makeLineage(wreck.generation, wreck.id);
+      save.navigatorLineage = makePendingValidLineage(wreck.id);
       Object.assign(save.ship, {
         worldX: wreck.worldX,
         worldY: wreck.worldY,
@@ -624,6 +698,16 @@ describe("save-game validation", () => {
   });
 
   it("rejects lifecycle, discovery, and terrain-patch inconsistencies", () => {
+    const wrongCurrentExpedition = makeValidSave();
+    wrongCurrentExpedition.expedition.id = 5;
+    expect(() => parseSaveGame(wrongCurrentExpedition)).toThrow(
+      /lineage chronology with expedition 4/,
+    );
+
+    const wrongFatalExpedition = makeValidSave();
+    wrongFatalExpedition.wrecks[0].expeditionId = 2;
+    expect(() => parseSaveGame(wrongFatalExpedition)).toThrow(/fatal expedition 3/);
+
     const inactivePersonal = makeValidSave();
     inactivePersonal.knowledge.runs.push([10, 1, KnowledgeState.Personal, 4]);
     expect(() => parseSaveGame(inactivePersonal)).toThrow(/without an active expedition/);

@@ -103,6 +103,7 @@ describe("lost navigator wreck surveys", () => {
       generation: 2,
     });
     expect(restored.returnedWreckSurveys).toHaveLength(1);
+    expect(restored.currentNavigator.successfulVoyages[0].wreckIds).toEqual([1]);
     expect(returned).toEqual([expect.objectContaining({
       expeditionId: 2,
       generation: 2,

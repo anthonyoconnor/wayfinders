@@ -21,6 +21,7 @@ import {
 } from "../exploration/WreckSurveyContracts";
 import type { SaveStore } from "../persistence/IndexedDbSaveStore";
 import { loadExactSaveSlot } from "../persistence/SaveGame";
+import type { NavigatorVoyageAchievementRecordV1 } from "../lineage/NavigatorLineageSystem";
 import { worldToGrid } from "../world/CoordinateSystem";
 import type { GeneratedIsland } from "../world/IslandGenerator";
 import { KnowledgeState } from "../world/TileData";
@@ -35,6 +36,8 @@ import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
 import {
   buildNavigatorGenerationSummary,
+  describeNavigatorVoyageAchievements,
+  type NavigatorAchievementSources,
   type NavigatorGenerationSummary,
 } from "./NavigatorGenerationSummary";
 
@@ -174,12 +177,7 @@ export class WayfindersScene extends Phaser.Scene {
   private browserDebugApi?: BrowserDebugApi;
   private activeLifecycleCue?: Phaser.GameObjects.Text;
   private returnCueScheduled = false;
-  private returnCuePending = false;
-  private pendingReturnedDiscoveryNames: string[] = [];
-  private pendingReturnedFishingLeadCount = 0;
-  private pendingReturnedFishingSurveyQualities: string[] = [];
-  private pendingReturnedWreckGenerations: number[] = [];
-  private pendingReturnVoyageNumber?: number;
+  private pendingReturnedVoyage?: Readonly<NavigatorVoyageAchievementRecordV1>;
   private pendingReturnVoyagesRemaining?: number;
   private pendingGenerationSummary?: Readonly<NavigatorGenerationSummary>;
   private previousShipPose!: ShipRenderPose;
@@ -997,11 +995,21 @@ export class WayfindersScene extends Phaser.Scene {
       this.generationSummaryJourneys.replaceChildren(...summary.journeys.map((journey) => {
         const row = document.createElement("li");
         row.dataset.outcome = journey.outcome;
+        const heading = document.createElement("div");
+        heading.className = "generation-summary__journey-heading";
         const label = document.createElement("strong");
         label.textContent = `Journey ${journey.voyageNumber}`;
         const outcome = document.createElement("span");
         outcome.textContent = journey.outcome === "returned" ? "Returned safely" : "Lost at sea";
-        row.append(label, outcome);
+        heading.append(label, outcome);
+        const achievements = document.createElement("ul");
+        achievements.className = "generation-summary__achievements";
+        achievements.replaceChildren(...journey.achievements.map((achievement) => {
+          const item = document.createElement("li");
+          item.textContent = achievement;
+          return item;
+        }));
+        row.append(heading, achievements);
         return row;
       }));
     }
@@ -1040,8 +1048,16 @@ export class WayfindersScene extends Phaser.Scene {
     if (!navigator || navigator.state === "active") {
       throw new Error(`Terminal navigator ${handover.fromNavigatorId} is missing from the lineage`);
     }
-    this.showGenerationSummary(buildNavigatorGenerationSummary(navigator));
+    this.showGenerationSummary(buildNavigatorGenerationSummary(navigator, this.navigatorAchievementSources()));
     return true;
+  }
+
+  private navigatorAchievementSources(): NavigatorAchievementSources {
+    return {
+      discoveries: this.simulation.returnedDiscoveries,
+      fishingShoals: this.simulation.fishingShoalDefinitions,
+      wrecks: this.simulation.wrecks,
+    };
   }
 
   private dismissGenerationSummary(): boolean {
@@ -1747,10 +1763,10 @@ export class WayfindersScene extends Phaser.Scene {
         voyagesRemaining,
         supportedTileCount,
         closedUnknownTileCount,
+        achievements,
       }) => {
         this.worldRenderer.refreshKnowledge(this.simulation.generated);
-        this.returnCuePending = true;
-        this.pendingReturnVoyageNumber = voyageNumber;
+        this.pendingReturnedVoyage = achievements;
         this.pendingReturnVoyagesRemaining = voyagesRemaining;
         this.scheduleReturnCue();
         this.log(
@@ -1767,7 +1783,10 @@ export class WayfindersScene extends Phaser.Scene {
       }) => {
         const navigator = this.simulation.navigatorLineage.find(({ id }) => id === navigatorId);
         if (!navigator) throw new Error(`Completed navigator ${navigatorId} is missing from the lineage`);
-        this.pendingGenerationSummary = buildNavigatorGenerationSummary(navigator);
+        this.pendingGenerationSummary = buildNavigatorGenerationSummary(
+          navigator,
+          this.navigatorAchievementSources(),
+        );
         this.scheduleReturnCue();
         this.log(
           `Generation ${generation}'s navigator completed ${completedVoyages} successful voyages; `
@@ -1792,7 +1811,10 @@ export class WayfindersScene extends Phaser.Scene {
         this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
         const navigator = this.simulation.navigatorLineage.find((record) => record.generation === generation);
         if (!navigator) throw new Error(`Lost navigator from generation ${generation} is missing from the lineage`);
-        this.showGenerationSummary(buildNavigatorGenerationSummary(navigator));
+        this.showGenerationSummary(buildNavigatorGenerationSummary(
+          navigator,
+          this.navigatorAchievementSources(),
+        ));
         this.log(
           `Generation ${generation} lost ${forgottenTiles} unreturned tiles; `
           + `generation ${nextGeneration} now carries the inherited chart.`,
@@ -1819,8 +1841,6 @@ export class WayfindersScene extends Phaser.Scene {
         this.requestLifecycleSave();
       }),
       this.simulation.events.on("wreckSurveysReturned", ({ reports }) => {
-        this.pendingReturnedWreckGenerations.push(...reports.map(({ lostGeneration }) => lostGeneration));
-        this.scheduleReturnCue();
         this.log(
           `Returned wreck report secured for ${reports.map(({ lostGeneration }) => `generation ${lostGeneration}`).join(", ")}.`,
         );
@@ -1865,16 +1885,13 @@ export class WayfindersScene extends Phaser.Scene {
         this.requestLifecycleSave();
       }),
       this.simulation.events.on("fishingShoalsReturned", ({ leads, surveys }) => {
-        this.pendingReturnedFishingLeadCount += leads.length;
         const returnedQualities: string[] = [];
         for (const survey of surveys) {
           const quality = this.simulation.fishingShoalDefinitions
             .find(({ id }) => id === survey.id)?.quality;
           if (!quality) continue;
           returnedQualities.push(quality);
-          this.pendingReturnedFishingSurveyQualities.push(quality);
         }
-        this.scheduleReturnCue();
         const leadReport = leads.length > 0 ? `${leads.length} inactive lead${leads.length === 1 ? "" : "s"}` : "";
         const surveyReport = returnedQualities.length > 0
           ? `${returnedQualities.join(", ")} returned survey`
@@ -1895,8 +1912,6 @@ export class WayfindersScene extends Phaser.Scene {
       }),
       this.simulation.events.on("discoveriesReturned", ({ discoveries }) => {
         const names = discoveries.map(({ name }) => name).join(", ");
-        this.pendingReturnedDiscoveryNames.push(...discoveries.map(({ name }) => name));
-        this.scheduleReturnCue();
         this.log(`Returned discoveries secured: ${names}.`);
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
@@ -1920,77 +1935,38 @@ export class WayfindersScene extends Phaser.Scene {
     this.returnCueScheduled = true;
     queueMicrotask(() => {
       this.returnCueScheduled = false;
-      const names = this.pendingReturnedDiscoveryNames.splice(0);
-      const fishingLeadCount = this.pendingReturnedFishingLeadCount;
-      this.pendingReturnedFishingLeadCount = 0;
-      const fishingSurveyQualities = this.pendingReturnedFishingSurveyQualities.splice(0);
-      const wreckGenerations = this.pendingReturnedWreckGenerations.splice(0);
-      const returned = this.returnCuePending;
-      this.returnCuePending = false;
-      const voyageNumber = this.pendingReturnVoyageNumber;
-      this.pendingReturnVoyageNumber = undefined;
+      const voyage = this.pendingReturnedVoyage;
+      this.pendingReturnedVoyage = undefined;
       const voyagesRemaining = this.pendingReturnVoyagesRemaining;
       this.pendingReturnVoyagesRemaining = undefined;
       const generationSummary = this.pendingGenerationSummary;
       this.pendingGenerationSummary = undefined;
-      if (
-        !returned
-        && names.length === 0
-        && fishingLeadCount === 0
-        && fishingSurveyQualities.length === 0
-        && wreckGenerations.length === 0
-        && !generationSummary
-      ) return;
+      if (!voyage && !generationSummary) return;
 
       if (generationSummary) {
         this.showGenerationSummary(generationSummary);
         return;
       }
+      if (!voyage) return;
 
-      const voyageHeading = voyageNumber === undefined
-        ? "EXPEDITION RETURNED"
-        : `VOYAGE ${voyageNumber} OF 4 RETURNED`;
+      const voyageHeading = `VOYAGE ${voyage.voyageNumber} OF 4 RETURNED`;
       const remainingLine = voyagesRemaining === undefined
         ? ""
         : `${voyagesRemaining} VOYAGE${voyagesRemaining === 1 ? "" : "S"} REMAIN · `;
-
-      if (
-        names.length > 0
-        || fishingLeadCount > 0
-        || fishingSurveyQualities.length > 0
-        || wreckGenerations.length > 0
-      ) {
-        const discoveryLine = names.length === 1
-          ? names[0].toUpperCase()
-          : names.length > 1
-            ? `${names.length} DISCOVERIES RETURNED`
-            : "";
-        const fishingLine = fishingSurveyQualities.length > 0 && fishingLeadCount > 0
-          ? `${fishingSurveyQualities.length} FISHING SURVEY + ${fishingLeadCount} LEAD${fishingLeadCount === 1 ? "" : "S"} RETURNED`
-          : fishingSurveyQualities.length > 0
-            ? `FISHING SURVEY RETURNED · ${fishingSurveyQualities[0].toUpperCase()} QUALITY`
-            : fishingLeadCount > 0
-              ? `${fishingLeadCount} FISHING LEAD${fishingLeadCount === 1 ? "" : "S"} RECORDED`
-              : "";
-        const wreckLine = wreckGenerations.length === 1
-          ? `WRECK REPORT RETURNED · GENERATION ${wreckGenerations[0]} NAVIGATOR`
-          : wreckGenerations.length > 1
-            ? `${wreckGenerations.length} WRECK REPORTS RETURNED`
-            : "";
-        const findings = [discoveryLine, fishingLine, wreckLine].filter(Boolean).join("\n");
-        this.showLifecycleCue(
-          `${voyageHeading}\n${findings}\nADDED TO THE INHERITED CHART\n`
-          + `${remainingLine}ROUTE SUPPORTED · PROVISIONS REPLENISHED`,
-          "#eadb9f",
-          5_000,
-        );
-      } else {
-        this.showLifecycleCue(
-          `${voyageHeading}\nROUTE NOW SUPPORTED\n${remainingLine}PROVISIONS REPLENISHED`,
-          "#d9fff5",
-          3_500,
-        );
-      }
+      const achievements = describeNavigatorVoyageAchievements(
+        voyage,
+        this.navigatorAchievementSources(),
+      ).map((achievement) => achievement.toUpperCase()).join("\n");
+      const hasNotableFindings = voyage.discoveryIds.length > 0
+        || voyage.fishingLeadIds.length > 0
+        || voyage.fishingSurveyIds.length > 0
+        || voyage.wreckIds.length > 0;
+      this.showLifecycleCue(
+        `${voyageHeading}\n${achievements}\nADDED TO THE INHERITED CHART\n`
+        + `${remainingLine}PROVISIONS REPLENISHED`,
+        hasNotableFindings ? "#eadb9f" : "#d9fff5",
+        hasNotableFindings ? 5_000 : 3_500,
+      );
     });
   }
 

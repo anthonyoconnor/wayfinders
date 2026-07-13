@@ -1,4 +1,9 @@
-export const NAVIGATOR_LINEAGE_CONTRACT_VERSION = 3 as const;
+import {
+  isCurrentFishingShoalId,
+  type FishingShoalId,
+} from "../exploration/FishingShoalContracts";
+
+export const NAVIGATOR_LINEAGE_CONTRACT_VERSION = 4 as const;
 export const NAVIGATOR_ID_VERSION = 1 as const;
 export const NAVIGATOR_SUCCESSION_KEY_VERSION = 2 as const;
 export const NAVIGATOR_VOYAGE_LIMIT = 4 as const;
@@ -30,36 +35,52 @@ export interface ParsedNavigatorSuccessionKey {
   resolutionId: number;
 }
 
-interface NavigatorRecordBaseV3 {
+export interface NavigatorVoyageAchievementInputV1 {
+  readonly expeditionId: number;
+  readonly supportedTileCount: number;
+  readonly closedUnknownTileCount: number;
+  readonly discoveryIds: readonly number[];
+  readonly fishingLeadIds: readonly FishingShoalId[];
+  readonly fishingSurveyIds: readonly FishingShoalId[];
+  readonly wreckIds: readonly number[];
+}
+
+export interface NavigatorVoyageAchievementRecordV1 extends NavigatorVoyageAchievementInputV1 {
+  readonly voyageNumber: number;
+}
+
+interface NavigatorRecordBaseV4 {
   id: NavigatorId;
   generation: number;
   /** Null only for the first navigator in the current lineage. */
   createdBySuccessionKey: NavigatorSuccessionKey | null;
   completedVoyages: number;
+  /** Exact-dock-committed results, in numbered voyage order. */
+  successfulVoyages: readonly Readonly<NavigatorVoyageAchievementRecordV1>[];
 }
 
-export interface ActiveNavigatorRecordV3 extends NavigatorRecordBaseV3 {
+export interface ActiveNavigatorRecordV4 extends NavigatorRecordBaseV4 {
   state: "active";
   successionReason?: never;
   endedBySuccessionKey?: never;
 }
 
-export interface CompletedNavigatorRecordV3 extends NavigatorRecordBaseV3 {
+export interface CompletedNavigatorRecordV4 extends NavigatorRecordBaseV4 {
   state: "completed";
   successionReason: "tenure";
   endedBySuccessionKey: NavigatorSuccessionKey;
 }
 
-export interface LostNavigatorRecordV3 extends NavigatorRecordBaseV3 {
+export interface LostNavigatorRecordV4 extends NavigatorRecordBaseV4 {
   state: "lost";
   successionReason: "wreck";
   endedBySuccessionKey: NavigatorSuccessionKey;
 }
 
-export type NavigatorRecordV3 =
-  | ActiveNavigatorRecordV3
-  | CompletedNavigatorRecordV3
-  | LostNavigatorRecordV3;
+export type NavigatorRecordV4 =
+  | ActiveNavigatorRecordV4
+  | CompletedNavigatorRecordV4
+  | LostNavigatorRecordV4;
 
 /** Persisted between the visible end of one navigator and creation of the next. */
 export interface NavigatorSuccessionTransitionV2 {
@@ -71,9 +92,9 @@ export interface NavigatorSuccessionTransitionV2 {
   nextGeneration: number;
 }
 
-export interface NavigatorLineageSnapshotV3 {
+export interface NavigatorLineageSnapshotV4 {
   contractVersion: typeof NAVIGATOR_LINEAGE_CONTRACT_VERSION;
-  navigators: readonly Readonly<NavigatorRecordV3>[];
+  navigators: readonly Readonly<NavigatorRecordV4>[];
   pendingSuccession: Readonly<NavigatorSuccessionTransitionV2> | null;
 }
 
@@ -94,7 +115,8 @@ export type NavigatorSuccessfulVoyageResult =
       completedVoyages: number;
       remainingVoyages: number;
       tenureCompleted: false;
-      navigator: Readonly<ActiveNavigatorRecordV3>;
+      voyage: Readonly<NavigatorVoyageAchievementRecordV1>;
+      navigator: Readonly<ActiveNavigatorRecordV4>;
     }
   | {
       status: "tenure-completed";
@@ -102,8 +124,9 @@ export type NavigatorSuccessfulVoyageResult =
       completedVoyages: typeof NAVIGATOR_VOYAGE_LIMIT;
       remainingVoyages: 0;
       tenureCompleted: true;
-      navigator: Readonly<CompletedNavigatorRecordV3>;
-      successor: Readonly<ActiveNavigatorRecordV3>;
+      voyage: Readonly<NavigatorVoyageAchievementRecordV1>;
+      navigator: Readonly<CompletedNavigatorRecordV4>;
+      successor: Readonly<ActiveNavigatorRecordV4>;
       transition: Readonly<NavigatorSuccessionTransitionV2>;
     };
 
@@ -115,13 +138,13 @@ export type NavigatorSuccessionBeginResult =
   | {
       status: "already-completed";
       transition: Readonly<NavigatorSuccessionTransitionV2>;
-      navigator: Readonly<NavigatorRecordV3>;
+      navigator: Readonly<NavigatorRecordV4>;
     };
 
 export interface NavigatorSuccessionCompleteResult {
   status: "completed" | "already-completed";
   transition: Readonly<NavigatorSuccessionTransitionV2>;
-  navigator: Readonly<NavigatorRecordV3>;
+  navigator: Readonly<NavigatorRecordV4>;
 }
 
 export class NavigatorLineageValidationError extends RangeError {
@@ -182,7 +205,7 @@ export function isCurrentNavigatorSuccessionKey(value: unknown): value is Naviga
 }
 
 /** Validates and defensively copies the exact current lineage contract. */
-export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageSnapshotV3 {
+export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageSnapshotV4 {
   const root = record(value, "navigatorLineage");
   if (root.contractVersion !== NAVIGATOR_LINEAGE_CONTRACT_VERSION) {
     fail(
@@ -194,7 +217,7 @@ export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageS
     fail("must contain at least one navigator", "navigatorLineage.navigators");
   }
 
-  const navigators: Readonly<NavigatorRecordV3>[] = [];
+  const navigators: Readonly<NavigatorRecordV4>[] = [];
   const navigatorIds = new Set<string>();
   const generations = new Set<number>();
   const endedKeys = new Set<string>();
@@ -215,6 +238,7 @@ export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageS
       `${path}.createdBySuccessionKey`,
     );
     const completedVoyages = navigatorVoyageCount(item.completedVoyages, `${path}.completedVoyages`);
+    const successfulVoyages = parseSuccessfulVoyages(item.successfulVoyages, completedVoyages, path);
     if (createdBySuccessionKey !== null) {
       if (createdKeys.has(createdBySuccessionKey)) {
         fail("must create at most one navigator", `${path}.createdBySuccessionKey`);
@@ -233,6 +257,7 @@ export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageS
         state: "active",
         createdBySuccessionKey,
         completedVoyages,
+        successfulVoyages,
       }));
       continue;
     }
@@ -267,7 +292,8 @@ export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageS
       endedBySuccessionKey,
       createdBySuccessionKey,
       completedVoyages,
-    } as CompletedNavigatorRecordV3 | LostNavigatorRecordV3));
+      successfulVoyages,
+    } as CompletedNavigatorRecordV4 | LostNavigatorRecordV4));
   }
 
   if (navigators[0].generation !== 1) {
@@ -290,6 +316,7 @@ export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageS
       fail("must be created by the previous navigator's succession", `${path}.createdBySuccessionKey`);
     }
   }
+  validateVoyageExpeditionOrder(navigators);
 
   const pendingSuccession = root.pendingSuccession === null
     ? null
@@ -329,7 +356,7 @@ export function parseNavigatorLineageSnapshot(value: unknown): NavigatorLineageS
 
 /** Pure owner of one active navigator and the lineage's immutable history. */
 export class NavigatorLineageSystem {
-  private navigatorsValue: readonly Readonly<NavigatorRecordV3>[];
+  private navigatorsValue: readonly Readonly<NavigatorRecordV4>[];
   private pendingSuccessionValue: Readonly<NavigatorSuccessionTransitionV2> | null = null;
 
   constructor() {
@@ -340,6 +367,7 @@ export class NavigatorLineageSystem {
         state: "active",
         createdBySuccessionKey: null,
         completedVoyages: 0,
+        successfulVoyages: Object.freeze([]),
       }),
     ]);
   }
@@ -350,16 +378,16 @@ export class NavigatorLineageSystem {
     return system;
   }
 
-  get navigators(): readonly Readonly<NavigatorRecordV3>[] {
+  get navigators(): readonly Readonly<NavigatorRecordV4>[] {
     return this.navigatorsValue;
   }
 
   /** The latest record, including the outgoing navigator during a succession hold. */
-  get currentNavigator(): Readonly<NavigatorRecordV3> {
+  get currentNavigator(): Readonly<NavigatorRecordV4> {
     return this.navigatorsValue[this.navigatorsValue.length - 1];
   }
 
-  get activeNavigator(): Readonly<ActiveNavigatorRecordV3> | undefined {
+  get activeNavigator(): Readonly<ActiveNavigatorRecordV4> | undefined {
     const current = this.currentNavigator;
     return current.state === "active" ? current : undefined;
   }
@@ -383,14 +411,27 @@ export class NavigatorLineageSystem {
     );
   }
 
-  completeSuccessfulVoyage(): NavigatorSuccessfulVoyageResult {
+  completeSuccessfulVoyage(
+    achievements: Readonly<NavigatorVoyageAchievementInputV1>,
+  ): NavigatorSuccessfulVoyageResult {
     const active = this.requireActiveNavigator();
     if (active.completedVoyages >= NAVIGATOR_VOYAGE_LIMIT) {
       throw new RangeError("Navigator has already completed the four-voyage tenure");
     }
     const previousCompletedVoyages = active.completedVoyages;
     const completedVoyages = previousCompletedVoyages + 1;
-    const navigator = freezeNavigator<ActiveNavigatorRecordV3>({ ...active, completedVoyages });
+    const successfulVoyage = freezeVoyageAchievementInput(achievements, completedVoyages);
+    const expectedExpeditionId = validateVoyageExpeditionOrder(this.navigatorsValue);
+    if (successfulVoyage.expeditionId !== expectedExpeditionId) {
+      throw new RangeError(
+        `Successful voyage must use chronological expedition ${expectedExpeditionId}`,
+      );
+    }
+    const navigator = freezeNavigator<ActiveNavigatorRecordV4>({
+      ...active,
+      completedVoyages,
+      successfulVoyages: Object.freeze([...active.successfulVoyages, successfulVoyage]),
+    });
     this.replaceActiveNavigator(navigator);
 
     if (completedVoyages < NAVIGATOR_VOYAGE_LIMIT) {
@@ -400,6 +441,7 @@ export class NavigatorLineageSystem {
         completedVoyages,
         remainingVoyages: NAVIGATOR_VOYAGE_LIMIT - completedVoyages,
         tenureCompleted: false,
+        voyage: successfulVoyage,
         navigator,
       });
     }
@@ -419,6 +461,7 @@ export class NavigatorLineageSystem {
       completedVoyages: NAVIGATOR_VOYAGE_LIMIT,
       remainingVoyages: 0,
       tenureCompleted: true,
+      voyage: successfulVoyage,
       navigator: terminal,
       successor: completed.navigator,
       transition: completed.transition,
@@ -506,13 +549,14 @@ export class NavigatorLineageSystem {
       state: "active",
       createdBySuccessionKey: pending.key,
       completedVoyages: 0,
+      successfulVoyages: Object.freeze([]),
     });
     this.navigatorsValue = Object.freeze([...this.navigatorsValue, navigator]);
     this.pendingSuccessionValue = null;
     return Object.freeze({ status: "completed", transition: pending, navigator });
   }
 
-  snapshot(): NavigatorLineageSnapshotV3 {
+  snapshot(): NavigatorLineageSnapshotV4 {
     return Object.freeze({
       contractVersion: NAVIGATOR_LINEAGE_CONTRACT_VERSION,
       navigators: this.navigatorsValue,
@@ -528,7 +572,7 @@ export class NavigatorLineageSystem {
 
   private completedTransition(key: NavigatorSuccessionKey): {
     transition: Readonly<NavigatorSuccessionTransitionV2>;
-    navigator: Readonly<NavigatorRecordV3>;
+    navigator: Readonly<NavigatorRecordV4>;
   } | undefined {
     const successorIndex = this.navigatorsValue.findIndex((record) => record.createdBySuccessionKey === key);
     if (successorIndex <= 0) return undefined;
@@ -552,13 +596,13 @@ export class NavigatorLineageSystem {
     };
   }
 
-  private requireActiveNavigator(): Readonly<ActiveNavigatorRecordV3> {
+  private requireActiveNavigator(): Readonly<ActiveNavigatorRecordV4> {
     const active = this.activeNavigator;
     if (!active) throw new RangeError("Navigator lineage has no active navigator");
     return active;
   }
 
-  private replaceActiveNavigator(navigator: Readonly<ActiveNavigatorRecordV3>): void {
+  private replaceActiveNavigator(navigator: Readonly<ActiveNavigatorRecordV4>): void {
     this.navigatorsValue = Object.freeze([
       ...this.navigatorsValue.slice(0, -1),
       navigator,
@@ -566,7 +610,7 @@ export class NavigatorLineageSystem {
   }
 
   private validateSuccessionChoice(
-    active: Readonly<ActiveNavigatorRecordV3>,
+    active: Readonly<ActiveNavigatorRecordV4>,
     reason: NavigatorSuccessionReason,
   ): void {
     if (reason === "tenure") {
@@ -579,6 +623,95 @@ export class NavigatorLineageSystem {
       throw new RangeError("A navigator cannot wreck after completing the four-voyage tenure");
     }
   }
+}
+
+function parseSuccessfulVoyages(
+  value: unknown,
+  completedVoyages: number,
+  navigatorPath: string,
+): readonly Readonly<NavigatorVoyageAchievementRecordV1>[] {
+  const path = `${navigatorPath}.successfulVoyages`;
+  if (!Array.isArray(value)) fail("must be an array", path);
+  if (value.length !== completedVoyages) {
+    fail("length must equal completedVoyages", path);
+  }
+  return Object.freeze(value.map((voyage, index) => (
+    parseVoyageAchievement(voyage, index + 1, `${path}[${index}]`)
+  )));
+}
+
+function parseVoyageAchievement(
+  value: unknown,
+  expectedVoyageNumber: number,
+  path: string,
+): Readonly<NavigatorVoyageAchievementRecordV1> {
+  const item = record(value, path);
+  const voyageNumber = positiveSafeInteger(item.voyageNumber, `${path}.voyageNumber`);
+  if (voyageNumber !== expectedVoyageNumber) {
+    fail(`must be voyage ${expectedVoyageNumber}`, `${path}.voyageNumber`);
+  }
+  const expeditionId = positiveUint32(item.expeditionId, `${path}.expeditionId`);
+  const supportedTileCount = nonNegativeSafeInteger(
+    item.supportedTileCount,
+    `${path}.supportedTileCount`,
+  );
+  const closedUnknownTileCount = nonNegativeSafeInteger(
+    item.closedUnknownTileCount,
+    `${path}.closedUnknownTileCount`,
+  );
+  const discoveryIds = positiveIntegerArray(item.discoveryIds, `${path}.discoveryIds`);
+  const fishingLeadIds = fishingShoalIdArray(item.fishingLeadIds, `${path}.fishingLeadIds`);
+  const fishingSurveyIds = fishingShoalIdArray(item.fishingSurveyIds, `${path}.fishingSurveyIds`);
+  const wreckIds = positiveIntegerArray(item.wreckIds, `${path}.wreckIds`);
+  const leadIds = new Set<string>(fishingLeadIds);
+  for (const id of fishingSurveyIds) {
+    if (leadIds.has(id)) fail("cannot also be recorded as a fishing lead", `${path}.fishingSurveyIds`);
+  }
+  if (fishingSurveyIds.length + wreckIds.length > 1) {
+    fail("cannot spend more than one survey case", path);
+  }
+  return Object.freeze({
+    expeditionId,
+    voyageNumber,
+    supportedTileCount,
+    closedUnknownTileCount,
+    discoveryIds,
+    fishingLeadIds,
+    fishingSurveyIds,
+    wreckIds,
+  });
+}
+
+function freezeVoyageAchievementInput(
+  input: Readonly<NavigatorVoyageAchievementInputV1>,
+  voyageNumber: number,
+): Readonly<NavigatorVoyageAchievementRecordV1> {
+  return parseVoyageAchievement(
+    { ...input, voyageNumber },
+    voyageNumber,
+    `successfulVoyage[${voyageNumber - 1}]`,
+  );
+}
+
+function validateVoyageExpeditionOrder(
+  navigators: readonly Readonly<NavigatorRecordV4>[],
+): number {
+  let expectedExpeditionId = 1;
+  for (let navigatorIndex = 0; navigatorIndex < navigators.length; navigatorIndex++) {
+    const navigator = navigators[navigatorIndex];
+    for (let voyageIndex = 0; voyageIndex < navigator.successfulVoyages.length; voyageIndex++) {
+      const voyage = navigator.successfulVoyages[voyageIndex];
+      if (voyage.expeditionId !== expectedExpeditionId) {
+        fail(
+          `must follow lineage chronology with expedition ${expectedExpeditionId}`,
+          `navigatorLineage.navigators[${navigatorIndex}].successfulVoyages[${voyageIndex}].expeditionId`,
+        );
+      }
+      expectedExpeditionId = nextExpeditionId(expectedExpeditionId);
+    }
+    if (navigator.state === "lost") expectedExpeditionId = nextExpeditionId(expectedExpeditionId);
+  }
+  return expectedExpeditionId;
 }
 
 function parsePendingSuccession(value: unknown): Readonly<NavigatorSuccessionTransitionV2> {
@@ -602,7 +735,7 @@ function parsePendingSuccession(value: unknown): Readonly<NavigatorSuccessionTra
   });
 }
 
-function freezeNavigator<T extends NavigatorRecordV3>(recordValue: T): Readonly<T> {
+function freezeNavigator<T extends NavigatorRecordV4>(recordValue: T): Readonly<T> {
   return Object.freeze(recordValue);
 }
 
@@ -640,6 +773,31 @@ function navigatorVoyageCount(value: unknown, path: string): number {
   return value as number;
 }
 
+function positiveIntegerArray(value: unknown, path: string): readonly number[] {
+  if (!Array.isArray(value)) fail("must be an array", path);
+  const result = value.map((item, index) => positiveSafeInteger(item, `${path}[${index}]`));
+  validateCanonicalOrder(result, path);
+  return Object.freeze(result);
+}
+
+function fishingShoalIdArray(value: unknown, path: string): readonly FishingShoalId[] {
+  if (!Array.isArray(value)) fail("must be an array", path);
+  const result = value.map((item, index) => {
+    if (!isCurrentFishingShoalId(item)) fail("must contain current fishing-shoal IDs", `${path}[${index}]`);
+    return item;
+  });
+  validateCanonicalOrder(result, path);
+  return Object.freeze(result);
+}
+
+function validateCanonicalOrder(values: readonly (number | string)[], path: string): void {
+  for (let index = 1; index < values.length; index++) {
+    if (values[index - 1] >= values[index]) {
+      fail("must be sorted with no duplicates", path);
+    }
+  }
+}
+
 function validateVoyageCountForState(
   state: NavigatorLifecycleState,
   completedVoyages: number,
@@ -664,6 +822,23 @@ function record(value: unknown, path: string): Record<string, unknown> {
 function positiveSafeInteger(value: unknown, path: string): number {
   if (!Number.isSafeInteger(value) || (value as number) <= 0) fail("must be a positive safe integer", path);
   return value as number;
+}
+
+function nonNegativeSafeInteger(value: unknown, path: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 0) {
+    fail("must be a non-negative safe integer", path);
+  }
+  return value as number;
+}
+
+function positiveUint32(value: unknown, path: string): number {
+  const result = positiveSafeInteger(value, path);
+  if (result > 0xffff_ffff) fail("must fit an unsigned 32-bit integer", path);
+  return result;
+}
+
+function nextExpeditionId(expeditionId: number): number {
+  return expeditionId === 0xffff_ffff ? 1 : expeditionId + 1;
 }
 
 function fail(message: string, path: string): never {

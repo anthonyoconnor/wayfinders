@@ -20,12 +20,12 @@ import {
   parseNavigatorSuccessionKey,
   parseNavigatorLineageSnapshot,
   type NavigatorGenerationHandoverV1,
-  type NavigatorLineageSnapshotV3,
+  type NavigatorLineageSnapshotV4,
 } from "../lineage/NavigatorLineageSystem";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
-export const SAVE_SCHEMA_VERSION = 8 as const;
+export const SAVE_SCHEMA_VERSION = 9 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -107,7 +107,7 @@ export interface SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySave
     provisional: FishingShoalProvisionalRecordV1[];
     returned: FishingShoalReturnedRecordV1[];
   };
-  navigatorLineage: NavigatorLineageSnapshotV3;
+  navigatorLineage: NavigatorLineageSnapshotV4;
   terrainPatches: [];
 }
 
@@ -461,7 +461,7 @@ export function parseSaveGame(value: unknown): SaveGame {
       `save.fishingShoals.provisional[${provisionalFishingSurveyIndex}].state`,
     );
   }
-  let navigatorLineage: NavigatorLineageSnapshotV3;
+  let navigatorLineage: NavigatorLineageSnapshotV4;
   try {
     navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
   } catch (error) {
@@ -473,7 +473,25 @@ export function parseSaveGame(value: unknown): SaveGame {
   if (navigatorLineage.navigators.at(-1)?.generation !== generation) {
     fail("latest navigator generation must match the saved generation", "save.navigatorLineage.navigators");
   }
-  validateLineageWrecks(navigatorLineage, wrecks);
+  const lineageChronology = validateLineageWrecks(navigatorLineage, wrecks);
+  const expectedExpeditionId = pendingRespawn
+    ? lineageChronology.latestFatalExpeditionId
+    : lineageChronology.nextExpeditionId;
+  if (expectedExpeditionId === undefined) {
+    fail("requires a fatal voyage in the navigator lineage", "save.expedition.id");
+  }
+  if (expeditionId !== expectedExpeditionId) {
+    fail(
+      `must match lineage chronology with expedition ${expectedExpeditionId}`,
+      "save.expedition.id",
+    );
+  }
+  validateVoyageAchievements(
+    navigatorLineage,
+    returnedDiscoveries,
+    returnedFishingShoals,
+    wrecks,
+  );
   validateReturnedSurveyCases(navigatorLineage, wrecks, returnedFishingShoals);
   const pendingSuccession = navigatorLineage.pendingSuccession;
   if (pendingRespawn === null && pendingSuccession !== null) {
@@ -812,13 +830,25 @@ function validateWreckSurvey(
 }
 
 function validateLineageWrecks(
-  lineage: NavigatorLineageSnapshotV3,
+  lineage: NavigatorLineageSnapshotV4,
   wrecks: readonly ShipwreckState[],
-): void {
-  const lostNavigatorByWreckId = new Map<number, { generation: number; index: number }>();
+): { nextExpeditionId: number; latestFatalExpeditionId?: number } {
+  const lostNavigatorByWreckId = new Map<number, {
+    generation: number;
+    index: number;
+    fatalExpeditionId: number;
+  }>();
+  let nextChronologicalExpeditionId = 1;
+  let latestFatalExpeditionId: number | undefined;
   for (let index = 0; index < lineage.navigators.length; index++) {
     const navigator = lineage.navigators[index];
+    for (let voyageIndex = 0; voyageIndex < navigator.successfulVoyages.length; voyageIndex++) {
+      nextChronologicalExpeditionId = nextExpeditionId(nextChronologicalExpeditionId);
+    }
     if (navigator.state !== "lost") continue;
+    const fatalExpeditionId = nextChronologicalExpeditionId;
+    nextChronologicalExpeditionId = nextExpeditionId(nextChronologicalExpeditionId);
+    latestFatalExpeditionId = fatalExpeditionId;
     const parsedKey = parseNavigatorSuccessionKey(navigator.endedBySuccessionKey);
     if (!parsedKey || parsedKey.reason !== "wreck") {
       fail(
@@ -835,6 +865,7 @@ function validateLineageWrecks(
     lostNavigatorByWreckId.set(parsedKey.resolutionId, {
       generation: navigator.generation,
       index,
+      fatalExpeditionId,
     });
   }
 
@@ -860,11 +891,22 @@ function validateLineageWrecks(
         `save.wrecks[${index}].generation`,
       );
     }
+    if (lostNavigator.fatalExpeditionId !== wreck.expeditionId) {
+      fail(
+        `must match fatal expedition ${lostNavigator.fatalExpeditionId}`,
+        `save.wrecks[${index}].expeditionId`,
+      );
+    }
   }
+
+  return {
+    nextExpeditionId: nextChronologicalExpeditionId,
+    latestFatalExpeditionId,
+  };
 }
 
 function validateReturnedSurveyCases(
-  lineage: NavigatorLineageSnapshotV3,
+  lineage: NavigatorLineageSnapshotV4,
   wrecks: readonly ShipwreckState[],
   fishingShoals: readonly FishingShoalReturnedRecordV1[],
 ): void {
@@ -901,13 +943,111 @@ function validateReturnedSurveyCases(
   }
 }
 
+function validateVoyageAchievements(
+  lineage: NavigatorLineageSnapshotV4,
+  discoveries: readonly DiscoverySaveRecord[],
+  fishingShoals: readonly FishingShoalReturnedRecordV1[],
+  wrecks: readonly ShipwreckState[],
+): void {
+  const discoveryById = new Map(discoveries.map((record) => [record.id, record]));
+  const fishingShoalById = new Map(fishingShoals.map((record) => [record.id, record]));
+  const wreckById = new Map(wrecks.map((record) => [record.id, record]));
+  const creditedDiscoveries = new Set<number>();
+  const creditedFishingLeads = new Set<string>();
+  const creditedFishingSurveys = new Set<string>();
+  const creditedWrecks = new Set<number>();
+
+  for (let navigatorIndex = 0; navigatorIndex < lineage.navigators.length; navigatorIndex++) {
+    const navigator = lineage.navigators[navigatorIndex];
+    for (let voyageIndex = 0; voyageIndex < navigator.successfulVoyages.length; voyageIndex++) {
+      const voyage = navigator.successfulVoyages[voyageIndex];
+      const path = `save.navigatorLineage.navigators[${navigatorIndex}].successfulVoyages[${voyageIndex}]`;
+      const validateProvenance = (
+        record: { generation: number; expeditionId: number },
+        sourcePath: string,
+      ): void => {
+        if (record.generation !== navigator.generation || record.expeditionId !== voyage.expeditionId) {
+          fail("must belong to this navigator and voyage", sourcePath);
+        }
+      };
+
+      for (let index = 0; index < voyage.discoveryIds.length; index++) {
+        const id = voyage.discoveryIds[index];
+        const sourcePath = `${path}.discoveryIds[${index}]`;
+        const discovery = discoveryById.get(id);
+        if (!discovery) fail(`does not reference returned discovery ${id}`, sourcePath);
+        validateProvenance(discovery, sourcePath);
+        if (creditedDiscoveries.has(id)) fail(`duplicates discovery ${id}`, sourcePath);
+        creditedDiscoveries.add(id);
+      }
+
+      for (let index = 0; index < voyage.fishingLeadIds.length; index++) {
+        const id = voyage.fishingLeadIds[index];
+        const sourcePath = `${path}.fishingLeadIds[${index}]`;
+        const fishingShoal = fishingShoalById.get(id);
+        if (!fishingShoal) fail(`does not reference returned fishing shoal ${id}`, sourcePath);
+        if (fishingShoal.state === "lead") validateProvenance(fishingShoal, sourcePath);
+        if (creditedFishingSurveys.has(id)) {
+          fail("must precede the returned fishing survey", sourcePath);
+        }
+        if (creditedFishingLeads.has(id)) fail(`duplicates fishing lead ${id}`, sourcePath);
+        creditedFishingLeads.add(id);
+      }
+
+      for (let index = 0; index < voyage.fishingSurveyIds.length; index++) {
+        const id = voyage.fishingSurveyIds[index];
+        const sourcePath = `${path}.fishingSurveyIds[${index}]`;
+        const fishingShoal = fishingShoalById.get(id);
+        if (!fishingShoal || fishingShoal.state !== "survey") {
+          fail(`does not reference returned fishing survey ${id}`, sourcePath);
+        }
+        validateProvenance(fishingShoal, sourcePath);
+        if (creditedFishingSurveys.has(id)) fail(`duplicates fishing survey ${id}`, sourcePath);
+        creditedFishingSurveys.add(id);
+      }
+
+      for (let index = 0; index < voyage.wreckIds.length; index++) {
+        const id = voyage.wreckIds[index];
+        const sourcePath = `${path}.wreckIds[${index}]`;
+        const wreck = wreckById.get(id);
+        if (!wreck || wreck.survey.state !== "returned") {
+          fail(`does not reference returned wreck report ${id}`, sourcePath);
+        }
+        validateProvenance(wreck.survey, sourcePath);
+        if (creditedWrecks.has(id)) fail(`duplicates wreck report ${id}`, sourcePath);
+        creditedWrecks.add(id);
+      }
+    }
+  }
+
+  for (let index = 0; index < discoveries.length; index++) {
+    if (!creditedDiscoveries.has(discoveries[index].id)) {
+      fail("must be credited to its successful voyage", `save.discoveries.returned[${index}]`);
+    }
+  }
+  for (let index = 0; index < fishingShoals.length; index++) {
+    const fishingShoal = fishingShoals[index];
+    const credited = fishingShoal.state === "survey"
+      ? creditedFishingSurveys.has(fishingShoal.id)
+      : creditedFishingLeads.has(fishingShoal.id);
+    if (!credited) {
+      fail("must be credited to its successful voyage", `save.fishingShoals.returned[${index}]`);
+    }
+  }
+  for (let index = 0; index < wrecks.length; index++) {
+    if (wrecks[index].survey.state === "returned" && !creditedWrecks.has(wrecks[index].id)) {
+      fail("must be credited to its successful voyage", `save.wrecks[${index}].survey`);
+    }
+  }
+}
+
 function nextExpeditionId(expeditionId: number): number {
   return expeditionId === 0xffff_ffff ? 1 : expeditionId + 1;
 }
 
 function validateLineageGenerationHandover(
   handover: NavigatorGenerationHandoverV1 | null,
-  lineage: NavigatorLineageSnapshotV3,
+  lineage: NavigatorLineageSnapshotV4,
   pendingRespawn: PendingRespawnSaveState | null,
 ): void {
   if (!handover) return;

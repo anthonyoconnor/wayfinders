@@ -127,6 +127,7 @@ describe("discovery expedition lifecycle", () => {
     expect(simulation.provisionalDiscoveries).toHaveLength(0);
     expect(simulation.returnedDiscoveries).toHaveLength(1);
     expect(simulation.returnedDiscoveries[0]).toMatchObject({ id: provisional.id, returned: true });
+    expect(simulation.currentNavigator.successfulVoyages[0].discoveryIds).toEqual([provisional.id]);
   });
 
   it("loses only provisional discoveries on wreck and keeps runtime wrecks separate", () => {

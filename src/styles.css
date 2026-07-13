@@ -312,32 +312,47 @@ a:focus-visible {
   list-style: none;
 }
 
-.generation-summary__journeys li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+.generation-summary__journeys > li {
+  display: grid;
+  gap: 0.45rem;
   padding: 0.65rem 0.75rem;
   border: 1px solid rgba(141, 216, 207, 0.2);
   border-radius: 0.4rem;
   background: rgba(4, 21, 28, 0.66);
 }
 
-.generation-summary__journeys strong {
+.generation-summary__journey-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.generation-summary__journey-heading strong {
   color: #d9fff5;
   font-size: 0.82rem;
 }
 
-.generation-summary__journeys span {
+.generation-summary__journey-heading span {
   color: var(--shell-muted);
   font-size: 0.78rem;
 }
 
-.generation-summary__journeys li[data-outcome="lost-at-sea"] {
+.generation-summary__achievements {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0 0 0 1rem;
+  margin: 0;
+  color: #d7e7df;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.generation-summary__journeys > li[data-outcome="lost-at-sea"] {
   border-color: rgba(255, 181, 167, 0.46);
 }
 
-.generation-summary__journeys li[data-outcome="lost-at-sea"] span {
+.generation-summary__journeys > li[data-outcome="lost-at-sea"] .generation-summary__journey-heading span {
   color: var(--shell-danger);
 }
 
