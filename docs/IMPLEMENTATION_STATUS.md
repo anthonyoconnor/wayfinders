@@ -22,7 +22,8 @@ Verification: TypeScript check, 20 unit tests and a production Vite build pass.
 Status: complete
 
 - Recognisable seeded home island with coastline, huts, harbour flag, dock and labelled home.
-- Visually distinct supported water surrounding the home, including boundary buoys.
+- Visually distinct Supported water surrounding the home. The fog edge alone
+  communicates its boundary; no decorative boundary buoys or marker dots are rendered.
 - Continuous WASD/arrow-key ship movement with a readable heading and wake.
 - Terrain-authoritative island, rock and reef collision.
 - Smooth follow camera with wheel or Q/E zoom and bounded world view.

@@ -21,7 +21,6 @@ const COLORS = {
   timberLight: 0xb17c45,
   roof: 0x9b4f32,
   sailcloth: 0xf0d79b,
-  buoy: 0xf0c467,
 } as const;
 
 interface IslandPalette {
@@ -203,13 +202,6 @@ export class WorldRenderer {
         waves.strokePath();
       }
 
-      if (supported && this.touchesUnknown(grid, x, y) && seededValue(seed + 607, x, y) > 0.72) {
-        const structures = this.getLayer(chunk, "structures");
-        structures.fillStyle(COLORS.buoy, 1);
-        structures.fillCircle(px + size / 2, py + size / 2, size * 0.08);
-        structures.lineStyle(1, COLORS.timber, 0.9);
-        structures.lineBetween(px + size / 2, py + size * 0.56, px + size / 2, py + size * 0.75);
-      }
     });
 
     this.drawHome(generated);
@@ -379,11 +371,6 @@ export class WorldRenderer {
       this.homeStructures.lineStyle(2, COLORS.timberLight, 1);
       this.homeStructures.lineBetween(x, harbourWorld.y - size * 0.23, x, harbourWorld.y + size * 0.23);
     }
-  }
-
-  private touchesUnknown(grid: GeneratedWorld["grid"], x: number, y: number): boolean {
-    const neighbors = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]] as const;
-    return neighbors.some(([nx, ny]) => grid.inBounds(nx, ny) && grid.getKnowledge(nx, ny) === KnowledgeState.Unknown);
   }
 
   private clear(): void {
