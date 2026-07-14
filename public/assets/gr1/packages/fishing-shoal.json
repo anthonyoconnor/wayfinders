@@ -1,0 +1,23 @@
+{
+  "contractVersion": 1,
+  "assetId": "shoal.fishing.primary",
+  "kind": "fishing-shoal",
+  "sourceAssetId": "generated.fishing-shoal.source.v1",
+  "runtimeRevision": 1,
+  "tileSize": 32,
+  "grid": {
+    "width": 1,
+    "height": 1,
+    "placementOrigin": { "x": 0, "y": 0 },
+    "serviceAnchor": { "x": 0, "y": 0 },
+    "passable": true
+  },
+  "visual": {
+    "imageId": "shoal.fishing.primary.complete",
+    "pixelSize": { "width": 96, "height": 64 },
+    "origin": { "x": 0.5, "y": 0.5 },
+    "scale": 1,
+    "depth": 42
+  },
+  "visibilitySource": "fishing-shoal-read-model"
+}

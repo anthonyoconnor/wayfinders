@@ -132,6 +132,18 @@ describe("GR-1.1 authored asset contracts", () => {
     expect(() => validateAuthoredAssetMetadata(duplicate)).toThrow(/duplicate cell/);
   });
 
+  it("expands a compact fixed authored row map without procedural tile assembly", () => {
+    const compact = homeFixture();
+    const grid = compact.grid as Record<string, unknown>;
+    delete grid.cells;
+    grid.cellRows = ["SSSSS", "SLLLS", "SLLSS", "SLLLS", "SSSSS"];
+    const validated = validateAuthoredAssetMetadata(compact);
+    expect(validated.kind).toBe("home-island");
+    if (validated.kind !== "home-island") throw new Error("Expected home-island metadata");
+    expect(validated.grid.cells).toHaveLength(25);
+    expect(validated.grid.cells.find(({ x, y }) => x === 2 && y === 2)?.terrain).toBe(AUTHORED_TERRAINS.land);
+  });
+
   it("rejects overlapping or out-of-range authored render slices", () => {
     const overlapping = homeFixture();
     const render = overlapping.render as { slices: Record<string, unknown>[] };

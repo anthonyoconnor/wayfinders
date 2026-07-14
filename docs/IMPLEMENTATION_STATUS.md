@@ -30,8 +30,8 @@ foundation.
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
 `Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-4.1` work is
-complete and accepted. `GR-1.1` is also complete and accepted; the ordered
-`GR-1.2` through `GR-1.4` batch is authorized. No other later gameplay or
+complete and accepted. `GR-1.1` and `GR-1.2` are also complete and accepted;
+the ordered `GR-1.3` through `GR-1.4` batch is authorized. No other later gameplay or
 graphics milestone is authorized by this status document.
 
 ## Run and verify
@@ -54,7 +54,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 238 automated tests pass across 28 files. The suite includes deterministic
+- 250 automated tests pass across 30 files. The suite includes deterministic
   island-dossier and survey-site catalog/lifecycle coverage, exact-island fog
   reveal, deterministic idol-host selection, provisional/return/wreck idol
   integration, completion choices, simulation integration and lineage/Great
@@ -387,16 +387,19 @@ Current verification baseline:
   Supported-route traffic.
 - `GR-1.1`: authored asset contract V1 defines and validates the home-island,
   player-boat and pilot-shoal grid/visual metadata boundary.
-- Later `GR-*`: production art, the authored-package loader, asset tooling,
-  environmental audio and production polish are not yet implemented.
+- `GR-1.2`: three metadata packages and four prepared runtime textures preload
+  through a typed semantic catalog; invalid or incomplete packages remain
+  unavailable with legible diagnostics and developer-art fallback.
+- Later `GR-*`: production-art integration, asset tooling, environmental audio
+  and production polish are not yet implemented.
 - Default and doubled-world range probes pass the performance hardening
   baseline. Touch-first sailing is not implemented, and representative
   mid-range mobile rendering/performance validation remains outstanding.
 
 ## Active planning point
 
-`GP-4.1` and `GR-1.1` are accepted. No later gameplay milestone is currently
-authorized; `GR-1.2` through `GR-1.4` are the active authorized graphics batch.
+`GP-4.1`, `GR-1.1` and `GR-1.2` are accepted. No later gameplay milestone is
+currently authorized; `GR-1.3` through `GR-1.4` are the active authorized graphics batch.
 
 The completed milestones are:
 
@@ -441,13 +444,17 @@ The completed milestones are:
     and service anchors; player-boat heading/wake metadata; passable read-model-
     gated shoal metadata; and focused contract coverage in the clean 245-test
     typecheck/build gate.
+15. `GR-1.2` — accepted: startup preload for three validated packages and four
+    generated runtime textures; semantic lookup; isolated missing/invalid-
+    package diagnostics; developer-art fallback; and focused loader coverage in
+    the clean 250-test typecheck/build gate.
 
 No later gameplay milestone is authorized. GP-4.1 adds no physical idol,
 recovery action, cargo, clue chain, Gem Hall, Relics wing, saving or production
 art obligation.
 
-The `GR-1` graphics start gate is satisfied. `GR-1.1` is accepted and the
-ordered `GR-1.2` through `GR-1.4` batch is authorized. Fishing, trade and other
+The `GR-1` graphics start gate is satisfied. `GR-1.1` and `GR-1.2` are accepted
+and the ordered `GR-1.3` through `GR-1.4` batch is authorized. Fishing, trade and other
 routine world-activity vessels remain presentation work rather than
 authoritative economy state.
 

@@ -1,8 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-4.1` work and `GR-1.1` are complete and accepted.
-The ordered `GR-1.2` through `GR-1.4` batch is authorized. No other later
+ordered `GP-0.1` through `GP-4.1` work and `GR-1.1` through `GR-1.2` are complete
+and accepted. The ordered `GR-1.3` through `GR-1.4` batch is authorized. No other later
 gameplay or graphics minor is authorized by this roadmap status.
 
 ### Saving policy
@@ -760,7 +760,7 @@ not define collision, identity or rules.
 ### GR-1 — Authored-asset runtime pilot
 
 Start gate: satisfied because GP-3.3 is accepted. The ordered `GR-1.1` through
-`GR-1.4` batch is authorized; `GR-1.1` is accepted.
+`GR-1.4` batch is authorized; `GR-1.1` and `GR-1.2` are accepted.
 
 Goal: prove the smallest useful path from externally generated source art to
 grid-aligned runtime assets. Asset generation and preparation happen before the
@@ -809,7 +809,7 @@ typecheck, 245-test and production-build gate passes.
 
 #### GR-1.2 — Minimal package loading
 
-Status: authorized; next in the ordered batch.
+Status: implemented and accepted.
 
 Add the smallest runtime boundary that loads the three accepted packages and
 their metadata when the game starts. A typed catalog maps semantic IDs to
@@ -828,9 +828,17 @@ legibly and preserve usable developer presentation; regeneration does not
 duplicate textures or display objects; and loading stays within the approved
 pilot memory and startup-time budgets.
 
+Implementation evidence: a typed three-package catalog queues metadata and four
+runtime textures in scene preload; contract validation and image-reference
+checks build a semantic-ID runtime before renderers are created; a failed
+package stays unavailable and reports a developer-log diagnostic while the
+other packages remain usable. The prepared source and runtime images live
+outside the example-assets reference folder. The clean typecheck, 250-test and
+production-build gate passes.
+
 #### GR-1.3 — Home island, boat and shoal proof
 
-Status: authorized; pending GR-1.2 acceptance.
+Status: authorized; next in the ordered batch.
 
 Generate new grid-ready art for the current game rather than using the example
 assets directly. Integrate:

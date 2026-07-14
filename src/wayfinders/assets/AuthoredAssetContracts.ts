@@ -251,9 +251,11 @@ function validateHomeIsland(parsed: Record<string, unknown>): AuthoredHomeIsland
   const placementOrigin = point(gridInput.placementOrigin, "grid.placementOrigin", true);
   assertPointInGrid(placementOrigin, width, height, "grid.placementOrigin");
 
-  if (!Array.isArray(gridInput.cells)) throw new TypeError("grid.cells must be an array");
+  const sourceCells = Array.isArray(gridInput.cells)
+    ? gridInput.cells
+    : authoredCellsFromRows(gridInput.cellRows, width, height);
   const cellKeys = new Set<string>();
-  const cells = gridInput.cells.map((value, index): AuthoredHomeCell => {
+  const cells = sourceCells.map((value, index): AuthoredHomeCell => {
     const cellInput = record(value, `grid.cells[${index}]`);
     const cellPoint = point(cellInput, `grid.cells[${index}]`, true);
     assertPointInGrid(cellPoint, width, height, `grid.cells[${index}]`);
@@ -367,6 +369,37 @@ function validateHomeIsland(parsed: Record<string, unknown>): AuthoredHomeIsland
     anchors,
     render: { pixelSize, slices },
   };
+}
+
+function authoredCellsFromRows(value: unknown, width: number, height: number): readonly unknown[] {
+  if (!Array.isArray(value) || value.length !== height) {
+    throw new TypeError("grid must provide cells or one cellRows string per grid row");
+  }
+  const terrainByCode: Readonly<Record<string, AuthoredTerrain>> = {
+    D: AUTHORED_TERRAINS.deepOcean,
+    S: AUTHORED_TERRAINS.shallowOcean,
+    F: AUTHORED_TERRAINS.reef,
+    R: AUTHORED_TERRAINS.rock,
+    L: AUTHORED_TERRAINS.land,
+  };
+  const cells: AuthoredHomeCell[] = [];
+  for (let y = 0; y < value.length; y++) {
+    const row = value[y];
+    if (typeof row !== "string" || row.length !== width) {
+      throw new RangeError(`grid.cellRows[${y}] must contain exactly ${width} terrain codes`);
+    }
+    for (let x = 0; x < row.length; x++) {
+      const cellTerrain = terrainByCode[row[x]];
+      if (!cellTerrain) throw new RangeError(`grid.cellRows[${y}] contains unsupported terrain code ${row[x]}`);
+      cells.push({
+        x,
+        y,
+        terrain: cellTerrain,
+        belongsToHomeIsland: cellTerrain === AUTHORED_TERRAINS.land || cellTerrain === AUTHORED_TERRAINS.rock,
+      });
+    }
+  }
+  return cells;
 }
 
 function assertDockPathToEdge(

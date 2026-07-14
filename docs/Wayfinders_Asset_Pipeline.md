@@ -1,7 +1,7 @@
 # Wayfinders authored-asset direction
 
-Status: active. `GR-1.1` is implemented and accepted; the ordered `GR-1.2`
-through `GR-1.4` pilot is authorized.
+Status: active. `GR-1.1` and `GR-1.2` are implemented and accepted; the ordered
+`GR-1.3` through `GR-1.4` pilot is authorized.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
@@ -94,6 +94,11 @@ The pilot does not require a general asset resolver, visual lifecycle states,
 variant selection, hot swapping, a generated manifest, atlas automation or a
 workshop. Those abstractions should not be introduced until repeated work shows
 that they solve a real problem.
+
+The accepted implementation preloads three JSON packages and four prepared PNG
+textures, validates the metadata and its image references, and exposes only
+successfully loaded packages by semantic ID. Package failures are isolated and
+reported while the renderer can continue with developer graphics.
 
 ## GR-1 pilot sequence
 

@@ -1,5 +1,7 @@
 import Phaser from "phaser";
 import { appendDeveloperLog, clearDeveloperLog } from "../../developerLog";
+import { preloadPilotAssetPackages } from "../assets/PilotAssetCatalog";
+import { createPilotAssetRuntime, type PilotAssetRuntime } from "../assets/PilotAssetRuntime";
 import {
   onPrototypeConfigChanged,
   patchPrototypeConfig,
@@ -181,12 +183,18 @@ export class WayfindersScene extends Phaser.Scene {
   private pendingCompletionNavigatorId?: NavigatorId;
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
+  private pilotAssets!: PilotAssetRuntime;
   constructor(simulation = new GameSimulation()) {
     super({ key: "WayfindersScene" });
     this.simulation = simulation;
   }
 
+  preload(): void {
+    preloadPilotAssetPackages(this);
+  }
+
   create(): void {
+    this.pilotAssets = createPilotAssetRuntime(this);
     this.worldRenderer = new WorldRenderer(this);
     this.wreckRenderer = new WreckRenderer(this);
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
@@ -201,6 +209,9 @@ export class WayfindersScene extends Phaser.Scene {
     this.debugGraphics = this.add.graphics().setDepth(71);
     this.gameHost = document.querySelector<HTMLElement>("#game-host") ?? undefined;
     this.gameStatus = document.querySelector<HTMLElement>("#game-status") ?? undefined;
+    for (const diagnostic of this.pilotAssets.diagnostics) {
+      this.log(`Using developer graphics for ${diagnostic.assetId}: ${diagnostic.message}`);
+    }
 
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Keyboard input is unavailable");

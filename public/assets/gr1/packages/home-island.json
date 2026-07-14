@@ -1,0 +1,51 @@
+{
+  "contractVersion": 1,
+  "assetId": "home.island.primary",
+  "kind": "home-island",
+  "sourceAssetId": "generated.home-island.source.v1",
+  "runtimeRevision": 1,
+  "tileSize": 32,
+  "grid": {
+    "width": 15,
+    "height": 15,
+    "placementOrigin": { "x": 7, "y": 7 },
+    "cellRows": [
+      "DDDDDDDDDDDDDDD",
+      "DDDDSSSSSSSDDDD",
+      "DDSSSSSSSSSSSDD",
+      "DSSSLLLLLSSSSSD",
+      "DSSLLLLLLLSSSSD",
+      "DSSLLLLLLLLSSSD",
+      "DSSLLLLLLLLSSSD",
+      "DSSLLLLLLSSSSSD",
+      "DSSLLLLLLLLSSSD",
+      "DSSLLLLLLLSSSSD",
+      "DSSSLLLLLSSSSSD",
+      "DDSSSSSSSSSSSDD",
+      "DDSSRSSSSSRSSDD",
+      "DDDDSSSSSSSDDDD",
+      "DDDDDDDDDDDDDDD"
+    ]
+  },
+  "anchors": {
+    "homeCenter": { "x": 7, "y": 7 },
+    "harbour": { "x": 11, "y": 7 },
+    "dock": { "x": 12, "y": 7 },
+    "homeReturn": { "x": 12, "y": 7 },
+    "service": { "x": 12, "y": 7 }
+  },
+  "render": {
+    "pixelSize": { "width": 480, "height": 480 },
+    "slices": [
+      {
+        "id": "complete",
+        "imageId": "home.island.primary.complete",
+        "gridBounds": { "x": 0, "y": 0, "width": 15, "height": 15 },
+        "pixelOffset": { "x": 0, "y": 0 },
+        "pixelSize": { "width": 480, "height": 480 },
+        "scale": 1,
+        "depth": 4.5
+      }
+    ]
+  }
+}

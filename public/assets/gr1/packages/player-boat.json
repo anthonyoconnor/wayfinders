@@ -1,0 +1,33 @@
+{
+  "contractVersion": 1,
+  "assetId": "player.boat.primary",
+  "kind": "player-boat",
+  "sourceAssetId": "generated.player-boat.source.v1",
+  "runtimeRevision": 1,
+  "tileSize": 32,
+  "visual": {
+    "imageId": "player.boat.primary.frames",
+    "frameSize": { "width": 64, "height": 64 },
+    "origin": { "x": 0.5, "y": 0.5 },
+    "sourceHeadingDegrees": 0,
+    "headingMode": "rotate",
+    "directionCount": 1,
+    "motionFramesPerDirection": 1,
+    "framesPerSecond": 6,
+    "scale": 1,
+    "depth": 50
+  },
+  "wake": {
+    "imageId": "player.boat.primary.wake",
+    "frameSize": { "width": 96, "height": 64 },
+    "origin": { "x": 0.75, "y": 0.5 },
+    "offset": { "x": -18, "y": 0 },
+    "frameCount": 1,
+    "framesPerSecond": 8,
+    "sourceHeadingDegrees": 0,
+    "minimumSpeedPixelsPerSecond": 2,
+    "fullSpeedPixelsPerSecond": 80,
+    "scale": 1,
+    "depth": 49
+  }
+}
