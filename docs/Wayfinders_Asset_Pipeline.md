@@ -1,229 +1,153 @@
-# Wayfinders graphics and asset-pipeline direction
+# Wayfinders authored-asset direction
 
-Status: deferred design reference, not implemented.
+Status: proposed design reference, not implemented or authorized.
 
 Saving is not part of the active baseline. Any save-related language in this
-deferred reference is a historical or future compatibility consideration, not
-authorization to add persistence. Saving may return only through an explicitly
-authorized milestone that names it as in scope.
-
-This document records only the constraints needed to begin production asset
-work. It does not claim that an asset workshop, manifest generator or asset
-build commands already exist.
+reference is a future compatibility consideration, not authorization to add
+persistence.
 
 ## Goal
 
-Replace developer art incrementally while preserving the accepted exploration,
-navigation, island-dossier and performance baseline and the gameplay
-contracts accepted before graphics integration.
+Generate and prepare production assets before importing them into the game.
+When Wayfinders starts, it loads complete authored asset packages and places
+them within the procedurally generated world.
 
-Production art must improve readability and atmosphere without becoming a new
-source of gameplay truth.
+Procedural generation continues to decide where whole assets belong. It does
+not construct islands at runtime by selecting and joining suitable terrain
+squares. A whole island can be generated as one source composition and then cut
+into fixed runtime slices for grid alignment, fog, culling or texture limits.
+Those slices are never rearranged into another shape.
 
-The forward roadmap separates graphics work from gameplay work:
+The first implementation is deliberately small: one home island, the player
+boat and one fishing-shoal representation, followed by a focused animated-boat
+pass. This pilot tests the contract and runtime path before any larger renderer,
+world-generator or tooling commitment.
 
-- `GR-0` keeps developer graphics as the functional gameplay fallback;
-- `GR-1` introduces the minimal semantic asset runtime;
-- `GR-2` adds viewing and candidate-creation tooling; and
-- `GR-3` applies production presentation in reviewed families.
+## Source-art boundary
 
-The start gate for `GR-1` is acceptance of `GP-3.3`: island dossiers and the
-extensible historic-wreck/coastal-ruin/tidal-cave site contract must first
-complete the sight, provision-funded survey, exact-dock return, wreck rollback
-and Great Hall loop using developer graphics. GP-3.3 is now accepted, so this
-dependency gate is open. GR-1 and production-asset work remain proposed and are
-not authorized to begin. Changing scope still requires explicit roadmap
-approval.
+Concept art and generated source compositions are inputs to asset preparation,
+not files loaded by the game. In particular, the images under
+`concept_art/example assets` are examples only and must not be copied, cropped
+or adapted directly into runtime assets.
 
-## Foundation contracts
+Pilot assets must be newly generated for the current `32`-pixel navigation grid
+and prepared before import. Preparation may include transparent-background
+cleanup, scaling, slicing, heading frames and hand-reviewed metadata.
 
-Asset work must preserve:
+## Authored asset packages
 
-- the `32`-pixel navigation grid;
-- terrain-authoritative movement and sight blocking;
-- stable island, island-dossier and survey-site IDs;
-- deterministic seed behavior;
-- current fog and overlay readability;
-- ship origin/heading behavior;
-- runtime wreck, island-dossier and historic-site marker distinction;
-- exact save/content-version validation and invalidation;
-- camera-culling and dirty-chunk performance.
+Each runtime package has a stable semantic ID, one or more derived images and
+validated metadata. Filenames are package implementation details and do not
+appear in gameplay or renderer call sites.
 
-Rendered pixels are never read back to determine collision, navigation,
-knowledge, resources or dossier/site state.
+The pilot contract covers:
 
-## Semantic asset identity
+- `home.island.primary`: grid width and height, placement origin, render slices,
+  per-cell terrain and collision, shallow water, harbour, dock and home-return
+  anchors;
+- `player.boat.primary`: origin, scale, visual bounds, heading behavior and any
+  animation frames; and
+- `shoal.fishing.primary`: visual footprint, placement origin, passability,
+  service anchor and read-model presentation behavior.
 
-Gameplay should request semantic IDs rather than filenames. A future resolver
-maps those IDs to developer, candidate or approved visuals.
+Rendered pixels are never sampled to determine gameplay. For authored islands,
+the reviewed grid metadata is the logical shape authority that is stamped into
+the world at the procedural placement anchor. Metadata and art are therefore
+reviewed together, while collision and interaction remain inspectable without
+reading the texture.
 
-Recommended ID shape:
+An incompatible change to an asset's grid shape, origin or semantic meaning
+requires a new contract version or semantic ID. A visual-only revision may keep
+the same ID when it remains aligned with the accepted metadata.
 
-```text
-<theme>.<family>.<name>.<variant>
-```
+## Placement model
 
-Examples:
+The runtime treats each authored island as one indivisible layout:
 
-```text
-home_waters.terrain.ocean_deep.01
-home_waters.structure.dock_small.01
-home_waters.vessel.player_explorer.01
-shared.island_dossier.resource.01
-shared.survey_site.historic_wreck.01
-shared.effect.missing_asset.01
-```
+1. World generation selects a whole asset package and a legal placement anchor.
+2. The package's authored metadata is translated onto the navigation grid.
+3. Terrain, collision and service anchors are stamped from that metadata.
+4. The package's image or fixed slices are drawn at their declared offsets.
+5. Fog, knowledge, risk, routes, labels and interactions remain separate
+   runtime layers.
 
-An ID remains stable when its visual is replaced. If footprint, origin,
-animation contract or semantic meaning changes incompatibly, create a new ID
-instead of repurposing the old one.
+The pilot applies this model only to the home island at the existing central
+home placement. Non-home islands retain their current implementation until a
+later milestone is planned and authorized.
 
-## Asset lifecycle
+The player boat continues to use the simulation's continuous position and
+heading. The shoal continues to use its existing deterministic catalog position
+and lifecycle. Their authored packages replace presentation, not movement,
+discovery or survey authority.
 
-Use four explicit states:
+## Minimal runtime loading
 
-- `developer`: current functional placeholder;
-- `candidate`: production-intent art under in-game review;
-- `approved`: accepted for the active theme and scale;
-- `deprecated`: retained only while current-version references still require it.
+`GR-1.2` adds only what the three-asset pilot requires:
 
-The first implementation may use a hand-authored JSON manifest. Typed ID
-generation, atlas packing and a dedicated workshop should be added only when
-the initial asset family proves the contracts useful.
+- a typed catalog from semantic ID to runtime image and metadata files;
+- Phaser preload integration before renderers are constructed;
+- metadata validation and clear load failures; and
+- the existing developer graphics as a usable fallback.
 
-## Proposed source and runtime layout
+The pilot does not require a general asset resolver, visual lifecycle states,
+variant selection, hot swapping, a generated manifest, atlas automation or a
+workshop. Those abstractions should not be introduced until repeated work shows
+that they solve a real problem.
 
-This layout is a graphics-roadmap proposal; create it only as the corresponding
-`GR-*` minor is implemented.
+## GR-1 pilot sequence
 
-```text
-assets-src/
-  concepts/
-  shared/
-  themes/
-    home_waters/
-      terrain/
-      structures/
-      vessels/
-      survey_sites/
+1. `GR-1.1` defines and tests the authored asset and grid-metadata contracts.
+2. `GR-1.2` loads and validates the three packages at game startup.
+3. `GR-1.3` generates and integrates the home island, player boat and one
+   deterministically selected fishing shoal, then verifies gameplay and
+   performance in the running game.
+4. `GR-1.4` completes the boat with correct all-heading presentation, restrained
+   motion and a speed-responsive animated wake.
 
-public/assets/
-  images/
-  atlases/
-  manifests/
+The four minors are ordered. Each one must meet its acceptance gate before the
+next changes shared world-generation or rendering code.
 
-asset runtime module/
-  asset IDs
-  manifest types
-  loader
-  resolver
-  factories
-```
+## Deferred GR-2 tooling
 
-Concept art remains reference material and is not loaded at runtime.
+GR-2 remains necessary for later asset expansion, but begins only after the
+complete GR-1 pilot reveals the real preparation and review needs. Its viewer
+must use the same Phaser camera, package metadata and rendering path as the game. Its
+intake workflow may then help generate slices, edit metadata and validate grid
+alignment without inventing separate placement rules.
 
-## Island presentation strategy
+Typed ID generation, thumbnails, atlas packing and batch validation remain
+conditional on measured repetition.
 
-The current procedural generator remains the authority for island descriptors,
-terrain, collision, sight blocking, placement and save identity.
+## Runtime separation
 
-Production presentation should use a hybrid approach:
+Keep changing or stateful content separate from static base art:
 
-- authored composition for the home island and other major landmarks;
-- semantic terrain/decoration families for deterministic non-home islands;
-- lightweight procedural variants for small islets, reefs, rocks, sandbars,
-  fishing grounds and offshore detail;
-- dynamic objects kept separate from static terrain art.
+- the player boat and future vessels;
+- people, smoke, flags, foam and waves;
+- runtime navigator wrecks;
+- dossier, survey-site and shoal state cues;
+- fog, knowledge, route and risk overlays; and
+- labels, interaction prompts and developer diagnostics.
 
-An authored island image or prefab is acceptable only when it supplies masks
-and anchors aligned with the authoritative navigation grid. It must not replace
-the saved/generated island ID or cause rendered pixels to define gameplay.
+The home island may include fixed terrain, buildings and dock art whose layout
+is captured by its metadata. It must not bake dynamic voyage or discovery state
+into the base image.
 
-Dynamic content remains separate from static island art:
+## Performance and acceptance
 
-- ships and people;
-- smoke, flags, foam and waves;
-- runtime player wrecks;
-- island-dossier and survey-site markers;
-- resources and settlement changes;
-- fog and voyage overlays.
-
-This separation allows the living world to change without rebuilding a whole
-island image.
-
-## Deterministic variation
-
-Visual variants must be selected from stable semantic data, for example:
-
-```text
-world seed + island ID + tile + object type + variation slot
-```
-
-Adding or replacing a visual variant must not change terrain topology,
-dossier/site identity or navigation. Resolver changes that would reshuffle an
-existing saved world's visuals require an explicit content-version bump; the
-older save is then incompatible and removed rather than migrated.
-
-## First implementation slice
-
-Begin only after the roadmap's graphics start gate and semantic gameplay
-contracts are accepted. This slice corresponds to `GR-1`.
-
-Build the smallest end-to-end asset path:
-
-1. Define semantic IDs and origin/footprint contracts for the player ship,
-   dock, ocean, one representative island family, a shoal, the three accepted
-   survey-site types and one presentation-only fishing/trade vessel.
-2. Add a minimal manifest, loader and resolver.
-3. Render developer and candidate assets through the same factory.
-4. Review them at normal camera zoom under fog, Personal-grey and risk overlays.
-5. Confirm no gameplay arrays or saves change when visuals are swapped.
-6. Measure draw calls, texture memory and frame timing before expanding the
-   asset set.
-
-Do not begin by building a large workshop or automated atlas pipeline. `GR-2`
-starts with a runtime-faithful viewer and candidate intake workflow; add typed
-IDs or atlas automation only after repeated manual work demonstrates which
-automation is needed.
-
-## Asset viewer and creation-tool requirements
-
-When `GR-2` is approved, its viewer and candidate-intake tools should use the
-same Phaser renderer, camera, runtime asset factories and rendering/texture
-paths as the game. Useful views are:
-
-- asset browser by ID, theme, family and lifecycle state;
-- ship heading/animation preview at expected zoom levels;
-- terrain adjacency and island-composition preview;
-- deterministic placement preview from fixed seeds;
-- overlay/fog contrast preview;
-- origin, footprint and metadata validation.
-
-The workshop is not a parallel renderer and must not invent separate gameplay
-placement rules.
-
-## Performance and loading
-
-- Keep native-resolution pixel art and scale it in Phaser.
-- Prefer shared atlases only when they reduce real texture switches.
-- Keep atlas dimensions within broadly supported browser limits.
-- Load core home/ship assets at boot; load later theme content when needed.
-- Preserve camera culling for static world chunks.
-- Reuse animation and factory definitions across variants.
-- Avoid one large unique texture for every procedural island.
-- Keep environmental particle counts configurable.
-
-## Approval checklist
-
-An asset family is ready only when:
-
-- semantic IDs and lifecycle states are clear;
-- source and runtime files are tracked together;
-- scale, origin and draw offsets are correct;
-- navigation footprint matches authoritative gameplay data;
-- required animation names and headings exist;
-- the art is readable under fog and voyage overlays;
-- deterministic variants remain stable;
-- save data and generated terrain are unchanged by visual replacement;
-- default-world performance does not regress;
-- the result has been reviewed in the running game.
+- Load the three pilot packages at boot and report startup time and texture
+  memory.
+- Preserve current camera culling; split a large authored composition only when
+  required for culling, fog or texture limits.
+- Confirm normal-zoom readability under fog, Personal grey, route and risk
+  overlays.
+- Confirm the home dock is reachable and exact-dock return still works.
+- Confirm the boat remains aligned during turning, sailing, docking, teleport
+  and reset presentation.
+- Confirm every boat heading has the correct bow direction and stable origin,
+  and that its wake responds to movement without persisting at rest.
+- Confirm the authored shoal stays passable, reveals no hidden state and retains
+  its complete sight/survey/return/wreck behavior.
+- Run the clean typecheck, test and build gate plus the approved numeric startup,
+  memory, draw-call and frame-time budgets before considering broader asset
+  work.

@@ -292,8 +292,8 @@ Current verification baseline:
   it is rebuilt rather than saved.
   Returns one through three update it without forcing it open. The same
   navigator entry becomes the required, non-dismissible handover mode at
-  succession. GR-3.4 may polish this presentation without changing the shared
-  read model or authoritative voyage records.
+  succession. A later graphics milestone may polish this presentation without
+  changing the shared read model or authoritative voyage records.
 - The final-location return opens the Hall in a dedicated completion mode after
   the credited voyage has committed. That mode offers **Continue exploring**
   and **Start new game**; it is not a Gem Hall or separate Relics wing.
@@ -384,7 +384,7 @@ Current verification baseline:
   reusing their ordinary survey/return/wreck lifecycle and Great Hall credit.
 - `GP-3`: there are no fishing boats, trade vessels or
   Supported-route traffic.
-- `GR-*`: production art, the asset resolver, asset tooling,
+- `GR-*`: production art, the authored-package loader, asset tooling,
   environmental audio and production polish are not implemented.
 - Default and doubled-world range probes pass the performance hardening
   baseline. Touch-first sailing is not implemented, and representative

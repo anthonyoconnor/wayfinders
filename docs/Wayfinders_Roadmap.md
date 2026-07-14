@@ -12,10 +12,10 @@ restoration obligations. Every launch or refresh starts a fresh session.
 
 Saving must not be implemented, maintained as an acceptance requirement, or
 added incidentally to another feature. It may return only when the user
-explicitly authorizes a named milestone whose scope includes saving. GP-5 is a
-deferred placeholder, not current authorization. Any older save-related
-acceptance evidence below is historical and creates no present compatibility
-or implementation obligation.
+explicitly authorizes a future named milestone whose scope includes saving.
+No saving milestone is currently planned or authorized. Any older save-related
+acceptance evidence below is historical and creates no present compatibility or
+implementation obligation.
 
 ## Roadmap model
 
@@ -316,9 +316,9 @@ warnings or errors.
   Supported-water eligibility check.
 - Show one unmistakable developer-art cue for an eligible returned survey.
   This remains a derived, non-economic proof. Sparse fishing and trade traffic
-  is presentation-only work for GR-3.3; an authoritative tribe economy, output
-  model or automatic trade system requires a separately approved future
-  gameplay major.
+  remains presentation-only work for a separately planned future graphics
+  milestone; an authoritative tribe economy, output model or automatic trade
+  system requires a separately approved future gameplay major.
 
 Acceptance gate: returned leads and provisional surveys never show the cue;
 returned surveys show it only with a valid Supported connection; connectivity
@@ -741,54 +741,6 @@ priority over ordinary return and succession cues. Catalog, integration, Hall,
 completion-choice, seed-reset and final-voyage-order tests are part of the clean
 typecheck/test/build gate recorded in `IMPLEMENTATION_STATUS.md`.
 
-### GP-5 — Player-facing save, load and game continuity
-
-Status: deferred placeholder; not authorized.
-
-Goal: if explicitly authorized in the future, design a new saving capability
-from the authoritative gameplay shape that exists then. Do not restore or
-extend the retired autosave/checkpoint implementation by default.
-
-#### GP-5.1 — Saved-game model and metadata
-
-Status: proposed.
-
-- Apply the storage-model decision made before GP-0.1 persistence architecture:
-  one active lineage plus checkpoints or, if explicitly approved, multiple
-  named saved games.
-- Define displayed metadata such as seed, navigator, generation, voyage state,
-  idol progress and last-played time.
-
-Acceptance gate: the chosen model is understandable and does not blur autosave,
-manual save and checkpoint semantics. Multiple slots are not required unless
-separately approved.
-
-#### GP-5.2 — New, save, load and delete flow
-
-Status: proposed.
-
-- Add the confirmed player-facing controls with overwrite/delete safeguards.
-- Preserve the exact-dock, active-expedition and pending-wreck states supported
-  by the authoritative schema.
-
-Acceptance gate: every legal save point restores exactly; destructive actions
-require clear confirmation; a failed/corrupt record cannot silently damage an
-unrelated saved lineage or checkpoint.
-
-#### GP-5.3 — Long-sequence continuity hardening
-
-Status: proposed.
-
-- Test repeated current-version save/load across voyage tenure, succession,
-  provision-funded surveys, island dossiers, survey sites, returned
-  idol-location progress and the one-shot completion choice.
-- Delete malformed or version-mismatched records and provide legible fresh-start
-  recovery behavior.
-
-Acceptance gate: long multi-generation histories remain deterministic and no
-survey result, achievement, generation or completion event can be duplicated
-by reload.
-
 ## Graphics track
 
 ### GR-0 — Developer graphics contract
@@ -804,49 +756,127 @@ Acceptance gate on every GP minor: each new authoritative state is
 distinguishable at normal zoom, overlays remain readable and presentation does
 not define collision, identity or rules.
 
-### GR-1 — Minimal asset runtime
+### GR-1 — Authored-asset runtime pilot
 
 Start gate: open because GP-3.3 is accepted. GR-1 remains proposed and is not
 authorized to begin.
 
-#### GR-1.1 — Semantic asset contracts
+Goal: prove the smallest useful path from externally generated source art to
+grid-aligned runtime assets. Asset generation and preparation happen before the
+game loads them. The runtime procedurally places complete authored assets; it
+does not generate an island by selecting and joining interchangeable terrain
+squares.
+
+The ordered pilot covers exactly one authored home island, the player boat and
+one fishing-shoal representation. The example images under
+`concept_art/example assets` are reference material only and must not be loaded
+or adapted directly as runtime assets.
+
+#### GR-1.1 — Authored asset and grid-metadata contract
 
 Status: proposed.
 
-Define stable semantic IDs plus origin, footprint, heading, animation, scale
-and layering contracts for the ship, dock, ocean, one island family, shoals,
-survey-site types and presentation-only fishing/trade vessels.
+Define the minimal semantic IDs and metadata needed by the pilot:
 
-Acceptance gate: swapping an asset ID's visual leaves simulation snapshots,
-terrain, identities and saves unchanged; incompatible footprints or meanings
-receive new IDs.
+- source and derived-runtime identity for the home island, player boat and one
+  shoal;
+- grid dimensions, placement origin, render offsets, scale and depth;
+- an authored home-island cell map describing terrain, collision, shallows,
+  harbour, dock and return/service anchors;
+- boat origin, visual bounds and heading/animation behavior; and
+- shoal footprint, passability and service anchor.
 
-#### GR-1.2 — Manifest, loader and resolver
+A whole island may be cut into runtime slices for texture limits, grid
+alignment, fog or culling, but those slices remain parts of one authored
+composition. The runtime may not rearrange them into a new island. Rendered
+pixels are never sampled for gameplay; validated metadata supplies the logical
+shape and anchors.
+
+Acceptance gate: contract fixtures reject missing cells, overlapping or
+out-of-range slices, invalid anchors, inconsistent dimensions and a blocked
+dock approach; the complete authored home layout maps exactly onto the
+navigation grid; boat and shoal contracts have unambiguous origins and bounds;
+and no contract requires a viewer, editor, asset-lifecycle registry or general
+non-home-island refactor.
+
+#### GR-1.2 — Minimal package loading
 
 Status: proposed.
 
-Implement a hand-authored manifest, developer/candidate/approved/deprecated
-lifecycle states, deterministic variants and an explicit missing-asset
-fallback.
+Add the smallest runtime boundary that loads the three accepted packages and
+their metadata when the game starts. A typed catalog maps semantic IDs to
+runtime files and validated metadata. It supports a whole texture or ordered
+slices from the same authored composition and keeps filenames out of gameplay
+and renderer call sites.
 
-Acceptance gate: every lifecycle state resolves predictably; missing or invalid
-assets fall back visibly without crashing; deterministic variants remain stable
-for a saved world/content version.
+This minor does not add candidate/approved/deprecated lifecycle states,
+deterministic visual variants, atlas automation, hot swapping or a generalized
+resolver. Existing developer graphics remain the explicit fallback when a
+package cannot load or validate.
 
-#### GR-1.3 — Representative runtime proof
+Acceptance gate: all three packages preload before their renderers are created;
+valid packages resolve by semantic ID; missing images and invalid metadata fail
+legibly and preserve usable developer presentation; regeneration does not
+duplicate textures or display objects; and loading stays within the approved
+pilot memory and startup-time budgets.
+
+#### GR-1.3 — Home island, boat and shoal proof
 
 Status: proposed.
 
-Route candidate or developer versions of the player ship, dock, ocean, one
-island family, a shoal, one survey site and one presentation-only vessel through
-the resolver. This proves the runtime path; GR-3 later completes approved
-production families.
+Generate new grid-ready art for the current game rather than using the example
+assets directly. Integrate:
 
-Acceptance gate: origins, headings, scale and depth are correct under fog and
-route/risk overlays; visual swaps leave gameplay/save snapshots unchanged; the
-approved minor plan's numeric draw-call, memory and frame-time budgets pass.
+- one complete authored home-island composition, stamped at the procedural
+  world's home placement from its validated terrain and anchor metadata;
+- one player-boat asset using the current continuous position and heading; and
+- one fishing-shoal asset at one deterministically selected existing shoal,
+  while all other shoals retain developer presentation.
+
+The home island's shape comes from its authored package, not the existing
+radius/noise painter or runtime tile assembly. World placement, island identity,
+ship movement, shoal placement and discovery state remain procedural and
+authoritative. Fog, knowledge, risk, route and interaction presentation remain
+separate runtime layers.
+
+Acceptance gate: the authored home layout produces a reachable dock and the
+expected land/shallow/collision map at the home anchor; the boat remains aligned
+through turning, sailing, docking, teleport and wreck/reset presentation; the
+chosen shoal remains passable, appears only when its existing read model permits
+and preserves its full survey/return/wreck lifecycle; all three assets remain
+readable at normal zoom under fog and overlays; unchanged gameplay outside the
+home layout passes regression tests; and the approved startup, memory, draw-call
+and frame-time budgets pass.
+
+#### GR-1.4 — Directional boat and wake animation
+
+Status: proposed.
+
+Turn the GR-1.3 player-boat proof into a finished animated vessel. Use the
+simplest animation approach that remains convincing at the game's normal zoom:
+directional frames or a rotation-safe sprite for every heading, restrained hull
+or sail motion, and a speed-responsive wake animation while moving. Animation
+is presentation-only and continues to follow the interpolated simulation pose.
+
+The boat must look intentional rather than mirrored or upside down at every
+heading. Its origin, visual footprint, heading convention and animation timing
+belong to the authored package metadata. Wake frames or particles remain a
+separate layer behind the boat, stop promptly when stationary and do not affect
+movement, collision, fog or voyage state.
+
+Acceptance gate: representative cardinal, diagonal and wraparound headings have
+the correct bow direction and stable origin; turns do not pop, mirror or drift
+off the simulation position; motion animation is restrained and legible; wake
+direction, intensity and cadence respond to speed and disappear at rest; the
+boat remains correct during forward/reverse movement, docking, teleport,
+wreck/reset and camera zoom; and the approved memory, draw-call and frame-time
+budgets pass.
 
 ### GR-2 — Asset viewing and creation tooling
+
+Status: deferred until GR-1.4 is accepted and its manual asset-preparation
+friction is understood. GR-2 remains necessary for later expansion but is not
+part of the authored-asset pilot.
 
 #### GR-2.1 — Runtime asset viewer
 
@@ -866,7 +896,7 @@ Status: proposed.
 
 Create or import candidate records from templates; edit semantic metadata;
 validate frames, dimensions and variants; export tracked source/runtime files
-and a manifest entry consumable by both viewer and game.
+and a package-catalog entry consumable by both viewer and game.
 
 Acceptance gate: invalid IDs, missing frames, incompatible dimensions and
 incomplete metadata are rejected; valid output loads in viewer and game without
@@ -882,58 +912,15 @@ when it removes measured repetition and produces deterministic outputs.
 Acceptance gate: clean rebuilds are byte-for-byte or semantically reproducible,
 stay within texture limits and demonstrably remove repeated manual work.
 
-### GR-3 — Production graphics passes
+### GR-3 — Deferred production expansion
 
-#### GR-3.1 — Ship and home waters
-
-Status: proposed. Replace the player vessel, idol-location finding presentation,
-ocean, dock and home-island composition while preserving authoritative
-footprints and overlay readability.
-
-Acceptance gate: docking, heading, origins and cargo readability remain exact;
-terrain stays authoritative; the approved visual/performance budgets pass.
-
-#### GR-3.2 — Island and world families
-
-Status: proposed. Add deterministic visual families for generated islands,
-reefs, rocks and offshore detail without changing topology, IDs or culling.
-
-Acceptance gate: saved seeds choose stable variants; atoll passages and terrain
-topology are unchanged; culling, chunk invalidation and memory budgets pass.
-
-#### GR-3.3 — Gameplay activity visuals
-
-Status: proposed. Replace clues and survey-site objects, then add sparse
-presentation-only fishing and trade traffic derived from returned records and
-Supported routes. GP-3 defines no authoritative fishing output, tribe state or
-trade settlement; vessel transforms and activity intensity remain graphics
-state and are never saved.
-
-Acceptance gate: provisional and returned states remain distinct; traffic
-reveals no hidden result or fog, remains sparse, non-blocking and
-Supported-only, and cannot change supplies, knowledge, discoveries, routes,
-voyage credit or save snapshots.
-
-#### GR-3.4 — Lineage, idol and completion presentation
-
-Status: proposed. Add production navigator/voyage cues, polish the accepted
-Great Hall chronicle and its required handover/mourning mode, and add idol
-cargo, archive exhibits and
-optional-ending celebration without leaking hidden state.
-
-Acceptance gate: presentation matches authoritative navigator/idol records,
-does not reveal hidden locations and never forces the optional ending.
-
-#### GR-3.5 — Environmental polish and platform validation
-
-Status: proposed. Add restrained animation, particles, audio and final contrast
-work, then validate frame time, memory and loading on representative target
-hardware.
-
-Acceptance gate: the approved numeric platform budgets pass and every already
-implemented input method remains usable. Touch-first sailing requires a
-separate approved gameplay/platform minor; graphics validation does not create
-that missing control scheme implicitly.
+Status: placeholder only. Do not define or authorize GR-3 minors until the
+authored-asset GR-1 pilot and the relevant GR-2 workflow have shown what should
+be standardized. Later planning may cover authored non-home island packages,
+remaining shoals, survey sites, activity presentation, lineage/completion art,
+environmental polish and platform validation. It must preserve procedural
+whole-asset placement and must not reintroduce runtime island construction from
+interchangeable grid squares.
 
 ## Dependencies and safe parallel work
 
@@ -957,24 +944,12 @@ flowchart LR
     GP32 --> GP33["GP-3.3 extensible survey sites"]
     GP33 --> GP41["GP-4.1 idol locations and completion"]
     GP23 --> GP41
-    GP33 --> GR1["GR-1 asset runtime"]
-    GR1 --> GR2["GR-2 viewer and intake tooling"]
-    GR2 --> GR31["GR-3.1 ship and home"]
-    GR2 --> GR32["GR-3.2 world families"]
-    GR2 --> GR33["GR-3.3 activity visuals"]
-    GP33 --> GR33
-    GR2 --> GR34["GR-3.4 lineage and idols"]
-    GP22 --> GR34
-    GP23 --> GR34
-    GP41 --> GR34
-    GR31 --> GR35["GR-3.5 polish and validation"]
-    GR32 --> GR35
-    GR33 --> GR35
-    GR34 --> GR35
-    GP22 --> GP5["GP-5 save/load experience"]
-    GP23 --> GP5
-    GP33 --> GP5
-    GP41 --> GP5
+    GP33 --> GR11["GR-1.1 authored asset contract"]
+    GR11 --> GR12["GR-1.2 minimal package loading"]
+    GR12 --> GR13["GR-1.3 three-asset proof"]
+    GR13 --> GR14["GR-1.4 animated boat and wake"]
+    GR14 --> GR2["GR-2 deferred viewer and intake tooling"]
+    GR2 -. future replanning .-> GR3["GR-3 production expansion placeholder"]
 ```
 
 Work may proceed in parallel only after its relevant minor is authorized,
@@ -991,7 +966,7 @@ accepted:
 | Fishing/trade traffic presentation | Graphics-only renderer/path work after GP-3.3 and the relevant GR interfaces are accepted | Traffic must remain derived, non-authoritative and absent from saves |
 | Save version validation/invalidation | One persistence owner can work beside pure modules after the current state shape is approved | Parser/store/startup and shared exact-version round-trip tests remain one integration gate |
 | Idol locations and completion | Pure deterministic host catalog and read-model tests after survey-site and navigator IDs freeze | One owner integrates survey results, exact-dock credit, final Great Hall and completion ordering |
-| Asset manifest and resolver | New asset-runtime directory after the GP-3.3 start gate | Runtime renderer replacement waits for accepted GR-1 interfaces |
+| Authored asset packages and loader | New asset-contract/runtime modules after the GP-3.3 start gate; source-art generation stays outside game code | Home generation and renderer replacement are serialized through the ordered GR-1 gates |
 | Isolated asset viewer/intake tools | New tooling directory after the relevant GR-1 runtime interfaces are accepted | Game integration and production passes wait for GR-2 acceptance |
 
 Central integration files are single-owner merge gates and should not be edited
@@ -1086,7 +1061,8 @@ Additional product decisions are recorded here for later milestones:
   Great Hall, continued play with later Hall access, or a fresh new-seed game.
   There is no physical idol recovery, cargo, Gem Hall or Relics wing.
 - Touch-first sailing needs a separately scoped gameplay/platform input minor
-  if it is a target; GR-3.5 validates only input that has actually been built.
+  if it is a target; future graphics/platform validation covers only input that
+  has actually been built.
 
 Recommended delivery rule: parallel feature agents own disjoint new
 modules/tests, while one integration owner changes shared lifecycle, save and

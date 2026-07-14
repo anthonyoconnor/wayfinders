@@ -562,8 +562,9 @@ exposes provisional achievements. The rows are derived from the committed
 outgoing lineage record, the view does not create the successor or settle
 economy state, and sailing input remains suppressed until acknowledgement.
 Outside succession, **Go ashore · Great Hall** opens the dismissible browsing
-mode only at the exact home dock; it is never part of the sailing HUD. GR-3.4
-may polish this transition without changing the authoritative records. The
+mode only at the exact home dock; it is never part of the sailing HUD. A later
+graphics milestone may polish this transition without changing the
+authoritative records. The
 ordinary shell status and return overlays expose **Voyage n of 4** so the
 bounded tenure is legible without a retirement decision control.
 

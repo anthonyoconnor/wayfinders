@@ -1,9 +1,9 @@
 # Wayfinders Survey, Legacy Goals and Future World Activity Design
 
 Saving is intentionally absent from active development. References below to
-reload behavior, saved state or GP-5 describe historical acceptance or a
-possible future design; they do not authorize implementation. Saving may return
-only through a named milestone explicitly authorized with saving in scope.
+reload behavior or saved state describe historical acceptance or a possible
+future design; they do not authorize implementation. Saving may return only
+through a future named milestone explicitly authorized with saving in scope.
 
 ## Summary
 
@@ -532,12 +532,12 @@ non-retriggering world or a reset on a distinct-seed new game.
 There is no multi-stage GP-4 recovery plan, physical idol, cargo, clue chain,
 Gem Hall or Relics wing.
 
-### GP-5 and future persistence
+### Future persistence
 
-GP-5 is a deferred placeholder, not an active schema plan. If saving is later
+No persistence milestone is currently planned or authorized. If saving is later
 authorized, it must begin from the authoritative gameplay shape that exists
-then, define a new version-one format and add its own round-trip acceptance.
-No current gameplay milestone inherits a save, reload or migration obligation.
+then, define a new version-one format and add its own round-trip acceptance. No
+current gameplay milestone inherits a save, reload or migration obligation.
 
 ### Graphics track
 
