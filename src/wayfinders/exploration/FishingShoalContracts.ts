@@ -3,7 +3,6 @@ import type { SurveyBudgetReadModel } from "./SurveyContracts";
 
 export const FISHING_SHOAL_CONTRACT_VERSION = 2 as const;
 export const FISHING_SHOAL_CONTENT_VERSION = 1 as const;
-export const FISHING_SHOAL_PERSISTENCE_OWNER = "fishing-shoals" as const;
 export const FISHING_SHOAL_SURVEY_PRESENTATION_MS = 1_200 as const;
 export const FISHING_SHOAL_INTERACTION_RANGE_TILES = 1.5 as const;
 
@@ -53,7 +52,7 @@ export interface FishingShoalClue {
   label: string;
 }
 
-/** Authoritative seed-derived content. It is regenerated, never serialized. */
+/** Authoritative seed-derived content. */
 export interface FishingShoalDefinition {
   id: FishingShoalId;
   contentVersion: typeof FISHING_SHOAL_CONTENT_VERSION;
@@ -72,10 +71,6 @@ export interface FishingShoalProvisionalRecordV1 {
   state: FishingShoalProvisionalState;
   expeditionId: number;
   generation: number;
-}
-
-export interface FishingShoalSightedSaveRecordV1 extends FishingShoalProvisionalRecordV1 {
-  state: "sighted";
 }
 
 /** Mutable authoritative state owned only by the fishing-shoal system. */
@@ -109,7 +104,7 @@ export interface FishingShoalSurveyedReadModel extends FishingShoalReadModelBase
 export interface FishingShoalReturnedSurveyReadModel extends FishingShoalReadModelBase {
   state: "returned-survey";
   quality: FishingShoalQuality;
-  /** Derived GP-1.4 proof; never serialized. */
+  /** Derived GP-1.4 proof. */
   homeConnected: boolean;
 }
 

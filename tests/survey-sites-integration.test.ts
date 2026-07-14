@@ -214,46 +214,4 @@ describe("GameSimulation survey-site integration", () => {
       .flatMap(({ surveySiteReportIds }) => surveySiteReportIds)).not.toContain(target.id);
   });
 
-  it("round-trips provisional and returned reports without rerolling or duplicate credit", () => {
-    const original = new GameSimulation();
-    const target = siteOfType(original, "coastal-ruin");
-    expect(original.teleport(target.serviceAnchor)).toBe(true);
-    expect(survey(original, target).status).toBe("surveyed");
-
-    const activeSave = original.createSave();
-    const activeRestored = new GameSimulation();
-    activeRestored.restoreSave(activeSave);
-    expect(activeRestored.surveySiteDefinitions).toEqual(original.surveySiteDefinitions);
-    expect(activeRestored.provisionalSurveySites).toEqual(original.provisionalSurveySites);
-    expect(activeRestored.returnedSurveySites).toEqual([]);
-    expect(activeRestored.surveySiteReadModels.find(({ id }) => id === target.id))
-      .toMatchObject({ state: "surveyed", result: target.result });
-    const provisionsBeforeRepeat = activeRestored.ship.provisions;
-    expect(survey(activeRestored, target)).toMatchObject({
-      status: "rejected",
-      reason: "already-surveyed",
-    });
-    expect(activeRestored.ship.provisions).toBe(provisionsBeforeRepeat);
-
-    expect(activeRestored.teleport(activeRestored.generated.landmarks.homeReturnTile)).toBe(true);
-    expect(activeRestored.currentNavigator.successfulVoyages[0].surveySiteReportIds)
-      .toContain(target.id);
-    const returnedSave = activeRestored.createSave();
-    const returnedRestored = new GameSimulation();
-    returnedRestored.restoreSave(returnedSave);
-    expect(returnedRestored.returnedSurveySites).toEqual(activeRestored.returnedSurveySites);
-    expect(returnedRestored.currentNavigator.successfulVoyages).toHaveLength(1);
-    expect(returnedRestored.currentNavigator.successfulVoyages[0].surveySiteReportIds)
-      .toContain(target.id);
-    expect(returnedRestored.createSave().surveySites).toEqual(returnedSave.surveySites);
-
-    expect(returnedRestored.teleport(target.serviceAnchor)).toBe(true);
-    const provisionsBeforeReturnedRepeat = returnedRestored.ship.provisions;
-    expect(survey(returnedRestored, target)).toMatchObject({
-      status: "rejected",
-      reason: "already-surveyed",
-    });
-    expect(returnedRestored.ship.provisions).toBe(provisionsBeforeReturnedRepeat);
-    expect(returnedRestored.currentNavigator.successfulVoyages).toHaveLength(1);
-  });
 });

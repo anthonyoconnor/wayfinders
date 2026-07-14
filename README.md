@@ -4,7 +4,7 @@ Wayfinders is a playable Phaser and TypeScript exploration prototype. The
 current implementation is the accepted gameplay and performance baseline: it
 provides a stable base for sailing, charting water, managing provisions,
 returning discoveries, inheriting Supported knowledge across generations and
-saving progress between browser sessions.
+supporting rapid session-based gameplay development.
 
 The current build includes:
 
@@ -14,10 +14,10 @@ The current build includes:
 - Unknown, Personal and Supported water knowledge states;
 - four-second wreck presentation, persistent wreck sites and generational respawning;
 - deterministic discoveries with carried, returned and lost states; and
-- IndexedDB autosaves plus a separate manual save checkpoint.
+- a fresh game session on every launch or browser refresh.
 
 The runtime also includes interpolated ship presentation, viewport-culled
-chunk overlays, cached save encoding, incremental return-route rendering and
+chunk overlays, incremental return-route rendering and
 frame-time diagnostics so gameplay, living-world and presentation work can
 extend the foundation without replacing it.
 
@@ -44,7 +44,9 @@ npm.cmd run dev -- 5174
 
 Then open `http://127.0.0.1:5174/`. An explicitly requested port will not silently fall back to another port if it is already occupied.
 
-Reloading the page restores the latest autosave. **Save checkpoint** records a stable manual checkpoint, and **Load checkpoint** restores the ship and world to that recorded state.
+Saving is intentionally absent during active development. Reloading starts a
+fresh session. Saving must not be reintroduced unless an explicitly authorized
+milestone names it as in scope.
 
 ## Verify
 

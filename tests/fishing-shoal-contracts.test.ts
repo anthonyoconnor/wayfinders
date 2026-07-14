@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   FISHING_SHOAL_CONTENT_VERSION,
   FISHING_SHOAL_CONTRACT_VERSION,
-  FISHING_SHOAL_PERSISTENCE_OWNER,
   createFishingShoalId,
   isCurrentFishingShoalId,
   parseFishingShoalId,
@@ -57,7 +56,6 @@ describe("versioned fishing-shoal contracts", () => {
   it("fixes ownership and Survey-only interaction discriminators at contract version two", () => {
     expect(FISHING_SHOAL_CONTRACT_VERSION).toBe(2);
     expect(FISHING_SHOAL_CONTENT_VERSION).toBe(1);
-    expect(FISHING_SHOAL_PERSISTENCE_OWNER).toBe("fishing-shoals");
     expect(resultStatus({
       contractVersion: 2,
       status: "rejected",

@@ -441,43 +441,4 @@ describe("island-dossier lifecycle", () => {
     expect(harness.system.recordsRevision).toBe(surveyedRevision);
   });
 
-  it("restores only valid lead/dossier state combinations and keeps failed restores atomic", () => {
-    const harness = generatedHarness();
-    const islandId = harness.definitions[0].islandId;
-    const returnedLead: IslandDossierReturnedRecordV1 = {
-      islandId,
-      state: "lead",
-      expeditionId: 1,
-      generation: 1,
-    };
-    const provisionalSurvey: IslandDossierProvisionalRecordV1 = {
-      islandId,
-      state: "surveyed",
-      expeditionId: 2,
-      generation: 2,
-    };
-    harness.system.restore([provisionalSurvey], [returnedLead]);
-    expect(harness.system.returned).toEqual([returnedLead]);
-    expect(harness.system.provisional).toEqual([provisionalSurvey]);
-    expect(harness.system.revealedIslandIds).toEqual([islandId]);
-
-    const beforeProvisional = harness.system.provisional;
-    const beforeReturned = harness.system.returned;
-    expect(() => harness.system.restore([
-      { ...provisionalSurvey, state: "sighted" },
-    ], [returnedLead])).toThrow(/returned lead with a provisional survey/);
-    expect(() => harness.system.restore([provisionalSurvey], [
-      { ...returnedLead, state: "dossier" },
-    ])).toThrow(/returned lead with a provisional survey/);
-    expect(() => harness.system.restore([], [returnedLead, returnedLead])).toThrow(/duplicated/);
-    expect(() => harness.system.restore([
-      { ...provisionalSurvey, islandId: 99_999 },
-    ], [])).toThrow(/regenerated catalog/);
-    expect(() => harness.system.restore([
-      { ...provisionalSurvey, state: "invalid" } as unknown as IslandDossierProvisionalRecordV1,
-    ], [])).toThrow(/invalid provisional state/);
-    expect(harness.system.provisional).toEqual(beforeProvisional);
-    expect(harness.system.returned).toEqual(beforeReturned);
-    expect(harness.system.revealedIslandIds).toEqual([islandId]);
-  });
 });

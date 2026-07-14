@@ -2,12 +2,24 @@
 
 This is the starting point for a new development session.
 
+## Active saving policy
+
+Saving has been removed from the active baseline to keep feature development
+fast. Every launch or browser refresh starts a fresh session. There is no save
+schema, browser storage, autosave, checkpoint, load or restoration acceptance
+burden.
+
+Do not reimplement saving as part of another feature or from historical code.
+It may return only when the user explicitly authorizes a named milestone whose
+scope includes saving. Older save-related acceptance notes in this document or
+the roadmap are historical only and create no current obligation.
+
 ## Accepted baseline
 
 The current implementation is the accepted starting point. It includes
 developer tooling, home waters, exploration knowledge, provision-aware risk
-and return, expedition inheritance, deterministic island dossiers,
-cross-session persistence, versioned navigator succession, four-voyage
+and return, in-session expedition inheritance, deterministic island dossiers,
+versioned navigator succession, four-voyage
 navigator tenures with exact-dock-committed achievements in a permanent Great
 Hall chronicle, the shared required generation-handover view, returned
 identity/fate reports for runtime navigator wrecks, provision-funded surveying,
@@ -39,16 +51,14 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 262 automated tests pass across 28 files. The suite includes deterministic
+- 223 automated tests pass across 26 files. The suite includes deterministic
   island-dossier and survey-site catalog/lifecycle coverage, exact-island fog
-  reveal, simulation integration, lineage/Great Hall and exact-version
-  persistence coverage.
+  reveal, simulation integration and lineage/Great Hall coverage.
 - The production Vite build passes.
 - Existing browser acceptance covers fishing return,
   returned-lead upgrade,
-  autosave reload, manual checkpoint restore, exact ship/camera restoration,
-  the home-linked fishing-ground cue, wreck-hold reload, generation
-  advancement, save clearing, four-voyage automatic succession,
+  the home-linked fishing-ground cue, wreck and generation-handover flows,
+  advancement, four-voyage automatic succession,
   runtime-wreck survey/reporting and a clean warning/error console. The shared
   Great Hall model and exact-dock access policy are automated; an interactive
   pass over its focused handover and optional browsing modes remains
@@ -148,11 +158,11 @@ Current verification baseline:
   numbered voyage on which the navigator was lost at sea, without crediting any
   provisional result from the fatal expedition. Sailing remains suppressed
   until dismissal. The unacknowledged handover and its voyage records are
-  authoritative, survive save/reload and reopen unchanged after refresh.
+  authoritative and remain available for the current session.
 - Earlier Supported routes, returned island leads/dossiers and runtime wrecks
   survive a later failure.
 
-### Island dossiers, survey sites, fishing signs and persistence
+### Island dossiers, survey sites and fishing signs
 
 - Island-dossier content V1 derives exactly one immutable definition from each
   non-home island's stable numeric ID. It includes a deterministic unique name,
@@ -202,8 +212,8 @@ Current verification baseline:
   an inherited inactive lead; surveying that lead on a later expedition creates
   a provisional upgrade, and a wreck discards only the upgrade. Exact-dock
   return commits a terminal returned survey with stable quality. Returned
-  surveys remain idempotent through revisit, repeat input, dock, wreck,
-  autosave and checkpoint reload and are the sole later-activation eligible
+  surveys remain idempotent through revisit, repeat input, dock and wreck and
+  are the sole later-activation eligible
   lifecycle state. Actual activation eligibility is derived only when the
   returned survey's exact service anchor has a cardinal, passable Supported
   connection to the exact home-return tile.
@@ -214,30 +224,7 @@ Current verification baseline:
   free. A successful survey spends provisions atomically, refreshes risk
   guidance immediately and remains provisional until dock; multiple surveys
   are allowed while supplies remain.
-- Schema-versioned saves persist the authoritative ship, provisions,
-  expedition/generation state, navigator lineage, completed-voyage counts and
-  exact-dock-committed per-voyage achievement summaries, knowledge and stamps,
-  runtime wrecks, pending wreck holds and unacknowledged generation handovers,
-  provisional/returned wreck identity reports, provisional/returned
-  island-dossier, survey-site and fishing records. Save schema V12 requires
-  island-dossier content V1, survey-site content V1, exact lineage V6 with
-  voyage records V3, generation-handover V1 and the current wreck shape;
-  non-current records are deleted rather than migrated. Dossier/site
-  definitions, placement/service data and hidden results regenerate from seed
-  and stable identity and are not serialized.
-  Fishing connectivity and its path are derived after load, never serialized.
-- Base terrain and island descriptors regenerate from the saved seed and world
-  configuration. Visibility, forward range and return paths rebuild on load.
-- Reload uses a rolling IndexedDB autosave. **Save checkpoint** and
-  **Load checkpoint** use a separate stable manual record. Loading a checkpoint
-  restores the exact ship position, snaps the camera there and makes that state
-  the new autosave baseline.
 - Explicit world regeneration remains a deliberate fresh-world reset.
-- Schema, generator, content and serialized-format versions are exact equality
-  guards. Any malformed, older or newer autosave/checkpoint is deleted. A
-  rejected autosave starts a fresh world; a rejected checkpoint becomes
-  unavailable without replacing the running world. Development saves are never
-  migrated or preserved across incompatible versions.
 
 ### Presentation and tools
 
@@ -275,16 +262,15 @@ Current verification baseline:
   and earlier-generation wreck inspection; dedicated moves to the historic-
   wreck, coastal-ruin and tidal-cave service anchors; water-tile teleport;
   provision/wreck
-  controls; synchronized overlay toggles; session-only configuration; bounded
-  event logging; autosave status and checkpoint controls. Lifecycle-mutating
-  controls are disabled during wreck and generation-handover presentations,
-  while persistence controls remain available for transition reload testing.
+  controls; synchronized overlay toggles; session-only configuration; and
+  bounded event logging. Lifecycle-mutating controls are disabled during wreck
+  and generation-handover presentations.
   The drawer is non-modal: sailing continues while it remains open, and a
   focused numeric tuning field keeps WASD live while reserving arrow keys for
   native number editing.
 - Browser diagnostics are exposed through canvas data attributes and the
   developer automation API, including rolling frame percentiles, long-frame
-  counts, dropped simulation time and save-serialization timing.
+  counts and dropped simulation time.
 
 ### Performance foundation
 
@@ -293,9 +279,6 @@ Current verification baseline:
   expansion.
 - The deterministic simulation remains at 30 updates per second while the ship
   and camera target interpolate at render rate.
-- Save dirtiness is independent from presentation dirtiness. Canonical
-  knowledge runs are cached by knowledge version, normal autosaves are spaced
-  to three seconds, and lifecycle/checkpoint saves remain immediate.
 - Forward and return calculations retain their world-sized buffers. Return
   roots use an incrementally maintained Supported/Personal boundary instead of
   scanning all Personal water.
@@ -312,20 +295,19 @@ Current verification baseline:
 
 1. The headless simulation owns authoritative gameplay state. Phaser presents
    it and forwards input; renderers do not mutate world rules.
-2. The deterministic seed, generation configuration and stable island IDs are
-   exact save-acceptance boundaries; incompatible changes bump a version and
-   invalidate prior records.
+2. The deterministic seed, generation configuration and stable island IDs
+   preserve reproducible worlds and stable logical identity.
 3. Current sight is a visual reveal, not a knowledge-cost discount. Personal
    water is created behind actual travel to preserve full-cost outward and
    half-cost retrace behavior.
 4. Exact-dock return is the only success/commit boundary.
 5. A wreck resolves rollback immediately, presentation after four seconds, and
    generation advancement exactly once.
-6. Base generated terrain is not serialized. Only authoritative mutable state
-   belongs in saves; derived search and rendering data must rebuild.
+6. Authoritative mutable state remains separate from derived search and
+   rendering data so future infrastructure can rebuild derived results.
 7. Runtime player wrecks remain distinct from island dossiers and future
    generated historic-wreck sites.
-8. Explicit regeneration resets the world; browser reload restores it.
+8. Explicit regeneration and browser refresh both begin a fresh world session.
 9. Gameplay uses semantic terrain/content data. Production art must not become
    a second collision or navigation authority.
 10. Normal sailing work stays local, sparse, cached or version driven.
@@ -349,17 +331,15 @@ Current verification baseline:
   `GP-3.3` adds one independently generated historic-wreck, coastal-ruin and
   tidal-cave site through one extensible lifecycle. Runtime wreck identity/fate
   surveying and reporting are implemented; idols remain proposed GP-4 work.
-- Gameplay track: autosave and a stable manual checkpoint exist, but a final
-  player-facing saved-game model has not been chosen.
 - `GP-3`: there are no fishing boats, trade vessels or
   Supported-route traffic.
 - `GR-*`: production art, the asset resolver, asset tooling,
   environmental audio and production polish are not implemented.
-- Default and doubled-world save/range probes pass the performance hardening
+- Default and doubled-world range probes pass the performance hardening
   baseline. Touch-first sailing is not implemented, and representative
   mid-range mobile rendering/performance validation remains outstanding.
 
-## Active checkpoint
+## Active planning point
 
 `GP-3.3` is accepted. `GP-4.1`, the deterministic idol catalog, is the next
 proposed gameplay milestone and awaits authorization.

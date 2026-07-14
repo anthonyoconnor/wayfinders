@@ -5,7 +5,6 @@ import {
   NAVIGATOR_VOYAGE_LIMIT,
   type NavigatorVoyageAchievementRecordV1,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
-import { SAVE_SCHEMA_VERSION, parseSaveGame } from "../src/wayfinders/persistence/SaveGame.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
 
 function findUnknownWater(simulation: GameSimulation): GridPoint {
@@ -137,10 +136,10 @@ describe("four-journey navigator tenure", () => {
     for (let voyage = 0; voyage < NAVIGATOR_VOYAGE_LIMIT - 1; voyage++) returnOneExpedition(simulation);
     const attemptedTarget = findUnknownWater(simulation);
     let callbackTeleport: boolean | undefined;
-    let callbackSave: ReturnType<GameSimulation["createSave"]> | undefined;
+    let callbackHandoverActive: boolean | undefined;
     simulation.events.on("expeditionReturned", ({ tenureCompleted }) => {
       if (!tenureCompleted) return;
-      callbackSave = simulation.createSave();
+      callbackHandoverActive = simulation.generationHandoverActive;
       callbackTeleport = simulation.teleport(attemptedTarget);
     });
 
@@ -150,11 +149,10 @@ describe("four-journey navigator tenure", () => {
     expect(simulation.atDock).toBe(true);
     expect(simulation.expeditionActive).toBe(false);
     expect(simulation.generationHandoverActive).toBe(true);
-    expect(callbackSave).toBeDefined();
-    expect(() => parseSaveGame(callbackSave)).not.toThrow();
+    expect(callbackHandoverActive).toBe(true);
   });
 
-  it("does not count idle time, reloads, or inactive dock arrivals as journeys", () => {
+  it("does not count idle time or inactive dock arrivals as journeys", () => {
     const simulation = new GameSimulation();
     simulation.update({ turn: 0, throttle: 0 }, 10_000);
     expect(simulation.navigatorVoyagesCompleted).toBe(0);
@@ -162,54 +160,12 @@ describe("four-journey navigator tenure", () => {
     expect(simulation.navigatorVoyagesCompleted).toBe(0);
 
     returnOneExpedition(simulation);
-    const restored = new GameSimulation(simulation.config);
-    restored.restoreSave(simulation.createSave());
-    restored.update({ turn: 0, throttle: 0 }, 10_000);
-    expect(restored.teleport(restored.generated.landmarks.homeReturnTile)).toBe(true);
+    simulation.update({ turn: 0, throttle: 0 }, 10_000);
+    expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
 
-    expect(restored.navigatorVoyagesCompleted).toBe(1);
-    expect(restored.navigatorVoyagesRemaining).toBe(3);
-    expect(restored.successfulReturns).toBe(1);
-  });
-
-  it("completes the fourth-journey transition exactly once across save and reload", () => {
-    const simulation = new GameSimulation();
-    for (let voyage = 0; voyage < 3; voyage++) returnOneExpedition(simulation);
-    const beforeFourth = simulation.createSave();
-    expect(beforeFourth.schemaVersion).toBe(SAVE_SCHEMA_VERSION);
-
-    const restored = new GameSimulation(simulation.config);
-    restored.restoreSave(beforeFourth);
-    returnOneExpedition(restored);
-    const afterFourth = restored.createSave();
-
-    const underSuppliedHandover = structuredClone(afterFourth);
-    underSuppliedHandover.ship.provisions--;
-    expect(() => new GameSimulation(simulation.config).restoreSave(underSuppliedHandover))
-      .toThrow(/fully supplied ship/);
-
-    const reloaded = new GameSimulation(simulation.config);
-    reloaded.restoreSave(afterFourth);
-    const blockedTarget = findUnknownWater(reloaded);
-    const blockedShip = { ...reloaded.ship };
-    reloaded.update({ turn: 0, throttle: 0 }, 10_000);
-    expect(reloaded.ship).toEqual(blockedShip);
-    expect(reloaded.teleport(blockedTarget)).toBe(false);
-    expect(reloaded.pendingGenerationHandover).toMatchObject({
-      fromGeneration: 1,
-      nextGeneration: 2,
-      reason: "tenure",
-    });
-    expect(parseSaveGame(reloaded.createSave()).expedition.pendingGenerationHandover).not.toBeNull();
-    expect(reloaded.acknowledgeGenerationHandover()).toBe(true);
-    expect(reloaded.acknowledgeGenerationHandover()).toBe(false);
-    expect(reloaded.teleport(blockedTarget)).toBe(true);
-
-    expect(reloaded.generation).toBe(2);
-    expect(reloaded.navigatorLineage).toHaveLength(2);
-    expect(reloaded.successfulReturns).toBe(4);
-    expect(reloaded.navigatorLineage[0]).toMatchObject({ state: "completed", completedVoyages: 4 });
-    expect(reloaded.currentNavigator).toMatchObject({ state: "active", completedVoyages: 0 });
+    expect(simulation.navigatorVoyagesCompleted).toBe(1);
+    expect(simulation.navigatorVoyagesRemaining).toBe(3);
+    expect(simulation.successfulReturns).toBe(1);
   });
 
   it("kills a wrecked navigator early, preserves their completed journeys, and resumes once", () => {
@@ -230,48 +186,24 @@ describe("four-journey navigator tenure", () => {
     expect(simulation.successfulReturns).toBe(2);
     expect(simulation.failedExpeditions).toBe(1);
 
-    simulation.update({ turn: 0, throttle: 0 }, 1);
-    const restored = new GameSimulation(simulation.config);
-    restored.restoreSave(simulation.createSave());
-    restored.update({ turn: 0, throttle: 0 }, restored.respawnSecondsRemaining);
-    restored.update({ turn: 0, throttle: 0 }, 10);
+    simulation.update({ turn: 0, throttle: 0 }, simulation.respawnSecondsRemaining);
+    simulation.update({ turn: 0, throttle: 0 }, 10);
 
-    expect(restored.wreckPresentationActive).toBe(false);
-    expect(restored.generation).toBe(2);
-    expect(restored.navigatorLineage).toHaveLength(2);
-    expect(restored.navigatorLineage[0]).toMatchObject({ state: "lost", completedVoyages: 2 });
-    expect(restored.currentNavigator).toMatchObject({ state: "active", completedVoyages: 0 });
-    expect(restored.pendingGenerationHandover).toMatchObject({
+    expect(simulation.wreckPresentationActive).toBe(false);
+    expect(simulation.generation).toBe(2);
+    expect(simulation.navigatorLineage).toHaveLength(2);
+    expect(simulation.navigatorLineage[0]).toMatchObject({ state: "lost", completedVoyages: 2 });
+    expect(simulation.currentNavigator).toMatchObject({ state: "active", completedVoyages: 0 });
+    expect(simulation.pendingGenerationHandover).toMatchObject({
       fromGeneration: 1,
       nextGeneration: 2,
       reason: "wreck",
     });
-    const afterSuccession = new GameSimulation(simulation.config);
-    afterSuccession.restoreSave(restored.createSave());
-    expect(afterSuccession.teleport(findUnknownWater(afterSuccession))).toBe(false);
-    expect(afterSuccession.acknowledgeGenerationHandover()).toBe(true);
-    expect(afterSuccession.teleport(findUnknownWater(afterSuccession))).toBe(true);
-    expect(restored.successfulReturns).toBe(2);
-    expect(restored.failedExpeditions).toBe(1);
+    expect(simulation.teleport(findUnknownWater(simulation))).toBe(false);
+    expect(simulation.acknowledgeGenerationHandover()).toBe(true);
+    expect(simulation.teleport(findUnknownWater(simulation))).toBe(true);
+    expect(simulation.successfulReturns).toBe(2);
+    expect(simulation.failedExpeditions).toBe(1);
   });
 
-  it("rejects impossible persisted voyage counts and orphaned wreck history", () => {
-    const active = new GameSimulation();
-    const activeSave = structuredClone(active.createSave());
-    (activeSave.navigatorLineage.navigators[0] as { completedVoyages: number }).completedVoyages = 4;
-    expect(() => parseSaveGame(activeSave)).toThrow(/length|less than 4/);
-
-    const completed = new GameSimulation();
-    for (let voyage = 0; voyage < 4; voyage++) returnOneExpedition(completed);
-    const completedSave = structuredClone(completed.createSave());
-    (completedSave.navigatorLineage.navigators[0] as { completedVoyages: number }).completedVoyages = 3;
-    expect(() => parseSaveGame(completedSave)).toThrow(/length|completed tenure/);
-
-    const wrecked = new GameSimulation();
-    expect(wrecked.teleport(findUnknownWater(wrecked))).toBe(true);
-    expect(wrecked.forceWreck()).toBe(true);
-    const orphanedWreck = structuredClone(wrecked.createSave());
-    orphanedWreck.wrecks[0].id = 99;
-    expect(() => parseSaveGame(orphanedWreck)).toThrow(/saved wreck|lost navigator/);
-  });
 });

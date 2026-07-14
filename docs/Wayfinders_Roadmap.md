@@ -5,6 +5,19 @@ ordered `GP-0.1` through `GP-3.3` work is complete and accepted. `GP-4.1` is the
 next proposed gameplay milestone; no later gameplay or graphics minor is
 authorized by this roadmap status.
 
+### Saving policy
+
+Saving is intentionally absent from the active development baseline so new
+gameplay does not incur schema, storage, migration, checkpoint, reload or
+restoration obligations. Every launch or refresh starts a fresh session.
+
+Saving must not be implemented, maintained as an acceptance requirement, or
+added incidentally to another feature. It may return only when the user
+explicitly authorizes a named milestone whose scope includes saving. GP-5 is a
+deferred placeholder, not current authorization. Any older save-related
+acceptance evidence below is historical and creates no present compatibility
+or implementation obligation.
+
 ## Roadmap model
 
 The work that produced the current build is historical context, not the
@@ -14,7 +27,7 @@ numbering system for future work. Forward planning uses three labels:
 - **GP-x.y** — gameplay major milestones and their minor acceptance gates;
 - **GR-x.y** — graphics, asset-pipeline and production-presentation gates.
 
-A minor milestone is complete only when its behavior, persistence, tests,
+A minor milestone is complete only when its behavior, tests,
 readability and performance criteria pass and its acceptance evidence is
 recorded. A major milestone closes only when all required minor gates pass.
 
@@ -65,8 +78,7 @@ The current build already provides:
   succession after either a completed tenure or a fatal wreck;
 - exact-dock-committed achievement records for each safe voyage and a shared
   Great Hall chronicle whose focused handover mode presents them at succession;
-- schema-validated IndexedDB autosave, a stable manual checkpoint and exact
-  ship/camera restoration;
+- fresh-session startup with no browser persistence or checkpoint obligations;
 - functional developer graphics, developer controls, diagnostics and the
   performance foundation.
 
@@ -75,8 +87,8 @@ completed and lost records. Exact-dock active-expedition returns complete one
 of a navigator's four voyages, while fatal wrecks and completed-tenure
 transitions share one idempotent succession authority.
 Island dossier and survey-site findings are descriptive records and do not
-create active resources or a tribe economy. Save/load is functional
-infrastructure rather than a complete player-facing game-management flow.
+create active resources or a tribe economy. Cross-session save/load is not part
+of the active baseline.
 
 ## Cross-cutting gameplay gates
 
@@ -84,7 +96,8 @@ infrastructure rather than a complete player-facing game-management flow.
 
 #### GP-0.1 — Exact-version save validation
 
-Status: accepted.
+Status: retired from the active baseline. The following acceptance evidence is
+historical only and is superseded by the Saving policy above.
 
 Acceptance evidence (updated 2026-07-13): autosave and checkpoint records pass
 through one fail-closed parser for the exact current save schema, world
@@ -120,9 +133,9 @@ Acceptance gate:
 - no later GP minor can be accepted without explicit version invalidation and
   current-version persistence coverage.
 
-Persistence is not postponed to the later save/load milestone. GP-5 adds
-player-facing game management after every preceding gameplay system already
-persists correctly.
+These former persistence requirements no longer apply to active milestones.
+No gameplay milestone should add save fragments, schema versions or round-trip
+coverage unless saving is explicitly included in its authorized scope.
 
 #### GP-0.2 — Versioned integration boundaries
 
@@ -730,8 +743,11 @@ histories cannot make completion impossible.
 
 ### GP-5 — Player-facing save, load and game continuity
 
-Goal: build on the accepted autosave/checkpoint foundation to provide a clear
-game lifecycle once the authoritative gameplay shape is stable.
+Status: deferred placeholder; not authorized.
+
+Goal: if explicitly authorized in the future, design a new saving capability
+from the authoritative gameplay shape that exists then. Do not restore or
+extend the retired autosave/checkpoint implementation by default.
 
 #### GP-5.1 — Saved-game model and metadata
 

@@ -248,39 +248,6 @@ export class FishingShoalSystem {
     return Object.freeze(lost);
   }
 
-  restore(
-    provisionalRecords: readonly FishingShoalProvisionalRecordV1[],
-    returnedRecords: readonly FishingShoalReturnedRecordV1[] = [],
-  ): void {
-    this.provisionalById.clear();
-    this.returnedById.clear();
-    for (const saved of returnedRecords) {
-      if (!isCurrentFishingShoalId(saved.id) || !this.definitionById.has(saved.id)) {
-        throw new RangeError(`Fishing shoal ${saved.id} does not match the regenerated catalog`);
-      }
-      if (saved.state !== "lead" && saved.state !== "survey") {
-        throw new RangeError(`Fishing shoal ${saved.id} has an invalid returned state`);
-      }
-      if (this.returnedById.has(saved.id)) throw new RangeError(`Returned fishing shoal ${saved.id} is duplicated`);
-      this.returnedById.set(saved.id, { ...saved });
-    }
-    for (const saved of provisionalRecords) {
-      if (!isCurrentFishingShoalId(saved.id) || !this.definitionById.has(saved.id)) {
-        throw new RangeError(`Fishing shoal ${saved.id} does not match the regenerated catalog`);
-      }
-      if (this.provisionalById.has(saved.id)) throw new RangeError(`Fishing shoal ${saved.id} is duplicated`);
-      if (saved.state !== "sighted" && saved.state !== "surveyed") {
-        throw new RangeError(`Fishing shoal ${saved.id} has an invalid provisional state`);
-      }
-      const returned = this.returnedById.get(saved.id);
-      if (returned && !(returned.state === "lead" && saved.state === "surveyed")) {
-        throw new RangeError(`Fishing shoal ${saved.id} has an invalid provisional/returned overlap`);
-      }
-      this.provisionalById.set(saved.id, { ...saved });
-    }
-    this.markRecordsChanged();
-  }
-
   readModels(): readonly Readonly<FishingShoalReadModel>[] {
     const models: FishingShoalReadModel[] = [];
     for (const definition of this.definitions) {

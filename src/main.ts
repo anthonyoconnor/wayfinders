@@ -5,17 +5,10 @@ import {
   developerLogText,
 } from "./developerLog";
 import {
-  patchPrototypeConfig,
   prototypeConfig,
-  resetPrototypeConfig,
 } from "./wayfinders/config/prototypeConfig";
 import { GameSimulation } from "./wayfinders/core/GameSimulation";
-import { IndexedDbSaveStore } from "./wayfinders/persistence/IndexedDbSaveStore";
-import {
-  applyGenerationConfig,
-  loadExactSaveSlot,
-} from "./wayfinders/persistence/SaveGame";
-import { WayfindersScene, type PersistenceBootState } from "./wayfinders/rendering/WayfindersScene";
+import { WayfindersScene } from "./wayfinders/rendering/WayfindersScene";
 import "./styles.css";
 
 type ShellState = "starting" | "ready" | "error";
@@ -166,57 +159,9 @@ document.documentElement.dataset.appReady = "true";
 export let wayfindersGame: Phaser.Game | undefined;
 
 try {
-  const saveStore = new IndexedDbSaveStore<unknown>();
-  const checkpointStore = new IndexedDbSaveStore<unknown>({ saveKey: "checkpoint" });
-  let simulation: GameSimulation;
-  let persistenceBoot: PersistenceBootState;
-  try {
-    const slot = await loadExactSaveSlot(saveStore, (save) => {
-      const config = applyGenerationConfig(save.world.generationConfig, save.world.seed);
-      new GameSimulation(config).restoreSave(save);
-    });
-    if (slot.status === "empty") {
-      simulation = new GameSimulation();
-      persistenceBoot = {
-        status: "new",
-        message: "No inherited browser save was found; a new chart has begun.",
-        autosave: true,
-      };
-    } else if (slot.status === "discarded") {
-      simulation = new GameSimulation();
-      persistenceBoot = {
-        status: slot.removed ? "recovered" : "unavailable",
-        message: slot.removed
-          ? "The browser save was incompatible with this build and was removed; a fresh chart has begun."
-          : `The browser save was incompatible but could not be removed; browser saving is disabled: ${slot.removalError instanceof Error ? slot.removalError.message : "storage error"}.`,
-        autosave: slot.removed,
-      };
-    } else {
-      const restoredConfig = applyGenerationConfig(
-        slot.save.world.generationConfig,
-        slot.save.world.seed,
-      );
-      patchPrototypeConfig(restoredConfig);
-      simulation = new GameSimulation(prototypeConfig);
-      simulation.restoreSave(slot.save);
-      persistenceBoot = {
-        status: "loaded",
-        message: `Loaded generation ${simulation.generation} and its inherited chart from browser storage.`,
-        autosave: true,
-      };
-    }
-  } catch (error) {
-    resetPrototypeConfig();
-    simulation = new GameSimulation();
-    persistenceBoot = {
-      status: "unavailable",
-      message: `Browser storage is unavailable: ${error instanceof Error ? error.message : "unknown storage error"}.`,
-      autosave: false,
-    };
-  }
-
+  const simulation = new GameSimulation(prototypeConfig);
   wayfindersGame = createWayfindersGame([
-    new WayfindersScene(simulation, saveStore, checkpointStore, persistenceBoot),
+    new WayfindersScene(simulation),
   ]);
   window.dispatchEvent(
     new CustomEvent("wayfinders:shell-ready", {

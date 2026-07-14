@@ -196,7 +196,7 @@ type MutableGreatHallVoyageTotals = {
 
 /**
  * Ephemeral GP-2.3 read model. Every value is derived from the authoritative
- * lineage and returned-world records; this object is never a persistence owner.
+ * lineage and returned-world records; this object is never gameplay authority.
  */
 export interface GreatHallChronicle {
   readonly readModelVersion: typeof GREAT_HALL_CHRONICLE_READ_MODEL_VERSION;

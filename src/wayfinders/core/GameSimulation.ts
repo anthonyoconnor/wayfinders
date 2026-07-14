@@ -5,7 +5,6 @@ import {
 } from "../config/prototypeConfig";
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import {
-  FISHING_SHOAL_CONTENT_VERSION,
   FISHING_SHOAL_CONTRACT_VERSION,
   type FishingShoalDefinition,
   type FishingShoalInteractionCommandV1,
@@ -18,7 +17,6 @@ import {
 import { generateFishingShoalCatalog } from "../exploration/FishingShoalCatalog";
 import { FishingShoalSystem } from "../exploration/FishingShoalSystem";
 import {
-  ISLAND_DOSSIER_CONTENT_VERSION,
   ISLAND_DOSSIER_CONTRACT_VERSION,
   type IslandDossierDefinitionV1,
   type IslandDossierInteractionCommandV1,
@@ -45,7 +43,6 @@ import {
 } from "../exploration/SurveyContracts";
 import { generateSurveySiteCatalog } from "../exploration/SurveySiteCatalog";
 import {
-  SURVEY_SITE_CONTENT_VERSION,
   SURVEY_SITE_CONTRACT_VERSION,
   type SurveySiteDefinition,
   type SurveySiteId,
@@ -78,17 +75,6 @@ import {
   type NavigatorRecordV6,
   type NavigatorVoyageAchievementInputV3,
 } from "../lineage/NavigatorLineageSystem";
-import {
-  SAVE_SCHEMA_VERSION,
-  WORLD_GENERATOR_VERSION,
-  applyGenerationConfig,
-  captureGenerationConfig,
-  decodeKnowledgeRuns,
-  encodeWorldKnowledgeRuns,
-  parseSaveGame,
-  type KnowledgeRun,
-  type SaveGame,
-} from "../persistence/SaveGame";
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import { WorldGenerator } from "../world/WorldGenerator";
 import type { WorldGrid } from "../world/WorldGrid";
@@ -190,20 +176,6 @@ interface PendingRespawnState {
   remainingSeconds: number;
 }
 
-interface KnowledgeSaveCache {
-  world: WorldGrid;
-  knowledgeVersion: number;
-  runs: readonly KnowledgeRun[];
-}
-
-/** A structurally valid save conflicts with its regenerated authoritative world. */
-export class SaveRestoreError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "SaveRestoreError";
-  }
-}
-
 /**
  * Phaser-independent owner of the live prototype state. Presentation adapters
  * may read it, but all state changes go through this class or its systems.
@@ -221,8 +193,6 @@ export class GameSimulation {
   ship!: ShipState;
   lastMovement: MovementResult = NO_MOVEMENT;
   revision = 0;
-  /** Monotonic dirtiness key for authoritative state included in createSave(). */
-  saveRevision = 0;
   /** Monotonic collection key for renderers that display permanent wrecks. */
   wrecksRevision = 0;
   overlaysRevision = 0;
@@ -247,7 +217,6 @@ export class GameSimulation {
   private pendingRespawn?: PendingRespawnState;
   private pendingGenerationHandoverValue?: Readonly<NavigatorGenerationHandoverV1>;
   private interactionTransactionActive = false;
-  private knowledgeSaveCache?: KnowledgeSaveCache;
   private riskResultsInitialized = false;
 
   constructor(readonly config: PrototypeConfig = prototypeConfig) {
@@ -490,7 +459,6 @@ export class GameSimulation {
       this.lastMovement = NO_MOVEMENT;
       return NO_MOVEMENT;
     }
-    const previousShip = { ...this.ship };
     const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     const previousHeading = this.ship.heading;
     const previousKnowledge = this.world.getKnowledge(previousTile.x, previousTile.y);
@@ -564,7 +532,6 @@ export class GameSimulation {
     if (movement.tileChanged || headingChanged || charge.consumedBundles > 0 || knowledgeChanged > 0 || lifecycleChanged) {
       this.revision++;
     }
-    if (this.shipSaveStateChanged(previousShip) || knowledgeChanged > 0 || lifecycleChanged) this.saveRevision++;
     return this.lastMovement;
   }
 
@@ -629,7 +596,6 @@ export class GameSimulation {
     this.lastMovement = NO_MOVEMENT;
     this.lifecycleResolutionRevision++;
     this.revision++;
-    this.saveRevision++;
     this.events.emit("worldRegenerated", { seed: normalizedSeed });
   }
 
@@ -654,32 +620,22 @@ export class GameSimulation {
 
     this.recalculateRiskOverlays();
     this.revision++;
-    this.saveRevision++;
     if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
     return true;
   }
 
   refreshVisibility(): void {
     if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return;
-    const wasActiveExpedition = this.activeExpedition;
     const tile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
     const visibility = this.visibility.updateAt(tile);
     const knowledge = this.knowledge.applyVisibility(visibility, this.expeditionId);
-    const islandDossiersChanged = this.observeIslandDossiers() > 0;
-    const surveySitesChanged = this.observeSurveySites() > 0;
-    const fishingShoalsChanged = this.observeFishingShoals() > 0;
-    const wrecksChanged = this.discoverVisibleWrecks() > 0;
+    this.observeIslandDossiers();
+    this.observeSurveySites();
+    this.observeFishingShoals();
+    this.discoverVisibleWrecks();
     this.recalculateRiskOverlays();
     this.revision++;
-    if (
-      knowledge.changedCount > 0
-      || islandDossiersChanged
-      || surveySitesChanged
-      || fishingShoalsChanged
-      || wrecksChanged
-      || wasActiveExpedition !== this.activeExpedition
-    ) this.saveRevision++;
     if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
   }
 
@@ -696,7 +652,6 @@ export class GameSimulation {
 
     this.recalculateRiskOverlays();
     this.revision++;
-    this.saveRevision++;
   }
 
   addProvisions(delta: number): void {
@@ -751,7 +706,6 @@ export class GameSimulation {
       const definition = this.islandDossierSystem.definitionFor(result.islandId);
       if (!definition) throw new Error(`Surveyed island ${result.islandId} has no dossier definition`);
       this.revision++;
-      this.saveRevision++;
       if (expeditionStarted) {
         this.events.emit("expeditionStarted", {
           expeditionId: this.expeditionId,
@@ -796,7 +750,6 @@ export class GameSimulation {
       const definition = this.surveySiteSystem.definitionFor(result.id);
       if (!definition) throw new Error(`Surveyed site ${result.id} has no definition`);
       this.revision++;
-      this.saveRevision++;
       if (expeditionStarted) {
         this.events.emit("expeditionStarted", {
           expeditionId: this.expeditionId,
@@ -853,7 +806,6 @@ export class GameSimulation {
       const definition = this.fishingShoalSystem.definitionFor(result.id);
       if (!definition) throw new Error(`Surveyed fishing shoal ${result.id} has no definition`);
       this.revision++;
-      this.saveRevision++;
       if (expeditionStarted) {
         this.events.emit("expeditionStarted", {
           expeditionId: this.expeditionId,
@@ -919,7 +871,6 @@ export class GameSimulation {
       this.applySurveyProvisionCharge(surveyBudget.surveyCost);
       this.wrecksRevision++;
       this.revision++;
-      this.saveRevision++;
       const result = {
         contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
         status: "surveyed",
@@ -956,7 +907,6 @@ export class GameSimulation {
     if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
     this.recalculateRiskOverlays();
     this.revision++;
-    this.saveRevision++;
     return true;
   }
 
@@ -967,7 +917,6 @@ export class GameSimulation {
     this.lastMovement = NO_MOVEMENT;
     this.lifecycleResolutionRevision++;
     this.revision++;
-    this.saveRevision++;
     return true;
   }
 
@@ -980,194 +929,6 @@ export class GameSimulation {
     if (this.debug[name] === visible) return;
     this.debug[name] = visible;
     this.revision++;
-  }
-
-  createSave(): SaveGame {
-    return {
-      schemaVersion: SAVE_SCHEMA_VERSION,
-      savedAt: Date.now(),
-      world: {
-        seed: this.generated.seed,
-        generatorVersion: WORLD_GENERATOR_VERSION,
-        generationConfig: captureGenerationConfig(this.config),
-        contentVersions: {
-          fishingShoals: FISHING_SHOAL_CONTENT_VERSION,
-          islandDossiers: ISLAND_DOSSIER_CONTENT_VERSION,
-          surveySites: SURVEY_SITE_CONTENT_VERSION,
-        },
-      },
-      generation: this.generation,
-      expedition: {
-        id: this.expeditionId,
-        active: this.activeExpedition,
-        pendingRespawn: this.pendingRespawn
-          ? {
-              expeditionId: this.pendingRespawn.expeditionId,
-              generation: this.pendingRespawn.generation,
-              forgottenTiles: this.pendingRespawn.forgottenTiles,
-              wreckId: this.pendingRespawn.wreck.id,
-              remainingSeconds: this.pendingRespawn.remainingSeconds,
-            }
-          : null,
-        pendingGenerationHandover: this.pendingGenerationHandoverValue
-          ? { ...this.pendingGenerationHandoverValue }
-          : null,
-      },
-      ship: { ...this.ship },
-      knowledge: {
-        encoding: "non-unknown-runs-v1",
-        runs: this.copyKnowledgeRunsForSave(),
-      },
-      wrecks: this.shipwrecks.map((wreck) => ({ ...wreck, survey: { ...wreck.survey } })),
-      islandDossiers: {
-        provisional: this.provisionalIslandDossiers.map((record) => ({ ...record })),
-        returned: this.returnedIslandDossiers.map((record) => ({ ...record })),
-      },
-      surveySites: {
-        provisional: this.provisionalSurveySites.map((record) => ({ ...record })),
-        returned: this.returnedSurveySites.map((record) => ({ ...record })),
-      },
-      fishingShoals: {
-        provisional: this.provisionalFishingShoals.map((record) => ({ ...record })),
-        returned: this.returnedFishingShoals.map((record) => ({ ...record })),
-      },
-      navigatorLineage: this.lineage.snapshot(),
-      terrainPatches: [],
-    };
-  }
-
-  /**
-   * Restores authoritative state only. Base terrain and dossier definitions
-   * are regenerated, while sight, movement caches and risk paths are rebuilt.
-   */
-  restoreSave(value: unknown): void {
-    if (this.interactionTransactionActive) {
-      throw new SaveRestoreError("Cannot restore a save during an interaction transaction");
-    }
-    const parsed = parseSaveGame(value);
-    const currentGenerationConfig = captureGenerationConfig(this.config);
-    const savedGenerationConfig = captureGenerationConfig(applyGenerationConfig(
-      parsed.world.generationConfig,
-      parsed.world.seed,
-    ));
-    if (JSON.stringify(savedGenerationConfig) !== JSON.stringify(currentGenerationConfig)) {
-      throw new SaveRestoreError("Saved world generation settings do not match this simulation configuration");
-    }
-
-    const generated = this.generator.generate(parsed.world.seed);
-    const decoded = decodeKnowledgeRuns(generated.grid.tileCount, parsed.knowledge.runs);
-    generated.grid.replaceKnowledge(decoded.knowledge, decoded.expeditionStamps);
-
-    if (generated.grid.isMovementBlocked(parsed.ship.currentTileX, parsed.ship.currentTileY)) {
-      throw new SaveRestoreError("Saved ship tile is blocked in the regenerated world");
-    }
-    if (
-      parsed.expedition.pendingGenerationHandover
-      && parsed.ship.provisions !== this.config.provisions.startingBundles
-    ) {
-      throw new SaveRestoreError("Saved generation handover must contain a fully supplied ship");
-    }
-    const restoredIslandDossiers = new IslandDossierSystem(
-      generated.grid,
-      generateIslandDossierCatalog(
-        generated.grid,
-        generated.seed,
-        generated.islands,
-        generated.landmarks.homeReturnTile,
-        parsed.world.contentVersions.islandDossiers,
-      ),
-    );
-    try {
-      restoredIslandDossiers.restore(
-        parsed.islandDossiers.provisional,
-        parsed.islandDossiers.returned,
-      );
-    } catch (error) {
-      throw new SaveRestoreError(error instanceof Error ? error.message : "Saved island dossiers are invalid");
-    }
-    const restoredSurveySites = new SurveySiteSystem(
-      generated.grid,
-      generateSurveySiteCatalog(
-        generated.grid,
-        generated.seed,
-        generated.islands,
-        generated.landmarks.homeReturnTile,
-        parsed.world.contentVersions.surveySites,
-      ),
-    );
-    try {
-      restoredSurveySites.restore(
-        parsed.surveySites.provisional,
-        parsed.surveySites.returned,
-      );
-    } catch (error) {
-      throw new SaveRestoreError(error instanceof Error ? error.message : "Saved survey-site records are invalid");
-    }
-    const restoredFishingShoals = new FishingShoalSystem(
-      generated.grid,
-      generateFishingShoalCatalog(
-        generated.grid,
-        generated.seed,
-        generated.landmarks.homeReturnTile,
-        parsed.world.contentVersions.fishingShoals,
-      ),
-      generated.landmarks.homeReturnTile,
-    );
-    try {
-      restoredFishingShoals.restore(
-        parsed.fishingShoals.provisional,
-        parsed.fishingShoals.returned,
-      );
-    } catch (error) {
-      throw new SaveRestoreError(error instanceof Error ? error.message : "Saved fishing-shoal records are invalid");
-    }
-
-    const restoredWrecks = parsed.wrecks.map((wreck) => ({ ...wreck, survey: { ...wreck.survey } }));
-    const restoredLineage = NavigatorLineageSystem.fromSnapshot(parsed.navigatorLineage);
-    let pendingRespawn: PendingRespawnState | undefined;
-    if (parsed.expedition.pendingRespawn) {
-      const pending = parsed.expedition.pendingRespawn;
-      const wreck = restoredWrecks.find(({ id }) => id === pending.wreckId);
-      if (!wreck) throw new SaveRestoreError(`Pending wreck ${pending.wreckId} is missing`);
-      pendingRespawn = {
-        expeditionId: pending.expeditionId,
-        generation: pending.generation,
-        forgottenTiles: pending.forgottenTiles,
-        wreck,
-        remainingSeconds: pending.remainingSeconds,
-      };
-    }
-
-    this.config.world.seed = parsed.world.seed;
-    this.generated = generated;
-    this.expeditionId = parsed.expedition.id;
-    this.activeExpedition = parsed.expedition.active;
-    this.lineage = restoredLineage;
-    this.shipwrecks.length = 0;
-    this.shipwrecks.push(...restoredWrecks);
-    this.wrecksRevision++;
-    this.pendingRespawn = pendingRespawn;
-    this.pendingGenerationHandoverValue = parsed.expedition.pendingGenerationHandover
-      ? Object.freeze({ ...parsed.expedition.pendingGenerationHandover })
-      : undefined;
-    this.ship = { ...parsed.ship };
-    this.movement = new MovementSystem(this.world, this.config);
-    this.visibility = new VisibilitySystem(this.world, this.config);
-    this.knowledge = new KnowledgeSystem(this.world, this.config);
-    this.provisions = new ProvisionSystem(this.world, this.config);
-    this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
-    this.returnPathing = new ReturnPathSystem(this.world, this.config);
-    this.riskResultsInitialized = false;
-    this.islandDossierSystem = restoredIslandDossiers;
-    this.surveySiteSystem = restoredSurveySites;
-    this.fishingShoalSystem = restoredFishingShoals;
-    this.visibility.updateAt({ x: this.ship.currentTileX, y: this.ship.currentTileY });
-    this.lastMovement = NO_MOVEMENT;
-    this.recalculateRiskOverlays();
-    this.lifecycleResolutionRevision++;
-    this.revision++;
-    this.saveRevision++;
-    this.events.emit("gameLoaded", { schemaVersion: parsed.schemaVersion, seed: parsed.world.seed });
   }
 
   snapshot(): SimulationSnapshot {
@@ -1529,7 +1290,6 @@ export class GameSimulation {
 
     pending.remainingSeconds = Math.max(0, pending.remainingSeconds - deltaSeconds);
     if (pending.remainingSeconds <= 1e-9) this.completePendingRespawn(pending);
-    this.saveRevision++;
     return NO_MOVEMENT;
   }
 
@@ -1734,33 +1494,6 @@ export class GameSimulation {
       });
     }
     return observation.found.length;
-  }
-
-  private copyKnowledgeRunsForSave(): KnowledgeRun[] {
-    const world = this.world;
-    if (
-      !this.knowledgeSaveCache
-      || this.knowledgeSaveCache.world !== world
-      || this.knowledgeSaveCache.knowledgeVersion !== world.knowledgeVersion
-    ) {
-      this.knowledgeSaveCache = {
-        world,
-        knowledgeVersion: world.knowledgeVersion,
-        runs: encodeWorldKnowledgeRuns(world),
-      };
-    }
-    return this.knowledgeSaveCache.runs.map(([start, length, state, stamp]) => [start, length, state, stamp]);
-  }
-
-  private shipSaveStateChanged(previous: ShipState): boolean {
-    return previous.worldX !== this.ship.worldX
-      || previous.worldY !== this.ship.worldY
-      || previous.heading !== this.ship.heading
-      || previous.speed !== this.ship.speed
-      || previous.currentTileX !== this.ship.currentTileX
-      || previous.currentTileY !== this.ship.currentTileY
-      || previous.provisions !== this.ship.provisions
-      || previous.provisionAccumulator !== this.ship.provisionAccumulator;
   }
 
   private recalculateRiskOverlays(): void {

@@ -30,8 +30,6 @@ import {
   type WreckSurveyInteractionResultV1,
 } from "../exploration/WreckSurveyContracts";
 import type { SurveyBudgetReadModel } from "../exploration/SurveyContracts";
-import type { SaveStore } from "../persistence/IndexedDbSaveStore";
-import { loadExactSaveSlot } from "../persistence/SaveGame";
 import {
   buildGreatHallChronicle,
   type GreatHallChronicle,
@@ -80,12 +78,9 @@ interface BrowserDebugApi {
   forceWreck: () => boolean;
   regenerate: (seed?: number) => ReturnType<GameSimulation["snapshot"]>;
   setOverlay: (name: keyof GameSimulation["debug"], visible: boolean) => void;
-  saveNow: () => Promise<boolean>;
-  loadSave: () => Promise<boolean>;
-  clearSave: () => Promise<boolean>;
   returnToDock: () => boolean;
   navigatorWreckTargets: () => ReadonlyArray<{ id: number; generation: number; x: number; y: number }>;
-  performance: () => ReturnType<FrameTimingMonitor["snapshot"]> & { lastSaveSerializationMs: number };
+  performance: () => ReturnType<FrameTimingMonitor["snapshot"]>;
   fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
   islandDossierTargets: () => ReadonlyArray<{ islandId: number; x: number; y: number }>;
   surveySiteTargets: () => ReadonlyArray<{ id: string; type: string; x: number; y: number }>;
@@ -100,12 +95,6 @@ interface BrowserDebugApi {
   greatHall: () => Readonly<GreatHallChronicle>;
 }
 
-export interface PersistenceBootState {
-  status: "new" | "loaded" | "recovered" | "unavailable";
-  message: string;
-  autosave: boolean;
-}
-
 declare global {
   interface Window {
     __WAYFINDERS__?: BrowserDebugApi;
@@ -117,16 +106,11 @@ const PALETTE = {
   sight: 0x78fff0,
 } as const;
 
-const AUTOSAVE_INTERVAL_MS = 3_000;
-
 export class WayfindersScene extends Phaser.Scene {
   readonly simulation: GameSimulation;
 
   private readonly clock = new SimulationClock();
   private readonly frameTiming = new FrameTimingMonitor();
-  private readonly saveStore: SaveStore<unknown>;
-  private readonly checkpointStore: SaveStore<unknown>;
-  private readonly persistenceBoot: PersistenceBootState;
   private keys!: MovementKeys;
   private worldRenderer!: WorldRenderer;
   private knowledgeOverlay!: KnowledgeOverlayRenderer;
@@ -145,7 +129,6 @@ export class WayfindersScene extends Phaser.Scene {
   private gameHost?: HTMLElement;
   private gameStatus?: HTMLElement;
   private provisionOutput?: HTMLOutputElement;
-  private persistenceOutput?: HTMLOutputElement;
   private recordsOutput?: HTMLOutputElement;
   private readonly developerStateOutputs = new Map<string, HTMLElement>();
   private readonly developerDisclosureState = new Map<string, boolean>([
@@ -186,15 +169,6 @@ export class WayfindersScene extends Phaser.Scene {
   private lastFishingShoalVisibilityVersion = -1;
   private lastFishingShoalKnowledgeVersion = -1;
   private lastFishingShoalSupportedTopologyVersion = -1;
-  private persistenceEnabled: boolean;
-  private persistenceStatus: PersistenceBootState["status"];
-  private lastSavedSaveRevision = -1;
-  private lastSaveAt = Number.NEGATIVE_INFINITY;
-  private saveInFlight?: Promise<boolean>;
-  private saveQueued = false;
-  private clearInFlight?: Promise<boolean>;
-  private lifecycleSaveScheduled = false;
-  private checkpointAvailable: boolean | undefined;
   private browserDebugApi?: BrowserDebugApi;
   private activeLifecycleCue?: Phaser.GameObjects.Text;
   private returnCueScheduled = false;
@@ -203,22 +177,9 @@ export class WayfindersScene extends Phaser.Scene {
   private pendingGenerationHandoverPresentation = false;
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
-  private lastSaveSerializationMs = 0;
-
-  constructor(
-    simulation = new GameSimulation(),
-    saveStore: SaveStore<unknown>,
-    checkpointStore: SaveStore<unknown>,
-    persistenceBoot: PersistenceBootState,
-  ) {
+  constructor(simulation = new GameSimulation()) {
     super({ key: "WayfindersScene" });
     this.simulation = simulation;
-    this.saveStore = saveStore;
-    this.checkpointStore = checkpointStore;
-    this.persistenceBoot = persistenceBoot;
-    this.persistenceEnabled = persistenceBoot.autosave;
-    this.persistenceStatus = persistenceBoot.status;
-    if (persistenceBoot.status === "loaded") this.lastSavedSaveRevision = simulation.saveRevision;
   }
 
   create(): void {
@@ -271,11 +232,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.bindSimulationEvents();
     this.showPendingGenerationHandover();
     this.syncPresentation(true);
-    this.log(this.persistenceBoot.message);
-    void this.refreshCheckpointAvailability();
-    window.addEventListener("pagehide", this.onPageHide);
-    document.addEventListener("visibilitychange", this.onVisibilityChange);
-
     const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
     if (sceneStatus) sceneStatus.textContent = "Exploration sandbox active";
     if (this.gameStatus) this.gameStatus.textContent = "WASD / arrows sail · wheel or Q/E zoom · Developer tools tune";
@@ -283,7 +239,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyBindings());
   }
 
-  override update(time: number, delta: number): void {
+  override update(_time: number, delta: number): void {
     const activeElement = document.activeElement;
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const textInputFocused = this.isTextEntryElement(activeElement);
@@ -313,7 +269,6 @@ export class WayfindersScene extends Phaser.Scene {
     });
     this.frameTiming.record(delta, this.clock.lastDroppedMs, document.visibilityState === "visible");
     this.syncPresentation();
-    this.maybeAutosave(time);
   }
 
   private readMovementInput(): MovementInput {
@@ -545,7 +500,6 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.fishingShoalVisible = String(this.simulation.fishingShoalReadModels.length);
       host.dataset.surveyCost = String(this.simulation.config.provisions.surveyCost);
       host.dataset.fishingShoalInteraction = this.simulation.fishingShoalInteraction?.id ?? "";
-      host.dataset.persistenceStatus = this.persistenceStatus;
       host.dataset.wreckPresentation = String(this.simulation.wreckPresentationActive);
       host.dataset.respawnSeconds = this.simulation.respawnSecondsRemaining.toFixed(3);
       host.dataset.lifecyclePhase = this.simulation.generationHandoverActive
@@ -571,7 +525,6 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.frameMaxMs = timing.maxMs.toFixed(2);
       host.dataset.longFrames = String(timing.longFrameCount);
       host.dataset.droppedSimulationMs = timing.totalDroppedSimulationMs.toFixed(2);
-      host.dataset.lastSaveSerializationMs = this.lastSaveSerializationMs.toFixed(2);
     }
     if (document.documentElement.dataset.wayfindersReady !== "true") {
       document.documentElement.dataset.wayfindersReady = "true";
@@ -714,13 +667,7 @@ export class WayfindersScene extends Phaser.Scene {
         </fieldset>
 
         <fieldset class="tool-card">
-          <legend>Persistence and expedition records</legend>
-          <div class="tool-row tool-row--buttons">
-            <button data-action="save-checkpoint" type="button">Save checkpoint</button>
-            <button data-action="load-checkpoint" type="button">Load checkpoint</button>
-            <button data-action="clear-save" type="button">Clear stored saves</button>
-          </div>
-          <output data-output="persistence">${this.persistenceSummary()}</output>
+          <legend>Expedition records</legend>
           <output data-output="records">${this.expeditionRecordsSummary()}</output>
         </fieldset>
 
@@ -766,7 +713,6 @@ export class WayfindersScene extends Phaser.Scene {
       </div>`;
 
     this.provisionOutput = slot.querySelector<HTMLOutputElement>("[data-output='provisions']") ?? undefined;
-    this.persistenceOutput = slot.querySelector<HTMLOutputElement>("[data-output='persistence']") ?? undefined;
     this.recordsOutput = slot.querySelector<HTMLOutputElement>("[data-output='records']") ?? undefined;
     this.developerStateOutputs.clear();
     slot.querySelectorAll<HTMLElement>("[data-state]").forEach((output) => {
@@ -845,15 +791,6 @@ export class WayfindersScene extends Phaser.Scene {
       const lockReason = this.developerActionLockReason();
       if (lockReason) this.log(lockReason);
       else if (!this.forceWreckForTesting()) this.log("Force wreck requires an active ship outside Supported water.");
-    }, { signal });
-    slot.querySelector<HTMLButtonElement>("[data-action='save-checkpoint']")?.addEventListener("click", () => {
-      void this.saveCheckpoint();
-    }, { signal });
-    slot.querySelector<HTMLButtonElement>("[data-action='load-checkpoint']")?.addEventListener("click", () => {
-      void this.loadCheckpointFromStore();
-    }, { signal });
-    slot.querySelector<HTMLButtonElement>("[data-action='clear-save']")?.addEventListener("click", () => {
-      void this.clearSaveFromStore();
     }, { signal });
     this.updateDeveloperStateOutputs();
     this.syncDeveloperToolAvailability();
@@ -1005,8 +942,7 @@ export class WayfindersScene extends Phaser.Scene {
       wreckId: interaction.wreckId,
     });
     if (result.status === "surveyed") {
-      this.updatePersistenceOutputs();
-      this.requestLifecycleSave();
+      this.updateRecordsOutputs();
     } else if (result.status === "rejected") {
       this.log(`Wreck survey was not started: ${result.reason}.`);
     }
@@ -1023,8 +959,7 @@ export class WayfindersScene extends Phaser.Scene {
       id: interaction.id,
     });
     if (result.status === "surveyed") {
-      this.updatePersistenceOutputs();
-      this.requestLifecycleSave();
+      this.updateRecordsOutputs();
     } else if (result.status === "rejected") {
       this.log(`Fishing-shoal survey was not started: ${result.reason}.`);
     }
@@ -1041,8 +976,7 @@ export class WayfindersScene extends Phaser.Scene {
       id: interaction.id,
     });
     if (result.status === "surveyed") {
-      this.updatePersistenceOutputs();
-      this.requestLifecycleSave();
+      this.updateRecordsOutputs();
     } else {
       this.log(`${interaction.typeLabel} survey was not started: ${result.reason}.`);
     }
@@ -1059,8 +993,7 @@ export class WayfindersScene extends Phaser.Scene {
       islandId: interaction.islandId,
     });
     if (result.status === "surveyed") {
-      this.updatePersistenceOutputs();
-      this.requestLifecycleSave();
+      this.updateRecordsOutputs();
     } else {
       this.log(`Island dossier survey was not started: ${result.reason}.`);
     }
@@ -1178,7 +1111,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.syncHomeAction();
     this.syncSurveyRibbon();
     this.syncRiskLegend();
-    this.requestLifecycleSave();
     const focusTarget = document.documentElement.dataset.developerTools === "open"
       ? document.querySelector<HTMLElement>("#developer-tools-close")
       : this.gameHost;
@@ -1472,23 +1404,8 @@ export class WayfindersScene extends Phaser.Scene {
     if (this.provisionOutput) {
       this.provisionOutput.value = `${this.simulation.ship.provisions} bundles aboard`;
     }
-    this.updatePersistenceOutputs();
+      this.updateRecordsOutputs();
     this.syncDeveloperToolAvailability();
-  }
-
-  private persistenceSummary(): string {
-    const label = this.persistenceStatus === "loaded"
-      ? "saved"
-      : this.persistenceStatus === "new"
-        ? "empty"
-        : this.persistenceStatus;
-    const checkpoint = this.checkpointAvailable === undefined
-      ? "checking"
-      : this.checkpointAvailable
-        ? "ready"
-        : "none";
-    return `Browser autosave: ${label}${this.persistenceEnabled ? " · on" : " · off"} `
-      + `· Manual checkpoint: ${checkpoint}`;
   }
 
   private expeditionRecordsSummary(): string {
@@ -1503,210 +1420,9 @@ export class WayfindersScene extends Phaser.Scene {
       + `Survey cost ${this.simulation.config.provisions.surveyCost} bundles`;
   }
 
-  private updatePersistenceOutputs(): void {
-    if (this.persistenceOutput) this.persistenceOutput.value = this.persistenceSummary();
+  private updateRecordsOutputs(): void {
     if (this.recordsOutput) this.recordsOutput.value = this.expeditionRecordsSummary();
     this.updateDeveloperStateOutputs();
-  }
-
-  private maybeAutosave(time: number): void {
-    if (!this.persistenceEnabled || this.lastSavedSaveRevision === this.simulation.saveRevision) return;
-    if (this.saveInFlight || this.clearInFlight) return;
-    if (time - this.lastSaveAt < AUTOSAVE_INTERVAL_MS) return;
-    void this.saveNow(false);
-  }
-
-  private saveNow(reportSuccess: boolean): Promise<boolean> {
-    if (!this.persistenceEnabled) {
-      if (reportSuccess) this.log("Browser saving is unavailable for this session.");
-      this.updatePersistenceOutputs();
-      return Promise.resolve(false);
-    }
-    if (this.clearInFlight) return Promise.resolve(false);
-    if (this.saveInFlight) {
-      this.saveQueued = true;
-      return this.saveInFlight;
-    }
-
-    const operation = this.performSaveLoop(reportSuccess);
-    this.saveInFlight = operation;
-    void operation.finally(() => {
-      if (this.saveInFlight === operation) this.saveInFlight = undefined;
-    });
-    return operation;
-  }
-
-  private async performSaveLoop(reportSuccess: boolean): Promise<boolean> {
-    try {
-      do {
-        this.saveQueued = false;
-        const saveRevision = this.simulation.saveRevision;
-        const serializationStarted = performance.now();
-        const save = this.simulation.createSave();
-        this.lastSaveSerializationMs = performance.now() - serializationStarted;
-        await this.saveStore.save(save);
-        this.lastSavedSaveRevision = saveRevision;
-        this.lastSaveAt = this.time.now;
-      } while (
-        this.saveQueued
-        && this.lastSavedSaveRevision !== this.simulation.saveRevision
-      );
-      this.persistenceStatus = "loaded";
-      this.updatePersistenceOutputs();
-      if (reportSuccess) this.log("Saved the inherited world to browser storage.");
-      return true;
-    } catch (error) {
-      this.persistenceStatus = "unavailable";
-      this.persistenceEnabled = false;
-      this.updatePersistenceOutputs();
-      this.log(`Browser save failed: ${error instanceof Error ? error.message : "unknown storage error"}`);
-      return false;
-    }
-  }
-
-  private async refreshCheckpointAvailability(): Promise<void> {
-    try {
-      const slot = await loadExactSaveSlot(
-        this.checkpointStore,
-        (save) => new GameSimulation(structuredClone(prototypeConfig)).restoreSave(save),
-      );
-      this.checkpointAvailable = slot.status === "loaded";
-      if (slot.status === "discarded") {
-        if (slot.removed) {
-          this.log(
-            `Removed an incompatible manual checkpoint: ${slot.error instanceof Error ? slot.error.message : "invalid save"}.`,
-          );
-        } else {
-          this.log(
-            `The manual checkpoint is incompatible and could not be removed: `
-            + `${slot.removalError instanceof Error ? slot.removalError.message : "storage error"}.`,
-          );
-        }
-      }
-    } catch {
-      this.checkpointAvailable = false;
-    }
-    this.updatePersistenceOutputs();
-  }
-
-  private async saveCheckpoint(): Promise<boolean> {
-    try {
-      const tile = this.simulation.snapshot().tile;
-      await this.checkpointStore.save(this.simulation.createSave());
-      this.checkpointAvailable = true;
-      this.updatePersistenceOutputs();
-      this.showLifecycleCue(
-        `CHECKPOINT SAVED\nSHIP AT ${tile.x}, ${tile.y}`,
-        "#d9fff5",
-        3_000,
-      );
-      this.log(`Saved a manual checkpoint with the ship at ${tile.x}, ${tile.y}.`);
-      return true;
-    } catch (error) {
-      this.log(`Checkpoint save failed: ${error instanceof Error ? error.message : "storage error"}`);
-      return false;
-    }
-  }
-
-  private async loadCheckpointFromStore(): Promise<boolean> {
-    let slot: Awaited<ReturnType<typeof loadExactSaveSlot>>;
-    try {
-      slot = await loadExactSaveSlot(
-        this.checkpointStore,
-        (save) => new GameSimulation(structuredClone(prototypeConfig)).restoreSave(save),
-      );
-    } catch (error) {
-      this.log(`Checkpoint load failed: ${error instanceof Error ? error.message : "storage error"}`);
-      return false;
-    }
-    if (slot.status === "empty") {
-      this.checkpointAvailable = false;
-      this.updatePersistenceOutputs();
-      this.log("No manual checkpoint exists yet. Use Save checkpoint first.");
-      return false;
-    }
-    if (slot.status === "discarded") {
-      this.checkpointAvailable = false;
-      this.updatePersistenceOutputs();
-      this.log(
-        `The manual checkpoint is incompatible with this build${slot.removed ? " and was removed" : ""}: `
-        + `${slot.removed
-          ? (slot.error instanceof Error ? slot.error.message : "invalid save")
-          : (slot.removalError instanceof Error ? slot.removalError.message : "storage error")}.`,
-      );
-      return false;
-    }
-    if (this.saveInFlight) await this.saveInFlight;
-    try {
-      this.simulation.restoreSave(slot.save);
-    } catch (error) {
-      this.checkpointAvailable = false;
-      this.updatePersistenceOutputs();
-      this.log(`Checkpoint restoration failed after validation: ${error instanceof Error ? error.message : "invalid save"}.`);
-      return false;
-    }
-    try {
-      this.checkpointAvailable = true;
-      this.persistenceEnabled = true;
-      this.persistenceStatus = "loaded";
-      // The loaded checkpoint becomes the new rolling autosave baseline so
-      // a subsequent page reload resumes from the restored state.
-      this.lastSavedSaveRevision = -1;
-      this.mountDeveloperTools();
-      this.afterWorldChanged();
-      const tile = this.simulation.snapshot().tile;
-      this.showLifecycleCue(
-        `CHECKPOINT LOADED\nSHIP RESTORED TO ${tile.x}, ${tile.y}`,
-        "#d9fff5",
-        3_000,
-      );
-      this.log(
-        `Loaded the manual checkpoint, restored the ship to ${tile.x}, ${tile.y}, `
-        + "and rebuilt sight and route calculations.",
-      );
-      await this.saveNow(false);
-      return true;
-    } catch (error) {
-      this.log(`Load failed without changing the running world: ${error instanceof Error ? error.message : "invalid save"}`);
-      return false;
-    }
-  }
-
-  private clearSaveFromStore(): Promise<boolean> {
-    if (this.clearInFlight) return this.clearInFlight;
-    const operation = this.performClearSave();
-    this.clearInFlight = operation;
-    void operation.finally(() => {
-      if (this.clearInFlight === operation) this.clearInFlight = undefined;
-    });
-    return operation;
-  }
-
-  private async performClearSave(): Promise<boolean> {
-    const saveRevisionAtRequest = this.simulation.saveRevision;
-    try {
-      if (this.saveInFlight) await this.saveInFlight;
-      await Promise.all([this.saveStore.clear(), this.checkpointStore.clear()]);
-      this.persistenceEnabled = true;
-      this.persistenceStatus = "new";
-      this.checkpointAvailable = false;
-      this.lastSavedSaveRevision = saveRevisionAtRequest;
-      this.updatePersistenceOutputs();
-      this.log("Cleared the browser autosave and manual checkpoint. The running world was not reset.");
-      return true;
-    } catch (error) {
-      this.log(`Could not clear browser storage: ${error instanceof Error ? error.message : "storage error"}`);
-      return false;
-    }
-  }
-
-  private requestLifecycleSave(): void {
-    if (this.lifecycleSaveScheduled) return;
-    this.lifecycleSaveScheduled = true;
-    queueMicrotask(() => {
-      this.lifecycleSaveScheduled = false;
-      void this.saveNow(false);
-    });
   }
 
   private afterWorldChanged(): void {
@@ -1835,15 +1551,9 @@ export class WayfindersScene extends Phaser.Scene {
         return this.simulation.snapshot();
       },
       setOverlay: (name, visible) => this.simulation.setDebugVisibility(name, visible),
-      saveNow: () => this.saveCheckpoint(),
-      loadSave: () => this.loadCheckpointFromStore(),
-      clearSave: () => this.clearSaveFromStore(),
       returnToDock: () => this.returnToDockForTesting(),
       navigatorWreckTargets: () => this.navigatorWreckTargets(),
-      performance: () => ({
-        ...this.frameTiming.snapshot(),
-        lastSaveSerializationMs: this.lastSaveSerializationMs,
-      }),
+      performance: () => this.frameTiming.snapshot(),
       fishingShoalTargets: () => this.simulation.fishingShoalDefinitions.map(({ id, tile }) => ({
         id,
         x: tile.x,
@@ -1911,7 +1621,6 @@ export class WayfindersScene extends Phaser.Scene {
           `Voyage ${voyageNumber} of 4 returned: ${supportedTileCount} Personal tiles and `
           + `${closedUnknownTileCount} enclosed Unknown tiles became Supported; ${voyagesRemaining} remain.`,
         );
-        this.requestLifecycleSave();
       }),
       this.simulation.events.on("navigatorTenureCompleted", ({
         generation,
@@ -1924,7 +1633,6 @@ export class WayfindersScene extends Phaser.Scene {
           `Generation ${generation}'s navigator completed ${completedVoyages} successful voyages; `
           + `generation ${nextGeneration} took the helm.`,
         );
-        this.requestLifecycleSave();
       }),
       this.simulation.events.on("shipWrecked", ({ generation }) => {
         const holdMs = Math.max(0, this.simulation.config.simulation.wreckPresentationSeconds * 1000 - 480);
@@ -1936,7 +1644,6 @@ export class WayfindersScene extends Phaser.Scene {
         this.log(
           `Generation ${generation}'s navigator was lost at sea; home mourns as time passes.`,
         );
-        this.requestLifecycleSave();
       }),
       this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
         this.resetShipPresentation(false);
@@ -1946,7 +1653,6 @@ export class WayfindersScene extends Phaser.Scene {
           `Generation ${generation} lost ${forgottenTiles} unreturned tiles; `
           + `generation ${nextGeneration} now carries the inherited chart.`,
         );
-        this.requestLifecycleSave();
       }),
       this.simulation.events.on("shipReplenished", ({ reason }) => {
         if (reason !== "dock") return;
@@ -1955,7 +1661,6 @@ export class WayfindersScene extends Phaser.Scene {
       }),
       this.simulation.events.on("wreckDiscovered", ({ wreckId }) => {
         this.log(`Found unidentified navigator wreck ${wreckId}. Survey it to learn whose vessel it was.`);
-        this.requestLifecycleSave();
       }),
       this.simulation.events.on("wreckSurveyed", ({ lostGeneration, presentationMs, provisionsSpent }) => {
         this.showLifecycleCue(
@@ -1964,22 +1669,19 @@ export class WayfindersScene extends Phaser.Scene {
           presentationMs,
         );
         this.log(`Wreck survey spent ${provisionsSpent} bundles and identified generation ${lostGeneration}'s navigator; the report is provisional.`);
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("wreckSurveysReturned", ({ reports }) => {
         this.log(
           `Returned wreck report secured for ${reports.map(({ lostGeneration }) => `generation ${lostGeneration}`).join(", ")}.`,
         );
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("wreckSurveysLost", ({ reports }) => {
         this.log(
           `Unreturned wreck identification lost at sea for ${reports.map(({ lostGeneration }) => `generation ${lostGeneration}`).join(", ")}; the wreck can be surveyed again.`,
         );
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("islandSighted", ({ name }) => {
         this.showLifecycleCue(
@@ -1988,8 +1690,7 @@ export class WayfindersScene extends Phaser.Scene {
           5_000,
         );
         this.log(`Provisional island lead: ${name}. Its dossier remains hidden until surveyed.`);
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("islandDossierSurveyed", ({
         name,
@@ -2003,8 +1704,7 @@ export class WayfindersScene extends Phaser.Scene {
           presentationMs,
         );
         this.log(`Surveyed ${name} for ${provisionsSpent} bundles: ${dossier.detail}`);
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("surveySiteSighted", ({ typeLabel, clue }) => {
         this.showLifecycleCue(
@@ -2013,8 +1713,7 @@ export class WayfindersScene extends Phaser.Scene {
           5_000,
         );
         this.log(`Provisional ${typeLabel.toLowerCase()} lead: ${clue.label}.`);
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("surveySiteSurveyed", ({
         id,
@@ -2030,8 +1729,7 @@ export class WayfindersScene extends Phaser.Scene {
           presentationMs,
         );
         this.log(`Surveyed ${typeLabel.toLowerCase()} for ${provisionsSpent} bundles: ${result.detail}`);
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("surveySitesReturned", ({ leads, reports }) => {
         const labelFor = (id: string): string => this.simulation.surveySiteDefinitions
@@ -2042,8 +1740,7 @@ export class WayfindersScene extends Phaser.Scene {
             reports.length > 0 ? `reports for ${reports.map(({ id }) => labelFor(id)).join(", ")}` : "",
           ].filter(Boolean).join("; ")}.`,
         );
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("surveySitesLost", ({ records }) => {
         const sighted = records.filter(({ state }) => state === "sighted").length;
@@ -2052,8 +1749,7 @@ export class WayfindersScene extends Phaser.Scene {
           `Unreturned survey-site work lost with the ship: ${sighted} lead${sighted === 1 ? "" : "s"}, `
           + `${surveyed} report${surveyed === 1 ? "" : "s"}. Earlier returned leads remain inherited.`,
         );
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("fishingShoalSighted", ({ clue }) => {
         this.showLifecycleCue(
@@ -2062,8 +1758,7 @@ export class WayfindersScene extends Phaser.Scene {
           5_000,
         );
         this.log(`Provisional fishing-shoal sighting: ${clue.label}.`);
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("fishingShoalSurveyed", ({ quality, presentationMs, provisionsSpent }) => {
         this.showLifecycleCue(
@@ -2072,8 +1767,7 @@ export class WayfindersScene extends Phaser.Scene {
           presentationMs,
         );
         this.log(`Fishing ground surveyed: ${quality} quality for ${provisionsSpent} bundles.`);
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("fishingShoalsReturned", ({ leads, surveys }) => {
         const returnedQualities: string[] = [];
@@ -2088,8 +1782,7 @@ export class WayfindersScene extends Phaser.Scene {
           ? `${returnedQualities.join(", ")} returned survey`
           : "";
         this.log(`Fishing report secured: ${[leadReport, surveyReport].filter(Boolean).join("; ")}.`);
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("fishingShoalsLost", ({ records }) => {
         const surveys = records.filter(({ state }) => state === "surveyed").length;
@@ -2098,8 +1791,7 @@ export class WayfindersScene extends Phaser.Scene {
           `Unreturned fishing work lost with the ship: ${sightings} sighting${sightings === 1 ? "" : "s"}, `
           + `${surveys} survey${surveys === 1 ? "" : "s"}. Earlier returned leads remain inherited.`,
         );
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("islandDossiersReturned", ({ leads, dossiers }) => {
         const nameFor = (islandId: number): string => this.simulation.islandDossierDefinitions
@@ -2112,8 +1804,7 @@ export class WayfindersScene extends Phaser.Scene {
             dossierNames.length > 0 ? `dossiers for ${dossierNames.join(", ")}` : "",
           ].filter(Boolean).join("; ")}.`,
         );
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("islandDossiersLost", ({ records }) => {
         const sighted = records.filter(({ state }) => state === "sighted").length;
@@ -2122,11 +1813,9 @@ export class WayfindersScene extends Phaser.Scene {
           `Unreturned island work lost with the ship: ${sighted} lead${sighted === 1 ? "" : "s"}, `
           + `${surveyed} dossier${surveyed === 1 ? "" : "s"}. Earlier returned leads remain inherited.`,
         );
-        this.updatePersistenceOutputs();
-        this.requestLifecycleSave();
+      this.updateRecordsOutputs();
       }),
       this.simulation.events.on("worldRegenerated", () => {
-        this.requestLifecycleSave();
       }),
       this.simulation.events.on("shipTeleported", () => {
         this.resetShipPresentation(true);
@@ -2222,7 +1911,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.gameHost = undefined;
     this.gameStatus = undefined;
     this.provisionOutput = undefined;
-    this.persistenceOutput = undefined;
     this.recordsOutput = undefined;
     this.developerStateOutputs.clear();
     this.surveyRibbon?.remove();
@@ -2246,10 +1934,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
-    window.removeEventListener("pagehide", this.onPageHide);
-    document.removeEventListener("visibilitychange", this.onVisibilityChange);
-    this.saveStore.close();
-    this.checkpointStore.close();
     if (this.activeLifecycleCue) {
       this.tweens.killTweensOf(this.activeLifecycleCue);
       this.activeLifecycleCue.destroy();
@@ -2259,14 +1943,4 @@ export class WayfindersScene extends Phaser.Scene {
     this.browserDebugApi = undefined;
   }
 
-  private readonly onPageHide = (): void => {
-    if (this.lastSavedSaveRevision !== this.simulation.saveRevision) void this.saveNow(false);
-  };
-
-  private readonly onVisibilityChange = (): void => {
-    if (
-      document.visibilityState === "hidden"
-      && this.lastSavedSaveRevision !== this.simulation.saveRevision
-    ) void this.saveNow(false);
-  };
 }

@@ -4,7 +4,6 @@ import type { SurveyBudgetReadModel } from "./SurveyContracts";
 
 export const ISLAND_DOSSIER_CONTRACT_VERSION = 1 as const;
 export const ISLAND_DOSSIER_CONTENT_VERSION = 1 as const;
-export const ISLAND_DOSSIER_PERSISTENCE_OWNER = "island-dossiers" as const;
 export const ISLAND_DOSSIER_INTERACTION_RANGE_TILES = 1.5 as const;
 export const ISLAND_DOSSIER_SURVEY_PRESENTATION_MS = 1_800 as const;
 
@@ -27,7 +26,7 @@ export interface IslandDossierResultV1 {
   readonly developerArtId: string;
 }
 
-/** Seed-derived authority. Definitions and their geometry are never serialized. */
+/** Seed-derived authority. */
 export interface IslandDossierDefinitionV1 {
   readonly contentVersion: typeof ISLAND_DOSSIER_CONTENT_VERSION;
   /** The stable generated island ID is also the single-dossier identity. */

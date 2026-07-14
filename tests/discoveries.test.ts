@@ -261,53 +261,6 @@ describe("GameSimulation island-dossier integration", () => {
     expect(restoredLead).not.toHaveProperty("dossier");
   });
 
-  it("round-trips provisional and returned dossiers without rerolling or duplicate credit", () => {
-    const original = new GameSimulation();
-    const [target] = remoteDossiers(original);
-    expect(original.teleport(target.canonicalApproach)).toBe(true);
-    expect(survey(original, target).status).toBe("surveyed");
-
-    const activeSave = original.createSave();
-    const activeRestored = new GameSimulation();
-    activeRestored.restoreSave(activeSave);
-    expect(activeRestored.islandDossierDefinitions).toEqual(original.islandDossierDefinitions);
-    expect(activeRestored.provisionalIslandDossiers).toEqual(original.provisionalIslandDossiers);
-    expect(activeRestored.returnedIslandDossiers).toEqual([]);
-    expect(activeRestored.revealedIslandIds).toContain(target.islandId);
-    const provisionsBeforeRepeat = activeRestored.ship.provisions;
-    expect(survey(activeRestored, target)).toMatchObject({
-      status: "rejected",
-      reason: "already-surveyed",
-    });
-    expect(activeRestored.ship.provisions).toBe(provisionsBeforeRepeat);
-
-    expect(activeRestored.teleport(activeRestored.generated.landmarks.homeReturnTile)).toBe(true);
-    expect(activeRestored.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual([
-      target.islandId,
-    ]);
-    const returnedSave = activeRestored.createSave();
-    const returnedRestored = new GameSimulation();
-    returnedRestored.restoreSave(returnedSave);
-    expect(returnedRestored.returnedIslandDossiers).toEqual(activeRestored.returnedIslandDossiers);
-    expect(returnedRestored.currentNavigator.successfulVoyages).toHaveLength(1);
-    expect(returnedRestored.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual([
-      target.islandId,
-    ]);
-    expect(returnedRestored.createSave().islandDossiers).toEqual(returnedSave.islandDossiers);
-
-    expect(returnedRestored.teleport(target.canonicalApproach)).toBe(true);
-    expect(returnedRestored.islandDossierInteraction).toBeUndefined();
-    const returnedBeforeRepeat = structuredClone(returnedRestored.returnedIslandDossiers);
-    const provisionsBeforeReturnedRepeat = returnedRestored.ship.provisions;
-    expect(survey(returnedRestored, target)).toMatchObject({
-      status: "rejected",
-      reason: "already-surveyed",
-    });
-    expect(returnedRestored.ship.provisions).toBe(provisionsBeforeReturnedRepeat);
-    expect(returnedRestored.returnedIslandDossiers).toEqual(returnedBeforeRepeat);
-    expect(returnedRestored.currentNavigator.successfulVoyages).toHaveLength(1);
-  });
-
   it("reveals the island footprint without mutating knowledge state, counts, or travel costs", () => {
     const simulation = new GameSimulation();
     const [target] = remoteDossiers(simulation);

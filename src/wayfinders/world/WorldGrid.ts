@@ -206,7 +206,7 @@ export class WorldGrid {
   }
 
   /**
-   * Replaces persisted knowledge in one bulk operation. The input is validated
+   * Replaces knowledge in one bulk operation. The input is validated
    * before any live state changes, indexes/counts are rebuilt, and each affected
    * chunk is invalidated at most once.
    */

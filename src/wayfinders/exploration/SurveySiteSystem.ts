@@ -247,43 +247,6 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
     return Object.freeze(lost);
   }
 
-  restore(
-    provisionalRecords: readonly SurveySiteProvisionalRecord[],
-    returnedRecords: readonly SurveySiteReturnedRecord[] = [],
-  ): void {
-    const nextProvisionalById = new Map<SurveySiteId, SurveySiteProvisionalRecord>();
-    const nextReturnedById = new Map<SurveySiteId, SurveySiteReturnedRecord>();
-
-    for (const saved of returnedRecords) {
-      this.assertSavedId(saved.id);
-      assertProvenance(saved.expeditionId, saved.generation, `Returned survey site ${saved.id}`);
-      if (saved.state !== "lead" && saved.state !== "report") {
-        throw new RangeError(`Survey site ${saved.id} has an invalid returned state`);
-      }
-      if (nextReturnedById.has(saved.id)) throw new RangeError(`Returned survey site ${saved.id} is duplicated`);
-      nextReturnedById.set(saved.id, { ...saved });
-    }
-
-    for (const saved of provisionalRecords) {
-      this.assertSavedId(saved.id);
-      assertProvenance(saved.expeditionId, saved.generation, `Provisional survey site ${saved.id}`);
-      if (saved.state !== "sighted" && saved.state !== "surveyed") {
-        throw new RangeError(`Survey site ${saved.id} has an invalid provisional state`);
-      }
-      if (nextProvisionalById.has(saved.id)) throw new RangeError(`Provisional survey site ${saved.id} is duplicated`);
-      const returned = nextReturnedById.get(saved.id);
-      if (returned && !(returned.state === "lead" && saved.state === "surveyed")) {
-        throw new RangeError(`Survey site ${saved.id} has an invalid provisional/returned overlap`);
-      }
-      nextProvisionalById.set(saved.id, { ...saved });
-    }
-    this.provisionalById.clear();
-    this.returnedById.clear();
-    for (const [id, record] of nextProvisionalById) this.provisionalById.set(id, record);
-    for (const [id, record] of nextReturnedById) this.returnedById.set(id, record);
-    this.markRecordsChanged();
-  }
-
   readModels(): readonly Readonly<SurveySiteReadModel<TType>>[] {
     const models: SurveySiteReadModel<TType>[] = [];
     for (const definition of this.definitions) {
@@ -364,12 +327,6 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
       ) > SURVEY_SITE_INTERACTION_RANGE_TILES
     ) throw new RangeError(`Survey site ${definition.id} service anchor is out of range`);
     this.definitionById.set(definition.id, definition);
-  }
-
-  private assertSavedId(id: SurveySiteId): void {
-    if (!isCurrentSurveySiteId(id) || !this.definitionById.has(id)) {
-      throw new RangeError(`Survey site ${id} does not match the regenerated catalog`);
-    }
   }
 
   private reject(id: SurveySiteId | undefined, reason: SurveySiteRejectedResult["reason"]): SurveySiteRejectedResult {

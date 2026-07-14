@@ -307,42 +307,10 @@ describe("shared survey-site lifecycle", () => {
     expect(system.returned).toEqual([expect.objectContaining({ id: definition.id, state: "report" })]);
   });
 
-  it("round-trips records against regenerated definitions and rejects invalid overlaps", () => {
-    const { generated, definitions } = makeCatalog();
-    const lead = definitions[0];
-    const report = definitions[1];
-    const restored = new SurveySiteSystem(generated.grid, definitions);
-    restored.restore(
-      [{ id: lead.id, state: "surveyed", expeditionId: 12, generation: 5 }],
-      [
-        { id: lead.id, state: "lead", expeditionId: 8, generation: 3 },
-        { id: report.id, state: "report", expeditionId: 9, generation: 4 },
-      ],
-    );
-    expect(restored.provisional).toEqual([expect.objectContaining({ id: lead.id, state: "surveyed" })]);
-    expect(restored.returned).toHaveLength(2);
-    expect(restored.readModels().find(({ id }) => id === lead.id)).toHaveProperty("result", lead.result);
-    expect(restored.readModels().find(({ id }) => id === report.id)).toHaveProperty("result", report.result);
-    const validProvisional = structuredClone(restored.provisional);
-    const validReturned = structuredClone(restored.returned);
-
-    expect(() => restored.restore(
-      [{ id: report.id, state: "surveyed", expeditionId: 12, generation: 5 }],
-      [{ id: report.id, state: "report", expeditionId: 9, generation: 4 }],
-    )).toThrow(/invalid provisional\/returned overlap/);
-    expect(restored.provisional).toEqual(validProvisional);
-    expect(restored.returned).toEqual(validReturned);
-    expect(() => restored.restore(
-      [{ id: createSurveySiteId("historic-wreck", 99), state: "sighted", expeditionId: 12, generation: 5 }],
-      [],
-    )).toThrow(/does not match the regenerated catalog/);
-    expect(restored.provisional).toEqual(validProvisional);
-    expect(restored.returned).toEqual(validReturned);
-  });
 });
 
 describe("descriptor extensibility", () => {
-  it("uses the save-compatible binary ID order for future type names", () => {
+  it("uses deterministic binary ID order for future type names", () => {
     const generated = new WorldGenerator().generate(24_680);
     const base = INITIAL_SURVEY_SITE_DESCRIPTORS[0];
     const descriptor = (type: "a" | "a0", namespace: number): Readonly<SurveySiteTypeDescriptor<string>> => ({

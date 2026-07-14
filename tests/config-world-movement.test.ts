@@ -227,7 +227,7 @@ describe("world foundations", () => {
     expect(right.knowledgeRevision).toBe(rightKnowledgeRevision + 1);
   });
 
-  it("rejects knowledge and expedition-stamp combinations that cannot be persisted", () => {
+  it("rejects inconsistent knowledge and expedition-stamp combinations", () => {
     const world = new WorldGrid(2, 1, 2);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
 

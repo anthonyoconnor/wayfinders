@@ -89,7 +89,7 @@ export type NavigatorRecordV6 =
   | CompletedNavigatorRecordV6
   | LostNavigatorRecordV6;
 
-/** Persisted between the visible end of one navigator and creation of the next. */
+/** Held between the visible end of one navigator and creation of the next. */
 export interface NavigatorSuccessionTransitionV2 {
   key: NavigatorSuccessionKey;
   reason: NavigatorSuccessionReason;

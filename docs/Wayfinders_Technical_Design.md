@@ -4,6 +4,12 @@ This document describes the accepted implementation baseline. The roadmap
 contains proposed future sequencing; this document contains current runtime
 behavior and constraints.
 
+Saving is intentionally absent. Every launch or refresh creates a fresh
+session, and the runtime has no save schema, browser store, autosave, checkpoint
+or restoration path. Saving may be added only by an explicitly authorized
+milestone that names it as in scope; a future design starts from the gameplay
+model that exists then rather than reviving the removed implementation.
+
 ## 1. Design goals
 
 Wayfinders is a browser exploration prototype about leaving safe water,
@@ -14,12 +20,13 @@ The implementation follows these rules:
 
 1. Gameplay state is authoritative outside Phaser presentation objects.
 2. World generation, navigation and knowledge behavior are deterministic and
-   testable without a browser; persistence is schema-versioned and validated.
+   testable without a browser.
 3. Current sight may reveal visuals without discounting the cost of Unknown
    travel.
 4. Only exact-dock return commits an expedition.
 5. Rendering never becomes a second gameplay-data source.
-6. Saves contain authoritative mutable state, not derived search/render data.
+6. Stable logical identity and authoritative state boundaries preserve the
+   option to design saving later without imposing current save obligations.
 7. Normal sailing work remains local, sparse or cached.
 
 ## 2. Runtime architecture
@@ -32,7 +39,6 @@ core/         simulation owner, lifecycle events and fixed-step clock
 world/        chunked grid, tile data and deterministic generation
 navigation/   continuous ship movement and grid traversal
 exploration/  sight, knowledge, provisions, risk paths and island dossiers
-persistence/  save schema validation and IndexedDB storage
 rendering/    Phaser world, ship, fog, overlays, markers and developer UI
 ```
 
@@ -47,14 +53,13 @@ The Phaser scene adapter:
 - advances the fixed-step clock;
 - synchronizes renderers from simulation state;
 - owns camera behavior and screen-space UI;
-- connects browser persistence and developer controls;
+- connects developer controls;
 - never writes gameplay arrays directly.
 
 The obsolete source namespace and scene identity have been removed. All new
 roadmap modules must use the Wayfinders namespace.
 
-A typed event bus communicates lifecycle changes to presentation and
-persistence adapters.
+A typed event bus communicates lifecycle changes to presentation adapters.
 
 ## 3. Configuration and timing
 
@@ -442,80 +447,23 @@ returned lead—to `surveyed`; exact-dock return commits `lead` or `report`; wre
 only the active expedition's provisional records. Stable IDs and expedition /
 generation provenance make observation, survey, return and reload idempotent.
 
-## 12. Persistence
+## 12. Saving policy
 
-### Exact-version save boundary
+Saving is not an active runtime capability. The application always constructs a
+new `GameSimulation` and browser refresh discards the current session. There
+are no persistence modules, serialized game schemas, browser save records,
+manual checkpoints, game-level restoration paths or save-specific acceptance tests.
 
-The current exact-version save schema is V12, the navigator-lineage contract is
-V6 with voyage records V3, island-dossier and survey-site content are V1, and
-the generation-handover contract is V1. It stores:
+Current features must not introduce save fragments, storage adapters,
+compatibility work or reload guarantees. Keep gameplay authority outside
+presentation, retain stable logical identities and rebuild derived data so a
+future explicitly authorized saving milestone can design a new version-one
+format without inheriting obsolete contracts.
 
-- save, world-generator, content and serialized-format versions;
-- seed and generation-affecting configuration;
-- ship position, heading, provisions and accumulator;
-- expedition ID, active state and top-level generation;
-- optional pending wreck hold and optional unacknowledged generation handover;
-- navigator lineage, completed-voyage counts, committed per-voyage achievement
-  records and pending succession;
-- all non-Unknown knowledge as canonical run-length encoded state/stamp runs;
-- runtime wreck identity, discovered state and provisional/returned
-  identity/fate reports;
-- minimal provisional and returned island-dossier records with island,
-  expedition and generation provenance;
-- minimal provisional and returned survey-site records with stable typed ID,
-  state, expedition and generation provenance;
-- provisional and returned fishing-shoal records;
-- an empty reserved terrain-patch list.
-
-The current schema requires the current island-dossier/survey-site content,
-navigator-lineage and runtime-wreck contracts. Lineage V6 contains
-`completedVoyages`, exact-dock-committed voyage result records with distinct
-island lead/dossier and survey-site lead/report ID arrays, `active` /
-`completed` / `lost` states and
-`tenure` / `wreck` succession reasons. Runtime-wreck records distinguish an
-unidentified sighting, an expedition-owned provisional survey and an exact-
-dock-committed report associated with one lost navigator. Earlier shapes are
-deleted under the exact-version policy rather than migrated.
-
-The save does not contain base terrain, generated island descriptors,
-island-dossier definitions/results/approach sets, visibility or dossier-derived
-fog masks, survey-site definitions/results/service anchors, range masks, return
-paths, renderer state or caches.
-
-Restore requires exact equality for every schema, generator, content and
-serialized-format version, then validates structure before mutating the running
-simulation. It regenerates the deterministic base world, applies authoritative
-mutable state, rebuilds knowledge indices, recalculates visibility and paths,
-and restores the exact ship position. There is no cross-version migration path.
-
-### Browser storage
-
-IndexedDB contains two atomic records:
-
-- `autosave`: rolling reload state;
-- `checkpoint`: stable manual state written only by **Save checkpoint**.
-
-Autosave uses a dedicated authoritative `saveRevision`, is normally spaced to
-three seconds during continuous play, requested immediately at lifecycle
-boundaries, and flushed best-effort when the page hides. Knowledge runs are
-cached by world identity and knowledge version, so ship-only saves do not scan
-the world. Startup
-hydrates autosave before Phaser starts, avoiding a default-world flash or
-accidental overwrite.
-
-**Load checkpoint** waits for an in-flight autosave, restores the checkpoint,
-snaps the smoothed camera to the restored ship and writes that state as the new
-autosave baseline. **Clear stored saves** removes both records without mutating
-the currently running simulation.
-
-Any readable autosave or checkpoint that is malformed or has an older/newer
-schema, generator, content or serialized-format version is deleted and cannot
-load. Startup recovers to a fresh world; a rejected checkpoint becomes
-unavailable. If browser storage cannot be read or a rejected record cannot be
-deleted, saving is disabled but unsaved play remains available.
-
-Explicit seed regeneration is not load; it intentionally resets runtime
-inheritance and writes a new autosave after state changes.
+Reintroduction requires a named milestone whose authorized scope explicitly
+includes saving. Technical readiness, lost playtest progress or an adjacent
+feature may motivate proposing that milestone, but do not authorize
+implementation.
 
 ## 13. Rendering
 
@@ -568,9 +516,9 @@ The contextual prompt has no authoritative Leave command or separate survey
 allocation: it stays non-modal, sailing out of range defers the opportunity,
 and surveying spends a displayed provision cost.
 
-The camera follows the interpolated ship smoothly during play. World regeneration and
-checkpoint restore are discontinuities, so the camera snaps to the
-authoritative ship before smoothing resumes.
+The camera follows the interpolated ship smoothly during play. World
+regeneration is a discontinuity, so the camera snaps to the authoritative ship
+before smoothing resumes.
 
 Current developer art communicates terrain and mechanics only and remains
 intentional throughout gameplay validation. Future production assets must
@@ -627,7 +575,6 @@ Developer UI capabilities:
 - move to the service anchor for each initial survey-site type;
 - teleport by water-tile coordinate or click;
 - add/remove bundles and force a wreck;
-- save/load a manual checkpoint and clear browser saves;
 - toggle navigation grid, current sight, forward reach and return viability;
 - tune supported live configuration values.
 
@@ -637,10 +584,9 @@ remain native to that field until focus returns to the canvas or another
 non-editing control. Lifecycle holds still suppress navigation.
 
 The browser automation interface exposes snapshot, teleport, provision,
-wreck, regeneration, overlay, checkpoint and performance operations. Canvas
-data attributes provide stable diagnostic values for browser checks, including
-frame percentiles, long frames, deliberately dropped simulation time and save
-serialization duration.
+wreck, regeneration, overlay and performance operations. Canvas data attributes
+provide stable diagnostic values for browser checks, including frame
+percentiles, long frames and deliberately dropped simulation time.
 
 ## 15. Performance constraints
 
@@ -673,11 +619,10 @@ The automated suite covers configuration, deterministic generation, movement,
 visibility, knowledge asymmetry, provisions, forward/return calculations,
 overlay invalidation, island navigation, expedition success/failure,
 four-journey tenure and succession, Great Hall chronicle derivation and
-exact-home-dock access, Unknown pocket cleanup, island dossiers and exact-island
-fog reveal, extensible survey-site generation/lifecycle, save validation,
-runtime-wreck survey commit/rollback and idempotence, persistence round trips,
-save dirtiness, cached encoding, frame telemetry and ship interpolation.
-At the GP-3.3 boundary, typecheck, 262 tests across 28 files and the production
+ exact-home-dock access, Unknown pocket cleanup, island dossiers and exact-island
+ fog reveal, extensible survey-site generation/lifecycle, runtime-wreck survey
+ commit/rollback and idempotence, frame telemetry and ship interpolation.
+At the current baseline, typecheck, 223 tests across 26 files and the production
 build pass. Browser verification also covers the three typed service-anchor
 developer moves, the Survey-only site prompt, placeholder presentation and
 unsuppressed sailing input while developer tools remain open.
@@ -685,10 +630,9 @@ unsuppressed sailing input while developer tools remain open.
 Browser verification targets WebGL startup, controls, island/fishing cues,
 combined return presentation, fourth-return automatic succession, fatal-wreck mourning
 and succession, focused Great Hall handover entries, exact-home-dock browsing,
-unidentified wreck survey and exact-dock reporting, rolling reload, stable
-manual checkpoints, exact ship/camera restoration, pending handover and wreck
-reload, save clearing, live sailing and speed tuning with the developer drawer
-open, and console health.
+unidentified wreck survey and exact-dock reporting, pending handover and wreck
+flows, live sailing and speed tuning with the developer drawer open, and console
+health.
 
 Desktop keyboard/pointer play is the validated target. Responsive resize is
 implemented. Touch-first sailing is not implemented and requires a separately
@@ -707,7 +651,8 @@ provision-funded survey transaction. It now also includes GP-3.2's returned
 island leads/dossiers and exact-island fog reveal. GP-3.3 adds exactly one
 historic wreck, coastal ruin and tidal cave through a descriptor-extensible
 lifecycle, with lineage V6 voyage records V3 and Great Hall V3 credit. The
-forward roadmap may add idols, the full save/load experience, production assets and
+forward roadmap may add idols, an explicitly authorized saving milestone,
+production assets and
 environmental polish. It no longer places tribe economics, loadouts,
 generic cargo or automatic trade in GP-3. Those remaining roadmap items are
 proposed extensions, not implemented baseline behavior.
@@ -727,25 +672,21 @@ later site types do not require new interaction semantics. These sites are
 independently seed-derived and directly sighted; island dossiers do not spawn
 or unlock nested site leads.
 
-Presentation-only extensions may preserve the current save shape when they add
-no authoritative state. Gameplay extensions must define deterministic identity,
-event ordering, persistence ownership, version invalidation and fresh-start
-recovery behavior before integration.
+Gameplay extensions must define deterministic identity and event ordering while
+keeping authoritative state separate from derived presentation. They have no
+save-shape, persistence-ownership or reload-compatibility obligation.
 
 No roadmap work may change these foundation contracts without an explicit
-design decision and, where authoritative state is affected, a schema/content/
-format version bump that invalidates prior records:
+design decision:
 
 - deterministic world and stable island/dossier IDs;
 - terrain-authoritative movement and sight;
 - outward/current-sight knowledge asymmetry;
 - exact-dock commitment;
 - provision and return-cost semantics;
-- four-second wreck lifecycle;
-- authoritative save boundary;
-- rolling autosave and stable checkpoint behavior.
+- four-second wreck lifecycle.
 
 Central integration files are serialized merge gates. New pure systems,
 renderers and tests may be developed in parallel against frozen contracts, but
-one integration owner must wire simulation lifecycle, events, exact-version
-validation, scene input and autosave behavior at each acceptance gate.
+one integration owner must wire simulation lifecycle, events and scene input at
+each acceptance gate.

@@ -88,26 +88,24 @@ describe("lost navigator wreck surveys", () => {
     })]);
   });
 
-  it("commits the identity report only on exact-dock return and restores it from a save", () => {
+  it("commits the identity report only on exact-dock return", () => {
     const original = new GameSimulation();
     const wreckTile = loseFirstNavigator(original);
     expect(original.teleport(wreckTile)).toBe(true);
     expect(surveyCurrentWreck(original).status).toBe("surveyed");
 
-    const restored = new GameSimulation(original.config);
-    restored.restoreSave(original.createSave());
     const returned: unknown[] = [];
-    restored.events.on("wreckSurveysReturned", (event) => returned.push(event));
-    expect(restored.wrecks[0].survey.state).toBe("provisional");
+    original.events.on("wreckSurveysReturned", (event) => returned.push(event));
+    expect(original.wrecks[0].survey.state).toBe("provisional");
 
-    expect(restored.teleport(restored.generated.landmarks.homeReturnTile)).toBe(true);
-    expect(restored.wrecks[0].survey).toEqual({
+    expect(original.teleport(original.generated.landmarks.homeReturnTile)).toBe(true);
+    expect(original.wrecks[0].survey).toEqual({
       state: "returned",
       expeditionId: 2,
       generation: 2,
     });
-    expect(restored.returnedWreckSurveys).toHaveLength(1);
-    expect(restored.currentNavigator.successfulVoyages[0].wreckIds).toEqual([1]);
+    expect(original.returnedWreckSurveys).toHaveLength(1);
+    expect(original.currentNavigator.successfulVoyages[0].wreckIds).toEqual([1]);
     expect(returned).toEqual([expect.objectContaining({
       expeditionId: 2,
       generation: 2,
@@ -118,12 +116,10 @@ describe("lost navigator wreck surveys", () => {
       })],
     })]);
 
-    const reloaded = new GameSimulation(original.config);
-    reloaded.restoreSave(restored.createSave());
-    expect(reloaded.wrecks[0].survey.state).toBe("returned");
-    expect(reloaded.wreckSurveyInteraction).toBeUndefined();
-    expect(reloaded.teleport(wreckTile)).toBe(true);
-    expect(reloaded.interactWithWreck({
+    expect(original.wrecks[0].survey.state).toBe("returned");
+    expect(original.wreckSurveyInteraction).toBeUndefined();
+    expect(original.teleport(wreckTile)).toBe(true);
+    expect(original.interactWithWreck({
       contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
       type: "survey",
       wreckId: 1,
@@ -229,7 +225,6 @@ describe("lost navigator wreck surveys", () => {
     expect(simulation.expeditionActive).toBe(true);
     expect(simulation.wrecks[0].survey).toMatchObject({ state: "provisional", generation: 2 });
     expect(simulation.ship.provisions).toBe(10);
-    expect(() => new GameSimulation(simulation.config).restoreSave(simulation.createSave())).not.toThrow();
   });
 
   it("rejects a wreck survey without enough provisions and changes nothing", () => {
@@ -237,7 +232,6 @@ describe("lost navigator wreck surveys", () => {
     const wreckTile = loseFirstNavigator(simulation);
     expect(simulation.teleport(wreckTile)).toBe(true);
     simulation.setProvisions(1);
-    const saveRevisionBefore = simulation.saveRevision;
     expect(simulation.wreckSurveyInteraction).toMatchObject({
       surveyCost: 2,
       availableProvisionUnits: 1,
@@ -251,7 +245,6 @@ describe("lost navigator wreck surveys", () => {
     });
     expect(simulation.wrecks[0].survey).toEqual({ state: "unexamined" });
     expect(simulation.ship.provisions).toBe(1);
-    expect(simulation.saveRevision).toBe(saveRevisionBefore);
   });
 
   it("rejects stale contracts and unknown commands without changing the wreck", () => {

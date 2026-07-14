@@ -5,8 +5,6 @@ import {
   ISLAND_DOSSIER_CONTRACT_VERSION,
   ISLAND_DOSSIER_INTERACTION_RANGE_TILES,
   ISLAND_DOSSIER_SURVEY_PRESENTATION_MS,
-  isIslandDossierProvisionalStateV1,
-  isIslandDossierReturnedStateV1,
   type IslandDossierCommitResultV1,
   type IslandDossierDefinitionV1,
   type IslandDossierInteractionCommandV1,
@@ -24,10 +22,6 @@ function positiveSafeInteger(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new RangeError(`${label} must be a positive safe integer`);
   }
-}
-
-function sameNumericValues(left: readonly number[], right: readonly number[]): boolean {
-  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 /** Owns the mutable lead/dossier lifecycle while catalog definitions stay derived. */
@@ -253,53 +247,6 @@ export class IslandDossierSystem {
     return Object.freeze(lost);
   }
 
-  restore(
-    provisionalRecords: readonly Readonly<IslandDossierProvisionalRecordV1>[],
-    returnedRecords: readonly Readonly<IslandDossierReturnedRecordV1>[] = [],
-  ): void {
-    const nextProvisional = new Map<number, IslandDossierProvisionalRecordV1>();
-    const nextReturned = new Map<number, IslandDossierReturnedRecordV1>();
-
-    for (const saved of returnedRecords) {
-      this.validateRecordIdentityAndProvenance(saved);
-      if (!isIslandDossierReturnedStateV1(saved.state)) {
-        throw new RangeError(`Island dossier ${saved.islandId} has an invalid returned state`);
-      }
-      if (nextReturned.has(saved.islandId)) {
-        throw new RangeError(`Returned island dossier ${saved.islandId} is duplicated`);
-      }
-      nextReturned.set(saved.islandId, { ...saved });
-    }
-
-    for (const saved of provisionalRecords) {
-      this.validateRecordIdentityAndProvenance(saved);
-      if (!isIslandDossierProvisionalStateV1(saved.state)) {
-        throw new RangeError(`Island dossier ${saved.islandId} has an invalid provisional state`);
-      }
-      if (nextProvisional.has(saved.islandId)) {
-        throw new RangeError(`Provisional island dossier ${saved.islandId} is duplicated`);
-      }
-      const returned = nextReturned.get(saved.islandId);
-      if (returned && !(returned.state === "lead" && saved.state === "surveyed")) {
-        throw new RangeError(
-          `Island dossier ${saved.islandId} may overlap only as a returned lead with a provisional survey`,
-        );
-      }
-      nextProvisional.set(saved.islandId, { ...saved });
-    }
-
-    const previousRevealed = this.collectRevealedIslandIds(
-      this.provisionalByIslandId,
-      this.returnedByIslandId,
-    );
-    const nextRevealed = this.collectRevealedIslandIds(nextProvisional, nextReturned);
-    this.provisionalByIslandId.clear();
-    this.returnedByIslandId.clear();
-    for (const [islandId, record] of nextProvisional) this.provisionalByIslandId.set(islandId, record);
-    for (const [islandId, record] of nextReturned) this.returnedByIslandId.set(islandId, record);
-    this.markRecordsChanged(!sameNumericValues(previousRevealed, nextRevealed));
-  }
-
   readModels(): readonly Readonly<IslandDossierReadModelV1>[] {
     const models: Readonly<IslandDossierReadModelV1>[] = [];
     for (const definition of this.definitions) {
@@ -399,16 +346,6 @@ export class IslandDossierSystem {
 
     this.definitionByIslandId.set(definition.islandId, definition);
     this.approachIndicesByIslandId.set(definition.islandId, approaches);
-  }
-
-  private validateRecordIdentityAndProvenance(
-    record: Readonly<{ islandId: number; expeditionId: number; generation: number }>,
-  ): void {
-    if (!this.definitionByIslandId.has(record.islandId)) {
-      throw new RangeError(`Island dossier ${record.islandId} does not match the regenerated catalog`);
-    }
-    positiveSafeInteger(record.expeditionId, `Island dossier ${record.islandId} expedition ID`);
-    positiveSafeInteger(record.generation, `Island dossier ${record.islandId} generation`);
   }
 
   private collectRevealedIslandIds(

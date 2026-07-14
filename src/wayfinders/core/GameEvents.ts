@@ -159,7 +159,6 @@ export interface GameEventMap {
     generation: number;
     records: readonly Readonly<FishingShoalProvisionalRecordV1>[];
   };
-  gameLoaded: { schemaVersion: number; seed: number };
   expeditionFailed: {
     expeditionId: number;
     generation: number;

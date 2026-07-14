@@ -2,6 +2,11 @@
 
 Status: deferred design reference, not implemented.
 
+Saving is not part of the active baseline. Any save-related language in this
+deferred reference is a historical or future compatibility consideration, not
+authorization to add persistence. Saving may return only through an explicitly
+authorized milestone that names it as in scope.
+
 This document records only the constraints needed to begin production asset
 work. It does not claim that an asset workshop, manifest generator or asset
 build commands already exist.
@@ -9,7 +14,7 @@ build commands already exist.
 ## Goal
 
 Replace developer art incrementally while preserving the accepted exploration,
-navigation, island-dossier, persistence and performance baseline and the gameplay
+navigation, island-dossier and performance baseline and the gameplay
 contracts accepted before graphics integration.
 
 Production art must improve readability and atmosphere without becoming a new

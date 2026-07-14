@@ -5,7 +5,6 @@ import type { SurveyBudgetReadModel } from "./SurveyContracts";
 
 export const SURVEY_SITE_CONTRACT_VERSION = 1 as const;
 export const SURVEY_SITE_CONTENT_VERSION = 1 as const;
-export const SURVEY_SITE_PERSISTENCE_OWNER = "survey-sites" as const;
 export const SURVEY_SITE_INTERACTION_RANGE_TILES = 1.5 as const;
 export const SURVEY_SITE_PRESENTATION_MS = 1_600 as const;
 
@@ -59,7 +58,7 @@ export function isCurrentSurveySiteId(value: unknown): value is SurveySiteId {
   return parseSurveySiteId(value)?.contentVersion === SURVEY_SITE_CONTENT_VERSION;
 }
 
-/** Canonical save/lineage order: JavaScript binary UTF-16 code-unit order. */
+/** Canonical deterministic order: JavaScript binary UTF-16 code-unit order. */
 export function compareSurveySiteIds(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
@@ -90,7 +89,7 @@ export interface SurveySitePlacementRule {
 /**
  * All content variation lives here. The catalog and lifecycle are generic in
  * the type string, so adding a later non-idol type does not add a command,
- * reducer, or persistence fragment.
+ * reducer, or central integration fragment.
  */
 export interface SurveySiteTypeDescriptor<TType extends string = string> {
   readonly type: TType;
@@ -103,7 +102,7 @@ export interface SurveySiteTypeDescriptor<TType extends string = string> {
   readonly presentation: Readonly<SurveySitePresentation>;
 }
 
-/** Seed-derived content. Definitions are regenerated and never serialized. */
+/** Seed-derived content. */
 export interface SurveySiteDefinition<TType extends string = SurveySiteType> {
   readonly id: SurveySiteId;
   readonly contentVersion: typeof SURVEY_SITE_CONTENT_VERSION;

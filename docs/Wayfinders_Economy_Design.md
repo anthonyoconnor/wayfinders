@@ -1,5 +1,10 @@
 # Wayfinders Survey, Legacy Goals and Future World Activity Design
 
+Saving is intentionally absent from active development. References below to
+reload behavior, saved state or GP-5 describe historical acceptance or a
+possible future design; they do not authorize implementation. Saving may return
+only through a named milestone explicitly authorized with saving in scope.
+
 ## Summary
 
 Wayfinders makes exploration consequential through a simple commitment: sailing
