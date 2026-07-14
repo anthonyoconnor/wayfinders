@@ -27,8 +27,8 @@ extend the foundation without replacing it.
 Developer graphics remain intentional throughout the gameplay roadmap.
 Production asset infrastructure, tooling and art replacement are a separate
 graphics track. Its start gate is accepted `GP-3.3`, which freezes the stable
-island and generic survey-site identities/read models. The gate is open, but no
-graphics milestone is authorized.
+island and generic survey-site identities/read models. `GR-1.1` is accepted;
+the ordered `GR-1.2` through `GR-1.4` authored-asset pilot is authorized.
 
 ## Run locally
 

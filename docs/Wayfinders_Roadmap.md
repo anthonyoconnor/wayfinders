@@ -1,7 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-4.1` work is complete and accepted. No later
+ordered `GP-0.1` through `GP-4.1` work and `GR-1.1` are complete and accepted.
+The ordered `GR-1.2` through `GR-1.4` batch is authorized. No other later
 gameplay or graphics minor is authorized by this roadmap status.
 
 ### Saving policy
@@ -758,8 +759,8 @@ not define collision, identity or rules.
 
 ### GR-1 — Authored-asset runtime pilot
 
-Start gate: open because GP-3.3 is accepted. GR-1 remains proposed and is not
-authorized to begin.
+Start gate: satisfied because GP-3.3 is accepted. The ordered `GR-1.1` through
+`GR-1.4` batch is authorized; `GR-1.1` is accepted.
 
 Goal: prove the smallest useful path from externally generated source art to
 grid-aligned runtime assets. Asset generation and preparation happen before the
@@ -774,7 +775,7 @@ or adapted directly as runtime assets.
 
 #### GR-1.1 — Authored asset and grid-metadata contract
 
-Status: proposed.
+Status: implemented and accepted.
 
 Define the minimal semantic IDs and metadata needed by the pilot:
 
@@ -799,9 +800,16 @@ navigation grid; boat and shoal contracts have unambiguous origins and bounds;
 and no contract requires a viewer, editor, asset-lifecycle registry or general
 non-home-island refactor.
 
+Implementation evidence: authored asset contract V1 fixes semantic IDs for the
+home island, player boat and pilot fishing shoal; validates complete cell maps,
+terrain-derived collision, exact dock/return/service anchors, fixed render
+slices, normalized origins, all-heading boat metadata and passable read-model-
+gated shoals; and rejects invalid layouts before runtime integration. The clean
+typecheck, 245-test and production-build gate passes.
+
 #### GR-1.2 — Minimal package loading
 
-Status: proposed.
+Status: authorized; next in the ordered batch.
 
 Add the smallest runtime boundary that loads the three accepted packages and
 their metadata when the game starts. A typed catalog maps semantic IDs to
@@ -822,7 +830,7 @@ pilot memory and startup-time budgets.
 
 #### GR-1.3 — Home island, boat and shoal proof
 
-Status: proposed.
+Status: authorized; pending GR-1.2 acceptance.
 
 Generate new grid-ready art for the current game rather than using the example
 assets directly. Integrate:
@@ -850,7 +858,7 @@ and frame-time budgets pass.
 
 #### GR-1.4 — Directional boat and wake animation
 
-Status: proposed.
+Status: authorized; pending GR-1.3 acceptance.
 
 Turn the GR-1.3 player-boat proof into a finished animated vessel. Use the
 simplest animation approach that remains convincing at the game's normal zoom:
@@ -1031,8 +1039,9 @@ authorized ordered batch:
 5. A safely returned but unsurveyed sighting becomes an inactive persistent
    lead that can be surveyed later. A wreck loses only the current expedition's
    provisional state and preserves any earlier returned lead.
-6. GP-3.3 has opened the GR-1 dependency gate, but GR-1 remains proposed and
-   requires explicit authorization before implementation.
+6. GP-3.3 opened the GR-1 dependency gate. The ordered `GR-1.1` through
+   `GR-1.4` authored-asset pilot is authorized; accepted gates continue directly
+   to the next batch member without renewed permission.
 
 Additional product decisions are recorded here for later milestones:
 

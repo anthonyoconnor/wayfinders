@@ -30,8 +30,9 @@ foundation.
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
 `Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-4.1` work is
-complete and accepted. No later gameplay or graphics milestone is authorized
-by this status document.
+complete and accepted. `GR-1.1` is also complete and accepted; the ordered
+`GR-1.2` through `GR-1.4` batch is authorized. No other later gameplay or
+graphics milestone is authorized by this status document.
 
 ## Run and verify
 
@@ -384,15 +385,18 @@ Current verification baseline:
   reusing their ordinary survey/return/wreck lifecycle and Great Hall credit.
 - `GP-3`: there are no fishing boats, trade vessels or
   Supported-route traffic.
-- `GR-*`: production art, the authored-package loader, asset tooling,
-  environmental audio and production polish are not implemented.
+- `GR-1.1`: authored asset contract V1 defines and validates the home-island,
+  player-boat and pilot-shoal grid/visual metadata boundary.
+- Later `GR-*`: production art, the authored-package loader, asset tooling,
+  environmental audio and production polish are not yet implemented.
 - Default and doubled-world range probes pass the performance hardening
   baseline. Touch-first sailing is not implemented, and representative
   mid-range mobile rendering/performance validation remains outstanding.
 
 ## Active planning point
 
-`GP-4.1` is accepted. No later gameplay milestone is currently authorized.
+`GP-4.1` and `GR-1.1` are accepted. No later gameplay milestone is currently
+authorized; `GR-1.2` through `GR-1.4` are the active authorized graphics batch.
 
 The completed milestones are:
 
@@ -432,15 +436,20 @@ The completed milestones are:
     exact navigator/voyage credit in Great Hall V4; final Great Hall ordering;
     non-retriggering continued play with later Hall access; and a distinct-seed
     in-session new-game reset.
+14. `GR-1.1` — accepted: semantic authored-asset IDs; complete home-grid and
+    fixed-slice validation; terrain-derived collision; exact home dock, return
+    and service anchors; player-boat heading/wake metadata; passable read-model-
+    gated shoal metadata; and focused contract coverage in the clean 245-test
+    typecheck/build gate.
 
 No later gameplay milestone is authorized. GP-4.1 adds no physical idol,
 recovery action, cargo, clue chain, Gem Hall, Relics wing, saving or production
 art obligation.
 
-The `GR-1` graphics start gate is now open because GP-3.3 accepted stable island
-and generic survey-site identities/read models, but no graphics milestone is
-authorized. Fishing, trade and other routine world-activity vessels remain
-presentation work rather than authoritative economy state.
+The `GR-1` graphics start gate is satisfied. `GR-1.1` is accepted and the
+ordered `GR-1.2` through `GR-1.4` batch is authorized. Fishing, trade and other
+routine world-activity vessels remain presentation work rather than
+authoritative economy state.
 
 See `Wayfinders_Technical_Design.md` for the current implementation model,
 `Wayfinders_Roadmap.md` for proposed scope and sequencing,

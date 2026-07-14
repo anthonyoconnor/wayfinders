@@ -1,6 +1,7 @@
 # Wayfinders authored-asset direction
 
-Status: proposed design reference, not implemented or authorized.
+Status: active. `GR-1.1` is implemented and accepted; the ordered `GR-1.2`
+through `GR-1.4` pilot is authorized.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
