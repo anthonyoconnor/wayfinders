@@ -12,8 +12,10 @@ architecture rules or completed milestone evidence.
 - The accepted gameplay baseline runs through `GP-4.1`.
 - The accepted graphics baseline runs through `GR-1.4`.
 - No later gameplay milestone is authorized.
-- `GR-2.1` through `GR-2.3` are authorized as an ordered graphics-tooling batch
-  and are in progress; no `GR-3` scope is authorized.
+- `GR-2.1` through `GR-2.3` are implemented as an ordered graphics-tooling
+  batch. Their automated gates pass; interactive browser acceptance is still
+  required before the accepted graphics baseline advances beyond `GR-1.4`.
+- No `GR-3` scope is authorized.
 - Saving is intentionally absent. Every launch or browser refresh starts a
   fresh session. Saving may return only in an explicitly authorized named
   milestone whose scope includes it.
@@ -22,7 +24,9 @@ The playable baseline includes deterministic sailing and islands, fog and
 inherited water knowledge, provision-aware voyages, exact-dock settlement,
 navigator succession and Great Hall history, provision-funded island/site
 surveys, three hidden idol locations in the default world, final completion
-choices, authored home/boat/pilot-shoal presentation and developer diagnostics.
+choices, authored home/boat/pilot-shoal presentation and developer diagnostics,
+plus a separate shared-runtime asset viewer, candidate intake workbench and
+deterministic catalog/preparation pipeline.
 
 ## Run and verify
 
@@ -42,8 +46,10 @@ npm.cmd run check
 
 Latest accepted verification baseline:
 
+- Asset catalog, PNG/frame, texture-limit, generated-code, thumbnail and report
+  consistency checks pass before compilation.
 - TypeScript typecheck passes.
-- 264 automated tests pass across 32 files.
+- 275 automated tests pass across 35 files.
 - The production Vite build passes.
 - Browser acceptance covers the accepted fishing, return, wreck, succession,
   survey-site, idol completion, continued-world and new-game flows with a clean
@@ -55,13 +61,17 @@ Latest accepted verification baseline:
 - An interactive pass over the Great Hall's focused handover and optional
   browsing modes remains outstanding; their shared read model and exact-dock
   access policy have automated coverage.
+- An interactive WebGL pass over all three GR-2 viewer package kinds, contrast
+  overlays and the candidate template/bind/preview/export flow remains
+  outstanding. Browser control failed before it could open the local page;
+  automated contracts, deterministic rebuilds and production build pass.
 - Representative mid-range mobile rendering/performance validation remains
   outstanding.
 - Touch-first sailing is not implemented.
 - Fishing boats, trade vessels, numerical fishing output and an authoritative
   tribe economy are not implemented.
-- Broader production asset tooling and replacement remain deferred to `GR-2`
-  and later replanning.
+- Broader production asset replacement remains deferred to `GR-3` replanning
+  after GR-2 acceptance.
 
 ## Document ownership
 

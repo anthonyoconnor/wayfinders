@@ -592,6 +592,30 @@ one fishing-shoal cue. Developer art remains intentional for all other terrain
 and mechanics. Later production assets must retain the same navigation,
 identity and depth contracts.
 
+GR-2 adds an explicit `?mode=assets` application mode without creating another
+simulation. The viewer and game share the generated semantic catalog, Phaser
+texture loading, multi-slice home factory, boat/wake factory and shoal factory.
+The game remains the authority for placement and read-model visibility; the
+viewer supplies only fixed-seed coordinates and presentation guides. Boat
+spritesheets use row-major direction groups with motion frames inside each
+group, while rotate-mode art keeps one direction and applies continuous
+heading rotation.
+
+Candidate intake shares contract V1 validation with the runtime. It additionally
+requires exact PNG dimensions and frame layouts, lowercase safe runtime
+filenames, non-interlaced 8-bit RGB/RGBA data and a `4096 x 4096` texture limit.
+The browser may preview data-URL textures and export a portable bundle but does
+not write repository files. The repository command revalidates PNG headers and
+decoded pixels, requires explicit replacement of an existing semantic ID,
+materializes source/package/runtime files and regenerates the catalog.
+
+The generated catalog, bounded nearest-neighbour thumbnails and asset report
+are deterministic build artifacts. The normal verification gate rejects stale
+artifacts before TypeScript compilation. The report records exact dimensions,
+frame counts, source hashes and estimated uncompressed texture bytes. Atlas
+packing is absent because the current texture count and draw-call evidence do
+not justify it.
+
 ## 14. Events and developer interfaces
 
 Implemented simulation events:

@@ -1,9 +1,9 @@
 # Wayfinders current roadmap
 
-Status: active. The accepted gameplay work through `GP-4.1` and graphics work
-through `GR-1.4` form the current baseline. `GR-2.1` through `GR-2.3` are
-authorized as one dependency-ordered tooling batch; no later gameplay or
-graphics minor is authorized.
+Status: acceptance. The accepted gameplay work through `GP-4.1` and graphics
+work through `GR-1.4` form the current baseline. `GR-2.1` through `GR-2.3` are
+implemented as one dependency-ordered tooling batch and await their interactive
+browser acceptance pass; no later gameplay or graphics minor is authorized.
 
 This document contains only upcoming or explicitly deferred work. Completed
 milestone scope and acceptance evidence live in
@@ -51,15 +51,16 @@ The completed `GR-1` pilot proved the authored-asset contract, package loading,
 one authored home island, the player boat, one fishing-shoal cue and directional
 boat/wake presentation. Its acceptance evidence is in the archive.
 
-No next gameplay milestone is currently defined. `GR-2` is the active graphics
-batch and remains a prerequisite for broader production-asset work.
+No next gameplay milestone is currently defined. `GR-2` implementation is
+complete but the batch remains the active graphics acceptance point and a
+prerequisite for broader production-asset work.
 
 ## Upcoming graphics track
 
 ### GR-2 — Asset viewing and creation tooling
 
-Status: authorized as an ordered `GR-2.1` through `GR-2.3` batch. The accepted
-`GR-1` pilot supplies the manual asset-preparation evidence needed for this
+Status: implemented; interactive browser acceptance remains outstanding. The
+accepted `GR-1` pilot supplies the manual asset-preparation evidence for this
 work.
 
 Goal: make authored assets cheap to inspect, validate and prepare without
@@ -67,7 +68,7 @@ creating a second renderer or parallel gameplay authority.
 
 #### GR-2.1 — Runtime asset viewer
 
-Status: authorized.
+Status: implemented; interactive viewer acceptance pending.
 
 Build a browser using the same Phaser renderer, factories, camera and texture
 path as the game. Preview IDs, headings, animations, origins, footprints, fog,
@@ -88,7 +89,7 @@ all three pilot package kinds at normal and fog/overlay contrast.
 
 #### GR-2.2 — Candidate intake and creation workbench
 
-Status: authorized.
+Status: implemented; interactive workbench acceptance pending.
 
 Create or import candidate records from templates; edit semantic metadata;
 validate frames, dimensions and variants; export tracked source/runtime files
@@ -108,7 +109,7 @@ authority or expand the fixed GR-1 semantic-ID set before GR-3 replanning.
 
 #### GR-2.3 — Conditional build automation
 
-Status: authorized with narrowed scope based on measured GR-1 repetition.
+Status: implemented; automated acceptance passes, pending ordered-batch closure.
 
 Automate the repeated catalog-key wiring, PNG dimension/frame inspection,
 thumbnail creation and whole-catalog validation exposed by the four GR-1
@@ -171,6 +172,6 @@ serialized gate; isolated tooling must not fork rendering or gameplay rules.
 
 ## Active authorization boundary
 
-Implementation may proceed through `GR-2.3` dependency-first. It pauses after
-that batch; defining `GR-3`, adding a gameplay minor or expanding the semantic
-asset-ID set requires a new decision.
+Implementation has paused after `GR-2.3`. The remaining in-scope action is the
+interactive viewer/workbench acceptance pass. Defining `GR-3`, adding a
+gameplay minor or expanding the semantic asset-ID set requires a new decision.

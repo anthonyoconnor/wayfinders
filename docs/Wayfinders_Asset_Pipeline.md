@@ -1,7 +1,8 @@
 # Wayfinders authored-asset direction
 
 Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted.
-`GR-2.1` through `GR-2.3` are authorized as an ordered tooling batch.
+`GR-2.1` through `GR-2.3` are implemented as an ordered tooling batch; their
+interactive browser acceptance remains outstanding.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
