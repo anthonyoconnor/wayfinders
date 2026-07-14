@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "build": "tsc -b && vite build",
+    "assets:build": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs build",
+    "assets:check": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs check",
+    "assets:intake": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs intake",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc -b",
     "test": "vitest run",

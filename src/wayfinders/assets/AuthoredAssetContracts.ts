@@ -1,9 +1,9 @@
-import type { GridPoint } from "../core/types";
+import type { GridPoint } from "../core/types.ts";
 import {
   TerrainType,
   terrainBlocksMovement,
   terrainBlocksSight,
-} from "../world/TileData";
+} from "../world/TileData.ts";
 
 export const AUTHORED_ASSET_CONTRACT_VERSION = 1 as const;
 

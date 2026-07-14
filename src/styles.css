@@ -760,6 +760,83 @@ a:focus-visible {
   white-space: pre-wrap;
 }
 
+.asset-viewer-diagnostics[data-state="error"] {
+  color: var(--shell-danger);
+  border-color: rgba(255, 181, 167, 0.45);
+}
+
+.asset-workbench {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 1rem;
+  margin-top: 1rem;
+  border-top: 1px solid var(--shell-line);
+}
+
+.asset-workbench > header,
+.asset-workbench-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.asset-workbench h3,
+.asset-workbench .eyebrow {
+  margin: 0;
+}
+
+.asset-workbench > label,
+.asset-workbench-editor,
+.asset-workbench-images label {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.asset-workbench textarea {
+  width: 100%;
+  padding: 0.6rem;
+  resize: vertical;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+  color: #d9fff5;
+  background: rgba(2, 12, 17, 0.76);
+  font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.asset-workbench button,
+.asset-workbench select {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+  color: var(--shell-ink);
+  background: rgba(13, 45, 55, 0.8);
+  cursor: pointer;
+}
+
+.asset-workbench button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.asset-workbench-images {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.asset-workbench-images label {
+  padding: 0.55rem;
+  border: 1px dashed var(--shell-line);
+  border-radius: 0.35rem;
+}
+
+.asset-workbench-images label[data-bound="true"] {
+  border-color: rgba(179, 239, 134, 0.62);
+}
+
 .developer-tools {
   position: fixed;
   z-index: 40;

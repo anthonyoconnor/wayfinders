@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "assetId": "home.island.primary",
+      "metadataFile": "home-island.json",
+      "metadataKey": "wayfinders:metadata:home-island",
+      "images": [
+        {
+          "imageId": "home.island.primary.complete",
+          "textureKey": "wayfinders:image:home-island",
+          "runtimeFile": "public/assets/gr1/images/home-island.png",
+          "url": "./assets/gr1/images/home-island.png",
+          "loader": "image"
+        }
+      ]
+    },
+    {
+      "assetId": "player.boat.primary",
+      "metadataFile": "player-boat.json",
+      "metadataKey": "wayfinders:metadata:player-boat",
+      "images": [
+        {
+          "imageId": "player.boat.primary.frames",
+          "textureKey": "wayfinders:image:player-boat",
+          "runtimeFile": "public/assets/gr1/images/player-boat.png",
+          "url": "./assets/gr1/images/player-boat.png",
+          "loader": "spritesheet",
+          "frameConfig": { "frameWidth": 64, "frameHeight": 64 }
+        },
+        {
+          "imageId": "player.boat.primary.wake",
+          "textureKey": "wayfinders:image:player-wake",
+          "runtimeFile": "public/assets/gr1/images/player-wake.png",
+          "url": "./assets/gr1/images/player-wake.png",
+          "loader": "spritesheet",
+          "frameConfig": { "frameWidth": 96, "frameHeight": 64 }
+        }
+      ]
+    },
+    {
+      "assetId": "shoal.fishing.primary",
+      "metadataFile": "fishing-shoal.json",
+      "metadataKey": "wayfinders:metadata:fishing-shoal",
+      "images": [
+        {
+          "imageId": "shoal.fishing.primary.complete",
+          "textureKey": "wayfinders:image:fishing-shoal",
+          "runtimeFile": "public/assets/gr1/images/fishing-shoal.png",
+          "url": "./assets/gr1/images/fishing-shoal.png",
+          "loader": "image"
+        }
+      ]
+    }
+  ]
+}
