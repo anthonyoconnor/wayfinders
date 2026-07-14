@@ -53,6 +53,24 @@ function nonEmptyString(value: unknown, label: string): string {
   return value;
 }
 
+function pngHeader(dataUrl: string, label: string): { width: number; height: number } {
+  let binary: string;
+  try {
+    binary = atob(dataUrl.slice("data:image/png;base64,".length));
+  } catch {
+    throw new RangeError(`${label} contains invalid base64 PNG data`);
+  }
+  if (binary.length < 29) throw new RangeError(`${label} contains an incomplete PNG header`);
+  const bytes = Uint8Array.from(binary.slice(0, 29), (character) => character.charCodeAt(0));
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (!signature.every((byte, index) => bytes[index] === byte)) throw new RangeError(`${label} is not a PNG file`);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes[24] !== 8 || ![2, 6].includes(bytes[25]) || bytes[28] !== 0) {
+    throw new RangeError(`${label} must be a non-interlaced 8-bit RGB or RGBA PNG`);
+  }
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
 export function candidateImageRequirements(
   metadata: Readonly<AuthoredAssetMetadata>,
 ): readonly Readonly<CandidateImageRequirement>[] {
@@ -129,6 +147,10 @@ export function validateAssetCandidateBundle(value: unknown): Readonly<AssetCand
     const dataUrl = nonEmptyString(input.dataUrl, `images[${index}].dataUrl`);
     if (!dataUrl.startsWith("data:image/png;base64,")) {
       throw new RangeError(`images[${index}].dataUrl must contain base64 PNG data`);
+    }
+    const header = pngHeader(dataUrl, `images[${index}].dataUrl`);
+    if (header.width !== width || header.height !== height) {
+      throw new RangeError(`images[${index}] PNG header disagrees with its declared dimensions`);
     }
     imagesById.set(imageId, { imageId, filename, mimeType: "image/png", width, height, dataUrl });
   }

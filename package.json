@@ -12,7 +12,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "check": "npm run typecheck && npm test && npm run build"
+    "check": "npm run assets:check && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "phaser": "3.90.0"

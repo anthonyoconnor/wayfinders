@@ -9,7 +9,17 @@ import {
 } from "../src/wayfinders/assets/AssetCandidate";
 import { validateAuthoredAssetMetadata } from "../src/wayfinders/assets/AuthoredAssetContracts";
 
-const DATA = "data:image/png;base64,iVBORw0KGgo=";
+function pngHeaderData(width: number, height: number): string {
+  const header = Buffer.alloc(29);
+  Buffer.from("89504e470d0a1a0a", "hex").copy(header);
+  header.writeUInt32BE(13, 8);
+  header.write("IHDR", 12, "ascii");
+  header.writeUInt32BE(width, 16);
+  header.writeUInt32BE(height, 20);
+  header[24] = 8;
+  header[25] = 6;
+  return `data:image/png;base64,${header.toString("base64")}`;
+}
 
 function bundle(metadataInput: unknown) {
   const metadata = validateAuthoredAssetMetadata(metadataInput);
@@ -22,7 +32,7 @@ function bundle(metadataInput: unknown) {
       mimeType: "image/png",
       width: requirement.size.width,
       height: requirement.size.height,
-      dataUrl: DATA,
+      dataUrl: pngHeaderData(requirement.size.width, requirement.size.height),
     })),
   };
 }
@@ -51,7 +61,7 @@ describe("GR-2.2 asset candidate validation", () => {
 
     const wrongSize = bundle(fishingShoal);
     wrongSize.images[0].width += 1;
-    expect(() => validateAssetCandidateBundle(wrongSize)).toThrow(/must be 96x64/);
+    expect(() => validateAssetCandidateBundle(wrongSize)).toThrow(/PNG header disagrees/);
 
     const extra = bundle(homeIsland);
     extra.images.push({ ...extra.images[0], imageId: "unreferenced", filename: "extra.png" });
@@ -69,6 +79,7 @@ describe("GR-2.2 asset candidate validation", () => {
 
     const oversized = bundle(fishingShoal);
     oversized.images[0].width = 4_097;
+    oversized.images[0].dataUrl = pngHeaderData(4_097, oversized.images[0].height);
     expect(() => validateAssetCandidateBundle(oversized)).toThrow(/texture limit/);
   });
 });

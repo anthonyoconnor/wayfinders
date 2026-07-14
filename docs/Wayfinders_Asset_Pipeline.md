@@ -137,6 +137,24 @@ Deterministic catalog generation, thumbnails and batch validation are justified
 by repeated manual metadata/image wiring. Atlas packing remains deferred until
 runtime measurements demonstrate a need.
 
+### Tooling workflow
+
+1. Open `?mode=assets`, choose a fixed semantic-ID template and edit metadata.
+2. Bind exact PNG inputs or load the current catalog PNGs.
+3. Validate and preview through the shared runtime presentation path.
+4. Export one `.candidate.json` bundle for review.
+5. Run `npm.cmd run assets:intake -- <bundle> --replace` to revalidate PNG
+   headers and pixels, materialize the tracked source record, package metadata
+   and runtime images, then regenerate the shared catalog.
+6. Run `npm.cmd run check`; stale catalog code, thumbnails or the deterministic
+   asset report fail before the normal type/test/build gate.
+
+Candidate intake remains limited to `home.island.primary`,
+`player.boat.primary` and `shoal.fishing.primary`. The browser never writes the
+repository directly, and the command never replaces an accepted semantic ID
+without the explicit `--replace` flag. Each runtime PNG must be non-interlaced
+8-bit RGB or RGBA and no larger than `4096 x 4096`.
+
 ## Runtime separation
 
 Keep changing or stateful content separate from static base art:

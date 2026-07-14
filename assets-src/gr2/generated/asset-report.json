@@ -1,0 +1,90 @@
+{
+  "formatVersion": 1,
+  "textureLimit": {
+    "width": 4096,
+    "height": 4096
+  },
+  "thumbnailMaximum": 192,
+  "totals": {
+    "packages": 3,
+    "images": 4,
+    "sourceBytes": 382597,
+    "estimatedTextureBytes": 987136
+  },
+  "entries": [
+    {
+      "assetId": "home.island.primary",
+      "metadataFile": "home-island.json",
+      "images": [
+        {
+          "imageId": "home.island.primary.complete",
+          "runtimeFile": "public/assets/gr1/images/home-island.png",
+          "loader": "image",
+          "width": 480,
+          "height": 480,
+          "frameCount": 1,
+          "sourceBytes": 375897,
+          "estimatedTextureBytes": 921600,
+          "sha256": "f707fa1d7251148fa57c44a8517bdc443084681ef750d4c95c9841d24b4f1012",
+          "thumbnailFile": "public/assets/gr2/thumbnails/home-island-primary-1.png",
+          "thumbnailWidth": 192,
+          "thumbnailHeight": 192
+        }
+      ]
+    },
+    {
+      "assetId": "player.boat.primary",
+      "metadataFile": "player-boat.json",
+      "images": [
+        {
+          "imageId": "player.boat.primary.frames",
+          "runtimeFile": "public/assets/gr1/images/player-boat.png",
+          "loader": "spritesheet",
+          "width": 64,
+          "height": 64,
+          "frameCount": 1,
+          "sourceBytes": 2387,
+          "estimatedTextureBytes": 16384,
+          "sha256": "e2bc9aea6343c68f38d204ed3764727c08dd23249d5617fb794fca9e0ca2fbdf",
+          "thumbnailFile": "public/assets/gr2/thumbnails/player-boat-primary-1.png",
+          "thumbnailWidth": 64,
+          "thumbnailHeight": 64
+        },
+        {
+          "imageId": "player.boat.primary.wake",
+          "runtimeFile": "public/assets/gr1/images/player-wake.png",
+          "loader": "spritesheet",
+          "width": 96,
+          "height": 64,
+          "frameCount": 1,
+          "sourceBytes": 1332,
+          "estimatedTextureBytes": 24576,
+          "sha256": "5c9bfe65eb79fb3493e2782e494813b3437458caa60005647c7edd5a9f892f9a",
+          "thumbnailFile": "public/assets/gr2/thumbnails/player-boat-primary-2.png",
+          "thumbnailWidth": 96,
+          "thumbnailHeight": 64
+        }
+      ]
+    },
+    {
+      "assetId": "shoal.fishing.primary",
+      "metadataFile": "fishing-shoal.json",
+      "images": [
+        {
+          "imageId": "shoal.fishing.primary.complete",
+          "runtimeFile": "public/assets/gr1/images/fishing-shoal.png",
+          "loader": "image",
+          "width": 96,
+          "height": 64,
+          "frameCount": 1,
+          "sourceBytes": 2981,
+          "estimatedTextureBytes": 24576,
+          "sha256": "cca8c86108976d5857a0e3942e0fe93cb0997ec7888e095305a9508699e7fff1",
+          "thumbnailFile": "public/assets/gr2/thumbnails/shoal-fishing-primary-1.png",
+          "thumbnailWidth": 96,
+          "thumbnailHeight": 64
+        }
+      ]
+    }
+  ]
+}

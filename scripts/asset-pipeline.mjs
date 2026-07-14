@@ -1,6 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { deflateSync, inflateSync } from "node:zlib";
 import {
   candidateImageRequirements,
   validateAssetCandidateBundle,
@@ -9,6 +11,8 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(root, "assets-src", "gr2", "asset-catalog.json");
 const generatedPath = path.join(root, "src", "wayfinders", "assets", "generated", "AssetCatalog.generated.ts");
+const reportPath = path.join(root, "assets-src", "gr2", "generated", "asset-report.json");
+const thumbnailRoot = path.join(root, "public", "assets", "gr2", "thumbnails");
 const packageRoot = path.join(root, "src", "wayfinders", "assets", "packages");
 const knownPackageFiles = new Map([
   ["home.island.primary", "home-island.json"],
@@ -22,6 +26,120 @@ function pngSize(buffer, label) {
     throw new RangeError(`${label} is not a PNG file`);
   }
   return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
+}
+
+function crc32(buffer) {
+  let crc = 0xffff_ffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb8_8320 & -(crc & 1));
+  }
+  return (crc ^ 0xffff_ffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const name = Buffer.from(type, "ascii");
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const checksum = Buffer.alloc(4);
+  checksum.writeUInt32BE(crc32(Buffer.concat([name, data])));
+  return Buffer.concat([length, name, data, checksum]);
+}
+
+function paeth(left, above, upperLeft) {
+  const prediction = left + above - upperLeft;
+  const leftDistance = Math.abs(prediction - left);
+  const aboveDistance = Math.abs(prediction - above);
+  const upperLeftDistance = Math.abs(prediction - upperLeft);
+  return leftDistance <= aboveDistance && leftDistance <= upperLeftDistance
+    ? left
+    : aboveDistance <= upperLeftDistance ? above : upperLeft;
+}
+
+export function decodePng(buffer, label = "PNG") {
+  const size = pngSize(buffer, label);
+  const bitDepth = buffer[24];
+  const colorType = buffer[25];
+  const interlace = buffer[28];
+  if (bitDepth !== 8 || ![2, 6].includes(colorType) || interlace !== 0) {
+    throw new RangeError(`${label} must be a non-interlaced 8-bit RGB or RGBA PNG`);
+  }
+  const channels = colorType === 6 ? 4 : 3;
+  const idat = [];
+  for (let offset = 8; offset < buffer.length;) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.subarray(offset + 4, offset + 8).toString("ascii");
+    if (type === "IDAT") idat.push(buffer.subarray(offset + 8, offset + 8 + length));
+    offset += length + 12;
+  }
+  const filtered = inflateSync(Buffer.concat(idat));
+  const stride = size.width * channels;
+  if (filtered.length !== (stride + 1) * size.height) throw new RangeError(`${label} has invalid scanline data`);
+  const pixels = Buffer.alloc(size.width * size.height * 4);
+  const previous = Buffer.alloc(stride);
+  const current = Buffer.alloc(stride);
+  for (let y = 0; y < size.height; y++) {
+    const rowOffset = y * (stride + 1);
+    const filter = filtered[rowOffset];
+    for (let x = 0; x < stride; x++) {
+      const source = filtered[rowOffset + 1 + x];
+      const left = x >= channels ? current[x - channels] : 0;
+      const above = previous[x];
+      const upperLeft = x >= channels ? previous[x - channels] : 0;
+      switch (filter) {
+        case 0: current[x] = source; break;
+        case 1: current[x] = (source + left) & 0xff; break;
+        case 2: current[x] = (source + above) & 0xff; break;
+        case 3: current[x] = (source + Math.floor((left + above) / 2)) & 0xff; break;
+        case 4: current[x] = (source + paeth(left, above, upperLeft)) & 0xff; break;
+        default: throw new RangeError(`${label} uses unsupported PNG filter ${filter}`);
+      }
+    }
+    for (let x = 0; x < size.width; x++) {
+      const sourceIndex = x * channels;
+      const targetIndex = (y * size.width + x) * 4;
+      pixels[targetIndex] = current[sourceIndex];
+      pixels[targetIndex + 1] = current[sourceIndex + 1];
+      pixels[targetIndex + 2] = current[sourceIndex + 2];
+      pixels[targetIndex + 3] = channels === 4 ? current[sourceIndex + 3] : 255;
+    }
+    current.copy(previous);
+  }
+  return { ...size, pixels };
+}
+
+export function encodePng(width, height, pixels) {
+  if (pixels.length !== width * height * 4) throw new RangeError("RGBA buffer length does not match PNG dimensions");
+  const scanlines = Buffer.alloc((width * 4 + 1) * height);
+  for (let y = 0; y < height; y++) pixels.copy(scanlines, y * (width * 4 + 1) + 1, y * width * 4, (y + 1) * width * 4);
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8;
+  header[9] = 6;
+  const signature = Buffer.from("89504e470d0a1a0a", "hex");
+  return Buffer.concat([
+    signature,
+    pngChunk("IHDR", header),
+    pngChunk("IDAT", deflateSync(scanlines, { level: 9 })),
+    pngChunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+export function createThumbnail(buffer, maximumSize = 192, label = "PNG") {
+  const source = decodePng(buffer, label);
+  const scale = Math.min(1, maximumSize / source.width, maximumSize / source.height);
+  const width = Math.max(1, Math.round(source.width * scale));
+  const height = Math.max(1, Math.round(source.height * scale));
+  const pixels = Buffer.alloc(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    const sourceY = Math.min(source.height - 1, Math.floor(y / scale));
+    for (let x = 0; x < width; x++) {
+      const sourceX = Math.min(source.width - 1, Math.floor(x / scale));
+      source.pixels.copy(pixels, (y * width + x) * 4, (sourceY * source.width + sourceX) * 4, (sourceY * source.width + sourceX) * 4 + 4);
+    }
+  }
+  return { width, height, buffer: encodePng(width, height, pixels) };
 }
 
 function assertRelativeFile(value, label) {
@@ -110,16 +228,102 @@ function renderCatalog(manifest) {
   return `// Generated by scripts/asset-pipeline.mjs. Do not edit by hand.\nexport const GENERATED_ASSET_CATALOG = Object.freeze([\n${entries}\n]);\n`;
 }
 
+async function renderAutomationArtifacts(manifest) {
+  const thumbnails = new Map();
+  const entries = [];
+  let totalSourceBytes = 0;
+  let totalTextureBytes = 0;
+  let imageCount = 0;
+  for (const entry of manifest.entries) {
+    const metadata = JSON.parse(await readFile(path.join(packageRoot, entry.metadataFile), "utf8"));
+    const candidateImages = [];
+    const imageBuffers = new Map();
+    for (const image of entry.images) {
+      const runtimeFile = assertRelativeFile(image.runtimeFile, `${entry.assetId}.${image.imageId}.runtimeFile`);
+      const buffer = await readFile(path.join(root, runtimeFile));
+      const size = pngSize(buffer, runtimeFile);
+      candidateImages.push({
+        imageId: image.imageId,
+        filename: path.basename(runtimeFile),
+        mimeType: "image/png",
+        ...size,
+        dataUrl: `data:image/png;base64,${buffer.toString("base64")}`,
+      });
+      imageBuffers.set(image.imageId, { buffer, runtimeFile, ...size });
+    }
+    const bundle = validateAssetCandidateBundle({ bundleVersion: 1, metadata, images: candidateImages });
+    const requirements = new Map(candidateImageRequirements(bundle.metadata).map((requirement) => [requirement.imageId, requirement]));
+    const reportImages = [];
+    for (const [index, image] of entry.images.entries()) {
+      const source = imageBuffers.get(image.imageId);
+      const requirement = requirements.get(image.imageId);
+      const thumbnail = createThumbnail(source.buffer, 192, source.runtimeFile);
+      const thumbnailName = `${entry.assetId.replaceAll(".", "-")}-${index + 1}.png`;
+      thumbnails.set(thumbnailName, thumbnail.buffer);
+      const sourceBytes = source.buffer.length;
+      const textureBytes = source.width * source.height * 4;
+      totalSourceBytes += sourceBytes;
+      totalTextureBytes += textureBytes;
+      imageCount++;
+      reportImages.push({
+        imageId: image.imageId,
+        runtimeFile: source.runtimeFile,
+        loader: image.loader,
+        width: source.width,
+        height: source.height,
+        frameCount: requirement.frameCount,
+        sourceBytes,
+        estimatedTextureBytes: textureBytes,
+        sha256: createHash("sha256").update(source.buffer).digest("hex"),
+        thumbnailFile: `public/assets/gr2/thumbnails/${thumbnailName}`,
+        thumbnailWidth: thumbnail.width,
+        thumbnailHeight: thumbnail.height,
+      });
+    }
+    entries.push({ assetId: entry.assetId, metadataFile: entry.metadataFile, images: reportImages });
+  }
+  const report = {
+    formatVersion: 1,
+    textureLimit: { width: 4_096, height: 4_096 },
+    thumbnailMaximum: 192,
+    totals: { packages: entries.length, images: imageCount, sourceBytes: totalSourceBytes, estimatedTextureBytes: totalTextureBytes },
+    entries,
+  };
+  return { thumbnails, report: Buffer.from(`${JSON.stringify(report, null, 2)}\n`, "utf8") };
+}
+
+async function assertArtifact(pathname, expected, label) {
+  const current = await readFile(pathname).catch(() => Buffer.alloc(0));
+  if (!current.equals(expected)) throw new Error(`${label} is stale; run npm.cmd run assets:build`);
+}
+
 async function buildCatalog(checkOnly = false) {
   const manifest = await readManifest();
   await validateManifest(manifest);
-  const generated = renderCatalog(manifest);
+  const generated = Buffer.from(renderCatalog(manifest), "utf8");
+  const automation = await renderAutomationArtifacts(manifest);
   if (checkOnly) {
-    const current = await readFile(generatedPath, "utf8").catch(() => "");
-    if (current !== generated) throw new Error("Generated asset catalog is stale; run npm.cmd run assets:build");
+    await assertArtifact(generatedPath, generated, "Generated asset catalog");
+    await assertArtifact(reportPath, automation.report, "Generated asset report");
+    const expectedNames = [...automation.thumbnails.keys()].sort();
+    const currentNames = (await readdir(thumbnailRoot).catch(() => [])).filter((name) => name.endsWith(".png")).sort();
+    if (currentNames.join("|") !== expectedNames.join("|")) {
+      throw new Error("Generated asset thumbnail set is stale; run npm.cmd run assets:build");
+    }
+    for (const [name, thumbnail] of automation.thumbnails) {
+      await assertArtifact(path.join(thumbnailRoot, name), thumbnail, `Generated thumbnail ${name}`);
+    }
   } else {
     await mkdir(path.dirname(generatedPath), { recursive: true });
-    await writeFile(generatedPath, generated, "utf8");
+    await mkdir(path.dirname(reportPath), { recursive: true });
+    await mkdir(thumbnailRoot, { recursive: true });
+    await writeFile(generatedPath, generated);
+    await writeFile(reportPath, automation.report);
+    const expectedNames = new Set(automation.thumbnails.keys());
+    for (const name of await readdir(thumbnailRoot)) {
+      if (name.endsWith(".png") && !expectedNames.has(name)) await unlink(path.join(thumbnailRoot, name));
+    }
+    for (const [name, thumbnail] of automation.thumbnails) await writeFile(path.join(thumbnailRoot, name), thumbnail);
   }
   return manifest;
 }
@@ -134,6 +338,7 @@ async function intakeCandidate(bundleFile, replace, dryRun) {
     if (actual.width !== image.width || actual.height !== image.height) {
       throw new RangeError(`${image.filename} PNG header disagrees with its candidate dimensions`);
     }
+    decodePng(buffer, image.filename);
   }
   const manifest = await readManifest();
   const existingIndex = manifest.entries.findIndex((entry) => entry.assetId === bundle.metadata.assetId);
@@ -186,12 +391,14 @@ async function intakeCandidate(bundleFile, replace, dryRun) {
   console.log(`Accepted ${bundle.metadata.assetId}: metadata, ${images.length} PNG(s), source bundle and catalog regenerated.`);
 }
 
-const [command = "build", ...args] = process.argv.slice(2);
-if (command === "build") await buildCatalog(false);
-else if (command === "check") await buildCatalog(true);
-else if (command === "intake") await intakeCandidate(
-  args.find((arg) => !arg.startsWith("--")),
-  args.includes("--replace"),
-  args.includes("--dry-run"),
-);
-else throw new Error(`Unknown asset pipeline command ${command}`);
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const [command = "build", ...args] = process.argv.slice(2);
+  if (command === "build") await buildCatalog(false);
+  else if (command === "check") await buildCatalog(true);
+  else if (command === "intake") await intakeCandidate(
+    args.find((arg) => !arg.startsWith("--")),
+    args.includes("--replace"),
+    args.includes("--dry-run"),
+  );
+  else throw new Error(`Unknown asset pipeline command ${command}`);
+}

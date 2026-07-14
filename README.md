@@ -47,6 +47,28 @@ npm.cmd run dev -- 5174
 
 Then open `http://127.0.0.1:5174/`. An explicitly requested port will not silently fall back to another port if it is already occupied.
 
+## Asset viewer and workbench
+
+Open `http://127.0.0.1:5173/?mode=assets` or choose **Asset tools** in the
+running prototype. The GR-2 viewer uses the same catalog, textures and shared
+Phaser presentation factories as the game. It can inspect headings, animation
+frames, origins, footprints, fixed-seed placement and fog/overlay contrast.
+
+The workbench starts from any accepted package template. Edit its semantic
+metadata, bind PNGs (or use the current catalog PNGs), then validate and preview
+the candidate before exporting its `.candidate.json` bundle. Import a reviewed
+bundle into the repository with:
+
+```powershell
+npm.cmd run assets:intake -- path\to\asset.candidate.json --replace
+```
+
+`--replace` is required because the GR-2 workbench intentionally supports only
+the three existing semantic IDs. Run `npm.cmd run assets:build` after manual
+catalog/source changes. `npm.cmd run assets:check` verifies package contracts,
+PNG dimensions and frames, texture limits, generated catalog code, thumbnails
+and the deterministic asset report.
+
 Saving is intentionally absent during active development. Reloading starts a
 fresh session. Saving must not be reintroduced unless an explicitly authorized
 milestone names it as in scope.
@@ -57,7 +79,8 @@ milestone names it as in scope.
 npm.cmd run check
 ```
 
-The clean verification pipeline runs type checking, the automated test suite and the production build.
+The clean verification pipeline checks generated asset outputs, runs type
+checking and the automated test suite, and creates the production build.
 
 ## Project documentation
 
