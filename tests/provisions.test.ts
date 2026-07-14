@@ -67,7 +67,7 @@ it("makes partial movement accumulation frame-rate independent", () => {
 });
 
 it("preserves pre-observation Unknown cost in a prepared charge", () => {
-  const config = makeConfig({ navigation: { tileSize: 32 } });
+  const config = makeConfig({ navigation: { tileSize: 32 }, provisions: { unknownCost: 1 } });
   const world = createWorld(KnowledgeState.Unknown);
   const system = new ProvisionSystem(world, config);
   const ship = makeShip();

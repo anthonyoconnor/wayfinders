@@ -100,11 +100,13 @@ describe("prototype configuration", () => {
     expect(prototypeConfig.simulation.wreckPresentationSeconds).toBe(4);
   });
 
-  it("requires a positive Unknown travel cost so forward reach has a finite frontier", () => {
-    expect(() => patchPrototypeConfig({ provisions: { unknownCost: 0 } })).toThrow(
-      "provisions.unknownCost must be positive",
+  it("allows zero Unknown travel cost for consumption-free testing", () => {
+    patchPrototypeConfig({ provisions: { unknownCost: 0 } });
+    expect(prototypeConfig.provisions.unknownCost).toBe(0);
+    expect(() => patchPrototypeConfig({ provisions: { unknownCost: -0.1 } })).toThrow(
+      "provisions.unknownCost must be non-negative",
     );
-    expect(prototypeConfig.provisions.unknownCost).toBe(DEFAULT_PROTOTYPE_CONFIG.provisions.unknownCost);
+    expect(prototypeConfig.provisions.unknownCost).toBe(0);
   });
 
   it("accepts forward cone half-angles from 1 through 180 degrees", () => {

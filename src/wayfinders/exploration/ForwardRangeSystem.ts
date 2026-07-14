@@ -107,9 +107,8 @@ export class ForwardRangeSystem {
     if (!this.world.inBounds(ship.currentTileX, ship.currentTileY)) {
       throw new RangeError("Ship tile is outside the world");
     }
-    if (!Number.isFinite(this.config.provisions.unknownCost) || this.config.provisions.unknownCost <= 0) {
-      throw new RangeError("provisions.unknownCost must be positive to define a forward frontier");
-    }
+    // A zero Unknown cost intentionally exposes every connected reachable tile and produces no
+    // finite outer provision band; this supports testing with consumption disabled.
     this.validateCone();
     const presentationHeading = this.normalizeHeading(ship.heading);
 

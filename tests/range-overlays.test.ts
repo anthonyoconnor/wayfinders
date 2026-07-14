@@ -112,7 +112,7 @@ it("reports a presentation-only change when expansion moves the frontier beyond 
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   const ship = shipAt(0, 0, 2);
-  const system = new ForwardRangeSystem(world, makeConfig());
+  const system = new ForwardRangeSystem(world, makeConfig({ provisions: { unknownCost: 1 } }));
   const result = system.calculate(ship);
   const logicalMask = result.mask.slice();
   expect(result.presentationCandidateIndices).toEqual([world.index(2, 0)]);
@@ -255,7 +255,10 @@ it("keeps the forward frontier anchored in world space as travel consumes its bu
 });
 
 it("clips the terminal band to the configured cone ahead of the ship", () => {
-  const config = makeConfig({ overlays: { forwardConeHalfAngleDegrees: 60 } });
+  const config = makeConfig({
+    provisions: { unknownCost: 1 },
+    overlays: { forwardConeHalfAngleDegrees: 60 },
+  });
   const world = new WorldGrid(11, 11, 6);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const ship = shipAt(5, 5, 3);
@@ -279,27 +282,30 @@ it("preserves cone boundaries at right, obtuse, and full-circle half angles", ()
 
   const rightAngle = new ForwardRangeSystem(
     world,
-    makeConfig({ overlays: { forwardConeHalfAngleDegrees: 90 } }),
+    makeConfig({ provisions: { unknownCost: 1 }, overlays: { forwardConeHalfAngleDegrees: 90 } }),
   ).calculate(ship);
   expect(rightAngle.presentationMask[world.index(5, 2)]).toBe(1);
   expect(rightAngle.presentationMask[world.index(2, 5)]).toBe(0);
 
   const obtuse = new ForwardRangeSystem(
     world,
-    makeConfig({ overlays: { forwardConeHalfAngleDegrees: 120 } }),
+    makeConfig({ provisions: { unknownCost: 1 }, overlays: { forwardConeHalfAngleDegrees: 120 } }),
   ).calculate(ship);
   expect(obtuse.presentationMask[world.index(4, 3)]).toBe(1);
   expect(obtuse.presentationMask[world.index(3, 4)]).toBe(0);
 
   const fullCircle = new ForwardRangeSystem(
     world,
-    makeConfig({ overlays: { forwardConeHalfAngleDegrees: 180 } }),
+    makeConfig({ provisions: { unknownCost: 1 }, overlays: { forwardConeHalfAngleDegrees: 180 } }),
   ).calculate(ship);
   expect(fullCircle.presentationMask[world.index(2, 5)]).toBe(1);
 });
 
 it("rotates only the sparse presentation cone when heading changes", () => {
-  const config = makeConfig({ overlays: { forwardConeHalfAngleDegrees: 60 } });
+  const config = makeConfig({
+    provisions: { unknownCost: 1 },
+    overlays: { forwardConeHalfAngleDegrees: 60 },
+  });
   const world = new WorldGrid(11, 11, 6);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const ship = shipAt(5, 5, 3);
@@ -320,14 +326,14 @@ it("rotates only the sparse presentation cone when heading changes", () => {
   expect(result.costs).toEqual(costs);
 });
 
-it("rejects zero-cost Unknown travel because it has no finite provision frontier", () => {
+it("allows zero-cost Unknown travel and omits the nonexistent finite frontier", () => {
   const world = new WorldGrid(4, 1, 2);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const system = new ForwardRangeSystem(world, makeConfig({ provisions: { unknownCost: 0 } }));
 
-  expect(() => system.calculate(shipAt(0, 0, 5))).toThrow(
-    "provisions.unknownCost must be positive to define a forward frontier",
-  );
+  const result = system.calculate(shipAt(0, 0, 5));
+  expect(result.reachableCount).toBe(4);
+  expect(result.frontierCount).toBe(0);
 });
 });
 
@@ -372,7 +378,10 @@ it("connects the ship through currently visible Unknown without opening unseen s
   world.setKnowledge(2, 1, KnowledgeState.Personal, 1);
   world.setVisibleNow(4, 2, true);
   world.setVisibleNow(5, 2, true);
-  const system = new ReturnPathSystem(world, makeConfig());
+  const system = new ReturnPathSystem(
+    world,
+    makeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } }),
+  );
   const result = system.calculate(shipAt(5, 2, 8));
 
   expect(result.pathIndices).toEqual([5, 4, 3, 2, 1, 0].map((x) => world.index(x, 2)));
@@ -418,7 +427,7 @@ it("reclassifies every corridor tile together as provisions cross risk threshold
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   for (let x = 1; x <= 6; x++) world.setKnowledge(x, 0, KnowledgeState.Personal, 1);
   const ship = shipAt(6, 0, 7);
-  const system = new ReturnPathSystem(world, makeConfig());
+  const system = new ReturnPathSystem(world, makeConfig({ provisions: { personalCost: 0.5 } }));
   const result = system.calculate(ship);
   const corridor = [...result.corridorIndices];
   const pointSpy = vi.spyOn(world, "pointFromIndex");

@@ -177,6 +177,8 @@ describe("GameSimulation exploration integration", () => {
   });
 
   it("charges the outward Unknown leg at roughly twice the Personal return leg", () => {
+    // Keep this ratio-focused scenario independent of the lower gameplay defaults.
+    patchPrototypeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } });
     const simulation = new GameSimulation();
     const startingCapacity = simulation.ship.provisions - simulation.ship.provisionAccumulator;
 

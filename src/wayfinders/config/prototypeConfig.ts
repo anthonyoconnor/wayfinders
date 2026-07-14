@@ -126,8 +126,10 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
   provisions: {
     startingBundles: 12,
     supportedCost: 0,
-    personalCost: 0.5,
-    unknownCost: 1,
+    // Zero disables provision consumption in Personal water, which is useful for testing.
+    personalCost: 0.1,
+    // Zero likewise makes Unknown travel free; range overlays then have no finite outer frontier.
+    unknownCost: 0.2,
   },
   returnRisk: {
     comfortable: 3,
@@ -323,7 +325,8 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   nonNegativeInteger(config.provisions.startingBundles, "provisions.startingBundles");
   nonNegative(config.provisions.supportedCost, "provisions.supportedCost");
   nonNegative(config.provisions.personalCost, "provisions.personalCost");
-  positive(config.provisions.unknownCost, "provisions.unknownCost");
+  // All travel costs may be zero for developer testing sessions.
+  nonNegative(config.provisions.unknownCost, "provisions.unknownCost");
 
   nonNegative(config.returnRisk.comfortable, "returnRisk.comfortable");
   nonNegative(config.returnRisk.warning, "returnRisk.warning");
