@@ -1,7 +1,7 @@
 # Wayfinders authored-asset direction
 
-Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted. GR-2
-remains necessary later but is deferred and not authorized.
+Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted.
+`GR-2.1` through `GR-2.3` are authorized as an ordered tooling batch.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
@@ -124,16 +124,18 @@ travel, intensity follows speed, and stopped/hidden/reset ships show no wake.
 The four minors are ordered. Each one must meet its acceptance gate before the
 next changes shared world-generation or rendering code.
 
-## Deferred GR-2 tooling
+## GR-2 tooling
 
-GR-2 remains necessary for later asset expansion, but begins only after the
-complete GR-1 pilot reveals the real preparation and review needs. Its viewer
-must use the same Phaser camera, package metadata and rendering path as the game. Its
-intake workflow may then help generate slices, edit metadata and validate grid
-alignment without inventing separate placement rules.
+GR-2 follows the complete GR-1 pilot and addresses its demonstrated preparation
+and review needs. Its viewer uses the same Phaser camera, package metadata and
+shared presentation factories as the game. Its intake workflow generates
+portable candidate bundles, edits metadata and validates grid/frame alignment
+without inventing separate placement rules. A repository command, rather than
+the browser, owns tracked-file materialization and catalog changes.
 
-Typed ID generation, thumbnails, atlas packing and batch validation remain
-conditional on measured repetition.
+Deterministic catalog generation, thumbnails and batch validation are justified
+by repeated manual metadata/image wiring. Atlas packing remains deferred until
+runtime measurements demonstrate a need.
 
 ## Runtime separation
 

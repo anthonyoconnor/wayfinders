@@ -11,9 +11,9 @@ architecture rules or completed milestone evidence.
 
 - The accepted gameplay baseline runs through `GP-4.1`.
 - The accepted graphics baseline runs through `GR-1.4`.
-- No later gameplay or graphics milestone is authorized.
-- `GR-2.1` is the next proposed milestone, but `GR-2` remains deferred and not
-  authorized.
+- No later gameplay milestone is authorized.
+- `GR-2.1` through `GR-2.3` are authorized as an ordered graphics-tooling batch
+  and are in progress; no `GR-3` scope is authorized.
 - Saving is intentionally absent. Every launch or browser refresh starts a
   fresh session. Saving may return only in an explicitly authorized named
   milestone whose scope includes it.
