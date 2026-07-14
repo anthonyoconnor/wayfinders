@@ -284,17 +284,21 @@ Current verification baseline:
 
 ## Known limits
 
-- Gameplay track: discovery rewards, settlements and resources are records
-  only. The complete `GP-1` fishing survey loop ends at a derived connected
-  returned-ground cue; the Great Hall records returned voyage achievements,
-  but authoritative fishing activation/output, tribe economics and idols are
-  not yet implemented.
+- Gameplay track: the accepted `GP-1` fishing loop still uses one separate
+  survey case and an explicit **Leave** action. Proposed `GP-3.1` replaces that
+  interaction with provision-funded, sail-away-to-defer surveying; it is not
+  implemented yet. Returned fishing knowledge and the Great Hall records remain
+  authoritative, while numerical fishing output and tribe economics are no
+  longer part of the approved GP-3 direction.
 - Gameplay track: navigator identity, succession and the four-voyage tenure
   are authoritative, and the permanent Great Hall chronicle is implemented.
-  Later landfall, connection, trade and idol categories join it only at their
-  owning milestones. Runtime wreck identity/fate surveying and reporting are
-  implemented; salvage, bounded chart restoration, cargo and economy recovery
-  remain `GP-3.4` work.
+  Island sightings currently reveal their complete generated discovery without
+  a paid dossier survey, and there is no general survey-site catalog. Proposed
+  `GP-3.2` folds the one-per-island discovery into its single dossier and
+  retires the legacy island `HistoricWreck` / `FishingGround` target categories
+  before `GP-3.3` adds non-duplicating sites. Runtime wreck identity/fate
+  surveying and reporting are implemented; physical idol recovery and its
+  minimal aboard/loss contract remain `GP-4.2` work.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
   player-facing saved-game model has not been chosen.
 - `GP-3`: there are no fishing boats, trade vessels or
@@ -316,7 +320,8 @@ The completed milestones are:
    and current-version round trips;
 2. `GP-0.2` — accepted: versioned GP-1 integration boundaries;
 3. `GP-1.1` — accepted: deterministic fishing-shoal definitions and clues;
-4. `GP-1.2` — accepted: the one-case Survey / Leave action and interaction cue;
+4. `GP-1.2` — accepted historical baseline: the one-case Survey / Leave action
+   and interaction cue, explicitly superseded by proposed `GP-3.1`;
 5. `GP-1.3` — accepted: exact-dock returned leads/surveys and wreck rollback;
 6. `GP-1.4` — accepted: derived Supported-water home-connection proof and cue;
 7. `GP-2.1` — accepted: stable navigator identity and idempotent succession;
@@ -329,13 +334,15 @@ The completed milestones are:
    completed / lost navigator history, derived lineage totals and returned
    wreck-fate confirmation.
 
-The next proposed gameplay milestone is `GP-3.1`, tribe capacity and the
-protected recovery floor. It requires renewed authorization and remains
-untouched.
+The next proposed gameplay milestone is `GP-3.1`, provision-funded surveying.
+It removes the separate survey case and **Leave** command, makes sighting and
+sailing away free, and charges the shared provision supply only when a survey
+is performed. It requires renewed authorization and remains untouched.
 
-The graphics track remains deferred until `GP-3.2` is accepted, proving the
-survey-to-active-fishing and visible tribe-benefit loop with developer
-graphics, unless that gate is explicitly reapproved.
+The graphics track remains deferred until `GP-3.3` accepts stable island and
+generic survey-site identities/read models. Fishing, trade and other routine
+world-activity vessels are presentation work rather than GP-3 authoritative
+economy state, unless that gate is explicitly reapproved.
 
 See `Wayfinders_Technical_Design.md` for the current implementation model,
 `Wayfinders_Roadmap.md` for proposed scope and sequencing,

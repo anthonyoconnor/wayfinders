@@ -211,7 +211,7 @@ permanent sailing HUD.
 
 - Add a proximity **Survey / Leave** decision.
 - Begin with one fixed survey case for each new expedition allocation;
-  tribe-funded loadouts belong to GP-3.
+  GP-3.1 later supersedes that case with the standard provision allocation.
 - Exact-home-dock replenishment or post-wreck respawn intentionally creates the
   next one-case allocation; unused cases do not accumulate between voyages.
 - Sailing past a clue is free; surveying consumes a case and a short in-world
@@ -222,6 +222,11 @@ Acceptance gate: the player can knowingly spend or preserve the case; no case
 means no survey; dock, wreck and reload paths perform the one intentional
 replenishment without duplicate or unearned cases; keyboard, pointer and any
 approved contextual touch input work.
+
+This accepted milestone records the original GP-1 behavior. GP-3.1 explicitly
+supersedes its fixed survey case and Survey / Leave interaction with
+provision-funded, supply-limited surveying; it does not rewrite GP-1's
+historical acceptance evidence.
 
 #### GP-1.3 — Provisional, returned and lost surveys
 
@@ -295,8 +300,10 @@ warnings or errors.
 - Define an opportunity service anchor and a deterministic home-connected
   Supported-water eligibility check.
 - Show one unmistakable developer-art cue for an eligible returned survey.
-  This is a derived, non-economic proof; authoritative `Active` tribe state,
-  general traffic and output belong to GP-3.2.
+  This remains a derived, non-economic proof. Sparse fishing and trade traffic
+  is presentation-only work for GR-3.3; an authoritative tribe economy, output
+  model or automatic trade system requires a separately approved future
+  gameplay major.
 
 Acceptance gate: returned leads and provisional surveys never show the cue;
 returned surveys show it only with a valid Supported connection; connectivity
@@ -398,9 +405,10 @@ tests across 23 files plus typecheck and production build.
   existing four-second presentation hold, with no additional timed or
   wall-clock wait and no economy accumulation. The acknowledgement gate still
   suppresses sailing. The required committed-achievement summary makes the
-  generation handover legible;
-  later milestones may settle community activity there or give the shared
-  handover mode a richer mourning/ceremony presentation.
+  generation handover legible; later presentation may show derived world
+  changes there or give the shared handover mode a richer mourning/ceremony
+  presentation. Any future authoritative settlement system requires separate
+  approval and is not implied by this boundary.
 - Keep the limit legible through the existing navigator status and return cues
   as **Voyage n of 4**; add no retirement decision interface.
 
@@ -455,13 +463,15 @@ tests across 24 files plus typecheck and production build.
   mode.
 - Show a lost navigator as **Lost at sea** before their wreck is located. When
   GP-2.2's provisional wreck-identity survey is returned, attach the confirmed
-  wreck and fate report to the correct navigator. Deeper salvage, bounded chart
-  recovery, cargo and economy effects remain GP-3.4 work.
+  wreck and fate report to the correct navigator. Generic wreck salvage,
+  bounded chart recovery and economy effects are explicitly deferred;
+  GP-4.2 owns only the minimal cargo and recoverable-loss rules needed for
+  idols.
 
 The chronicle presentation begins after GP-2.2 supplies stable voyage ordinals,
 terminal states and committed summaries, but each later category is integrated
-at its owning gate: returned surveys after GP-1.3, fishing activation after
-GP-3.2, connected-community/trade records after GP-3.5 and idols after GP-4.2.
+at its owning gate: returned surveys after GP-1.3, returned island dossiers
+after GP-3.2, returned survey-site results after GP-3.3 and idols after GP-4.2.
 Stable achievement keys must include navigator and voyage identity and prevent
 duplicate credit.
 
@@ -471,101 +481,131 @@ terminal state; no reload or checkpoint replay duplicates credit; navigator and
 lineage totals reconcile; provisional information never appears as permanent
 history.
 
-### GP-3 — Tribe economy, support and recovery
+### GP-3 — Provision-funded surveying and discoverable places
 
-Goal: make exploration materially affect community capability without markets,
-route micromanagement or real-time waiting.
+Goal: make expedition supplies support repeated, meaningful investigation and
+expand surveying from the first fishing and navigator-wreck cases to islands
+and an extensible set of world sites. GP-3 adds no tribe economy, output model,
+voyage loadouts, automatic trade or generic wreck-salvage system.
 
-#### GP-3.1 — Tribe capacity and protected recovery floor
-
-Status: proposed.
-
-- Add a small community-support state and a guaranteed useful recovery
-  allocation.
-- Settle activity only on the instantaneous inter-voyage return/wreck
-  transitions defined by GP-2.2, never wall-clock waiting.
-- Define a persisted settlement key/cursor and apply tribe changes atomically
-  inside the authoritative return/wreck transaction; presentation events are
-  notifications, not the economy ledger.
-- Communicate healthy, strained and recovering states through developer world
-  cues and plain-language dock feedback.
-
-Acceptance gate: the player can always begin a meaningful voyage; clock
-manipulation gives no advantage; the minimum state vocabulary and settlement
-events are approved; tribe state is deterministic and exact-version replay-safe;
-replay or reload cannot settle one outcome twice.
-
-#### GP-3.2 — Tribe activation, fishing output and route activity
+#### GP-3.1 — Provision-funded surveying
 
 Status: proposed.
 
-- Promote a GP-1.4-eligible returned survey into authoritative `Active` tribe
-  state and let it contribute a simple fishing benefit.
-- Add sparse non-blocking fishing activity on Supported routes using developer
-  graphics so returned findings can become visible on later voyages.
-- Settle output idempotently on meaningful events; regenerate routine boat
-  transforms instead of saving them.
+This milestone supersedes GP-1's accepted fixed, non-stacking survey case while
+leaving that historical acceptance record intact.
 
-Acceptance gate: unreturned shoals give no benefit; boats never enter Personal
-or Unknown water; reload cannot double-apply output; activity stays readable
-and within the performance baseline.
+- Guarantee the same standard provision allocation at the beginning of every
+  journey. GP-3 adds no selectable loadout, tribe reserve or recovery tier.
+- Remove authoritative survey-case state and remove the **Leave** command,
+  button and keyboard action. Seeing a clue and sailing past it remain free.
+- Keep the contextual survey prompt non-modal. It offers only **Survey**, stays
+  out of the sailing HUD and automatically dismisses when the ship leaves the
+  target's interaction range; returning to range may show it again.
+- Give each survey target a deterministic provision cost. Before confirmation,
+  show both that cost and its projected impact on the known return route using
+  the same provision budget and return-path authority as sailing.
+- Apply the provision spend and provisional survey result as one authoritative
+  transaction. A rejection, stale command, duplicate command or failed
+  validation changes neither supplies nor target state.
+- Allow multiple surveys on one journey while provisions remain. Surveying is
+  supply-limited rather than capped by a separate case counter.
 
-GP-3.2 is the earliest proposed gate for beginning isolated graphics-platform
-work. Production-asset replacement still waits for stable gameplay entities.
+Acceptance gate: every journey begins with the standard supplies exactly once;
+sighting, prompt dismissal and sailing away cost nothing; a successful survey
+spends the displayed provisions exactly once and immediately refreshes
+forward/return guidance; insufficient supplies reject without mutation;
+repeat input and current-version reload cannot spend or award twice; fishing-
+ground and navigator-wreck surveys retain exact-dock commitment and wreck
+rollback; the non-modal prompt never suppresses sailing and sail-away dismissal
+requires no Leave action.
 
-#### GP-3.3 — Voyage commitments and physical capacity
-
-Status: proposed.
-
-- Add dockside **Light, Standard, Deep-water and Recovery** commitments.
-- Let choices determine provisions, survey/salvage capacity and open cargo room
-  at a legible tribe cost.
-- Keep cargo small and physical; do not introduce spreadsheet inventory.
-
-Acceptance gate: choices create distinct expeditions; consequences are clear
-before departure; unaffordable commitments cannot be selected; Recovery is
-always useful; reload cannot create supplies.
-
-#### GP-3.4 — Wreck setback and playable recovery
-
-Status: proposed.
-
-Depends on GP-2.1's accepted navigator/succession model, GP-2.3's stable
-voyage-record identity and GP-3.3's physical cargo/salvage contract.
-
-- Lose the current tribe investment on wreck, reduce optional support and lower
-  visible activity.
-- Preserve Supported routes, returned opportunities and the minimum allocation.
-- Recover through successful play and established activity, never waiting.
-- Build on GP-2.2's returned wreck-identity/fate report with bounded salvage,
-  chart knowledge, cargo or economy recovery. The wreck remains a meaningful
-  optional subgoal rather than restoring the failed expedition's Personal
-  chart or provisional achievements wholesale.
-
-Acceptance gate: a major loss affects the next generation; no legal failure
-sequence creates an unwinnable or idle-only state; the approved minor defines
-and tests a concrete maximum recovery sequence; salvage and recovered chart or
-economy effects are credited once to the already-identified wreck; cargo state
-and pending-wreck reload remain idempotent.
-
-#### GP-3.5 — Connected communities and automatic trade
+#### GP-3.2 — Island landfalls and single-dossier surveys
 
 Status: proposed.
 
-- Define stable water service anchors for returned settlements and a
-  Supported-only connection rule.
-- Give connected communities a small, legible surplus/need relationship and
-  settle exchange automatically without prices or manual cargo orders.
-- Use sparse, non-blocking developer-art trade traffic as world feedback.
-- Activate and settle new links at inter-voyage transitions so their traffic
-  can first appear naturally on a later voyage.
+Depends on GP-3.1's provision-funded survey transaction and the accepted stable
+island identity, discovery and exact-dock expedition boundaries.
 
-Acceptance gate: trade begins only after both endpoints and their Supported
-connection are returned; traffic never reveals or enters Personal/Unknown
-water; exchange cannot double-settle; no market, arbitrage or fleet-management
-screen is introduced.
+- Make first sight of a non-home island free. It records a provisional island
+  lead without spending provisions or revealing the island's full dossier.
+- Derive a coastal approach ring from the exact generated island footprint.
+  A dock-reachable passable water tile is a valid approach when the Euclidean
+  distance between its center and the center of at least one tile carrying that
+  exact island ID is at most 1.5 tile widths. The interaction is not tied to
+  one arbitrary marker or to land movement.
+- Give each exact island ID one deterministic dossier and at most one dossier
+  survey state. Surveying from any valid approach tile uses GP-3.1's cost and
+  transaction; repeated approach tiles cannot create duplicate dossiers.
+- Fold the accepted one-per-island generated discovery into that dossier's
+  descriptive result. Retire its `HistoricWreck` and `FishingGround` outcomes
+  as separate island-discovery target types when GP-3.2 ships: GP-3.3 sites and
+  GP-1 shoals are the only authoritative historic-wreck and fishing targets.
+- Preserve the returned-lead branch. Exact-dock return of a sighted but
+  unsurveyed island commits an inherited lead. Surveying a provisional sighting
+  or a returned lead creates a provisional dossier; exact-dock return commits
+  it, while a wreck removes that expedition's provisional sighting/dossier and
+  restores any previously returned lead.
+- Derive full reveal of tiles carrying that exact island ID from the
+  provisional or returned dossier. This fog presentation does not write
+  `KnowledgeState`, reveal other islands or water, change travel cost, create a
+  Supported route or mutate generated terrain.
+- Add no separate historic-wreck, ruin, cave or other site leads in GP-3.2; the
+  island itself is the single survey target and dossier owner, and its dossier
+  neither spawns nor unlocks a nested point target.
 
-### GP-4 — Idols, archive and optional completion
+Acceptance gate: sighting and naming an island is free; every eligible approach
+tile is derived from the exact footprint and is passable and dock-reachable;
+one island ID can produce only one deterministic dossier regardless of approach
+tile, revisit or reload; lead, provisional dossier and returned dossier remain
+distinct; wreck rollback loses only the current expedition's work; exact-dock
+return commits once; full exact-island-ID reveal appears and rolls back from
+dossier state without changing knowledge counts, route costs, connectivity,
+terrain or another island's fog; legacy island discovery categories cannot
+duplicate a GP-1 shoal or GP-3.3 site.
+
+#### GP-3.3 — Extensible survey sites
+
+Status: proposed.
+
+Depends on GP-3.1's survey transaction and GP-3.2's accepted separation between
+island dossiers, fog presentation and generated terrain.
+
+- Add one versioned, seed-derived survey-site catalog whose only content types
+  shipped in GP-3.3 are **historic wreck**, **coastal ruin** and **tidal cave**.
+  Historic sites remain distinct from runtime wrecks left by lost navigators.
+- Give all three types the same free sighting, non-modal prompt,
+  returned-lead branch, provision-funded survey, provisional result, exact-dock
+  return and wreck-rollback mechanics. A data-driven type descriptor supplies
+  placement, clue, result vocabulary and presentation IDs rather than changing
+  the lifecycle.
+- Let types differ only where content should differ: stable placement rules,
+  environmental clues, deterministic survey results and developer/production
+  art. Adding a later non-idol site type must not require another interaction or
+  persistence model.
+- Keep every site independently seed-derived and directly sightable. Island
+  dossiers do not spawn, unlock or point to these sites; chained leads and
+  nested site-within-island discoveries are deferred expansion work.
+- Treat each result as descriptive returned knowledge and Great Hall credit.
+  GP-3.3 results do not refill provisions, reveal water routes, create safe
+  waypoints or generate follow-on leads.
+- Keep site definitions separate from terrain and island generation authority;
+  sites may attach to stable island/coastal anchors but cannot edit collision,
+  island IDs, `KnowledgeState` or travel costs.
+- Add no idols, idol clues, relic cargo, archive progress or completion state.
+  Those remain exclusively GP-4 work.
+
+Acceptance gate: the same seed/content version produces the same site IDs,
+types, placements, clues and hidden results; all initial types pass one shared
+lifecycle and survey-cost contract; unsurveyed state never reveals hidden
+results or clears area fog, while a successful survey reveals its result only
+to the active expedition until exact-dock return; return and wreck rollback are
+idempotent across reload; runtime navigator wreck identity remains unambiguous;
+a synthetic fourth non-idol descriptor can pass the shared contract tests
+without a new command, reducer or save fragment, but it does not ship as
+GP-3.3 content; no idol state exists.
+
+### GP-4 — Idols, Great Hall relics and optional completion
 
 Goal: make returning every idol the finite long-term exploration goal and allow
 the player to complete the game without forcing the saved world to end.
@@ -575,10 +615,12 @@ the player to complete the game without forcing the saved world to end.
 Status: proposed.
 
 - Attach the first finite, versioned idol set to existing stable island and
-  historic-wreck anchors through a derived content catalog that does not edit
-  terrain generation. Ruins, caves, reef chambers or abandoned anchorages need
-  their own approved point-of-interest gate before use.
-- Reuse the sighting/survey lifecycle and avoid treating living-community
+  GP-3.3 site anchors through a derived content catalog that does not edit
+  terrain generation. Historic wrecks, coastal ruins and tidal caves are all
+  eligible stable site anchors; any additional site family needs its own
+  approved data-driven descriptor before use.
+- Reuse GP-3.1/GP-3.3's sighting and provision-funded survey lifecycle without
+  adding idol-specific survey commands, and avoid treating living-community
   objects as loot.
 - Reveal the total count but never exact remaining locations.
 
@@ -586,15 +628,20 @@ Acceptance gate: idol count and sites are stable; clues signal promise without
 map spoilers; idols are not currency, compulsory power or arbitrary open-water
 collectibles.
 
-#### GP-4.2 — Salvage, cargo and recoverable loss
+#### GP-4.2 — Idol recovery, minimal cargo and recoverable loss
 
 Status: proposed.
 
-Depends on GP-3.3's accepted physical-capacity contract. Catalog, clue and
-archive read-model work may proceed earlier, but cargo/wreck integration may
-not.
+Depends on GP-3.3's accepted survey-site contract, GP-4.1's idol catalog and
+GP-2.3's stable navigator/voyage credit. This milestone owns the minimum
+physical idol-cargo and loss/recovery contract; it does not require or create a
+general voyage loadout, inventory, tribe economy or generic wreck-salvage
+system.
 
-- Spend salvage capacity and cargo space to recover surveyed idols.
+- Add the smallest explicit recovery action and aboard cargo capacity required
+  by the first idol set. A site must be surveyed before its idol can be
+  recovered; the idol then occupies physical cargo space until exact-dock
+  return.
 - Track surveyed → recovered aboard → returned states.
 - On wreck, leave the idol recoverable at the wreck or restore its source.
 
@@ -603,16 +650,19 @@ collectible after every legal wreck sequence; aboard and lost states round-trip
 exactly; each idol exists in exactly one authoritative place/state—source,
 aboard, recoverable loss or archive; navigator and lineage credit agree.
 
-#### GP-4.3 — Home archive
+#### GP-4.3 — Great Hall Relics wing
 
 Status: proposed.
 
-- Add a home-only archive with named exhibits, silhouettes, lore, recovered
-  count and navigator credit.
-- Keep it outside the normal sailing HUD.
+- Add a **Relics** wing to the existing Great Hall with named exhibits,
+  silhouettes, lore, recovered count and navigator credit. Do not create a
+  second overlapping home archive.
+- Preserve the Great Hall's exact-home-dock access and keep relic progress out
+  of the normal sailing HUD.
 
-Acceptance gate: the archive contains only returned idols, preserves mystery,
-survives generations and remains optional for ordinary sailing.
+Acceptance gate: the Relics wing contains only returned idols, preserves
+mystery, survives generations and remains optional for ordinary sailing; its
+navigator and lineage credit agrees with the existing Great Hall chronicle.
 
 #### GP-4.4 — Completion and continue choice
 
@@ -661,14 +711,15 @@ unrelated saved lineage or checkpoint.
 
 Status: proposed.
 
-- Test repeated current-version save/load across voyage tenure, succession, economy,
-  idol loss/recovery and optional completion.
+- Test repeated current-version save/load across voyage tenure, succession,
+  provision-funded surveys, island dossiers, survey sites, idol loss/recovery
+  and optional completion.
 - Delete malformed or version-mismatched records and provide legible fresh-start
   recovery behavior.
 
 Acceptance gate: long multi-generation histories remain deterministic and no
-settlement, achievement, generation or completion event can be duplicated by
-reload.
+survey result, achievement, generation or completion event can be duplicated
+by reload.
 
 ## Graphics track
 
@@ -687,7 +738,7 @@ not define collision, identity or rules.
 
 ### GR-1 — Minimal asset runtime
 
-Do not begin before GP-3.2 is accepted unless this start gate is explicitly
+Do not begin before GP-3.3 is accepted unless this start gate is explicitly
 reapproved.
 
 #### GR-1.1 — Semantic asset contracts
@@ -695,8 +746,8 @@ reapproved.
 Status: proposed.
 
 Define stable semantic IDs plus origin, footprint, heading, animation, scale
-and layering contracts for the ship, dock, ocean, one island family, shoals and
-fishing skiffs.
+and layering contracts for the ship, dock, ocean, one island family, shoals,
+survey-site types and presentation-only fishing/trade vessels.
 
 Acceptance gate: swapping an asset ID's visual leaves simulation snapshots,
 terrain, identities and saves unchanged; incompatible footprints or meanings
@@ -719,8 +770,9 @@ for a saved world/content version.
 Status: proposed.
 
 Route candidate or developer versions of the player ship, dock, ocean, one
-island family, a shoal and a fishing skiff through the resolver. This proves the
-runtime path; GR-3 later completes approved production families.
+island family, a shoal, one survey site and one presentation-only vessel through
+the resolver. This proves the runtime path; GR-3 later completes approved
+production families.
 
 Acceptance gate: origins, headings, scale and depth are correct under fog and
 route/risk overlays; visual swaps leave gameplay/save snapshots unchanged; the
@@ -766,7 +818,7 @@ stay within texture limits and demonstrably remove repeated manual work.
 
 #### GR-3.1 — Ship and home waters
 
-Status: proposed. Replace the player vessel, physical cargo presentation,
+Status: proposed. Replace the player vessel, eventual idol-cargo presentation,
 ocean, dock and home-island composition while preserving authoritative
 footprints and overlay readability.
 
@@ -783,12 +835,16 @@ topology are unchanged; culling, chunk invalidation and memory budgets pass.
 
 #### GR-3.3 — Gameplay activity visuals
 
-Status: proposed. Replace clues, survey objects, fishing activity, tribe states
-and later connection vessels only after their gameplay contracts are accepted.
+Status: proposed. Replace clues and survey-site objects, then add sparse
+presentation-only fishing and trade traffic derived from returned records and
+Supported routes. GP-3 defines no authoritative fishing output, tribe state or
+trade settlement; vessel transforms and activity intensity remain graphics
+state and are never saved.
 
-Acceptance gate: provisional, returned and active states remain distinct;
-traffic remains sparse, non-blocking and Supported-only; economic feedback does
-not require a permanent numerical panel.
+Acceptance gate: provisional and returned states remain distinct; traffic
+reveals no hidden result or fog, remains sparse, non-blocking and
+Supported-only, and cannot change supplies, knowledge, discoveries, routes,
+voyage credit or save snapshots.
 
 #### GR-3.4 — Lineage, idol and completion presentation
 
@@ -827,30 +883,21 @@ flowchart LR
     GP21 --> GP22["GP-2.2 four-voyage tenure"]
     GP1 --> GP23["GP-2.3 Great Hall chronicle"]
     GP22 --> GP23
-    GP1 --> GP31["GP-3.1 tribe capacity"]
-    GP31 --> GP32["GP-3.2 fishing activation"]
-    GP23 --> GP32
-    GP32 --> GP33["GP-3.3 commitments and cargo"]
-    GP23 --> GP34["GP-3.4 wreck recovery"]
-    GP33 --> GP34
-    GP32 --> GP35["GP-3.5 automatic trade"]
-    GP1 --> GP41["GP-4.1 idol catalog"]
-    GP21 --> GP42["GP-4.2 idol recovery"]
-    GP23 --> GP42
-    GP33 --> GP42
+    GP1 --> GP31["GP-3.1 provision-funded surveying"]
+    GP23 --> GP31
+    GP31 --> GP32["GP-3.2 island dossiers"]
+    GP32 --> GP33["GP-3.3 extensible survey sites"]
+    GP33 --> GP41["GP-4.1 idol catalog"]
+    GP23 --> GP42["GP-4.2 idol recovery"]
     GP41 --> GP42
-    GP23 --> GP43["GP-4.3–4.4 archive and completion"]
+    GP23 --> GP43["GP-4.3–4.4 relic wing and completion"]
     GP42 --> GP43
-    GP34 --> GP43
-    GP32 --> GR1["GR-1 asset runtime"]
+    GP33 --> GR1["GR-1 asset runtime"]
     GR1 --> GR2["GR-2 viewer and intake tooling"]
     GR2 --> GR31["GR-3.1 ship and home"]
-    GP33 --> GR31
     GR2 --> GR32["GR-3.2 world families"]
-    GP41 --> GR32
     GR2 --> GR33["GR-3.3 activity visuals"]
-    GP34 --> GR33
-    GP35 --> GR33
+    GP33 --> GR33
     GR2 --> GR34["GR-3.4 lineage and idols"]
     GP22 --> GR34
     GP23 --> GR34
@@ -861,8 +908,7 @@ flowchart LR
     GR34 --> GR35
     GP22 --> GP5["GP-5 save/load experience"]
     GP23 --> GP5
-    GP34 --> GP5
-    GP35 --> GP5
+    GP33 --> GP5
     GP43 --> GP5
 ```
 
@@ -875,12 +921,12 @@ accepted:
 | Opportunity catalog | New deterministic catalog module and dedicated tests; do not edit terrain/island generators | Content-version and save identity are integrated by one owner |
 | Survey lifecycle | Separate headless opportunity-state reducer and tests against frozen catalog types | One owner wires actions, return/wreck behavior and saves |
 | Navigator identity, voyage-tenure policy and chronicle reducers | Separate headless lineage modules/read model and dedicated tests | Succession/event/save integration is serialized |
-| Supported-only route selection | New read-only navigation/activity module wrapping existing graph/path primitives | Economy activation and simulation wiring are serialized |
-| Economy settlement reducer | New pure reducer after settlement-key/outcome contracts are approved | Atomic return/wreck mutation and persistence are serialized |
-| Placeholder opportunity and traffic renderers | New renderer classes against a frozen read model | Scene construction, input and lifecycle wiring are serialized |
+| Island approach and dossier derivation | New pure footprint/ring and fog-read-model modules against stable island IDs | World observation, scene fog composition and save wiring are serialized |
+| Survey-site presentation | New clue/site renderers against frozen read models | Scene construction, input and lifecycle wiring are serialized |
+| Fishing/trade traffic presentation | Graphics-only renderer/path work after GP-3.3 and the relevant GR interfaces are accepted | Traffic must remain derived, non-authoritative and absent from saves |
 | Save version validation/invalidation | One persistence owner can work beside pure modules after the current state shape is approved | Parser/store/startup and shared exact-version round-trip tests remain one integration gate |
-| Idol catalog and lore/visual shell | Pure catalog plus non-authoritative archive shell after opportunity and navigator IDs freeze | The authoritative archive read model waits for GP-4.2's returned-idol/credit contract |
-| Asset manifest and resolver | New asset-runtime directory after the GP-3.2 start gate | Runtime renderer replacement waits for accepted GR-1 interfaces |
+| Idol catalog and lore/visual shell | Pure catalog plus non-authoritative archive shell after survey-site and navigator IDs freeze | The authoritative archive read model waits for GP-4.2's returned-idol/credit contract |
+| Asset manifest and resolver | New asset-runtime directory after the GP-3.3 start gate | Runtime renderer replacement waits for accepted GR-1 interfaces |
 | Isolated asset viewer/intake tools | New tooling directory after the relevant GR-1 runtime interfaces are accepted | Game integration and production passes wait for GR-2 acceptance |
 
 Central integration files are single-owner merge gates and should not be edited
@@ -896,19 +942,23 @@ concurrently by feature agents:
 - `tests/helpers.ts` plus shared save, persistence, expedition and
   full-simulation tests.
 
-Economy commitments, cargo/salvage, voyage succession and endgame all change
-lifecycle ordering. Their pure domain models can overlap, but their integration
-must be serialized through one owner. Each parallel branch should add its own
-new modules and tests; a designated integrator performs schema, simulation and
-scene changes at the documented gate.
+Provision spending, survey commitment/rollback, voyage succession, idol cargo
+and endgame all change lifecycle ordering. Their pure domain models can overlap,
+but their integration must be serialized through one owner. Each parallel
+branch should add its own new modules and tests; a designated integrator
+performs schema, simulation and scene changes at the documented gate.
 
 These boundaries describe the current architecture and must be re-audited when
 each minor is planned; they are not permanent product rules.
 
 ## Explicitly deferred
 
-- Production-asset replacement before the survey-to-active-fishing loop and
-  GP-3.2 asset-focus gate are accepted.
+- Production-asset replacement before GP-3.3 accepts the provision-funded
+  island-dossier and extensible survey-site contracts.
+- Authoritative tribe economy/output, selectable voyage loadouts, generic wreck
+  salvage/recovery and automatic trade gameplay.
+- Chained discovery quests, island dossiers that spawn separate site leads and
+  nested site-within-island targets.
 - Large resource catalogs, dynamic pricing, arbitrage, markets, manual route
   assignment, fleet management and labour allocation.
 - Real-time economic refill timers or idle progression.
@@ -935,14 +985,15 @@ authorized ordered batch:
 3. Saves load only when schema, generator, content and serialized-format
    versions exactly match the running build. Rejected records are deleted;
    development builds do not migrate or preserve older/newer saves.
-4. GP-1 uses fishing shoals, one non-stacking fixed survey case per new
-   expedition allocation and developer art.
+4. GP-1 used fishing shoals, one non-stacking fixed survey case per new
+   expedition allocation and developer art. This remains accurate accepted
+   history; GP-3.1 explicitly supersedes the case and Leave interaction.
 5. A safely returned but unsurveyed sighting becomes an inactive persistent
    lead that can be surveyed later. A wreck loses only the current expedition's
    provisional state and preserves any earlier returned lead.
-6. GR-1 remains deferred until GP-3.2 proves survey → return → visible tribe
-   benefit with developer graphics, unless that start gate is explicitly
-   reapproved.
+6. GR-1 remains deferred until GP-3.3 accepts the provision-funded island-
+   dossier and extensible survey-site contracts, unless that start gate is
+   explicitly reapproved.
 
 Additional product decisions are recorded here for later milestones:
 
@@ -953,11 +1004,20 @@ Additional product decisions are recorded here for later milestones:
   succession summarizes the achievements committed on each safe voyage and
   shows no provisional achievements for a fatal voyage. A later navigator may
   survey the lost navigator's unidentified runtime wreck with the existing
-  survey case, but only exact-dock return commits its identity/fate report.
-- GP-3 must define the minimal tribe vocabulary, settlement transactions,
-  tuning values and maximum recovery bound before economy implementation.
-- GP-4 proposes an optional ending plus continued play after the last idol;
-  its narrative presentation remains to be chosen.
+  GP-2 survey case, but only exact-dock return commits its identity/fate report.
+  GP-3.1 later replaces that case with an atomic provision cost without changing
+  the returned-report boundary.
+- GP-3 is confirmed as exactly three minors: provision-funded surveying; one
+  exact-island-ID dossier per landfall; and data-driven historic-wreck, coastal-
+  ruin and tidal-cave survey sites. Standard supplies are guaranteed every
+  journey; survey cases and Leave controls are removed; non-modal prompts
+  dismiss by sailing away; multiple surveys are limited by provisions; island
+  fog reveal is dossier-derived and does not mutate knowledge or travel; and no
+  idol, tribe economy/output, loadout, trade or generic wreck-recovery state is
+  added.
+- GP-4 proposes an optional ending plus continued play after the last idol and
+  a Great Hall **Relics** wing instead of a second home archive; both remain
+  subject to approval at their GP-4 milestones.
 - Touch-first sailing needs a separately scoped gameplay/platform input minor
   if it is a target; GR-3.5 validates only input that has actually been built.
 

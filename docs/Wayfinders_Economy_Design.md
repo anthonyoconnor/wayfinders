@@ -1,433 +1,579 @@
-# Wayfinders Economy, Legacy Goals and World Activity Design
+# Wayfinders Survey, Legacy Goals and Future World Activity Design
 
 ## Summary
 
-Wayfinders uses a community-backed economy and a lineage-wide relic collection to make exploration feel consequential without turning the game into a waiting or logistics-management game. The player is a wayfinder: they discover, survey, retrieve and safely report opportunities. Communities automatically fish, trade, build and travel on Supported routes once that knowledge has been returned home.
+Wayfinders makes exploration consequential through a simple commitment: sailing
+and surveying draw from the same provisions. Every journey begins with the
+tribe's standard supply allocation, so the player can always leave home and a
+new navigator is never blocked by an earlier loss. Surveying is nevertheless
+costly because it immediately reduces the distance and safety margin remaining
+on that journey.
 
-Routine activity is automatic and visible in the world. The player's economic choices happen at a few meaningful moments: how much community support to take on a voyage, whether to spend limited survey or salvage capacity on an uncertain lead, and when to return with what they have found. A failed expedition materially hinders the next generation, but inherited routes and a minimum recovery expedition prevent a death spiral. A finite set of rare idols provides a long-term exploration goal across the entire lineage.
+The player can notice an opportunity for free, survey it now at a provision
+cost, or sail on and return its sighting as a permanent lead. Survey results
+remain provisional until exact-dock return and are lost with the navigator if
+the voyage ends in a wreck. This makes the four journeys in each navigator's
+tenure a sequence of meaningful choices without a separate survey-case,
+loadout or tribe-capacity system.
 
-This document is a future economy and legacy-goal direction beyond the accepted implementation baseline. The forward roadmap proves fishing and survey gameplay with developer graphics before tribe economics, idols and production-asset replacement. Nothing in this document is implemented or approved merely by being described here.
+GP-3 expands the range of things that can be sighted, surveyed and brought home
+as knowledge. It does not add tribe reserves, fishing output, automatic trade,
+recovery floors or economic settlement. Fishing and trade boats can later show
+that the world uses returned knowledge during the graphics track; they do not
+require an authoritative economy or traffic simulation in GP-3.
 
-![Economy UI direction: dockside loading, an in-world survey prompt, and automatic fishing activity after return](<../concept_art/wayfinders exploration ui concept sheet.png>)
+A finite set of rare idols remains the long-term lineage goal owned by GP-4.
+GP-3 supplies stable survey sites and the shared sighting/survey lifecycle, but
+does not place idols, reveal idol-specific clues, carry relics or award
+collection credit.
+
+This document describes the intended forward design. The active roadmap remains
+authoritative, and nothing here authorizes implementation by itself.
 
 ## 1. Purpose
 
-This document defines how the world economy should support the central Wayfinders loop:
+The intended Wayfinders loop is:
 
-1. A community entrusts a navigator with limited resources.
-2. The navigator explores, surveys leads and retrieves finds.
-3. A safe exact-dock return converts personal knowledge into inherited knowledge.
-4. Communities use reported opportunities automatically.
-5. The player sees fishing, trade, construction and traffic make Supported waters more alive.
-6. A wreck loses the community's latest investment and leaves the next generation less capable, while earlier inherited routes survive.
-7. The historical record credits each navigator's returned surveys, discoveries, routes and idols while the full lineage works toward recovering every idol in the world.
+1. The tribe gives every journey its standard provision allocation.
+2. The navigator explores and notices environmental clues without paying a
+   survey cost.
+3. Near a sighted opportunity, the player chooses whether its provision cost is
+   worth reducing the current journey's remaining reach and return margin.
+4. Surveying reveals deterministic information provisionally; sailing away
+   simply defers the decision.
+5. Exact-dock return converts provisional sightings and surveys into inherited
+   leads and records.
+6. A wreck loses only the failed journey's provisional knowledge and physical
+   finds. Earlier returned knowledge and Supported routes survive.
+7. The Great Hall credits returned work to the appropriate navigator and
+   voyage, while the lineage eventually works toward recovering every idol.
 
-The intended feeling is not that the player owns a trading company. The player makes uncertain voyages on behalf of a growing network of island communities.
+The intended feeling is that the player is making difficult decisions with a
+finite journey, not managing a trading company or waiting for a resource bar.
 
 ## 2. Core design principles
 
-- Exploration is funded by community sacrifice. Supplies are not free magic; they represent food, water, repair material, labour and trust invested in a voyage.
-- Normal play must never require real-time waiting for resource bars to refill.
-- Routine fishing, trade and route operation are automatic. The player does not assign boats, set prices, choose cargo quantities or repeatedly fulfil orders.
-- Seeing an opportunity is not the same as proving its value. Survey, salvage or retrieval requires a deliberate expedition commitment.
-- Economic information is communicated first through the world: boats, docks, storehouses, cargo, workers and changed island activity. Menus appear only when a decision is needed.
-- A wreck must hurt the next generation, but it must not erase all progress or block further play.
-- Existing Supported routes are a practical inheritance. They allow a reduced recovery expedition to reach the old frontier at no provision cost.
-- The world is deterministic where it affects meaningful discovery value. The player can face uncertainty, but the game must not silently reroll outcomes after each attempt.
-- The game should distinguish **sighting**, **survey**, **returned record** and **active community use**. A sighting alone does not make a resource useful to the tribe.
-- Idols are achievement-like, lineage-wide goals. They create exploration motivation without becoming generic money or compulsory upgrade currency.
-- A failed voyage may delay an idol's recovery, but it must never make full collection permanently impossible.
+- Every journey and every successor receives the standard supply allocation.
+  There is no economy state that can prevent a meaningful departure.
+- Sailing and surveying use the same provisions. There is no separate survey
+  case, salvage allowance or survey-capacity counter in the forward design.
+- A survey must materially shorten or endanger the remaining journey. Its cost
+  and effect on return guidance are shown before the player commits.
+- Sighting is free. A non-modal prompt offers **Survey** only; continuing to
+  sail is the choice to defer.
+- A returned unsurveyed sighting is useful because it becomes an inherited lead
+  for a later journey or navigator.
+- Exact-dock return is the permanent commitment boundary. Wrecks discard the
+  current journey's provisional sightings, survey results and unreturned
+  physical objects.
+- Deterministic opportunities and results never silently reroll after a reload
+  or revisit.
+- One generated island has one authoritative island dossier even when its
+  survey reveals several characteristics.
+- Shared survey mechanics should be extended through data-driven site types,
+  not copied into a reducer and prompt for every content family.
+- Idols are finite, lineage-wide historical goals, not money, compulsory
+  upgrades or arbitrary open-water collectibles.
+- Living communities are not loot sources. Their objects become relationship,
+  entrusted-return or cultural-discovery stories where appropriate.
+- World traffic and community activity are later presentation. GP-3 does not
+  need saved `Active` states, output ledgers or economic settlement cursors to
+  justify future fishing or trade boats.
 
-## 3. What produces value
+## 3. Surveyable opportunity families
 
-### 3.1 Island resources
+### 3.1 Fishing shoals
 
-Each island can have one or more productive characteristics: freshwater, timber or fibre, stone, metal, crops, craft materials, protected anchorage or specialised local knowledge. Returning reliable information about an island creates the possibility of a later economic connection.
+Fishing shoals retain their deterministic locations, clues and hidden quality.
+A free sighting can be returned as a lead. A provision-funded survey reveals
+quality provisionally, and exact-dock return makes that survey inherited.
 
-An island does not need a large economy screen. Its role should be communicated through visible terrain, buildings, dock activity and the kinds of boats that eventually travel there.
+A returned survey connected to home through Supported water can be described as
+an active fishing ground as a derived fact. No separately saved activation
+state or numerical fishing output is required. Later graphics may place sparse
+fishing boats around a connected returned ground without making those boat
+positions authoritative.
 
-### 3.2 Nearby sea resources
+### 3.2 Island dossiers
 
-The sea itself contains valuable, place-based opportunities:
+Every non-home island has one stable dossier keyed by its existing island ID.
+Seeing the island creates a free provisional sighting. Returning without
+surveying commits one inherited island lead, preserving its location and the
+fact that it remains unexamined.
 
-- fishing shoals;
-- reef and tidal harvest grounds;
-- kelp, shellfish or other marine materials;
-- safe anchorages;
-- current lanes and navigational passages.
+The island uses a coastal approach ring derived from its exact painted
+footprint. A dock-reachable passable water tile is a valid approach when the
+Euclidean distance between its center and the center of at least one tile
+carrying that exact island ID is at most 1.5 tile widths. A canonical anchor
+may still support labels, developer tools and tests, but it never restricts the
+player to one approach. The survey consumes provisions and may report several
+characteristics in the same dossier, for example:
 
-These are important because they make established waters interesting. A safe route is not exhausted content; it can still contain smaller discoveries that help the community recover or grow.
+- freshwater, crops or useful growing conditions;
+- timber, fibre, stone, metal or craft material;
+- a protected anchorage or navigational landmark;
+- signs of former habitation or a living community;
+- specialised local knowledge or an unusual natural feature.
 
-### 3.3 One-off finds
+These characteristics are descriptive returned knowledge and Great Hall
+credit in GP-3. They do not refill provisions, alter travel, create an economy
+or spawn separate point targets.
 
-Wrecks, washed cargo, lost charts, rare tools, historic objects and stranded stores are finite opportunities. They may give immediate supplies, a future discovery lead, a unique upgrade path or a story-relevant object.
+Surveying reveals the exact generated island footprint through fog for the
+current expedition. This is a cartographic island reveal only. It does not
+change any water cell between Unknown, Personal and Supported, reveal a safe
+water route, reduce provision costs, change return calculations or imply that
+the navigator travelled around the island's coast.
 
-A wreck sighting is only a lead. It becomes useful only if the player spends effort to investigate and returns with a report or recoverable object.
+The provisional footprint reveal and dossier become permanent only on
+exact-dock return. A wreck removes the failed expedition's survey and footprint
+reveal, while an island lead returned by an earlier journey remains available
+to survey again. Multiple characteristics belong to the one dossier rather
+than becoming unrelated discovery records around the same island.
 
-### 3.4 Other communities
+GP-3.2 folds the current one-per-island generated discovery into the dossier's
+descriptive result. Its legacy `HistoricWreck` and `FishingGround` outcomes do
+not remain separate target types: GP-3.3 sites and GP-1 fishing shoals are the
+only authoritative historic-wreck and fishing targets.
 
-A discovered settlement can have needs and a surplus. Once the player returns with reliable information and a viable Supported route exists, the connected communities can establish routine exchange automatically.
+### 3.3 Runtime navigator wrecks
 
-Early trade should communicate connection and prosperity, not become a buy-low, sell-high minigame.
+A later navigator initially sees a discovered runtime wreck as unidentified.
+Surveying it consumes provisions and reveals the lost navigator's identity and
+fate provisionally. Only exact-dock return attaches that report to the correct
+Great Hall record. If the reporting navigator is also lost, the report is
+discarded and the wreck remains available to survey again.
 
-## 4. Discovery lifecycle
+Runtime navigator wrecks remain distinct from generated historic-wreck sites.
+The identification survey does not restore the fatal expedition's Personal
+chart, provisional discoveries or achievements.
 
-Every economic opportunity moves through a clear, branching state:
+### 3.4 Generic survey sites
 
-1. **Latent** — it exists in the seeded or world-generated simulation but is not known to the player.
-2. **Sighted/provisional** — the player notices an environmental clue, such as birds, disturbed water, debris or a reef opening.
-3. **Investigated/provisional** — the player spends expedition capacity to survey, test, salvage or chart it. The result belongs to the current expedition.
-4. **Returned lead** — an unsurveyed sighting is safely reported at the exact dock. It becomes an inherited lead but grants no economic benefit.
-5. **Returned survey or object** — exact-dock return makes an investigated report or recovered object inherited knowledge and eligible for later use.
-6. **Active** — the tribe or a connected community uses the returned opportunity automatically, where route and capacity conditions allow.
-7. **Developed** — later growth may make its effects more visible through extra boats, dock facilities or settlement change.
+GP-3.3 ships exactly three generic site families:
 
-A provisional sighting or investigation belongs to the current expedition. If the explorer wrecks before returning, it is lost with them. The physical opportunity remains in the deterministic world and can be found again. A returned lead survives but stays inactive until a later navigator investigates it and safely returns the result.
-
-## 5. Legacy goals: idols and historical records
-
-### 5.1 Purpose of idols
-
-Idols are a finite collection of rare relics distributed through the seeded world. They are a long-term achievement goal that gives players a reason to explore every kind of meaningful place: islands, historic wrecks, reefs, abandoned anchorages, ruins and unusual landmarks.
-
-They should not function primarily as currency or as mandatory power upgrades. Their value is historical, visual and completion-driven:
-
-- every returned idol becomes a named exhibit in the home archive;
-- the navigator who returned it receives permanent credit in their generation record;
-- the collection count gives the lineage a clear long-term objective;
-- idols can reveal lore, display art, archive entries or a final historical revelation;
-- a completed collection can support a completion ending or major world celebration without invalidating continued play.
-
-To avoid treating living cultures as loot, idols should normally be relics from abandoned sites, lost ships, shared ancient traditions or places where recovery is explicitly appropriate. An object belonging to a living community should instead become a relationship, entrusted-return or cultural discovery story.
-
-### 5.2 Idol placement and clue rules
-
-Each world has a configured, deterministic idol set. The player may know the total count through oral history or the home archive, but never receives a list of exact locations.
-
-Idols must be attached to meaningful locations rather than arbitrary hidden map cells. Valid sources include:
-
-- a historic wreck with a sealed hold;
-- a ruin, shrine or cave on an island;
-- a submerged reef site or tidal chamber;
-- a long-abandoned anchorage;
-- a distinctive natural landmark with a recoverable relic.
-
-The player should encounter clues before an idol becomes available. A clue can be environmental, historical or chart-based: an unusual wreck silhouette, old carvings, birds over a reef gap, a recovered map fragment or a survey result from another site. Clues should indicate promise without revealing the exact reward.
-
-### 5.3 Idol lifecycle
-
-| State | What the player knows | What the tribe or archive gains |
+| Site type | Visual and clue language | Initial result family |
 | --- | --- | --- |
-| Hidden | Nothing | Nothing |
-| Sighted lead | There may be something worth investigating | Nothing |
-| Surveyed | The site contains an idol or a strong idol lead | A provisional expedition record only |
-| Recovered aboard | The physical idol occupies cargo space | Still provisional until return |
-| Returned | The idol is safely delivered to the home archive | Permanent lineage achievement and navigator credit |
-| Lost in a wreck | The idol is not collected | A recoverable lost-relic state at the wreck or source; never permanent destruction |
+| Historic wreck | An old hull, broken mast, debris trail or sealed remains, never presented as a lineage navigator's wreck | Maritime history, evidence of former routes, mundane tools or traces of a larger story |
+| Coastal ruin | Foundations, carved stones, broken walls or traces of an abandoned shore settlement | Former habitation, local history, inscriptions or cultural traces |
+| Tidal cave | A cliff opening, dark water, unusual birds, echoes or reflected light | Geology, markings, unusual formations or evidence of earlier visitors |
 
-Surveying an idol site must cost expedition capacity, normally a survey or salvage case plus time and, where appropriate, cargo space. This makes discovery a choice: the player can preserve resources for range, investigate now or mark the lead and return later.
+All three use the same stable definition, service-anchor, sighting, provision
+cost, provisional survey, return-commit and wreck-rollback mechanics. They are
+distinguished initially by world marker, clue vocabulary and deterministic
+result content, not by separate controls or type-specific simulation.
 
-An idol aboard a wrecked ship is not credited as collected. It should become recoverable by a future generation through the wreck marker, or be restored to its original site if that is clearer for the content. This preserves meaningful failure without breaking a full-collection game goal.
+They are independently seed-derived, directly sightable targets. An island
+dossier does not spawn, unlock or point to one. Chained clues and nested
+site-within-island targets are deferred expansion work. Their survey results
+are descriptive records only: they do not refill provisions, reveal routes,
+create safe waypoints or generate follow-on leads.
 
-### 5.4 Great Hall voyage record and lineage archive
+The catalog and shared tests remain extensible to later shrines, reef chambers,
+abandoned anchorages, natural landmarks and other approved points of interest,
+but none ships in GP-3.3. GP-4 can attach an idol catalog entry to a stable
+generic-site ID without changing the site's terrain or letting GP-3 expose
+which sites contain idols.
 
-The player-facing permanent record is a diegetic **Great Hall** rather than an arcade score screen. GP-2.2 owns the four-journey tenure, death, succession and required handover gate. GP-2.3 turns that handover into the focused, non-dismissible view of the same Great Hall chronicle used for permanent browsing; it is not a separate summary. For each numbered safe voyage it lists the route-support counts, named discoveries, fishing leads and surveys, and navigator-wreck identities committed at the exact dock. For an early death it follows the earlier committed rows with the numbered voyage on which the navigator was lost at sea and shows none of that fatal voyage's provisional work.
+### 3.5 Other communities and future activity
 
-Outside succession, the player may browse every generation through **Go ashore · Great Hall** only at the exact home dock. The current navigator appears as **In progress**. Ordinary returns update the chronicle and may show a session-only update cue, but do not force the Hall open; there is no at-sea Great Hall or permanent sailing HUD. The chronicle entries and lineage totals are a shared, derived read model over authoritative lineage and returned-world records. The source records provide permanence while the Hall view is rebuilt; it is not a second archive, separately persisted aggregates or saved viewed/update state.
+An island dossier may record contact with a living community, but GP-3 does not
+simulate its needs, surplus, trade output or route operation. Those ideas are
+outside the approved gameplay roadmap unless a later decision gives them a
+specific player-facing purpose.
 
-Each navigator receives four numbered voyage positions. A navigator who completes their tenure fills all four with safely returned voyages. A navigator who dies in a wreck keeps their earlier completed voyages, receives a respectful terminal lost-voyage record and cannot use the remaining positions.
+Fishing skiffs, community boats and trade vessels may be added during graphics
+work as sparse, non-blocking evidence of returned knowledge and elapsed world
+time. They should be derived from permanent records and Supported water, never
+reveal Unknown or Personal routes, and need not imply a numerical economy.
 
-| Record section | Examples |
-| --- | --- |
-| Voyages 1–4 | Numbered returned voyages, or the terminal voyage on which the navigator was lost |
-| Landfalls | Islands, shoals, wrecks, anchorages and passages first brought home as knowledge |
-| Surveys returned | Fishing grounds, resources, settlement contacts, migration sites and safe routes confirmed |
-| Connections made | Supported corridors, active fishing grounds, trade links and future home sites enabled |
-| Idols recovered | Named relics returned by that navigator |
-| Navigator's fate | Completed four-voyage tenure, or lost at sea with the wreck initially unlocated and a later returned wreck report when found |
+## 4. Shared discovery lifecycle
 
-The lineage view aggregates permanent progress across every generation. It may show a restrained completion count such as **Idols recovered: 4 of 12**, recovered silhouettes and named exhibits. These totals are derived when the Great Hall is presented rather than stored as separate lineage state, and they must not reveal the remaining locations.
+Fishing shoals, island dossiers and GP-3.3 generated sites follow one branching
+lifecycle:
 
-Only returned achievements count as permanent legacy. Sighted and surveyed-but-unreturned opportunities remain provisional and are lost after a wreck. The terminal lost-voyage entry records that the navigator did not return, not the fatal expedition's provisional achievements. A later navigator's exact-dock-committed wreck survey can confirm whose wreck was found and attach that location/fate report to the lost record. This keeps exact-dock return as the game's clear commitment boundary.
+1. **Latent** — the deterministic opportunity exists but is unknown.
+2. **Sighted / provisional** — current sight reveals a clue for free during the
+   active expedition.
+3. **Surveyed / provisional** — the player deliberately spends provisions and
+   learns the deterministic result during the active expedition.
+4. **Returned lead** — exact-dock return commits an unsurveyed sighting for
+   future journeys.
+5. **Returned survey** — exact-dock return commits the surveyed result and
+   navigator/voyage credit.
 
-### 5.5 How idols drive exploration
+A returned lead can be surveyed on a later journey. That later survey remains
+provisional until it too reaches the exact dock. A wreck removes only records
+owned by the failed expedition; deterministic sites remain in the world and
+earlier returned leads or surveys survive.
 
-Idols should create curiosity at several scales:
+Runtime navigator wrecks reuse the provision charge and the provisional-report
+return/rollback rules, but not the full latent/returned-lead branch. Once found,
+their physical wreck marker remains persistent until its identity is reported.
 
-- A nearby clue makes a player decide whether to spend a survey case during the current voyage.
-- A returned clue gives a future voyage a concrete target beyond the next fog frontier.
-- A partially completed archive encourages travel to different types of locations rather than repeatedly harvesting one known route.
-- A lost idol aboard a wreck creates a recoverable reason for a later generation to revisit dangerous water.
+`Active` and `Developed` are not generic authoritative lifecycle states in
+GP-3. If later presentation calls a connected returned fishing survey active,
+that label is derived from its returned record and Supported connection.
 
-Idols therefore complement, rather than replace, economic discoveries. A fishing shoal improves community capacity; an idol gives the player a memorable historical objective. Both require survey, cargo decisions and a safe return.
+## 5. Provision-funded surveying
 
-## 6. Community support and voyage commitment
+### 5.1 Standard journey allocation
 
-### 6.1 Two layers of expedition support
+Every journey begins with the same standard provision allocation. Exact-dock
+return replenishes the next journey immediately. A wrecked navigator's
+successor also begins fully supplied after the succession handover. The tribe
+may narratively work, mourn and prepare between voyages, but no capacity,
+recovery or wall-clock economy state controls that allocation.
 
-The community provides two different kinds of support:
+### 5.2 Survey cost
 
-| Layer | Role |
-| --- | --- |
-| Recovery allocation | A minimum, still-useful expedition that is always available. It prevents the game from becoming a real-time waiting exercise. |
-| Optional commitment | Additional provisions, survey cases, salvage capacity and cargo room that make a longer or more capable voyage possible at a greater cost to community reserves. |
+The first version should use one fixed, configurable provision cost shared by
+all survey types. A site-specific cost should be introduced only if playtesting
+shows that it creates a legible choice rather than hidden content priority.
 
-The player should always be able to leave the dock. The real choice is how ambitious the next expedition should be.
+Before confirmation, the prompt shows:
 
-### 6.2 Voyage load choices
+- the provision cost;
+- provisions that will remain;
+- the resulting estimated return margin or risk state; and
+- that the result remains provisional until exact-dock return.
 
-The first player-facing version should use a few readable commitments rather than a detailed resource ledger:
+The simulation deducts the provision cost atomically with the survey result.
+Repeated input, reload or revisit cannot charge twice. The player may survey
+more than one opportunity on a journey when enough provisions remain; there is
+no one-survey-per-voyage restriction.
 
-| Commitment | Gameplay result | Community result |
+The game does not secretly reserve provisions for the return journey. If a
+survey leaves a dangerous or impossible estimated return, the prompt warns the
+player clearly but preserves the choice whenever the stated provision cost can
+be paid.
+
+### 5.3 Why deferring matters
+
+Sailing past a clue costs nothing. If that sighting reaches home, the returned
+lead gives a later journey an exact target. Surveying immediately trades current
+range for earlier certainty; deferring preserves this journey's provisions but
+uses one of the navigator's remaining journeys to revisit the site. This is the
+central GP-3 decision.
+
+## 6. Idol legacy goal
+
+### 6.1 Purpose and boundary
+
+Idols are a finite collection of rare relics distributed through the seeded
+world. They motivate exploration across islands, historic wrecks, reefs,
+abandoned places and unusual landmarks. Their value is historical, visual and
+completion-driven:
+
+- every returned idol becomes a named exhibit at home;
+- the navigator who returned it receives permanent voyage credit;
+- a restrained recovered count gives the lineage a finite objective;
+- exhibits can reveal lore and a final historical revelation; and
+- completing the collection can support a celebration or optional ending while
+  allowing continued play.
+
+GP-4 owns the idol registry, idol-specific clues, survey/recovery states,
+physical aboard state, recoverable loss, archive presentation and completion.
+GP-3 owns only the generic sites and survey mechanics on which some idols may
+later depend.
+
+### 6.2 Placement and clue rules
+
+Each world has a configured, deterministic idol set. The player may know the
+total count but never receives a list of exact remaining locations. Idols attach
+to meaningful stable anchors rather than arbitrary water cells, including:
+
+- a GP-3 historic-wreck, coastal-ruin or tidal-cave site;
+- a later approved shrine, reef chamber or abandoned anchorage;
+- a distinctive natural landmark with an appropriate recoverable relic.
+
+Clues precede recovery and indicate promise without exposing the exact reward.
+An unusual silhouette, carving, map fragment or returned survey elsewhere may
+point toward a site. GP-3's ordinary site result must not accidentally reveal an
+idol unless GP-4's idol-specific clue contract says it should.
+
+Objects belonging to living communities are not treated as loot. They become
+relationship, entrusted-return or cultural-discovery stories instead.
+
+### 6.3 Idol lifecycle and minimal cargo
+
+| State | What the player knows | Permanent credit |
 | --- | --- | --- |
-| Light | Short reconnaissance, limited ability to investigate leads | Routine activity remains stable |
-| Standard | The normal expedition baseline | The expected community investment |
-| Deep-water | Greater range and more survey or salvage capacity | Draws on reserve, delays some growth or reduces visible activity |
-| Recovery | Smaller but practical allocation after a major loss | The community is rebuilding after a failed investment |
+| Hidden | Nothing | None |
+| Sighted lead | A site may deserve investigation | None |
+| Surveyed | The site contains an idol or a strong idol lead | None; provisional expedition knowledge |
+| Recovered aboard | The physical idol is carried by the navigator | None; still provisional |
+| Returned | The idol reaches the exact home dock | Archive, navigator and lineage credit |
+| Lost in a wreck | The idol did not return | None; it remains recoverable at the wreck or source |
 
-The exact numbers are tuning values, not normal-play UI. The accepted baseline currently uses physical provision bundles and a fixed resupply model. A future gameplay minor may introduce different allocations only after its save-version invalidation, balance and playtest plans are approved.
+Surveying an idol site consumes provisions through the GP-3 survey contract.
+GP-4.2 owns the minimal cargo and recovery rules needed to move a surveyed idol
+aboard, lose it in a wreck and make it recoverable again. GP-3 does not add a
+general loadout screen, salvage-case resource or cargo economy in anticipation
+of that feature.
 
-### 6.3 Capacity trade-offs
+Every idol must exist in exactly one authoritative place or state: source,
+aboard, recoverable loss or returned archive. A wreck can delay collection but
+can never make full completion impossible.
 
-A voyage should have limited physical space. The player balances:
+### 6.4 Great Hall relic wing
 
-- provision crates for reach;
-- survey or salvage cases for validating opportunities;
-- open cargo space for recovered finds;
-- later, specialised equipment only if it creates distinct and enjoyable decisions.
+The existing Great Hall is the recommended home for the idol archive rather
+than a second overlapping home-only history screen. A **Relics** wing can show
+named exhibits, silhouettes, lore, recovered count and returning navigator
+credit while preserving the Hall's exact-home-dock access and optional nature.
 
-This makes an expedition plan meaningful without requiring a complex inventory. A navigator who packs only provisions can travel far but may be unable to prove a valuable discovery. A navigator who brings survey equipment may need to turn home earlier.
+The Great Hall's navigator entries continue to derive from authoritative
+lineage and returned-world records. Idols join those entries only after GP-4.2
+defines returned-idol and voyage-credit ownership. Collection totals are
+derived when the Hall is presented rather than saved as duplicate aggregates,
+and they never reveal remaining locations.
 
-## 7. Survey and salvage costs
+Each navigator still receives four numbered voyage positions. Only
+exact-dock-returned achievements appear in a safe-voyage row. A terminal lost
+voyage never displays its provisional survey or idol work. A later returned
+runtime-wreck report may identify the lost navigator without retroactively
+committing anything from the fatal voyage.
 
-A player should be able to sail past a lead for free. The cost begins only when they choose to investigate.
+### 6.5 Completion
 
-| Opportunity | Investigation commitment | Possible results |
+Returning the final idol unlocks an unmistakable one-shot completion event. The
+player may end the lineage's story or continue exploring the same world. The
+ending is never forced, continued play does not invalidate the collection, and
+arbitrary legal wreck histories cannot make completion impossible.
+
+## 7. Wrecks and inheritance
+
+A wreck ends the current navigator's tenure and loses:
+
+- the failed journey's Personal water knowledge;
+- provisional sightings, surveys and runtime-wreck identity reports;
+- unreturned physical finds such as a future idol; and
+- the current vessel and remaining provisions.
+
+It preserves:
+
+- all Supported routes and returned discoveries;
+- earlier returned island dossiers, leads and surveys;
+- the four-journey records already committed for that navigator;
+- the new runtime wreck as a later-discoverable marker; and
+- the tribe's guarantee of standard provisions for the successor.
+
+There is no tribe-capacity penalty, reduced recovery allocation, blocked
+loadout or automatic-output reduction after a wreck. The loss matters through
+the navigator's death, the shortened four-journey record and the failed
+journey's lost provisional progress.
+
+Surveying a runtime wreck identifies the lost navigator; it does not salvage
+cargo, restore chart knowledge or recover economic value. Idol recovery from a
+wreck belongs to GP-4.2. Any broader salvage system would require its own later
+approval and concrete player-facing purpose.
+
+This remains the central inheritance rule:
+
+> A wreck loses the navigator's unfinished journey, not the lineage's returned world.
+
+## 8. Time between journeys
+
+For the player, return, replenishment and succession are immediate. In the
+world, time passes between voyages: the tribe uses the returned report, waits
+for a missing navigator, mourns the dead and prepares a successor. That elapsed
+time justifies later visual changes such as boats using a reported shoal or a
+new route.
+
+No economic clock, output settlement or wall-clock waiting is needed to express
+that transition. Later cutscenes and graphics can enrich it without changing
+authoritative gameplay time.
+
+## 9. UI direction
+
+### 9.1 Persistent sailing presentation
+
+Normal sailing shows the ship, physical provision bundles, environmental clues
+and the existing navigation/risk guidance. It does not show survey cases, a
+general cargo rack, tribe reserves, market prices or a permanent economy task
+list. GP-4 may later add minimal presentation for an idol physically aboard.
+
+### 9.2 Contextual survey prompt
+
+The player first sees a clue in the world: birds, disturbed water, debris,
+carved stones, a cave opening or a broken mast. Within inspection range, a
+small world-adjacent prompt appears without pausing or suppressing sailing.
+
+The prompt contains one action:
+
+- **Survey** — spend the displayed provisions and reveal the deterministic
+  provisional result.
+
+There is no **Leave** button or authoritative leave command. Continuing to sail
+is the decision to defer. The prompt hides automatically when the target leaves
+inspection range and appears again on re-entry while the target remains
+surveyable. Dismissing or leaving range does not mutate or save gameplay state.
+
+The prompt shows the resulting provision and return-risk consequence before
+confirmation. If the cost cannot be paid, it explains why Survey is unavailable
+without blocking movement.
+
+### 9.3 Provisional and returned presentation
+
+A provisional sighting or survey receives a faint personal chart/world mark.
+An island survey may additionally show its exact footprint through fog for the
+current expedition. These presentation records roll back with their owning
+expedition on a wreck.
+
+At the exact dock, reporting is automatic. One concise return presentation
+lists the committed leads, surveys, island dossier information and wreck
+reports, then points to their permanent Great Hall record. There is no sell
+screen, manual route assignment or economy-settlement screen.
+
+### 9.4 UI choices
+
+| UI need | Initial direction | Boundary |
 | --- | --- | --- |
-| Fishing shoal | Survey case, a short stop and small voyage cost | Poor or seasonal fishing, useful local catch, major long-term ground |
-| Wreck | Salvage case, time and cargo space | Supplies, chart, rare tool, historic object, partial salvage or little value |
-| Reef passage | Survey case and careful movement | Safe shortcut, harvest site, useful anchorage or dead end |
-| Current lane | Charting effort and voyage time | Faster or safer route, seasonal lane or minor local variation |
+| Journey supplies | Automatic standard allocation | No dockside loadout or recovery tier |
+| Opportunity sighting | Environmental clue and faint provisional mark | Sighting is free |
+| Survey decision | Non-modal proximity prompt with **Survey** only | Sailing away defers and auto-hides the prompt |
+| Survey consequence | Cost, remaining provisions and return-risk change | No separate survey capacity |
+| Returned result | Brief dock report plus Great Hall credit | Exact dock is the permanent boundary |
+| Idol collection | Great Hall Relics wing with a restrained total | GP-4 only; never expose remaining locations |
 
-Results are uncertain to the player but fixed by the world state. Environmental clues should communicate rough promise: a large, dense bird flock and visibly active water are more promising than a faint ripple. A disappointing result must be uncommon enough and signposted enough that it feels like a reasonable gamble, not arbitrary punishment.
+## 10. Map language
 
-A lead that turns out to be poor can still add small navigational knowledge or story texture, but it should not become a profitable repeat action.
-
-## 8. Wrecks, inheritance and recovery
-
-A failed high-investment expedition is the death of the explorer and the loss of the community's latest contribution. It should produce a tangible inherited setback:
-
-- the active Personal route and provisional discoveries are lost;
-- provisions, survey cases, cargo and the expedition vessel are lost;
-- the next generation begins with a recovery allocation rather than full ambitious backing;
-- extended-voyage options may be unavailable until the community recovers;
-- fishing and trade activity can visibly reduce;
-- harbour improvements or new route launches can pause.
-
-At the same time, a wreck must preserve earlier success:
-
-- Supported routes survive;
-- returned discoveries survive;
-- active fishing grounds and trade links continue, though possibly at lower intensity;
-- the wreck remains as a visible, later-discoverable marker;
-- the next navigator can use Supported water at no provision cost to reach a distant old frontier.
-
-The persistent runtime wreck remains associated with the lost navigator, but a
-later navigator initially sees only an unidentified wreck. Surveying it uses
-the existing one-per-voyage survey case and tells the crew whose wreck they
-found. That identity/fate report remains provisional aboard and resolves the
-corresponding lineage record only after exact-dock return. If the surveying
-navigator is also lost, the report is lost and the discovered wreck can be
-surveyed again. This report must not retroactively commit the fatal
-expedition's Personal chart or provisional discoveries.
-
-GP-3.4 may later build on a returned wreck report with bounded salvage, chart
-knowledge, cargo or economy recovery. Those rewards are separate from the
-baseline identification survey and require their own capacity and recovery
-rules.
-
-This is the central inheritance rule:
-
-> A wreck does not erase the inherited world, but it makes the next generation rely on it.
-
-Recovery happens through play, not idle time. A small safe return, a newly confirmed nearby shoal, a recovered wreck object or output from already-established automatic routes can restore community capacity. The game must maintain a floor beneath which the player cannot fall into an unwinnable wait state.
-
-## 9. Automatic world activity
-
-Once an opportunity has been returned and the required route conditions are met, the communities take over routine operation.
-
-- Fishing boats travel between a connected island and a confirmed shoal.
-- Trade vessels travel only along Supported water between connected settlements.
-- Local boats may use confirmed anchorages, reef passages or current lanes.
-- Dock activity, storehouse fullness, repair work and settlement silhouettes respond to sustained connections.
-- Traffic remains sparse enough to read as a world consequence, not visual noise.
-
-The player does not open a route-management screen. Their return report and Supported route are the approval. In a later, deeper economy, communities may choose among competing opportunities automatically based on their needs, but this should remain legible through visible world changes.
-
-## 10. Economic time without waiting
-
-Economic simulation should advance on meaningful voyage transitions, not through a requirement to idle at the dock.
-
-Authoritative succession remains immediate, but every safe-tenure or fatal-wreck generation boundary creates GP-2.2's required handover gate before sailing resumes. GP-2.3 presents that gate as the outgoing navigator's focused Great Hall entry. A safe return or fatal-wreck succession represents elapsed world time between voyages. Connected communities are assumed to have been fishing, trading and working; after a loss, the tribe has also determined that its navigator will not return, mourned them and nominated a successor. The transition settles the effects of that elapsed period. Later presentation can enrich the handover or mourning scene without imposing real-time waiting or replacing the shared chronicle.
-
-This supports the desired pacing:
-
-- the player returns and can leave again immediately;
-- automatic routes have had time to matter during the compressed transition;
-- a major loss changes available support and visible activity immediately;
-- recovery occurs through successful play and established infrastructure rather than a countdown timer.
-
-## 11. UI direction
-
-The UI must uphold the normal-play minimal-HUD rule. The world and the physical ship communicate most state. Interface appears only at a dock or at the moment of a contextual decision.
-
-### 11.1 Persistent sailing presentation
-
-Normal sailing should show:
-
-- the boat and its physical cargo rack;
-- provisions, survey cases and empty cargo positions as distinct physical objects;
-- environmental clues in the world;
-- active fishing and trade boats on Supported routes;
-- only the existing navigation and risk guidance required by the exploration loop.
-
-It should not show a permanent economy panel, resource spreadsheet, market prices or task list.
-
-### 11.2 Dock preparation
-
-While moored at the home dock, the player opens a compact cargo layout. This is the one deliberate preparation surface.
-
-The preferred initial UI is a small set of commitment choices such as **Light**, **Standard** and **Deep water**. The selected option changes the physically shown cargo plan and displays a plain-language community consequence such as:
-
-- “The village will manage well.”
-- “This is the usual expedition provision.”
-- “Fishing crews will reduce their trips.”
-- “The stores cannot support a voyage this large.”
-
-A later version can expose a small grid of physical cargo slots for more detailed tuning. It should still avoid a raw numerical slider as the main interaction.
-
-### 11.3 Contextual survey and salvage
-
-At sea, the player first sees a clue, not a menu. Birds, fish, debris, water colour or a broken mast draw attention.
-
-Only within inspection range should a small world-adjacent ribbon appear:
-
-- **Survey** — consumes a survey case;
-- **Leave** — continue sailing.
-
-For an unidentified runtime navigator wreck, the current baseline option is **Survey wreck**. It consumes the same one-per-voyage survey case used by other survey work, requires no cargo space and creates a provisional identity/fate report. The crew can learn whose wreck it is at sea, but the tribe and permanent lineage receive that knowledge only after exact-dock return. Generated historic-wreck discoveries remain separate content and do not claim an association with a lineage navigator.
-
-After GP-3.3 defines physical salvage capacity, GP-3.4 may add a separate **Salvage wreck** action that shows its salvage-case and cargo-space requirements. Survey identifies and reports; salvage recovers bounded physical or chart/economy value. Both should remain concise world actions rather than long progress bars.
-
-### 11.4 Provisional records
-
-A sighted or investigated opportunity can leave a faint temporary mark on the expedition’s personal chart. It is useful for deciding whether to return later during that expedition, but it is not a permanent map marker until exact-dock return.
-
-### 11.5 Automatic return report
-
-At the dock, reporting is automatic. Workers receive the chart, wreck report or cargo, followed by one concise world-facing confirmation such as **Fishing ground confirmed** or **Lost navigator's wreck identified**. Later voyages visibly show the consequence: a wreck's lineage association remains known, fishing skiffs operate at the shoal, trade vessels use the new route or the harbour gains activity.
-
-There is no sell screen and no manual route assignment.
-
-### 11.6 UI options and recommendation
-
-| UI need | Minimal option | Richer option | Recommendation |
-| --- | --- | --- | --- |
-| Expedition load | Light, Standard and Deep-water commitments | Small physical cargo-slot layout | Begin with commitments; add slots only if playtests need more planning depth |
-| Opportunity discovery | Proximity prompt with Survey or Leave | A short inspection card with a clue-quality description | Use proximity prompt; do not interrupt sailing at first sight |
-| Provisional knowledge | Faint temporary world/chart mark | Expandable personal expedition log | Start with the faint mark |
-| Returned result | Brief dock report and visible boat activity | A compact returned-discovery journal | Use automatic dock report; journal can be optional later |
-| Community health | World activity and plain-language dock feedback | Optional accessible summary | Prefer visual world state, with an accessibility-readable summary |
-| Idol collection | Home archive and a restrained total recovered count | Expandable generation-by-generation relic chronicle | Keep the collection out of the sailing HUD and do not reveal remaining locations |
-
-The single three-panel UI mockup created for this discussion is the intended visual reference: dockside physical loading, a tiny in-world survey decision, and automatic dock reporting followed by fishing traffic. Idol recovery uses the same contextual pattern: a meaningful world clue, a small **Survey** or **Examine** decision, physical cargo space and automatic archiving after return. The mockup is a direction reference, not a final production layout.
-
-## 12. Map language
-
-Map and world presentation should make the economic state readable without a large legend:
-
-| State | World language |
+| State | World and chart language |
 | --- | --- |
-| Unknown opportunity | Environmental clue only |
-| Sighted or provisional | Faint personal mark, visible only to the active expedition |
-| Returned opportunity | Persistent mapped symbol or recognisable landmark |
-| Active fishing ground | Small skiffs, nets, fish activity and route wakes |
-| Active trade connection | Cargo boats, busy docks, storage and travel on Supported corridors |
-| Community recovery | Reduced but surviving activity, quieter dock, fewer optional projects |
-| Community growth | More boats, fuller stores, expanded docks and active island silhouettes |
-| Returned idol | Archive display and named historical record at home; no map spoiler for remaining idols |
-| Lost idol | Recoverable wreck or renewed site clue, never a permanently failed collection slot |
+| Unknown opportunity | Environmental clue only when current sight reaches it |
+| Sighted / provisional | Faint personal mark for the active expedition |
+| Returned lead | Persistent inherited lead with survey still available |
+| Surveyed / provisional | Revealed result marked as not yet returned |
+| Returned survey | Persistent named result and Great Hall voyage credit |
+| Surveyed island dossier | Exact island footprint revealed; surrounding water knowledge remains unchanged |
+| Connected returned fishing survey | May receive a derived home-linked label; no saved output state |
+| Returned idol | Named exhibit and navigator credit in the Great Hall Relics wing |
+| Lost idol | Recoverable wreck/source state, never a permanently failed collection slot |
 
-## 13. Content boundaries
+Later fishing or trade traffic is graphics-stage world language. It must remain
+sparse, non-blocking and unable to reveal hidden navigation knowledge.
 
-The first economy layer should use a small number of clear resource families. Suggested initial families are food and marine harvest, repair and craft material, building material, navigation knowledge, surveyable settlement or migration sites, and rare one-off finds.
+## 11. Content boundaries
 
-Do not start with a large list of commodities, dynamic price simulation, manual labour assignment, arbitrage or a global market. The goal is to make the world’s growth visible and exploration choices richer.
+GP-3 begins with existing fishing shoals, one dossier for every non-home island,
+runtime navigator-wreck reports and the three GP-3.3 generic site types:
+historic wreck, coastal ruin and tidal cave.
 
-Do not make idols a generic sale item, a compulsory source of raw power or a random collectible hidden in ordinary water. They are finite, meaningful relics tied to surveyable points of interest.
+Do not create a large commodity list, dynamic prices, labour assignment,
+arbitrage, manual trade routes, tribe-capacity state, fishing-output ledger or
+generic cargo inventory. These systems are not required by the approved
+exploration loop. They may return only through a separately approved design
+that identifies a concrete player-facing benefit.
 
-## 14. Roadmap placement
+Do not place GP-4 idols during GP-3, make ordinary historic objects count toward
+the finite idol set or imply that a living community's possessions are
+collectibles. GP-3 sites are stable anchors and ordinary discoveries; GP-4 owns
+the finite registry and all idol-specific behavior.
 
-The active roadmap is defined in `Wayfinders_Roadmap.md`. This design maps to it as follows.
+## 12. Roadmap placement
 
-### GP-1: fishing grounds and survey work
+The active roadmap is defined in `Wayfinders_Roadmap.md`. This design maps to
+the confirmed direction as follows.
 
-Begin with deterministic fishing-shoal clues, limited survey cases, an explicit **Survey / Leave** choice, branching returned-lead/returned-survey records and one clear developer cue proving Supported connectivity. Authoritative tribe activation and output wait for GP-3. Use developer graphics and do not introduce tribe reserves, production assets, salvage or idols in the first vertical slice.
+### GP-1: fishing grounds and the accepted survey baseline
 
-### GP-2: explorers, generations and lineage history
+GP-1 established deterministic fishing clues, sighting/survey/returned records,
+exact-dock commitment and wreck rollback. Its implemented one-case allocation
+and **Survey / Leave** prompt are accepted historical baseline behavior that
+GP-3.1 deliberately replaces; they are not the forward cross-content model.
 
-GP-2.2 adds persistent navigator identity, the four-journey tenure, automatic succession after the fourth safe return, fatal early succession on wreck and the required handover gate. GP-2.3 presents that handover as the focused view of the permanent Great Hall chronicle, adds optional exact-home-dock browsing across generations and derives lineage totals. Every succession shows the exact-dock-committed achievements of each safe voyage and excludes provisional fatal-voyage work. A later navigator can survey an unidentified runtime wreck with the existing survey case and permanently report whose wreck it is only after exact-dock return. GP-2 does not salvage cargo, restore chart knowledge or apply economy rewards from that wreck.
+### GP-2: navigators, generations and lineage history
 
-### GP-3: tribe economy, support and recovery
+GP-2.2 owns four-journey tenure, death, succession and the required handover
+gate. GP-2.3 presents that gate through the permanent Great Hall, supports
+exact-home-dock browsing and derives lineage totals. Runtime-wreck identity and
+fate reporting already obey the provisional/exact-dock boundary.
 
-After survey work is understood, introduce tribe support state, a protected recovery floor, automatic activation and output from returned fishing grounds, dockside voyage commitments, Supported-only fishing activity, wreck setback/recovery and later automatic exchange with connected communities. GP-3.4 builds on GP-2's returned wreck identity/fate report with bounded salvage, chart, cargo and economy recovery rather than redefining identification. Economic time settles on inter-voyage return/wreck transitions and never requires real-time waiting.
+### GP-3: survey choices and discoverable places
 
-`GP-3.2` is the proposed earliest gate for isolated graphics-platform work: the complete survey → return → visible tribe benefit loop must first work with developer graphics.
+- GP-3.1 replaces survey cases with provision-funded surveying, allows multiple
+  surveys when provisions permit and simplifies the non-modal prompt to
+  **Survey** only.
+- GP-3.2 gives every non-home island one sightable and surveyable dossier with
+  exact-footprint fog reveal that does not alter water knowledge or travel cost.
+- GP-3.3 adds the shared generic-site catalog with historic wreck, coastal ruin
+  and tidal cave as its only shipped types.
 
-### GP-4: idols, archive and optional completion
+All GP-3 records use stable IDs, deterministic results, exact-dock commitment,
+wreck rollback and Great Hall credit. GP-3 does not include the discarded tribe
+capacity, fishing activation/output, loadout, economic wreck-recovery or
+automatic-trade milestones.
 
-Add the deterministic idol registry, clue and survey state, salvage/cargo rules, recoverable wreck loss, home archive and navigator credit. Returning every idol unlocks an optional completion ending while allowing continued play.
+### GP-4: idols, relic wing and optional completion
 
-### GP-5 and the cross-cutting persistence gate
+GP-4 adds the deterministic idol registry and clues, attaches idols to approved
+stable sites, and distinguishes surveying from physical recovery. GP-4.2 owns
+the minimal idol cargo and recoverable-wreck-loss contract. Later GP-4 work adds
+the Great Hall Relics wing, navigator credit and optional completion/continue
+choice.
 
-Every gameplay minor that changes authoritative persisted state bumps the affected schema/content/format version, invalidates earlier saves and includes deterministic current-version round-trip tests. Cross-version migration is intentionally out of scope during development. GP-5 later turns the working autosave/checkpoint foundation into the confirmed player-facing new/save/load experience and hardens long multi-generation continuity within a supported version.
+### GP-5 and exact-version persistence
+
+Every gameplay minor that changes authoritative persisted state bumps the
+affected schema/content/format version, invalidates earlier records and includes
+deterministic current-version round-trip tests. Cross-version migration remains
+out of scope during development. GP-5 later turns the existing foundation into
+the confirmed player-facing new/save/load experience.
 
 ### Graphics track
 
-Production asset IDs, the resolver, asset viewing/creation tooling and production passes belong to the separate `GR-*` track. Developer graphics remain the gameplay fallback. Production replacement begins only after its roadmap start gate is explicitly approved.
+Production assets, fishing and trade boat presentation, richer island/site
+markers, transition scenes and environmental polish belong to the separate
+`GR-*` track. Developer graphics remain the gameplay fallback. Traffic may be
+derived from returned records but is not a prerequisite for accepting GP-3.
 
 ### Later expansion
 
-Only after the basic loop is enjoyable should the game add richer settlement needs, multiple competing routes, specialist equipment, family trees, inheritable traits, reputation, politics or a deeper trade simulation.
+Tribe reserves, economic output, markets, competing routes, specialist
+equipment, settlement needs and deeper trade simulation are outside the
+approved roadmap. They should be reconsidered only if playtesting identifies a
+specific missing decision that the simpler provision-and-survey loop cannot
+provide.
 
-## 15. Validation criteria
+## 13. Validation criteria
 
-The economy design is successful only if playtests show all of the following:
+The forward design succeeds only if playtesting and automated checks show that:
 
-- Players can always begin another meaningful voyage without waiting in real time.
-- Players understand that more support enables longer or more capable voyages but draws on the community.
-- Survey and salvage feel like real choices, not compulsory interaction prompts.
-- A returned fishing ground or trade link visibly changes the world.
-- Players understand that sighting, surveying, recovering and returning an idol are different states.
-- Every idol remains collectible after any legal sequence of wrecks; a lost relic is recoverable rather than silently destroyed.
-- The generation record clearly credits returned surveys and idols without becoming a permanent score HUD.
-- The lineage archive gives a clear collection goal without exposing exact remaining idol locations.
-- Players understand that sighting a runtime wreck does not identify it, an
-  aboard survey report is provisional, and only exact-dock return confirms the
-  wreck's lost navigator for the tribe and lineage.
-- Players understand that a wreck hurts the next generation while earlier Supported routes remain valuable.
-- Recovery feels achievable through smaller successful voyages and inherited routes, not through grinding.
-- Routine automatic traffic makes Supported waters feel alive without obscuring navigation, fog, risk overlays or performance.
-- Normal play remains free of a permanent numerical economy HUD.
+- every journey and successor receives the standard supply allocation;
+- no failure sequence can block the player from leaving home immediately;
+- surveying deducts provisions exactly once and materially changes remaining
+  reach or return risk;
+- players understand that sailing away defers a survey without losing the free
+  sighting;
+- the Survey-only prompt never pauses navigation and auto-hides out of range;
+- a returned lead can be found and surveyed on a later journey;
+- provisional surveys commit only at the exact dock and roll back on wreck;
+- multiple surveys are possible when provisions permit;
+- deterministic results cannot reroll across revisit or current-version reload;
+- each island has one dossier and its exact-footprint reveal changes no water
+  knowledge, path or provision cost;
+- historic wreck, coastal ruin and tidal cave sites feel distinct through
+  clues, visuals and content while sharing one survey mechanic;
+- runtime navigator wrecks cannot be confused with historic-wreck sites;
+- the Great Hall credits only returned work to the correct navigator and voyage;
+- sighting, surveying, recovering and returning an idol remain distinct states;
+- every idol remains collectible after every legal wreck sequence; and
+- normal play remains free of a permanent economy, inventory or score HUD.
 
-## 16. Roadmap approval gates and later decisions
+## 14. Remaining design decisions
 
-- Should a recovery allocation be a fixed lower supply level, a changing percentage of community capacity, or both?
-- How much uncertainty should visual clues communicate before a player spends a survey case?
-- Should any wreck salvage restore a portion of the original community investment, or only provide new opportunities?
-- Which resource families create the strongest early visible changes at home and on remote islands?
-- When should a returned opportunity activate automatically, and when should it wait for a compatible Supported route or community capacity?
-- Does the player need a dedicated map or logbook outside the world view, or is a temporary personal mark plus returned world markers sufficient?
-- What is the appropriate idol count for the default world and for larger future worlds?
-- Should all remaining idols have equal mystery, or should partial charts and archive clues gradually narrow the search?
-- The roadmap proposes that returning the final idol marks the game complete, presents a historical revelation or world celebration, and offers **End the lineage** or **Continue exploring**. The exact presentation and permanence of that choice still require approval.
+- What fixed provision cost creates a meaningful survey-versus-range choice at
+  the current twelve-bundle journey allocation?
+- What warning language best communicates a tight or impossible estimated
+  return after surveying without making the decision for the player?
+- Which island dossier characteristics produce the clearest and most memorable
+  returned reports?
+- How many generic sites should a world contain, and how should their clues
+  communicate rough promise without revealing deterministic outcomes?
+- Does the player need a dedicated returned-lead log later, or are world marks
+  plus the Great Hall sufficient?
+- What idol count suits the default world, and how should later clues narrow the
+  search without revealing exact remaining locations?
+- What form should the final-idol celebration and **End the lineage** /
+  **Continue exploring** choice take?

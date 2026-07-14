@@ -334,7 +334,8 @@ leaving the wreck discovered, unidentified and available to survey again.
 Repeated input, revisit, dock and reload cannot duplicate either the survey
 cost or returned report. This baseline report does not salvage cargo, restore
 Personal chart knowledge, commit the lost expedition's provisional discoveries
-or apply an economy reward; those extensions belong to GP-3.4.
+or apply an economy reward. Proposed GP-3.1 replaces the separate survey case
+with an atomic provision charge; physical idol recovery remains GP-4.2 work.
 
 ### Navigator tenure and transition time
 
@@ -382,11 +383,12 @@ serialized.
 
 Narratively, that boundary represents elapsed world time: the tribe can act on
 returned findings, or determine that a lost navigator will not return, mourn
-them and nominate a successor. Future economy systems settle at this event
-boundary, and future presentation may enrich the handover with a fuller
-ceremony or mourning scene. Neither wall-clock waiting nor handover display time
-advances authoritative gameplay or economy time; the pending handover itself
-remains authoritative input-gating state until acknowledgement.
+them and nominate a successor. Future presentation may show derived world
+changes there or enrich the handover with a fuller ceremony or mourning scene.
+Any future authoritative settlement system requires separate approval and is
+not implied by the boundary. Neither wall-clock waiting nor handover display
+time advances authoritative gameplay; the pending handover itself remains
+authoritative input-gating state until acknowledgement.
 
 ## 11. Discoveries
 
@@ -408,6 +410,13 @@ remain through later voyages and generations.
 
 Generated historic-wreck discoveries are content records. They are never added
 to the runtime player-wreck collection and use a distinct marker.
+
+Under proposed GP-3.2, the current one-per-island generated discovery is folded
+into the island's single dossier result. Its `HistoricWreck` and
+`FishingGround` outcomes are retired as separate target categories so they
+cannot duplicate GP-3.3 historic-wreck sites or GP-1 fishing shoals. The
+associated schema/content version changes under the exact-version policy; no
+legacy record migration is required.
 
 Current discovery rewards are descriptive records only. Economy, settlement,
 survey and activation effects are absent from the baseline and require an
@@ -526,6 +535,10 @@ contextual **Survey wreck / Leave** action. Surveying exposes the navigator's
 identity only as aboard, provisional knowledge. Exact-dock commitment changes
 the persistent presentation to a returned fate report. Historic generated
 wreck discoveries keep their distinct marker and never claim a lineage link.
+This describes the accepted baseline. Proposed GP-3.1 removes the authoritative
+Leave command and separate survey allocation: the contextual prompt stays
+non-modal, sailing out of range defers the opportunity, and surveying spends a
+displayed provision cost.
 
 The camera follows the interpolated ship smoothly during play. World regeneration and
 checkpoint restore are discontinuities, so the camera snaps to the
@@ -650,9 +663,26 @@ four-journey tenure, death, succession and required handover gate, and GP-2.3's
 shared permanent Great Hall chronicle with focused handover presentation,
 exact-home-dock browsing and derived lineage totals. It also includes returned
 identity/fate reports for runtime navigator wrecks. The forward roadmap may add
-wreck salvage and bounded chart/economy recovery, tribe economics, idols, the
-full save/load experience, production assets and environmental polish. These
-are proposed extensions, not implemented baseline behavior.
+provision-funded surveying, returned island dossiers, extensible historic and
+maritime survey sites, idols, the full save/load experience, production assets
+and environmental polish. It no longer places tribe economics, loadouts,
+generic cargo or automatic trade in GP-3. These are proposed extensions, not
+implemented baseline behavior.
+
+For proposed GP-3.2, a surveyed island's full-map reveal is a presentation
+derivation from its provisional or returned dossier record. The fog renderer
+excludes exactly the tiles whose generated `islandId` matches that record; it
+does not mutate `KnowledgeState`, expedition stamps, travel cost, Supported
+topology or route-achievement counts. A dock-reachable passable water tile is a
+valid approach when the Euclidean distance between its center and the center of
+at least one tile carrying that exact island ID is at most 1.5 tile widths. Any
+accessible coast can serve a small or large island. GP-3.3 ships only
+historic-wreck, coastal-ruin and tidal-cave sites. They share the same
+provision-spend and return/rollback lifecycle behind stable typed site IDs;
+their placement, clue and descriptive-result catalogs remain data driven so
+later site types do not require new interaction semantics. These sites are
+independently seed-derived and directly sighted; island dossiers do not spawn
+or unlock nested site leads.
 
 Presentation-only extensions may preserve the current save shape when they add
 no authoritative state. Gameplay extensions must define deterministic identity,
