@@ -30,8 +30,8 @@ foundation.
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
 `Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-4.1` work is
-complete and accepted. `GR-1.1` through `GR-1.3` are also complete and accepted;
-`GR-1.4` is authorized. No other later gameplay or
+complete and accepted. `GR-1.1` through `GR-1.4` are also complete and accepted.
+No later gameplay or
 graphics milestone is authorized by this status document.
 
 ## Run and verify
@@ -54,7 +54,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 253 automated tests pass across 31 files. The suite includes deterministic
+- 264 automated tests pass across 32 files. The suite includes deterministic
   island-dossier and survey-site catalog/lifecycle coverage, exact-island fog
   reveal, deterministic idol-host selection, provisional/return/wreck idol
   integration, completion choices, simulation integration and lineage/Great
@@ -268,7 +268,8 @@ Current verification baseline:
 
 ### Presentation and tools
 
-- Current visuals are functional developer art.
+- The home island, animated player boat/wake and ordinal-zero fishing shoal use
+  authored GR-1 packages. All remaining visuals are functional developer art.
 - Island sightings announce the named provisional lead without revealing the
   dossier result. Developer markers distinguish sighted/returned leads from
   provisional/returned dossiers; surveying presents the deterministic finding.
@@ -393,16 +394,18 @@ Current verification baseline:
 - `GR-1.3`: authored home metadata stamps the complete fixed layout at the
   procedural home center; the home image, interpolated boat image and ordinal-
   zero shoal cue replace their developer presentation without changing rules.
-- Later `GR-*`: boat/wake animation, asset tooling, environmental audio and
-  production polish are not yet implemented.
+- `GR-1.4`: the rotation-safe boat now has restrained metadata-timed motion and
+  a separate speed-responsive wake that follows signed travel and hides at rest.
+- Later `GR-*`: asset tooling, environmental audio and production polish are
+  not yet implemented.
 - Default and doubled-world range probes pass the performance hardening
   baseline. Touch-first sailing is not implemented, and representative
   mid-range mobile rendering/performance validation remains outstanding.
 
 ## Active planning point
 
-`GP-4.1` and `GR-1.1` through `GR-1.3` are accepted. No later gameplay milestone
-is currently authorized; `GR-1.4` is the active authorized graphics milestone.
+`GP-4.1` and `GR-1.1` through `GR-1.4` are accepted. No later gameplay or
+graphics milestone is currently authorized. GR-2 remains necessary but deferred.
 
 The completed milestones are:
 
@@ -455,13 +458,18 @@ The completed milestones are:
     procedural world placement; whole-image home presentation; interpolated
     authored boat; deterministic ordinal-zero read-model-gated shoal art; and a
     clean 253-test typecheck/build plus local-browser visual gate.
+17. `GR-1.4` — accepted: continuous all-heading rotation; stable boat origin;
+    restrained metadata-timed motion; separate signed-direction, speed-scaled
+    wake presentation; prompt rest/wreck/reset hiding; and focused cardinal,
+    diagonal, wraparound and reverse coverage in the clean 264-test
+    typecheck/build gate.
 
 No later gameplay milestone is authorized. GP-4.1 adds no physical idol,
 recovery action, cargo, clue chain, Gem Hall, Relics wing, saving or production
 art obligation.
 
-The `GR-1` graphics start gate is satisfied. `GR-1.1` through `GR-1.3` are
-accepted and `GR-1.4` is authorized. Fishing, trade and other
+The `GR-1` graphics pilot is complete and accepted. GR-2 is deferred and not
+authorized. Fishing, trade and other
 routine world-activity vessels remain presentation work rather than
 authoritative economy state.
 

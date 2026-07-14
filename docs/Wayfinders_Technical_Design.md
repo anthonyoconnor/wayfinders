@@ -587,9 +587,10 @@ The camera follows the interpolated ship smoothly during play. World
 regeneration is a discontinuity, so the camera snaps to the authoritative ship
 before smoothing resumes.
 
-Current developer art communicates terrain and mechanics only and remains
-intentional throughout gameplay validation. Future production assets must
-retain the same navigation, identity and depth contracts.
+The authored GR-1 pilot now supplies the home island, animated player boat and
+one fishing-shoal cue. Developer art remains intentional for all other terrain
+and mechanics. Later production assets must retain the same navigation,
+identity and depth contracts.
 
 ## 14. Events and developer interfaces
 

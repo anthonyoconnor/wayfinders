@@ -1,8 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-4.1` work and `GR-1.1` through `GR-1.3` are complete
-and accepted. `GR-1.4` is authorized. No other later
+ordered `GP-0.1` through `GP-4.1` work and `GR-1.1` through `GR-1.4` are complete
+and accepted. No later
 gameplay or graphics minor is authorized by this roadmap status.
 
 ### Saving policy
@@ -760,7 +760,7 @@ not define collision, identity or rules.
 ### GR-1 — Authored-asset runtime pilot
 
 Start gate: satisfied because GP-3.3 is accepted. The ordered `GR-1.1` through
-`GR-1.4` batch is authorized; `GR-1.1` through `GR-1.3` are accepted.
+`GR-1.4` batch is complete and accepted.
 
 Goal: prove the smallest useful path from externally generated source art to
 grid-aligned runtime assets. Asset generation and preparation happen before the
@@ -876,7 +876,7 @@ production-build and local-browser visual gate passes.
 
 #### GR-1.4 — Directional boat and wake animation
 
-Status: authorized; next in the ordered batch.
+Status: implemented and accepted.
 
 Turn the GR-1.3 player-boat proof into a finished animated vessel. Use the
 simplest animation approach that remains convincing at the game's normal zoom:
@@ -898,11 +898,21 @@ boat remains correct during forward/reverse movement, docking, teleport,
 wreck/reset and camera zoom; and the approved memory, draw-call and frame-time
 budgets pass.
 
+Implementation evidence: the rotation-safe east-authored boat follows the
+interpolated pose continuously through cardinal, diagonal and wraparound
+headings. A metadata-driven scale pulse adds restrained motion without shifting
+the ship origin. The separate wake image sits below the vessel, rotates and
+offsets along signed travel direction, scales and pulses with absolute speed,
+reverses correctly, and hides below its configured minimum speed or whenever
+the boat is hidden for wreck presentation. Teleport and dock/reset poses clear
+speed, so the wake stops immediately. The clean typecheck, 264-test and
+production-build gate passes.
+
 ### GR-2 — Asset viewing and creation tooling
 
-Status: deferred until GR-1.4 is accepted and its manual asset-preparation
-friction is understood. GR-2 remains necessary for later expansion but is not
-part of the authored-asset pilot.
+Status: deferred and not authorized. The accepted GR-1 pilot now supplies the
+manual asset-preparation evidence needed for later planning. GR-2 remains
+necessary for expansion but is not part of the completed pilot.
 
 #### GR-2.1 — Runtime asset viewer
 
@@ -1058,8 +1068,8 @@ authorized ordered batch:
    lead that can be surveyed later. A wreck loses only the current expedition's
    provisional state and preserves any earlier returned lead.
 6. GP-3.3 opened the GR-1 dependency gate. The ordered `GR-1.1` through
-   `GR-1.4` authored-asset pilot is authorized; accepted gates continue directly
-   to the next batch member without renewed permission.
+   `GR-1.4` authored-asset pilot is complete and accepted. GR-2 remains deferred
+   and requires separate authorization.
 
 Additional product decisions are recorded here for later milestones:
 

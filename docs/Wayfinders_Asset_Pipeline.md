@@ -1,7 +1,7 @@
 # Wayfinders authored-asset direction
 
-Status: active. `GR-1.1` through `GR-1.3` are implemented and accepted;
-`GR-1.4` is authorized.
+Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted. GR-2
+remains necessary later but is deferred and not authorized.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
@@ -115,6 +115,11 @@ map at the procedural home center, draws its one authored image without
 assembling terrain tiles, binds the boat image to the existing interpolated
 ship pose, and gives only the ordinal-zero fishing shoal the authored cue. The
 shoal remains passable and visible only through its existing read model.
+
+The accepted final boat pass uses its rotation-safe source for continuous
+all-heading presentation, adds only a restrained metadata-timed scale pulse,
+and renders the separate wake below the ship. Wake direction follows signed
+travel, intensity follows speed, and stopped/hidden/reset ships show no wake.
 
 The four minors are ordered. Each one must meet its acceptance gate before the
 next changes shared world-generation or rendering code.
