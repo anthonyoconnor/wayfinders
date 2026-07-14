@@ -61,8 +61,9 @@ The clean verification pipeline runs type checking, the automated test suite and
 
 ## Project documentation
 
-- [Implementation status](docs/IMPLEMENTATION_STATUS.md) is the starting point for a new development session.
+- [Implementation status](docs/IMPLEMENTATION_STATUS.md) is the compact operational handoff for a new development session.
 - [Technical design](docs/Wayfinders_Technical_Design.md) describes the implemented architecture and gameplay rules.
-- [Development roadmap](docs/Wayfinders_Roadmap.md) treats the current build as the accepted baseline and proposes major gameplay and graphics milestones.
+- [Current roadmap](docs/Wayfinders_Roadmap.md) contains only upcoming or explicitly deferred milestones and authorization state.
+- [Completed roadmap archive](docs/Wayfinders_Roadmap_Archive.md) preserves completed milestone scope and acceptance evidence.
 - [Economy and legacy design](docs/Wayfinders_Economy_Design.md) describes surveying, tribe support, inheritance and the idol completion goal.
 - [Asset pipeline](docs/Wayfinders_Asset_Pipeline.md) records the deferred production-graphics direction.
