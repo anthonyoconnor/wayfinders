@@ -9,7 +9,7 @@ build commands already exist.
 ## Goal
 
 Replace developer art incrementally while preserving the accepted exploration,
-navigation, discovery, persistence and performance baseline and the gameplay
+navigation, island-dossier, persistence and performance baseline and the gameplay
 contracts accepted before graphics integration.
 
 Production art must improve readability and atmosphere without becoming a new
@@ -22,9 +22,12 @@ The forward roadmap separates graphics work from gameplay work:
 - `GR-2` adds viewing and candidate-creation tooling; and
 - `GR-3` applies production presentation in reviewed families.
 
-The proposed start gate for `GR-1` is acceptance of `GP-3.2`: fishing grounds
-must first complete the survey, return and visible tribe-benefit loop using
-developer graphics. Changing that gate requires explicit roadmap approval.
+The start gate for `GR-1` is acceptance of `GP-3.3`: island dossiers and the
+extensible historic-wreck/coastal-ruin/tidal-cave site contract must first
+complete the sight, provision-funded survey, exact-dock return, wreck rollback
+and Great Hall loop using developer graphics. GP-3.2 is accepted; production
+asset work remains deferred while GP-3.3 is active. Changing that gate requires
+explicit roadmap approval.
 
 ## Foundation contracts
 
@@ -32,16 +35,16 @@ Asset work must preserve:
 
 - the `32`-pixel navigation grid;
 - terrain-authoritative movement and sight blocking;
-- stable island and discovery IDs;
+- stable island, island-dossier and survey-site IDs;
 - deterministic seed behavior;
 - current fog and overlay readability;
 - ship origin/heading behavior;
-- runtime wreck and discovery marker distinction;
+- runtime wreck, island-dossier and historic-site marker distinction;
 - exact save/content-version validation and invalidation;
 - camera-culling and dirty-chunk performance.
 
 Rendered pixels are never read back to determine collision, navigation,
-knowledge, resources or discovery state.
+knowledge, resources or dossier/site state.
 
 ## Semantic asset identity
 
@@ -60,7 +63,8 @@ Examples:
 home_waters.terrain.ocean_deep.01
 home_waters.structure.dock_small.01
 home_waters.vessel.player_explorer.01
-shared.discovery.resource.01
+shared.island_dossier.resource.01
+shared.survey_site.historic_wreck.01
 shared.effect.missing_asset.01
 ```
 
@@ -95,7 +99,7 @@ assets-src/
       terrain/
       structures/
       vessels/
-      discoveries/
+      survey_sites/
 
 public/assets/
   images/
@@ -134,7 +138,7 @@ Dynamic content remains separate from static island art:
 - ships and people;
 - smoke, flags, foam and waves;
 - runtime player wrecks;
-- discovery markers;
+- island-dossier and survey-site markers;
 - resources and settlement changes;
 - fog and voyage overlays.
 
@@ -150,7 +154,7 @@ world seed + island ID + tile + object type + variation slot
 ```
 
 Adding or replacing a visual variant must not change terrain topology,
-discovery identity or navigation. Resolver changes that would reshuffle an
+dossier/site identity or navigation. Resolver changes that would reshuffle an
 existing saved world's visuals require an explicit content-version bump; the
 older save is then incompatible and removed rather than migrated.
 
@@ -162,7 +166,8 @@ contracts are accepted. This slice corresponds to `GR-1`.
 Build the smallest end-to-end asset path:
 
 1. Define semantic IDs and origin/footprint contracts for the player ship,
-   dock, ocean, one representative island family, a shoal and a fishing skiff.
+   dock, ocean, one representative island family, a shoal, the three accepted
+   survey-site types and one presentation-only fishing/trade vessel.
 2. Add a minimal manifest, loader and resolver.
 3. Render developer and candidate assets through the same factory.
 4. Review them at normal camera zoom under fog, Personal-grey and risk overlays.

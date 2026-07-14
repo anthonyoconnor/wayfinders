@@ -11,6 +11,7 @@ import {
   WORLD_GENERATOR_VERSION,
   SaveValidationError,
   UnsupportedFishingShoalContentVersionError,
+  UnsupportedIslandDossierContentVersionError,
   UnsupportedSaveSchemaVersionError,
   UnsupportedWorldGeneratorVersionError,
   applyGenerationConfig,
@@ -45,7 +46,8 @@ function makeVoyage(
     expeditionId,
     supportedTileCount: 0,
     closedUnknownTileCount: 0,
-    discoveryIds: [],
+    islandLeadIds: [],
+    islandDossierIds: [],
     fishingLeadIds: [],
     fishingSurveyIds: [],
     wreckIds: [],
@@ -56,7 +58,7 @@ function makeVoyage(
 function makeValidLineage() {
   const lineage = new NavigatorLineageSystem();
   lineage.completeSuccessfulVoyage(makeVoyage(1));
-  lineage.completeSuccessfulVoyage(makeVoyage(2, { discoveryIds: [1] }));
+  lineage.completeSuccessfulVoyage(makeVoyage(2, { islandLeadIds: [1] }));
   const wreck = lineage.beginSuccession("wreck", 1);
   lineage.completeSuccession(wreck.transition.key);
   return lineage.snapshot();
@@ -65,7 +67,7 @@ function makeValidLineage() {
 function makePendingValidLineage(wreckId: number) {
   const lineage = new NavigatorLineageSystem();
   lineage.completeSuccessfulVoyage(makeVoyage(1));
-  lineage.completeSuccessfulVoyage(makeVoyage(2, { discoveryIds: [1] }));
+  lineage.completeSuccessfulVoyage(makeVoyage(2, { islandLeadIds: [1] }));
   lineage.beginSuccession("wreck", wreckId);
   return lineage.snapshot();
 }
@@ -93,7 +95,7 @@ function makeValidSave(): SaveGame {
       seed: config.world.seed,
       generatorVersion: WORLD_GENERATOR_VERSION,
       generationConfig: captureGenerationConfig(config),
-      contentVersions: { fishingShoals: 1 },
+      contentVersions: { fishingShoals: 1, islandDossiers: 1 },
     },
     generation: 2,
     expedition: {
@@ -128,21 +130,13 @@ function makeValidSave(): SaveGame {
       discovered: true,
       survey: { state: "unexamined" },
     }],
-    discoveries: {
+    islandDossiers: {
       provisional: [],
       returned: [{
-        id: 1,
-        type: 0,
-        tileX: 20,
-        tileY: 20,
         islandId: 1,
+        state: "lead",
         expeditionId: 2,
         generation: 1,
-        returned: true,
-        name: "Windward Isle",
-        rewardId: "island-chart",
-        rewardLabel: "new island chart",
-        detail: "A newly named island.",
       }],
     },
     fishingShoals: { provisional: [], returned: [] },
@@ -282,25 +276,152 @@ describe("save-game validation", () => {
     expect(config.islands).toEqual(save.world.generationConfig.islands);
   });
 
-  it("accepts active-expedition Personal knowledge and provisional discoveries", () => {
+  it("accepts active-expedition Personal knowledge and a provisional island lead", () => {
     const save = makeValidSave();
     save.expedition.active = true;
     save.knowledge.runs.push([10, 2, KnowledgeState.Personal, save.expedition.id]);
-    save.discoveries.provisional.push({
-      id: 2,
-      type: 6,
-      tileX: 30,
-      tileY: 31,
+    save.islandDossiers.provisional.push({
       islandId: 2,
+      state: "sighted",
       expeditionId: save.expedition.id,
-      generation: 2,
-      returned: false,
-      name: "Salt Reach",
-      rewardId: "resource-salt",
-      rewardLabel: "salt source",
-      detail: "A dependable source of salt.",
+      generation: save.generation,
     });
     expect(parseSaveGame(save)).toBe(save);
+  });
+
+  it("round-trips only minimal versioned island-dossier persistence records", () => {
+    const save = makeValidSave();
+    save.expedition.active = true;
+    save.islandDossiers.provisional.push({
+      islandId: 1,
+      state: "surveyed",
+      expeditionId: save.expedition.id,
+      generation: save.generation,
+    });
+
+    const roundTripped = JSON.parse(JSON.stringify(save)) as unknown;
+    expect(parseSaveGame(roundTripped)).toEqual(save);
+    expect(save.islandDossiers).toEqual({
+      provisional: [{
+        islandId: 1,
+        state: "surveyed",
+        expeditionId: 4,
+        generation: 2,
+      }],
+      returned: [{
+        islandId: 1,
+        state: "lead",
+        expeditionId: 2,
+        generation: 1,
+      }],
+    });
+    const serialized = JSON.stringify(save.islandDossiers);
+    expect(serialized).not.toMatch(/findingLabel|developerArtId|theme|detail/);
+
+    const leakedCatalogResult = structuredClone(save) as unknown as {
+      islandDossiers: { provisional: Array<Record<string, unknown>> };
+    };
+    leakedCatalogResult.islandDossiers.provisional[0].findingLabel = "Hidden result";
+    expect(() => parseSaveGame(leakedCatalogResult)).toThrow(/supported field/);
+  });
+
+  it("validates island-dossier sorting, overlap, and expedition provenance", () => {
+    const allowedUpgrade = makeValidSave();
+    allowedUpgrade.expedition.active = true;
+    allowedUpgrade.islandDossiers.provisional.push({
+      islandId: 1,
+      state: "surveyed",
+      expeditionId: allowedUpgrade.expedition.id,
+      generation: allowedUpgrade.generation,
+    });
+    expect(parseSaveGame(allowedUpgrade)).toBe(allowedUpgrade);
+
+    const sightedOverlap = structuredClone(allowedUpgrade);
+    sightedOverlap.islandDossiers.provisional[0].state = "sighted";
+    expect(() => parseSaveGame(sightedOverlap)).toThrow(/returned lead with a provisional survey/);
+
+    const dossierOverlap = structuredClone(allowedUpgrade);
+    dossierOverlap.islandDossiers.returned[0].state = "dossier";
+    expect(() => parseSaveGame(dossierOverlap)).toThrow(/returned lead with a provisional survey/);
+
+    const inactive = structuredClone(allowedUpgrade);
+    inactive.expedition.active = false;
+    expect(() => parseSaveGame(inactive)).toThrow(/requires an active expedition/);
+
+    const staleExpedition = structuredClone(allowedUpgrade);
+    staleExpedition.islandDossiers.provisional[0].expeditionId--;
+    expect(() => parseSaveGame(staleExpedition)).toThrow(/active expedition/);
+
+    const staleGeneration = structuredClone(allowedUpgrade);
+    staleGeneration.islandDossiers.provisional[0].generation--;
+    expect(() => parseSaveGame(staleGeneration)).toThrow(/current generation/);
+
+    const unsorted = structuredClone(allowedUpgrade);
+    unsorted.islandDossiers.provisional = [
+      { ...unsorted.islandDossiers.provisional[0], islandId: 3 },
+      { ...unsorted.islandDossiers.provisional[0], islandId: 2 },
+    ];
+    expect(() => parseSaveGame(unsorted)).toThrow(/uniquely sorted by island ID/);
+
+    const duplicateReturned = makeValidSave();
+    duplicateReturned.islandDossiers.returned.push({
+      ...duplicateReturned.islandDossiers.returned[0],
+    });
+    expect(() => parseSaveGame(duplicateReturned)).toThrow(/uniquely sorted by island ID/);
+
+    const futureReturned = makeValidSave();
+    futureReturned.islandDossiers.returned[0].generation = futureReturned.generation + 1;
+    expect(() => parseSaveGame(futureReturned)).toThrow(/later than the current generation/);
+  });
+
+  it("requires returned island leads and dossiers to match their successful voyages", () => {
+    const missingLeadCredit = structuredClone(makeValidSave());
+    const leadVoyage = missingLeadCredit.navigatorLineage.navigators[0]
+      .successfulVoyages[1] as { islandLeadIds: number[] };
+    leadVoyage.islandLeadIds = [];
+    expect(() => parseSaveGame(missingLeadCredit)).toThrow(/credited to its successful voyage/);
+
+    const wrongLeadProvenance = makeValidSave();
+    wrongLeadProvenance.islandDossiers.returned[0].expeditionId = 1;
+    expect(() => parseSaveGame(wrongLeadProvenance)).toThrow(/this navigator and voyage/);
+
+    const directDossier = makeValidSave();
+    const dossierExpeditionId = addSuccessfulVoyage(directDossier, { islandDossierIds: [2] });
+    directDossier.islandDossiers.returned.push({
+      islandId: 2,
+      state: "dossier",
+      expeditionId: dossierExpeditionId,
+      generation: directDossier.generation,
+    });
+    expect(parseSaveGame(directDossier)).toBe(directDossier);
+
+    const upgradedLead = makeValidSave();
+    const upgradeExpeditionId = addSuccessfulVoyage(upgradedLead, { islandDossierIds: [1] });
+    upgradedLead.islandDossiers.returned[0] = {
+      islandId: 1,
+      state: "dossier",
+      expeditionId: upgradeExpeditionId,
+      generation: upgradedLead.generation,
+    };
+    expect(parseSaveGame(upgradedLead)).toBe(upgradedLead);
+
+    const lateLead = structuredClone(makeValidSave());
+    const originalLeadVoyage = lateLead.navigatorLineage.navigators[0]
+      .successfulVoyages[1] as { islandLeadIds: number[] };
+    originalLeadVoyage.islandLeadIds = [];
+    const surveyExpeditionId = addSuccessfulVoyage(lateLead, { islandDossierIds: [1] });
+    lateLead.islandDossiers.returned[0] = {
+      islandId: 1,
+      state: "dossier",
+      expeditionId: surveyExpeditionId,
+      generation: lateLead.generation,
+    };
+    addSuccessfulVoyage(lateLead);
+    lateLead.navigatorLineage = structuredClone(lateLead.navigatorLineage);
+    const lateVoyage = lateLead.navigatorLineage.navigators[1]
+      .successfulVoyages[1] as { islandLeadIds: number[] };
+    lateVoyage.islandLeadIds = [1];
+    expect(() => parseSaveGame(lateLead)).toThrow(/after its dossier|precede the returned island dossier/);
   });
 
   it("validates current fishing-shoal records and permits multiple surveys in the active expedition", () => {
@@ -457,7 +578,7 @@ describe("save-game validation", () => {
     multipleWreckSurveys.expedition.id = 3;
     multipleWreckSurveys.expedition.active = true;
     multipleWreckSurveys.navigatorLineage = makeLineage(3);
-    multipleWreckSurveys.discoveries.returned = [];
+    multipleWreckSurveys.islandDossiers.returned = [];
     multipleWreckSurveys.wrecks[0] = {
       ...multipleWreckSurveys.wrecks[0],
       generation: 1,
@@ -635,7 +756,7 @@ describe("save-game validation", () => {
   });
 
   it("requires exact schema and format versions and rejects corrupt current data", () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(10);
+    expect(SAVE_SCHEMA_VERSION).toBe(11);
     for (const version of [SAVE_SCHEMA_VERSION - 1, SAVE_SCHEMA_VERSION + 1]) {
       const mismatchedSchema = makeValidSave() as SaveGame & { schemaVersion: number };
       mismatchedSchema.schemaVersion = version;
@@ -652,6 +773,14 @@ describe("save-game validation", () => {
     };
     futureContent.world.contentVersions.fishingShoals = 2;
     expect(() => parseSaveGame(futureContent)).toThrow(UnsupportedFishingShoalContentVersionError);
+
+    const futureIslandDossiers = makeValidSave() as unknown as {
+      world: { contentVersions: { islandDossiers: number } };
+    };
+    futureIslandDossiers.world.contentVersions.islandDossiers = 2;
+    expect(() => parseSaveGame(futureIslandDossiers)).toThrow(
+      UnsupportedIslandDossierContentVersionError,
+    );
 
     const oldLineageContract = structuredClone(makeValidSave()) as unknown as {
       navigatorLineage: { contractVersion: number };
@@ -697,7 +826,7 @@ describe("save-game validation", () => {
     expect(slot.remove).toHaveBeenCalledOnce();
   });
 
-  it("rejects lifecycle, discovery, and terrain-patch inconsistencies", () => {
+  it("rejects lifecycle, island-dossier, and terrain-patch inconsistencies", () => {
     const wrongCurrentExpedition = makeValidSave();
     wrongCurrentExpedition.expedition.id = 5;
     expect(() => parseSaveGame(wrongCurrentExpedition)).toThrow(
@@ -712,25 +841,15 @@ describe("save-game validation", () => {
     inactivePersonal.knowledge.runs.push([10, 1, KnowledgeState.Personal, 4]);
     expect(() => parseSaveGame(inactivePersonal)).toThrow(/without an active expedition/);
 
-    const duplicateDiscovery = makeValidSave();
-    duplicateDiscovery.discoveries.provisional.push({
-      ...duplicateDiscovery.discoveries.returned[0],
-      expeditionId: duplicateDiscovery.expedition.id,
-      generation: duplicateDiscovery.generation,
-      returned: false,
-    });
-    duplicateDiscovery.expedition.active = true;
-    expect(() => parseSaveGame(duplicateDiscovery)).toThrow(/duplicate discovery id/);
-
     const terrainMutation = makeValidSave() as SaveGame & { terrainPatches: unknown[] };
     terrainMutation.terrainPatches.push({ tileX: 1 });
     expect(() => parseSaveGame(terrainMutation)).toThrow(/empty array/);
 
-    const incompleteDiscovery = structuredClone(makeValidSave()) as SaveGame & {
-      discoveries: { returned: Array<Record<string, unknown>> };
+    const incompleteIslandDossier = structuredClone(makeValidSave()) as SaveGame & {
+      islandDossiers: { returned: Array<Record<string, unknown>> };
     };
-    delete incompleteDiscovery.discoveries.returned[0].expeditionId;
-    expect(() => parseSaveGame(incompleteDiscovery)).toThrow(/expeditionId/);
+    delete incompleteIslandDossier.islandDossiers.returned[0].expeditionId;
+    expect(() => parseSaveGame(incompleteIslandDossier)).toThrow(/expeditionId/);
 
     const futureWreck = makeValidSave();
     futureWreck.wrecks[0].generation = futureWreck.generation + 1;

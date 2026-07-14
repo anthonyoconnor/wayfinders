@@ -1,5 +1,5 @@
 import type { ShipwreckState } from "../core/types";
-import type { DiscoveryRecord } from "../exploration/DiscoverySystem";
+import type { IslandDossierDefinitionV1 } from "../exploration/IslandDossierContracts";
 import type {
   FishingShoalDefinition,
   FishingShoalId,
@@ -10,11 +10,11 @@ import {
   parseNavigatorSuccessionKey,
   type NavigatorId,
   type NavigatorLifecycleState,
-  type NavigatorRecordV4,
-  type NavigatorVoyageAchievementRecordV1,
+  type NavigatorRecordV5,
+  type NavigatorVoyageAchievementRecordV2,
 } from "./NavigatorLineageSystem";
 
-export const GREAT_HALL_CHRONICLE_READ_MODEL_VERSION = 1 as const;
+export const GREAT_HALL_CHRONICLE_READ_MODEL_VERSION = 2 as const;
 
 const greatHallVoyageKeyBrand: unique symbol = Symbol("GreatHallVoyageKey");
 const greatHallAchievementKeyBrand: unique symbol = Symbol("GreatHallAchievementKey");
@@ -23,8 +23,11 @@ export type GreatHallVoyageKey = string & { readonly [greatHallVoyageKeyBrand]: 
 export type GreatHallAchievementKey = string & { readonly [greatHallAchievementKeyBrand]: true };
 
 export interface GreatHallChronicleSources {
-  /** Labels for stable discovery IDs already committed to lineage voyages. */
-  readonly discoveries: readonly Readonly<Pick<DiscoveryRecord, "id" | "name">>[];
+  /** Deterministic names and results for stable island IDs credited by lineage voyages. */
+  readonly islandDossiers: readonly Readonly<Pick<
+    IslandDossierDefinitionV1,
+    "islandId" | "name" | "dossier"
+  >>[];
   /** Deterministic labels for stable fishing IDs already committed to lineage voyages. */
   readonly fishingShoals: readonly Readonly<Pick<FishingShoalDefinition, "id" | "quality">>[];
   /** Runtime wreck authority, including whether an identity report has returned home. */
@@ -46,10 +49,17 @@ export interface GreatHallMappedWaterAchievement extends GreatHallAchievementBas
   readonly tileCount: number;
 }
 
-export interface GreatHallDiscoveryAchievement extends GreatHallAchievementBase {
-  readonly kind: "discovery";
-  readonly discoveryId: number;
+export interface GreatHallIslandLeadAchievement extends GreatHallAchievementBase {
+  readonly kind: "island-lead";
+  readonly islandId: number;
   readonly name: string;
+}
+
+export interface GreatHallIslandDossierAchievement extends GreatHallAchievementBase {
+  readonly kind: "island-dossier";
+  readonly islandId: number;
+  readonly name: string;
+  readonly findingLabel: string;
 }
 
 export interface GreatHallFishingLeadAchievement extends GreatHallAchievementBase {
@@ -74,7 +84,8 @@ export interface GreatHallWreckReportAchievement extends GreatHallAchievementBas
 export type GreatHallAchievement =
   | GreatHallSupportedRouteAchievement
   | GreatHallMappedWaterAchievement
-  | GreatHallDiscoveryAchievement
+  | GreatHallIslandLeadAchievement
+  | GreatHallIslandDossierAchievement
   | GreatHallFishingLeadAchievement
   | GreatHallFishingSurveyAchievement
   | GreatHallWreckReportAchievement;
@@ -104,7 +115,8 @@ export interface GreatHallVoyageTotals {
   readonly lostVoyages: number;
   readonly supportedRouteTiles: number;
   readonly mappedEnclosedWaterTiles: number;
-  readonly discoveries: number;
+  readonly islandLeads: number;
+  readonly islandDossiers: number;
   readonly fishingLeads: number;
   readonly fishingSurveys: number;
   readonly wreckReports: number;
@@ -173,15 +185,18 @@ interface WreckReportCredit {
 }
 
 interface SourceIndexes {
-  readonly discoveryNameById: ReadonlyMap<number, string>;
+  readonly islandDossierById: ReadonlyMap<number, Readonly<Pick<
+    IslandDossierDefinitionV1,
+    "islandId" | "name" | "dossier"
+  >>>;
   readonly fishingQualityById: ReadonlyMap<FishingShoalId, FishingShoalQuality>;
   readonly wreckById: ReadonlyMap<number, Readonly<Pick<ShipwreckState, "id" | "generation" | "survey">>>;
-  readonly navigatorByGeneration: ReadonlyMap<number, Readonly<NavigatorRecordV4>>;
+  readonly navigatorByGeneration: ReadonlyMap<number, Readonly<NavigatorRecordV5>>;
 }
 
 /** Builds the complete home/succession chronicle without creating duplicate authority. */
 export function buildGreatHallChronicle(
-  navigators: readonly Readonly<NavigatorRecordV4>[],
+  navigators: readonly Readonly<NavigatorRecordV5>[],
   sources: Readonly<GreatHallChronicleSources>,
 ): Readonly<GreatHallChronicle> {
   if (navigators.length === 0) throw new RangeError("A Great Hall chronicle requires a navigator lineage");
@@ -266,8 +281,8 @@ export function createGreatHallVoyageKey(
 }
 
 function buildReturnedAchievements(
-  navigator: Readonly<NavigatorRecordV4>,
-  voyage: Readonly<NavigatorVoyageAchievementRecordV1>,
+  navigator: Readonly<NavigatorRecordV5>,
+  voyage: Readonly<NavigatorVoyageAchievementRecordV2>,
   voyageKey: GreatHallVoyageKey,
   indexes: Readonly<SourceIndexes>,
   usedAchievementKeys: Set<string>,
@@ -296,17 +311,32 @@ function buildReturnedAchievements(
     });
   }
 
-  for (const discoveryId of voyage.discoveryIds) {
-    const name = indexes.discoveryNameById.get(discoveryId);
-    if (name === undefined) {
-      throw new RangeError(`Voyage ${voyage.voyageNumber} references unknown discovery ${discoveryId}`);
+  for (const islandId of voyage.islandLeadIds) {
+    const definition = indexes.islandDossierById.get(islandId);
+    if (!definition) {
+      throw new RangeError(`Voyage ${voyage.voyageNumber} references unknown island dossier ${islandId}`);
     }
     add({
-      key: createAchievementKey(voyageKey, "discovery", discoveryId),
-      kind: "discovery",
-      discoveryId,
-      name,
-      label: `Discovered ${name}`,
+      key: createAchievementKey(voyageKey, "island-lead", islandId),
+      kind: "island-lead",
+      islandId,
+      name: definition.name,
+      label: `Recorded a lead for ${definition.name}`,
+    });
+  }
+
+  for (const islandId of voyage.islandDossierIds) {
+    const definition = indexes.islandDossierById.get(islandId);
+    if (!definition) {
+      throw new RangeError(`Voyage ${voyage.voyageNumber} references unknown island dossier ${islandId}`);
+    }
+    add({
+      key: createAchievementKey(voyageKey, "island-dossier", islandId),
+      kind: "island-dossier",
+      islandId,
+      name: definition.name,
+      findingLabel: definition.dossier.findingLabel,
+      label: `Surveyed ${definition.name} — ${definition.dossier.findingLabel}`,
     });
   }
 
@@ -379,7 +409,7 @@ function buildReturnedAchievements(
 }
 
 function resolveLostNavigatorFate(
-  navigator: Readonly<NavigatorRecordV4> & { readonly state: "lost" },
+  navigator: Readonly<NavigatorRecordV5> & { readonly state: "lost" },
   indexes: Readonly<SourceIndexes>,
   wreckReportCredits: ReadonlyMap<number, Readonly<WreckReportCredit>>,
 ): Readonly<GreatHallWreckFate> {
@@ -404,11 +434,16 @@ function resolveLostNavigatorFate(
 }
 
 function createSourceIndexes(
-  navigators: readonly Readonly<NavigatorRecordV4>[],
+  navigators: readonly Readonly<NavigatorRecordV5>[],
   sources: Readonly<GreatHallChronicleSources>,
 ): SourceIndexes {
   return {
-    discoveryNameById: uniqueMap(sources.discoveries, ({ id }) => id, ({ name }) => name, "discovery"),
+    islandDossierById: uniqueMap(
+      sources.islandDossiers,
+      ({ islandId }) => islandId,
+      (definition) => definition,
+      "island dossier",
+    ),
     fishingQualityById: uniqueMap(
       sources.fishingShoals,
       ({ id }) => id,
@@ -440,7 +475,7 @@ function uniqueMap<T, K, V>(
   return map;
 }
 
-function validateNavigatorVoyages(navigator: Readonly<NavigatorRecordV4>): void {
+function validateNavigatorVoyages(navigator: Readonly<NavigatorRecordV5>): void {
   if (navigator.successfulVoyages.length !== navigator.completedVoyages) {
     throw new RangeError(`Navigator ${navigator.id} voyage records do not match its completed count`);
   }
@@ -457,7 +492,7 @@ function validateNavigatorVoyages(navigator: Readonly<NavigatorRecordV4>): void 
   }
 }
 
-function terminalWreckId(navigator: Readonly<NavigatorRecordV4> & { readonly state: "lost" }): number {
+function terminalWreckId(navigator: Readonly<NavigatorRecordV5> & { readonly state: "lost" }): number {
   const parsed = parseNavigatorSuccessionKey(navigator.endedBySuccessionKey);
   if (parsed?.reason !== "wreck") {
     throw new RangeError(`Lost navigator ${navigator.id} has no valid wreck succession key`);
@@ -494,8 +529,11 @@ function totalVoyages(voyages: readonly Readonly<GreatHallVoyage>[]): Readonly<G
         case "mapped-enclosed-water-tiles":
           totals.mappedEnclosedWaterTiles += achievement.tileCount;
           break;
-        case "discovery":
-          totals.discoveries++;
+        case "island-lead":
+          totals.islandLeads++;
+          break;
+        case "island-dossier":
+          totals.islandDossiers++;
           break;
         case "fishing-leads":
           totals.fishingLeads += achievement.leadCount;
@@ -548,7 +586,8 @@ function mutableVoyageTotals(): MutableGreatHallVoyageTotals {
     lostVoyages: 0,
     supportedRouteTiles: 0,
     mappedEnclosedWaterTiles: 0,
-    discoveries: 0,
+    islandLeads: 0,
+    islandDossiers: 0,
     fishingLeads: 0,
     fishingSurveys: 0,
     wreckReports: 0,
@@ -563,7 +602,8 @@ function addVoyageTotals(
   target.lostVoyages += source.lostVoyages;
   target.supportedRouteTiles += source.supportedRouteTiles;
   target.mappedEnclosedWaterTiles += source.mappedEnclosedWaterTiles;
-  target.discoveries += source.discoveries;
+  target.islandLeads += source.islandLeads;
+  target.islandDossiers += source.islandDossiers;
   target.fishingLeads += source.fishingLeads;
   target.fishingSurveys += source.fishingSurveys;
   target.wreckReports += source.wreckReports;

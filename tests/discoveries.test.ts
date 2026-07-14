@@ -1,151 +1,355 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
+import type { GridPoint } from "../src/wayfinders/core/types";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import {
-  DiscoverySystem,
-  DiscoveryType,
-  generateDiscoveryDefinitions,
-} from "../src/wayfinders/exploration/DiscoverySystem";
-import type { GeneratedIsland } from "../src/wayfinders/world/IslandGenerator";
-import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
+  ISLAND_DOSSIER_CONTRACT_VERSION,
+  type IslandDossierDefinitionV1,
+} from "../src/wayfinders/exploration/IslandDossierContracts";
+import { buildGreatHallChronicle } from "../src/wayfinders/lineage/GreatHallChronicle";
+import { KnowledgeState } from "../src/wayfinders/world/TileData";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
 
-function inspectionTile(simulation: GameSimulation, island: GeneratedIsland): { x: number; y: number } {
-  let result: { x: number; y: number } | undefined;
-  let closest = Number.POSITIVE_INFINITY;
-  for (let y = island.bounds.minY; y <= island.bounds.maxY; y++) {
-    for (let x = island.bounds.minX; x <= island.bounds.maxX; x++) {
-      if (!simulation.world.inBounds(x, y) || simulation.world.isMovementBlocked(x, y)) continue;
-      if (simulation.world.getTile(x, y).islandId !== island.id) continue;
-      const distance = Math.hypot(x - island.center.x, y - island.center.y);
-      if (distance >= closest) continue;
-      closest = distance;
-      result = { x, y };
-    }
-  }
-  if (!result) throw new Error(`No inspection tile for island ${island.id}`);
-  return result;
+function remoteDossiers(
+  simulation: GameSimulation,
+  count = 1,
+): readonly Readonly<IslandDossierDefinitionV1>[] {
+  const dock = simulation.generated.landmarks.homeReturnTile;
+  return [...simulation.islandDossierDefinitions]
+    .sort((left, right) => {
+      const leftDistance = Math.hypot(
+        left.canonicalApproach.x - dock.x,
+        left.canonicalApproach.y - dock.y,
+      );
+      const rightDistance = Math.hypot(
+        right.canonicalApproach.x - dock.x,
+        right.canonicalApproach.y - dock.y,
+      );
+      return rightDistance - leftDistance || left.islandId - right.islandId;
+    })
+    .slice(0, count);
 }
 
-describe("deterministic discovery catalog", () => {
-  it("creates stable names and content without changing generated islands", () => {
-    const firstWorld = new WorldGenerator().generate(13_371);
-    const before = firstWorld.islands.map((island) => ({ ...island, center: { ...island.center }, bounds: { ...island.bounds } }));
-    const first = generateDiscoveryDefinitions(firstWorld.seed, firstWorld.islands);
-    const secondWorld = new WorldGenerator().generate(13_371);
-    const second = generateDiscoveryDefinitions(secondWorld.seed, secondWorld.islands);
-    const otherWorld = new WorldGenerator().generate(13_372);
-    const other = generateDiscoveryDefinitions(otherWorld.seed, otherWorld.islands);
+function alternateApproach(
+  simulation: GameSimulation,
+  definition: Readonly<IslandDossierDefinitionV1>,
+): GridPoint {
+  const canonicalIndex = simulation.world.index(
+    definition.canonicalApproach.x,
+    definition.canonicalApproach.y,
+  );
+  const alternate = definition.approachIndices.reduce<number | undefined>((selected, candidate) => {
+    if (candidate === canonicalIndex) return selected;
+    if (selected === undefined) return candidate;
+    const selectedPoint = simulation.world.pointFromIndex(selected);
+    const candidatePoint = simulation.world.pointFromIndex(candidate);
+    const selectedDistance = Math.hypot(
+      selectedPoint.x - definition.canonicalApproach.x,
+      selectedPoint.y - definition.canonicalApproach.y,
+    );
+    const candidateDistance = Math.hypot(
+      candidatePoint.x - definition.canonicalApproach.x,
+      candidatePoint.y - definition.canonicalApproach.y,
+    );
+    return candidateDistance > selectedDistance ? candidate : selected;
+  }, undefined);
+  if (alternate === undefined) throw new Error(`Island ${definition.islandId} has no alternate approach`);
+  return simulation.world.pointFromIndex(alternate);
+}
 
-    expect(second).toEqual(first);
-    expect(secondWorld.islands).toEqual(before);
-    expect(other.map(({ name }) => name)).not.toEqual(first.map(({ name }) => name));
-    expect(new Set(first.map(({ id }) => id)).size).toBe(first.length);
-    expect(new Set(first.map(({ name }) => name)).size).toBe(first.length);
-    expect(first.every(({ rewardId, rewardLabel, detail }) => rewardId && rewardLabel && detail)).toBe(true);
-    expect(first.some(({ type, settlementId }) => type === DiscoveryType.Settlement && settlementId)).toBe(true);
-    expect(first.some(({ type, resourceId }) => type === DiscoveryType.Resource && resourceId)).toBe(true);
+function survey(
+  simulation: GameSimulation,
+  definition: Readonly<IslandDossierDefinitionV1>,
+) {
+  return simulation.interactWithIslandDossier({
+    contractVersion: ISLAND_DOSSIER_CONTRACT_VERSION,
+    type: "survey",
+    islandId: definition.islandId,
   });
+}
 
-  it("uses current sight rather than a movement observation trail", () => {
-    const generated = new WorldGenerator().generate();
-    const system = new DiscoverySystem(generated.grid, generated.seed, generated.islands);
-    const island = generated.islands[1];
-    let revealIndex = -1;
-    generated.grid.forEachTile((x, y, index) => {
-      if (revealIndex < 0 && generated.grid.getTile(x, y).islandId === island.id) revealIndex = index;
-    });
-    expect(revealIndex).toBeGreaterThanOrEqual(0);
-
-    expect(system.observeCurrentSight(1, 1, []).found).toHaveLength(0);
-    expect(system.observeCurrentSight(1, 1, [revealIndex]).found).toHaveLength(1);
-    expect(system.observeCurrentSight(1, 1, [revealIndex]).found).toHaveLength(0);
+function unknownWater(simulation: GameSimulation): GridPoint {
+  const dock = simulation.generated.landmarks.homeReturnTile;
+  let selected: GridPoint | undefined;
+  let selectedDistance = -1;
+  simulation.world.forEachTile((x, y, index) => {
+    if (
+      simulation.world.isMovementBlockedAtIndex(index)
+      || simulation.world.getKnowledgeAtIndex(index) !== KnowledgeState.Unknown
+    ) return;
+    const distance = Math.hypot(x - dock.x, y - dock.y);
+    if (distance <= selectedDistance) return;
+    selected = { x, y };
+    selectedDistance = distance;
   });
+  if (!selected) throw new Error("No unknown passable water remains for a wreck test");
+  return selected;
+}
 
-  it("caches sorted record views and exposes a change revision", () => {
-    const generated = new WorldGenerator().generate();
-    const system = new DiscoverySystem(generated.grid, generated.seed, generated.islands);
-    const islandId = generated.islands[1].id;
-    let revealIndex = -1;
-    generated.grid.forEachTile((_x, _y, index) => {
-      if (revealIndex < 0 && generated.grid.getIslandIdAtIndex(index) === islandId) revealIndex = index;
-    });
-    expect(revealIndex).toBeGreaterThanOrEqual(0);
-
-    expect(system.recordsRevision).toBe(0);
-    expect(system.provisional).toBe(system.provisional);
-    expect(system.returned).toBe(system.returned);
-    expect(system.allRecords).toBe(system.allRecords);
-    expect(system.observeCurrentSight(1, 1, []).found).toHaveLength(0);
-    expect(system.recordsRevision).toBe(0);
-
-    expect(system.observeCurrentSight(1, 1, [revealIndex]).found).toHaveLength(1);
-    expect(system.recordsRevision).toBe(1);
-    const provisional = system.provisional;
-    const allProvisional = system.allRecords;
-    expect(system.provisional).toBe(provisional);
-    expect(system.allRecords).toBe(allProvisional);
-
-    expect(system.commitExpedition(1)).toHaveLength(1);
-    expect(system.recordsRevision).toBe(2);
-    expect(system.provisional).not.toBe(provisional);
-    expect(system.returned).toBe(system.returned);
-    expect(system.allRecords).not.toBe(allProvisional);
+function chronicleFor(simulation: GameSimulation) {
+  return buildGreatHallChronicle(simulation.navigatorLineage, {
+    islandDossiers: simulation.islandDossierDefinitions,
+    fishingShoals: simulation.fishingShoalDefinitions,
+    wrecks: simulation.wrecks,
   });
-});
+}
 
-describe("discovery expedition lifecycle", () => {
-  it("keeps a sighting provisional until exact-dock return", () => {
+describe("GameSimulation island-dossier integration", () => {
+  it("records a free sighting without exposing the dossier result", () => {
     const simulation = new GameSimulation();
-    const island = simulation.generated.islands[1];
-    expect(simulation.teleport(inspectionTile(simulation, island))).toBe(true);
+    const [target] = remoteDossiers(simulation);
+    const provisionsBefore = simulation.ship.provisions;
 
-    expect(simulation.expeditionActive).toBe(true);
-    expect(simulation.provisionalDiscoveries).toHaveLength(1);
-    expect(simulation.returnedDiscoveries).toHaveLength(0);
-    const provisional = simulation.provisionalDiscoveries[0];
-    expect(provisional.returned).toBe(false);
-    expect(provisional.islandId).toBe(island.id);
+    expect(simulation.teleport(target.canonicalApproach)).toBe(true);
 
-    const remoteSupportedIndex = [...simulation.world.getSupportedKnowledgeIndices()]
-      .find((index) => {
-        const point = simulation.world.pointFromIndex(index);
-        return !simulation.world.isMovementBlocked(point.x, point.y)
-          && index !== simulation.world.index(
-            simulation.generated.landmarks.homeReturnTile.x,
-            simulation.generated.landmarks.homeReturnTile.y,
-          );
+    expect(simulation.ship.provisions).toBe(provisionsBefore);
+    expect(simulation.provisionalIslandDossiers).toContainEqual(expect.objectContaining({
+      islandId: target.islandId,
+      state: "sighted",
+    }));
+    expect(simulation.returnedIslandDossiers).toEqual([]);
+    const lead = simulation.islandDossierReadModels.find(({ islandId }) => islandId === target.islandId);
+    expect(lead).toMatchObject({
+      islandId: target.islandId,
+      name: target.name,
+      state: "sighted",
+    });
+    expect(lead).not.toHaveProperty("dossier");
+    expect(simulation.revealedIslandIds).not.toContain(target.islandId);
+    expect(simulation.islandDossierInteraction).toMatchObject({
+      islandId: target.islandId,
+      state: "sighted",
+      surveyCost: simulation.config.provisions.surveyCost,
+      approachTile: target.canonicalApproach,
+    });
+    expect(simulation.islandDossierInteraction).not.toHaveProperty("dossier");
+  });
+
+  it("surveys from both canonical and alternate coastal approaches and charges provisions once", () => {
+    for (const approachKind of ["canonical", "alternate"] as const) {
+      const simulation = new GameSimulation();
+      const [target] = remoteDossiers(simulation);
+      const approach = approachKind === "canonical"
+        ? target.canonicalApproach
+        : alternateApproach(simulation, target);
+      const provisionsBefore = simulation.ship.provisions;
+
+      expect(simulation.teleport(approach)).toBe(true);
+      expect(simulation.islandDossierInteraction).toMatchObject({
+        islandId: target.islandId,
+        approachTile: approach,
       });
-    if (remoteSupportedIndex === undefined) throw new Error("No remote Supported tile");
-    expect(simulation.teleport(simulation.world.pointFromIndex(remoteSupportedIndex))).toBe(true);
-    expect(simulation.provisionalDiscoveries).toHaveLength(1);
-    expect(simulation.returnedDiscoveries).toHaveLength(0);
+      expect(survey(simulation, target)).toMatchObject({
+        status: "surveyed",
+        islandId: target.islandId,
+        dossier: target.dossier,
+        provisionsSpent: simulation.config.provisions.surveyCost,
+      });
+      expect(simulation.ship.provisions).toBe(
+        provisionsBefore - simulation.config.provisions.surveyCost,
+      );
+      expect(simulation.revealedIslandIds).toContain(target.islandId);
 
-    expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
-    expect(simulation.provisionalDiscoveries).toHaveLength(0);
-    expect(simulation.returnedDiscoveries).toHaveLength(1);
-    expect(simulation.returnedDiscoveries[0]).toMatchObject({ id: provisional.id, returned: true });
-    expect(simulation.currentNavigator.successfulVoyages[0].discoveryIds).toEqual([provisional.id]);
+      const provisionsAfterSurvey = simulation.ship.provisions;
+      expect(survey(simulation, target)).toMatchObject({
+        status: "rejected",
+        reason: "already-surveyed",
+      });
+      expect(simulation.ship.provisions).toBe(provisionsAfterSurvey);
+    }
   });
 
-  it("loses only provisional discoveries on wreck and keeps runtime wrecks separate", () => {
+  it("permits multiple dossier surveys while supplies last and credits them only at the exact dock", () => {
     const simulation = new GameSimulation();
-    const firstIsland = simulation.generated.islands[1];
-    expect(simulation.teleport(inspectionTile(simulation, firstIsland))).toBe(true);
+    const targets = remoteDossiers(simulation, 2);
+    const expectedIds = targets.map(({ islandId }) => islandId).sort((left, right) => left - right);
+    const provisionsBefore = simulation.ship.provisions;
+
+    for (const target of targets) {
+      expect(simulation.teleport(target.canonicalApproach)).toBe(true);
+      expect(survey(simulation, target).status).toBe("surveyed");
+    }
+
+    expect(simulation.ship.provisions).toBe(
+      provisionsBefore - targets.length * simulation.config.provisions.surveyCost,
+    );
+    expect(simulation.returnedIslandDossiers).toEqual([]);
+    expect(simulation.currentNavigator.successfulVoyages).toEqual([]);
+
     expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
-    expect(simulation.returnedDiscoveries).toHaveLength(1);
+    expect(simulation.provisionalIslandDossiers).toEqual([]);
+    expect(simulation.returnedIslandDossiers
+      .filter(({ state }) => state === "dossier")
+      .map(({ islandId }) => islandId)).toEqual(expectedIds);
+    expect(simulation.currentNavigator.successfulVoyages[0].islandLeadIds).toEqual([]);
+    expect(simulation.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual(expectedIds);
 
-    const secondIsland = simulation.generated.islands[2];
-    expect(simulation.teleport(inspectionTile(simulation, secondIsland))).toBe(true);
-    expect(simulation.provisionalDiscoveries).toHaveLength(1);
+    const voyage = chronicleFor(simulation).navigators[0].voyages[0];
+    expect(voyage.outcome).toBe("returned");
+    expect(voyage.achievements
+      .filter(({ kind }) => kind === "island-dossier")
+      .map(({ islandId }) => islandId)
+      .sort((left, right) => left - right)).toEqual(expectedIds);
+  });
+
+  it("commits an unsurveyed lead only on exact-dock return and records it in the Great Hall", () => {
+    const simulation = new GameSimulation();
+    const [target] = remoteDossiers(simulation);
+    expect(simulation.teleport(target.canonicalApproach)).toBe(true);
+
+    const dockIndex = simulation.world.index(
+      simulation.generated.landmarks.homeReturnTile.x,
+      simulation.generated.landmarks.homeReturnTile.y,
+    );
+    const supportedAwayFromDock = [...simulation.world.getSupportedKnowledgeIndices()]
+      .find((index) => index !== dockIndex && !simulation.world.isMovementBlockedAtIndex(index));
+    if (supportedAwayFromDock === undefined) throw new Error("No supported non-dock water tile");
+    expect(simulation.teleport(simulation.world.pointFromIndex(supportedAwayFromDock))).toBe(true);
+    expect(simulation.returnedIslandDossiers).toEqual([]);
+    expect(simulation.currentNavigator.successfulVoyages).toEqual([]);
+
+    expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
+    expect(simulation.returnedIslandDossiers).toContainEqual(expect.objectContaining({
+      islandId: target.islandId,
+      state: "lead",
+    }));
+    expect(simulation.currentNavigator.successfulVoyages[0].islandLeadIds).toEqual([target.islandId]);
+    expect(simulation.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual([]);
+
+    const voyage = chronicleFor(simulation).navigators[0].voyages[0];
+    expect(voyage.outcome).toBe("returned");
+    expect(voyage.achievements
+      .filter(({ kind }) => kind === "island-lead")
+      .map(({ islandId }) => islandId)).toEqual([target.islandId]);
+  });
+
+  it("rolls a wrecked survey back while preserving the previously returned lead", () => {
+    const simulation = new GameSimulation();
+    const [target] = remoteDossiers(simulation);
+
+    expect(simulation.teleport(target.canonicalApproach)).toBe(true);
+    expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
+    const returnedLead = structuredClone(
+      simulation.returnedIslandDossiers.find(({ islandId }) => islandId === target.islandId),
+    );
+    expect(returnedLead).toMatchObject({ islandId: target.islandId, state: "lead" });
+
+    expect(simulation.teleport(target.canonicalApproach)).toBe(true);
+    expect(simulation.islandDossierInteraction).toMatchObject({
+      islandId: target.islandId,
+      state: "returned-lead",
+    });
+    expect(survey(simulation, target).status).toBe("surveyed");
+    expect(simulation.provisionalIslandDossiers).toContainEqual(expect.objectContaining({
+      islandId: target.islandId,
+      state: "surveyed",
+    }));
+    expect(simulation.revealedIslandIds).toContain(target.islandId);
+
+    expect(simulation.teleport(unknownWater(simulation))).toBe(true);
     expect(simulation.forceWreck()).toBe(true);
+    expect(simulation.provisionalIslandDossiers).toEqual([]);
+    expect(simulation.returnedIslandDossiers).toContainEqual(returnedLead);
+    expect(simulation.revealedIslandIds).not.toContain(target.islandId);
+    const restoredLead = simulation.islandDossierReadModels.find(
+      ({ islandId }) => islandId === target.islandId,
+    );
+    expect(restoredLead).toMatchObject({ state: "returned-lead" });
+    expect(restoredLead).not.toHaveProperty("dossier");
+  });
 
-    expect(simulation.provisionalDiscoveries).toHaveLength(0);
-    expect(simulation.returnedDiscoveries).toHaveLength(1);
-    expect(simulation.wrecks).toHaveLength(1);
-    expect(simulation.wrecks[0].id).toBe(1);
-    expect(simulation.returnedDiscoveries[0].type).not.toBeUndefined();
+  it("round-trips provisional and returned dossiers without rerolling or duplicate credit", () => {
+    const original = new GameSimulation();
+    const [target] = remoteDossiers(original);
+    expect(original.teleport(target.canonicalApproach)).toBe(true);
+    expect(survey(original, target).status).toBe("surveyed");
+
+    const activeSave = original.createSave();
+    const activeRestored = new GameSimulation();
+    activeRestored.restoreSave(activeSave);
+    expect(activeRestored.islandDossierDefinitions).toEqual(original.islandDossierDefinitions);
+    expect(activeRestored.provisionalIslandDossiers).toEqual(original.provisionalIslandDossiers);
+    expect(activeRestored.returnedIslandDossiers).toEqual([]);
+    expect(activeRestored.revealedIslandIds).toContain(target.islandId);
+    const provisionsBeforeRepeat = activeRestored.ship.provisions;
+    expect(survey(activeRestored, target)).toMatchObject({
+      status: "rejected",
+      reason: "already-surveyed",
+    });
+    expect(activeRestored.ship.provisions).toBe(provisionsBeforeRepeat);
+
+    expect(activeRestored.teleport(activeRestored.generated.landmarks.homeReturnTile)).toBe(true);
+    expect(activeRestored.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual([
+      target.islandId,
+    ]);
+    const returnedSave = activeRestored.createSave();
+    const returnedRestored = new GameSimulation();
+    returnedRestored.restoreSave(returnedSave);
+    expect(returnedRestored.returnedIslandDossiers).toEqual(activeRestored.returnedIslandDossiers);
+    expect(returnedRestored.currentNavigator.successfulVoyages).toHaveLength(1);
+    expect(returnedRestored.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual([
+      target.islandId,
+    ]);
+    expect(returnedRestored.createSave().islandDossiers).toEqual(returnedSave.islandDossiers);
+
+    expect(returnedRestored.teleport(target.canonicalApproach)).toBe(true);
+    expect(returnedRestored.islandDossierInteraction).toBeUndefined();
+    const returnedBeforeRepeat = structuredClone(returnedRestored.returnedIslandDossiers);
+    const provisionsBeforeReturnedRepeat = returnedRestored.ship.provisions;
+    expect(survey(returnedRestored, target)).toMatchObject({
+      status: "rejected",
+      reason: "already-surveyed",
+    });
+    expect(returnedRestored.ship.provisions).toBe(provisionsBeforeReturnedRepeat);
+    expect(returnedRestored.returnedIslandDossiers).toEqual(returnedBeforeRepeat);
+    expect(returnedRestored.currentNavigator.successfulVoyages).toHaveLength(1);
+  });
+
+  it("reveals the island footprint without mutating knowledge state, counts, or travel costs", () => {
+    const simulation = new GameSimulation();
+    const [target] = remoteDossiers(simulation);
+    expect(simulation.teleport(target.canonicalApproach)).toBe(true);
+
+    const knowledgeBefore = Array.from({ length: simulation.world.tileCount }, (_, index) => ({
+      state: simulation.world.getKnowledgeAtIndex(index),
+      expeditionStamp: simulation.world.getExpeditionStampAtIndex(index),
+    }));
+    const countsBefore = [
+      simulation.world.getKnowledgeCount(KnowledgeState.Unknown),
+      simulation.world.getKnowledgeCount(KnowledgeState.Personal),
+      simulation.world.getKnowledgeCount(KnowledgeState.Supported),
+    ];
+    const footprintKnowledgeBefore = target.footprintIndices.map((index) => (
+      simulation.world.getKnowledgeAtIndex(index)
+    ));
+    const knowledgeVersionBefore = simulation.world.knowledgeVersion;
+    const supportedTopologyVersionBefore = simulation.world.supportedTopologyVersion;
+    const terrainVersionBefore = simulation.world.terrainVersion;
+    const returnCostBefore = simulation.returnPaths.returnCost;
+    const returnPathBefore = [...simulation.returnPaths.pathIndices];
+    const revealRevisionBefore = simulation.islandFogRevealRevision;
+
+    expect(survey(simulation, target).status).toBe("surveyed");
+
+    expect(simulation.revealedIslandIds).toContain(target.islandId);
+    expect(simulation.islandFogRevealRevision).toBe(revealRevisionBefore + 1);
+    expect(target.footprintIndices.map((index) => simulation.world.getKnowledgeAtIndex(index)))
+      .toEqual(footprintKnowledgeBefore);
+    expect(Array.from({ length: simulation.world.tileCount }, (_, index) => ({
+      state: simulation.world.getKnowledgeAtIndex(index),
+      expeditionStamp: simulation.world.getExpeditionStampAtIndex(index),
+    }))).toEqual(knowledgeBefore);
+    expect([
+      simulation.world.getKnowledgeCount(KnowledgeState.Unknown),
+      simulation.world.getKnowledgeCount(KnowledgeState.Personal),
+      simulation.world.getKnowledgeCount(KnowledgeState.Supported),
+    ]).toEqual(countsBefore);
+    expect(simulation.world.knowledgeVersion).toBe(knowledgeVersionBefore);
+    expect(simulation.world.supportedTopologyVersion).toBe(supportedTopologyVersionBefore);
+    expect(simulation.world.terrainVersion).toBe(terrainVersionBefore);
+    expect(simulation.returnPaths.returnCost).toBe(returnCostBefore);
+    expect(simulation.returnPaths.pathIndices).toEqual(returnPathBefore);
   });
 });

@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
-import { generateDiscoveryDefinitions } from "../src/wayfinders/exploration/DiscoverySystem";
 import { generateFishingShoalCatalog } from "../src/wayfinders/exploration/FishingShoalCatalog";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
   createFishingShoalId,
 } from "../src/wayfinders/exploration/FishingShoalContracts";
 import { FishingShoalSystem } from "../src/wayfinders/exploration/FishingShoalSystem";
+import { generateIslandDossierCatalog } from "../src/wayfinders/exploration/IslandDossierCatalog";
 import { createSurveyBudget } from "../src/wayfinders/exploration/SurveyContracts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
@@ -33,13 +33,13 @@ function surveyBudget(availableProvisionUnits = 12, returnCost = 0) {
 }
 
 describe("deterministic fishing-shoal catalog", () => {
-  it("derives a sparse stable catalog without changing terrain, islands, or discoveries", () => {
+  it("derives a sparse stable catalog without changing terrain, islands, or island dossiers", () => {
     const seed = 13_371;
     const first = new GameSimulation();
     first.regenerate(seed);
     const beforeTerrain = terrainSignature(first);
     const beforeIslands = structuredClone(first.generated.islands);
-    const beforeDiscoveries = structuredClone(first.discoveryDefinitions);
+    const beforeIslandDossiers = structuredClone(first.islandDossierDefinitions);
 
     const catalog = generateFishingShoalCatalog(
       first.world,
@@ -58,8 +58,13 @@ describe("deterministic fishing-shoal catalog", () => {
     expect(new Set(catalog.map(({ id }) => id)).size).toBe(catalog.length);
     expect(terrainSignature(first)).toEqual(beforeTerrain);
     expect(first.generated.islands).toEqual(beforeIslands);
-    expect(first.discoveryDefinitions).toEqual(beforeDiscoveries);
-    expect(generateDiscoveryDefinitions(seed, first.generated.islands)).toEqual(beforeDiscoveries);
+    expect(first.islandDossierDefinitions).toEqual(beforeIslandDossiers);
+    expect(generateIslandDossierCatalog(
+      first.world,
+      seed,
+      first.generated.islands,
+      first.generated.landmarks.homeReturnTile,
+    )).toEqual(beforeIslandDossiers);
 
     for (const definition of catalog) {
       const { x, y } = definition.tile;

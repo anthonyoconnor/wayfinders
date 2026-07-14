@@ -18,10 +18,19 @@ import {
 import { generateFishingShoalCatalog } from "../exploration/FishingShoalCatalog";
 import { FishingShoalSystem } from "../exploration/FishingShoalSystem";
 import {
-  DiscoverySystem,
-  type DiscoveryDefinition,
-  type DiscoveryRecord,
-} from "../exploration/DiscoverySystem";
+  ISLAND_DOSSIER_CONTENT_VERSION,
+  ISLAND_DOSSIER_CONTRACT_VERSION,
+  type IslandDossierDefinitionV1,
+  type IslandDossierInteractionCommandV1,
+  type IslandDossierInteractionReadModelV1,
+  type IslandDossierInteractionResultV1,
+  type IslandDossierProvisionalRecordV1,
+  type IslandDossierReadModelV1,
+  type IslandDossierReturnedRecordV1,
+  type IslandDossierSurveyRejectionReasonV1,
+} from "../exploration/IslandDossierContracts";
+import { generateIslandDossierCatalog } from "../exploration/IslandDossierCatalog";
+import { IslandDossierSystem } from "../exploration/IslandDossierSystem";
 import { KnowledgeSystem } from "../exploration/KnowledgeSystem";
 import {
   ProvisionSystem,
@@ -51,8 +60,8 @@ import {
   NavigatorLineageSystem,
   createNavigatorId,
   type NavigatorGenerationHandoverV1,
-  type NavigatorRecordV4,
-  type NavigatorVoyageAchievementInputV1,
+  type NavigatorRecordV5,
+  type NavigatorVoyageAchievementInputV2,
 } from "../lineage/NavigatorLineageSystem";
 import {
   SAVE_SCHEMA_VERSION,
@@ -120,14 +129,16 @@ export interface SimulationSnapshot {
     pendingWreckId: number | null;
     pendingGenerationHandover: Readonly<NavigatorGenerationHandoverV1> | null;
   };
-  navigator: Readonly<NavigatorRecordV4>;
-  lineage: readonly Readonly<NavigatorRecordV4>[];
+  navigator: Readonly<NavigatorRecordV5>;
+  lineage: readonly Readonly<NavigatorRecordV5>[];
   wrecks: readonly Readonly<ShipwreckState>[];
-  discoveries: {
+  islandDossiers: {
     available: number;
     provisional: number;
     returned: number;
-    records: readonly Readonly<DiscoveryRecord>[];
+    revealed: number;
+    interaction?: Readonly<IslandDossierInteractionReadModelV1>;
+    records: readonly Readonly<IslandDossierReadModelV1>[];
   };
   fishingShoals: {
     available: number;
@@ -203,7 +214,7 @@ export class GameSimulation {
   private provisions!: ProvisionSystem;
   private forwardRanges!: ForwardRangeSystem;
   private returnPathing!: ReturnPathSystem;
-  private discoverySystem!: DiscoverySystem;
+  private islandDossierSystem!: IslandDossierSystem;
   private fishingShoalSystem!: FishingShoalSystem;
   private readonly generator: WorldGenerator;
   private expeditionId = 1;
@@ -237,11 +248,11 @@ export class GameSimulation {
     return this.lineage.generation;
   }
 
-  get currentNavigator(): Readonly<NavigatorRecordV4> {
+  get currentNavigator(): Readonly<NavigatorRecordV5> {
     return this.lineage.currentNavigator;
   }
 
-  get navigatorLineage(): readonly Readonly<NavigatorRecordV4>[] {
+  get navigatorLineage(): readonly Readonly<NavigatorRecordV5>[] {
     return this.lineage.navigators;
   }
 
@@ -287,24 +298,32 @@ export class GameSimulation {
     return this.shipwrecks.filter(({ survey }) => survey.state === "returned");
   }
 
-  get discoveryDefinitions(): readonly Readonly<DiscoveryDefinition>[] {
-    return this.discoverySystem.definitions;
+  get islandDossierDefinitions(): readonly Readonly<IslandDossierDefinitionV1>[] {
+    return this.islandDossierSystem.definitions;
   }
 
-  get provisionalDiscoveries(): readonly Readonly<DiscoveryRecord>[] {
-    return this.discoverySystem.provisional;
+  get provisionalIslandDossiers(): readonly Readonly<IslandDossierProvisionalRecordV1>[] {
+    return this.islandDossierSystem.provisional;
   }
 
-  get returnedDiscoveries(): readonly Readonly<DiscoveryRecord>[] {
-    return this.discoverySystem.returned;
+  get returnedIslandDossiers(): readonly Readonly<IslandDossierReturnedRecordV1>[] {
+    return this.islandDossierSystem.returned;
   }
 
-  get discoveries(): readonly Readonly<DiscoveryRecord>[] {
-    return this.discoverySystem.allRecords;
+  get islandDossierReadModels(): readonly Readonly<IslandDossierReadModelV1>[] {
+    return this.islandDossierSystem.readModels();
   }
 
-  get discoveryRecordsRevision(): number {
-    return this.discoverySystem.recordsRevision;
+  get islandDossierRecordsRevision(): number {
+    return this.islandDossierSystem.recordsRevision;
+  }
+
+  get islandFogRevealRevision(): number {
+    return this.islandDossierSystem.fogRevealRevision;
+  }
+
+  get revealedIslandIds(): readonly number[] {
+    return this.islandDossierSystem.revealedIslandIds;
   }
 
   get fishingShoalDefinitions(): readonly Readonly<FishingShoalDefinition>[] {
@@ -346,6 +365,14 @@ export class GameSimulation {
   get fishingShoalInteraction(): Readonly<FishingShoalInteractionReadModel> | undefined {
     if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
     return this.fishingShoalSystem.interactionNear({
+      x: this.ship.currentTileX,
+      y: this.ship.currentTileY,
+    }, this.surveyBudget);
+  }
+
+  get islandDossierInteraction(): Readonly<IslandDossierInteractionReadModelV1> | undefined {
+    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
+    return this.islandDossierSystem.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
     }, this.surveyBudget);
@@ -457,7 +484,7 @@ export class GameSimulation {
       const visibility = this.visibility.updateForMovement(previousTile, currentTile);
       const knowledge = this.knowledge.applyTrailingVisibility(visibility, this.expeditionId);
       knowledgeChanged += knowledge.changedCount;
-      this.observeDiscoveries();
+      this.observeIslandDossiers();
       if (this.observeFishingShoals() > 0) lifecycleChanged = true;
       this.discoverVisibleWrecks();
       this.events.emit("shipEnteredTile", currentTile);
@@ -518,10 +545,14 @@ export class GameSimulation {
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
     this.riskResultsInitialized = false;
-    this.discoverySystem = new DiscoverySystem(
+    this.islandDossierSystem = new IslandDossierSystem(
       this.world,
-      this.generated.seed,
-      this.generated.islands,
+      generateIslandDossierCatalog(
+        this.world,
+        this.generated.seed,
+        this.generated.islands,
+        this.generated.landmarks.homeReturnTile,
+      ),
     );
     this.fishingShoalSystem = new FishingShoalSystem(
       this.world,
@@ -550,7 +581,7 @@ export class GameSimulation {
     this.movement.teleport(this.ship, tile);
     const visibility = this.visibility.updateAt(tile);
     let knowledgeChanged = this.knowledge.applyVisibility(visibility, this.expeditionId).changedCount;
-    this.observeDiscoveries();
+    this.observeIslandDossiers();
     this.observeFishingShoals();
     this.discoverVisibleWrecks();
     this.lastMovement = NO_MOVEMENT;
@@ -573,14 +604,14 @@ export class GameSimulation {
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
     const visibility = this.visibility.updateAt(tile);
     const knowledge = this.knowledge.applyVisibility(visibility, this.expeditionId);
-    const discoveriesChanged = this.observeDiscoveries() > 0;
+    const islandDossiersChanged = this.observeIslandDossiers() > 0;
     const fishingShoalsChanged = this.observeFishingShoals() > 0;
     const wrecksChanged = this.discoverVisibleWrecks() > 0;
     this.recalculateRiskOverlays();
     this.revision++;
     if (
       knowledge.changedCount > 0
-      || discoveriesChanged
+      || islandDossiersChanged
       || fishingShoalsChanged
       || wrecksChanged
       || wasActiveExpedition !== this.activeExpedition
@@ -627,6 +658,51 @@ export class GameSimulation {
     const knowledgeChanged = this.failExpedition();
     if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
     this.recalculateRiskOverlays();
+  }
+
+  interactWithIslandDossier(
+    command: Readonly<IslandDossierInteractionCommandV1>,
+  ): IslandDossierInteractionResultV1 {
+    if (this.interactionTransactionActive) {
+      return this.rejectIslandDossierSurvey(command.islandId, "interaction-busy");
+    }
+    if (this.pendingGenerationHandoverValue) {
+      return this.rejectIslandDossierSurvey(command.islandId, "generation-handover");
+    }
+    if (this.pendingRespawn) {
+      return this.rejectIslandDossierSurvey(command.islandId, "wreck-hold");
+    }
+
+    this.interactionTransactionActive = true;
+    try {
+      const result = this.islandDossierSystem.applyInteraction(command, {
+        x: this.ship.currentTileX,
+        y: this.ship.currentTileY,
+      }, this.expeditionId, this.generation, this.surveyBudget);
+      if (result.status !== "surveyed") return result;
+
+      const expeditionStarted = !this.activeExpedition;
+      if (expeditionStarted) this.activeExpedition = true;
+      this.applySurveyProvisionCharge(result.provisionsSpent);
+      const definition = this.islandDossierSystem.definitionFor(result.islandId);
+      if (!definition) throw new Error(`Surveyed island ${result.islandId} has no dossier definition`);
+      this.revision++;
+      this.saveRevision++;
+      if (expeditionStarted) {
+        this.events.emit("expeditionStarted", {
+          expeditionId: this.expeditionId,
+          generation: this.generation,
+        });
+      }
+      this.events.emit("islandDossierSurveyed", {
+        ...result,
+        canonicalApproach: definition.canonicalApproach,
+      });
+      this.resolveSurveyExhaustion();
+      return result;
+    } finally {
+      this.interactionTransactionActive = false;
+    }
   }
 
   interactWithFishingShoal(
@@ -796,7 +872,7 @@ export class GameSimulation {
     this.revision++;
   }
 
-  createSave(): SaveGame<DiscoveryRecord> {
+  createSave(): SaveGame {
     return {
       schemaVersion: SAVE_SCHEMA_VERSION,
       savedAt: Date.now(),
@@ -804,7 +880,10 @@ export class GameSimulation {
         seed: this.generated.seed,
         generatorVersion: WORLD_GENERATOR_VERSION,
         generationConfig: captureGenerationConfig(this.config),
-        contentVersions: { fishingShoals: FISHING_SHOAL_CONTENT_VERSION },
+        contentVersions: {
+          fishingShoals: FISHING_SHOAL_CONTENT_VERSION,
+          islandDossiers: ISLAND_DOSSIER_CONTENT_VERSION,
+        },
       },
       generation: this.generation,
       expedition: {
@@ -829,9 +908,9 @@ export class GameSimulation {
         runs: this.copyKnowledgeRunsForSave(),
       },
       wrecks: this.shipwrecks.map((wreck) => ({ ...wreck, survey: { ...wreck.survey } })),
-      discoveries: {
-        provisional: this.provisionalDiscoveries.map((discovery) => ({ ...discovery })),
-        returned: this.returnedDiscoveries.map((discovery) => ({ ...discovery })),
+      islandDossiers: {
+        provisional: this.provisionalIslandDossiers.map((record) => ({ ...record })),
+        returned: this.returnedIslandDossiers.map((record) => ({ ...record })),
       },
       fishingShoals: {
         provisional: this.provisionalFishingShoals.map((record) => ({ ...record })),
@@ -843,14 +922,14 @@ export class GameSimulation {
   }
 
   /**
-   * Restores authoritative state only. Base terrain and discovery definitions
+   * Restores authoritative state only. Base terrain and dossier definitions
    * are regenerated, while sight, movement caches and risk paths are rebuilt.
    */
   restoreSave(value: unknown): void {
     if (this.interactionTransactionActive) {
       throw new SaveRestoreError("Cannot restore a save during an interaction transaction");
     }
-    const parsed = parseSaveGame(value) as SaveGame<DiscoveryRecord>;
+    const parsed = parseSaveGame(value);
     const currentGenerationConfig = captureGenerationConfig(this.config);
     const savedGenerationConfig = captureGenerationConfig(applyGenerationConfig(
       parsed.world.generationConfig,
@@ -873,15 +952,23 @@ export class GameSimulation {
     ) {
       throw new SaveRestoreError("Saved generation handover must contain a fully supplied ship");
     }
-    const restoredDiscoveries = new DiscoverySystem(
+    const restoredIslandDossiers = new IslandDossierSystem(
       generated.grid,
-      generated.seed,
-      generated.islands,
+      generateIslandDossierCatalog(
+        generated.grid,
+        generated.seed,
+        generated.islands,
+        generated.landmarks.homeReturnTile,
+        parsed.world.contentVersions.islandDossiers,
+      ),
     );
     try {
-      restoredDiscoveries.restore(parsed.discoveries.provisional, parsed.discoveries.returned);
+      restoredIslandDossiers.restore(
+        parsed.islandDossiers.provisional,
+        parsed.islandDossiers.returned,
+      );
     } catch (error) {
-      throw new SaveRestoreError(error instanceof Error ? error.message : "Saved discoveries are invalid");
+      throw new SaveRestoreError(error instanceof Error ? error.message : "Saved island dossiers are invalid");
     }
     const restoredFishingShoals = new FishingShoalSystem(
       generated.grid,
@@ -938,7 +1025,7 @@ export class GameSimulation {
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
     this.riskResultsInitialized = false;
-    this.discoverySystem = restoredDiscoveries;
+    this.islandDossierSystem = restoredIslandDossiers;
     this.fishingShoalSystem = restoredFishingShoals;
     this.visibility.updateAt({ x: this.ship.currentTileX, y: this.ship.currentTileY });
     this.lastMovement = NO_MOVEMENT;
@@ -997,11 +1084,19 @@ export class GameSimulation {
       navigator: { ...this.currentNavigator },
       lineage: this.navigatorLineage.map((navigator) => ({ ...navigator })),
       wrecks: this.shipwrecks.map((wreck) => ({ ...wreck, survey: { ...wreck.survey } })),
-      discoveries: {
-        available: this.discoveryDefinitions.length,
-        provisional: this.provisionalDiscoveries.length,
-        returned: this.returnedDiscoveries.length,
-        records: this.discoveries.map((discovery) => ({ ...discovery })),
+      islandDossiers: {
+        available: this.islandDossierDefinitions.length,
+        provisional: this.provisionalIslandDossiers.length,
+        returned: this.returnedIslandDossiers.length,
+        revealed: this.revealedIslandIds.length,
+        interaction: this.islandDossierInteraction
+          ? {
+              ...this.islandDossierInteraction,
+              approachTile: { ...this.islandDossierInteraction.approachTile },
+              canonicalApproach: { ...this.islandDossierInteraction.canonicalApproach },
+            }
+          : undefined,
+        records: this.islandDossierReadModels,
       },
       fishingShoals: {
         available: this.fishingShoalDefinitions.length,
@@ -1048,14 +1143,15 @@ export class GameSimulation {
     const generation = this.generation;
     const navigatorId = this.currentNavigator.id;
     const committed = this.knowledge.commitExpedition(expeditionId);
-    const returnedDiscoveries = this.discoverySystem.commitExpedition(expeditionId);
+    const returnedIslandDossiers = this.islandDossierSystem.commitExpedition(expeditionId);
     const returnedFishingShoals = this.fishingShoalSystem.commitExpedition(expeditionId);
     const returnedWreckSurveys = this.commitWreckSurveys(expeditionId);
-    const achievements: NavigatorVoyageAchievementInputV1 = {
+    const achievements: NavigatorVoyageAchievementInputV2 = {
       expeditionId,
       supportedTileCount: committed.changedCount - (committed.closedUnknownCount ?? 0),
       closedUnknownTileCount: committed.closedUnknownCount ?? 0,
-      discoveryIds: returnedDiscoveries.map(({ id }) => id).sort((left, right) => left - right),
+      islandLeadIds: returnedIslandDossiers.leads.map(({ islandId }) => islandId).sort((left, right) => left - right),
+      islandDossierIds: returnedIslandDossiers.dossiers.map(({ islandId }) => islandId).sort((left, right) => left - right),
       fishingLeadIds: returnedFishingShoals.leads.map(({ id }) => id).sort(),
       fishingSurveyIds: returnedFishingShoals.surveys.map(({ id }) => id).sort(),
       wreckIds: returnedWreckSurveys.map(({ wreckId }) => wreckId).sort((left, right) => left - right),
@@ -1089,11 +1185,12 @@ export class GameSimulation {
       closedUnknownTileCount: voyage.voyage.closedUnknownTileCount,
       achievements: voyage.voyage,
     });
-    if (returnedDiscoveries.length > 0) {
-      this.events.emit("discoveriesReturned", {
+    if (returnedIslandDossiers.leads.length > 0 || returnedIslandDossiers.dossiers.length > 0) {
+      this.events.emit("islandDossiersReturned", {
         expeditionId,
         generation,
-        discoveries: returnedDiscoveries,
+        leads: returnedIslandDossiers.leads,
+        dossiers: returnedIslandDossiers.dossiers,
       });
     }
     if (returnedFishingShoals.leads.length > 0 || returnedFishingShoals.surveys.length > 0) {
@@ -1159,7 +1256,7 @@ export class GameSimulation {
     this.shipwrecks.push(wreck);
     this.wrecksRevision++;
     const reverted = this.knowledge.revertExpedition(expeditionId);
-    const lostDiscoveries = this.discoverySystem.revertExpedition(expeditionId);
+    const lostIslandDossiers = this.islandDossierSystem.revertExpedition(expeditionId);
     const lostFishingShoals = this.fishingShoalSystem.revertExpedition(expeditionId);
     const lostWreckSurveys = this.revertWreckSurveys(expeditionId);
     const previousProvisions = lostShip.provisions;
@@ -1189,11 +1286,11 @@ export class GameSimulation {
       worldX: wreck.worldX,
       worldY: wreck.worldY,
     });
-    if (lostDiscoveries.length > 0) {
-      this.events.emit("discoveriesLost", {
+    if (lostIslandDossiers.length > 0) {
+      this.events.emit("islandDossiersLost", {
         expeditionId,
         generation,
-        discoveries: lostDiscoveries,
+        records: lostIslandDossiers,
       });
     }
     if (lostFishingShoals.length > 0) {
@@ -1376,6 +1473,18 @@ export class GameSimulation {
     };
   }
 
+  private rejectIslandDossierSurvey(
+    islandId: number | undefined,
+    reason: IslandDossierSurveyRejectionReasonV1,
+  ): IslandDossierInteractionResultV1 {
+    return {
+      contractVersion: ISLAND_DOSSIER_CONTRACT_VERSION,
+      status: "rejected",
+      ...(islandId === undefined ? {} : { islandId }),
+      reason,
+    };
+  }
+
   private discoverVisibleWrecks(): number {
     let discoveredCount = 0;
     for (const wreck of this.shipwrecks) {
@@ -1392,13 +1501,21 @@ export class GameSimulation {
     return discoveredCount;
   }
 
-  private observeDiscoveries(): number {
+  private observeIslandDossiers(): number {
     if (!this.activeExpedition || this.pendingRespawn) return 0;
-    const observation = this.discoverySystem.observeCurrentSight(
+    const observation = this.islandDossierSystem.observeCurrentSight(
       this.expeditionId,
       this.generation,
     );
-    for (const discovery of observation.found) this.events.emit("discoveryFound", discovery);
+    for (const record of observation.found) {
+      const definition = this.islandDossierSystem.definitionFor(record.islandId);
+      if (!definition) continue;
+      this.events.emit("islandSighted", {
+        islandId: definition.islandId,
+        name: definition.name,
+        canonicalApproach: definition.canonicalApproach,
+      });
+    }
     return observation.found.length;
   }
 

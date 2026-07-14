@@ -13,6 +13,13 @@ import {
   type FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
 import {
+  ISLAND_DOSSIER_CONTENT_VERSION,
+  isIslandDossierProvisionalStateV1,
+  isIslandDossierReturnedStateV1,
+  type IslandDossierProvisionalRecordV1,
+  type IslandDossierReturnedRecordV1,
+} from "../exploration/IslandDossierContracts";
+import {
   NAVIGATOR_GENERATION_HANDOVER_VERSION,
   NavigatorLineageValidationError,
   createNavigatorId,
@@ -20,12 +27,12 @@ import {
   parseNavigatorSuccessionKey,
   parseNavigatorLineageSnapshot,
   type NavigatorGenerationHandoverV1,
-  type NavigatorLineageSnapshotV4,
+  type NavigatorLineageSnapshotV5,
 } from "../lineage/NavigatorLineageSystem";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
-export const SAVE_SCHEMA_VERSION = 10 as const;
+export const SAVE_SCHEMA_VERSION = 11 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -45,28 +52,6 @@ export interface GenerationConfigV1 {
   islands: PrototypeConfig["islands"];
 }
 
-/**
- * Structural persistence shape for accepted-baseline discoveries. The
- * simulation can later use its canonical DiscoveryRecord as the SaveGame
- * generic argument.
- */
-export interface DiscoverySaveRecord {
-  id: number;
-  type: number;
-  tileX: number;
-  tileY: number;
-  returned: boolean;
-  islandId: number;
-  expeditionId: number;
-  generation: number;
-  name: string;
-  rewardId: string;
-  rewardLabel: string;
-  detail: string;
-  settlementId?: string;
-  resourceId?: number;
-}
-
 export interface PendingRespawnSaveState {
   expeditionId: number;
   generation: number;
@@ -75,7 +60,7 @@ export interface PendingRespawnSaveState {
   remainingSeconds: number;
 }
 
-export interface SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySaveRecord> {
+export interface SaveGame {
   schemaVersion: typeof SAVE_SCHEMA_VERSION;
   savedAt: number;
   world: {
@@ -84,6 +69,7 @@ export interface SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySave
     generationConfig: GenerationConfigV1;
     contentVersions: {
       fishingShoals: typeof FISHING_SHOAL_CONTENT_VERSION;
+      islandDossiers: typeof ISLAND_DOSSIER_CONTENT_VERSION;
     };
   };
   generation: number;
@@ -99,15 +85,15 @@ export interface SaveGame<TDiscovery extends DiscoverySaveRecord = DiscoverySave
     runs: KnowledgeRun[];
   };
   wrecks: ShipwreckState[];
-  discoveries: {
-    provisional: TDiscovery[];
-    returned: TDiscovery[];
+  islandDossiers: {
+    provisional: IslandDossierProvisionalRecordV1[];
+    returned: IslandDossierReturnedRecordV1[];
   };
   fishingShoals: {
     provisional: FishingShoalProvisionalRecordV1[];
     returned: FishingShoalReturnedRecordV1[];
   };
-  navigatorLineage: NavigatorLineageSnapshotV4;
+  navigatorLineage: NavigatorLineageSnapshotV5;
   terrainPatches: [];
 }
 
@@ -154,6 +140,13 @@ export class UnsupportedFishingShoalContentVersionError extends Error {
   constructor(readonly version: number) {
     super(`Unsupported fishing-shoal content version ${version}`);
     this.name = "UnsupportedFishingShoalContentVersionError";
+  }
+}
+
+export class UnsupportedIslandDossierContentVersionError extends Error {
+  constructor(readonly version: number) {
+    super(`Unsupported island-dossier content version ${version}`);
+    this.name = "UnsupportedIslandDossierContentVersionError";
   }
 }
 
@@ -365,6 +358,13 @@ export function parseSaveGame(value: unknown): SaveGame {
   if (fishingShoalContentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
     throw new UnsupportedFishingShoalContentVersionError(fishingShoalContentVersion);
   }
+  const islandDossierContentVersion = integer(
+    contentVersions.islandDossiers,
+    "save.world.contentVersions.islandDossiers",
+  );
+  if (islandDossierContentVersion !== ISLAND_DOSSIER_CONTENT_VERSION) {
+    throw new UnsupportedIslandDossierContentVersionError(islandDossierContentVersion);
+  }
   const generationConfig = validateGenerationConfig(world.generationConfig, seed);
   const tileCount = generationConfig.world.width * generationConfig.world.height;
 
@@ -405,30 +405,29 @@ export function parseSaveGame(value: unknown): SaveGame {
   }
   if (pendingRespawn) validatePendingWreck(pendingRespawn, wrecks, ship);
 
-  const discoveries = record(root.discoveries, "save.discoveries");
-  const provisionalDiscoveries = validateDiscoveries(
-    discoveries.provisional,
-    false,
+  const islandDossiers = record(root.islandDossiers, "save.islandDossiers");
+  const provisionalIslandDossiers = validateIslandDossierProvisional(
+    islandDossiers.provisional,
     generationConfig,
     expeditionId,
     generation,
-    "save.discoveries.provisional",
+    expeditionActive,
   );
-  const returnedDiscoveries = validateDiscoveries(
-    discoveries.returned,
-    true,
+  const returnedIslandDossiers = validateIslandDossierReturned(
+    islandDossiers.returned,
     generationConfig,
-    expeditionId,
     generation,
-    "save.discoveries.returned",
   );
-  if (provisionalDiscoveries.length > 0 && !expeditionActive) {
-    fail("requires an active expedition", "save.discoveries.provisional");
-  }
-  const discoveryIds = new Set<number>();
-  for (const discovery of [...provisionalDiscoveries, ...returnedDiscoveries]) {
-    if (discoveryIds.has(discovery.id)) fail(`contains duplicate discovery id ${discovery.id}`, "save.discoveries");
-    discoveryIds.add(discovery.id);
+  const returnedIslandDossierById = new Map(returnedIslandDossiers.map((item) => [item.islandId, item]));
+  for (let index = 0; index < provisionalIslandDossiers.length; index++) {
+    const item = provisionalIslandDossiers[index];
+    const prior = returnedIslandDossierById.get(item.islandId);
+    if (prior && !(prior.state === "lead" && item.state === "surveyed")) {
+      fail(
+        "may overlap returned state only for a returned lead with a provisional survey upgrade",
+        `save.islandDossiers.provisional[${index}].islandId`,
+      );
+    }
   }
 
   if (!Array.isArray(root.terrainPatches) || root.terrainPatches.length !== 0) {
@@ -453,7 +452,7 @@ export function parseSaveGame(value: unknown): SaveGame {
       );
     }
   }
-  let navigatorLineage: NavigatorLineageSnapshotV4;
+  let navigatorLineage: NavigatorLineageSnapshotV5;
   try {
     navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
   } catch (error) {
@@ -480,7 +479,7 @@ export function parseSaveGame(value: unknown): SaveGame {
   }
   validateVoyageAchievements(
     navigatorLineage,
-    returnedDiscoveries,
+    returnedIslandDossiers,
     returnedFishingShoals,
     wrecks,
   );
@@ -579,6 +578,76 @@ function validateFishingShoalReturned(
     if (recordGeneration > generation) fail("cannot be later than the current generation", `${path}.generation`);
   }
   return value as FishingShoalReturnedRecordV1[];
+}
+
+function validateIslandDossierProvisional(
+  value: unknown,
+  config: GenerationConfigV1,
+  expeditionId: number,
+  generation: number,
+  expeditionActive: boolean,
+): IslandDossierProvisionalRecordV1[] {
+  const path = "save.islandDossiers.provisional";
+  if (!Array.isArray(value)) fail("must be an array", path);
+  let previousIslandId = 0;
+  for (let index = 0; index < value.length; index++) {
+    const itemPath = `${path}[${index}]`;
+    const item = record(value[index], itemPath);
+    assertExactRecordKeys(item, ["islandId", "state", "expeditionId", "generation"], itemPath);
+    const islandId = positiveSafeInteger(item.islandId, `${itemPath}.islandId`);
+    if (islandId <= previousIslandId) {
+      fail("must be uniquely sorted by island ID", `${itemPath}.islandId`);
+    }
+    previousIslandId = islandId;
+    if (islandId > config.islands.count) {
+      fail("does not reference a generated island", `${itemPath}.islandId`);
+    }
+    if (!isIslandDossierProvisionalStateV1(item.state)) {
+      fail("must be sighted or surveyed", `${itemPath}.state`);
+    }
+    const recordExpeditionId = unsigned32(item.expeditionId, `${itemPath}.expeditionId`, false);
+    const recordGeneration = positiveSafeInteger(item.generation, `${itemPath}.generation`);
+    if (!expeditionActive) fail("requires an active expedition", itemPath);
+    if (recordExpeditionId !== expeditionId) {
+      fail("must belong to the active expedition", `${itemPath}.expeditionId`);
+    }
+    if (recordGeneration !== generation) {
+      fail("must belong to the current generation", `${itemPath}.generation`);
+    }
+  }
+  return value as IslandDossierProvisionalRecordV1[];
+}
+
+function validateIslandDossierReturned(
+  value: unknown,
+  config: GenerationConfigV1,
+  generation: number,
+): IslandDossierReturnedRecordV1[] {
+  const path = "save.islandDossiers.returned";
+  if (!Array.isArray(value)) fail("must be an array", path);
+  let previousIslandId = 0;
+  for (let index = 0; index < value.length; index++) {
+    const itemPath = `${path}[${index}]`;
+    const item = record(value[index], itemPath);
+    assertExactRecordKeys(item, ["islandId", "state", "expeditionId", "generation"], itemPath);
+    const islandId = positiveSafeInteger(item.islandId, `${itemPath}.islandId`);
+    if (islandId <= previousIslandId) {
+      fail("must be uniquely sorted by island ID", `${itemPath}.islandId`);
+    }
+    previousIslandId = islandId;
+    if (islandId > config.islands.count) {
+      fail("does not reference a generated island", `${itemPath}.islandId`);
+    }
+    if (!isIslandDossierReturnedStateV1(item.state)) {
+      fail("must be a returned lead or dossier", `${itemPath}.state`);
+    }
+    unsigned32(item.expeditionId, `${itemPath}.expeditionId`, false);
+    const recordGeneration = positiveSafeInteger(item.generation, `${itemPath}.generation`);
+    if (recordGeneration > generation) {
+      fail("cannot be later than the current generation", `${itemPath}.generation`);
+    }
+  }
+  return value as IslandDossierReturnedRecordV1[];
 }
 
 function validateGenerationConfig(value: unknown, seed: number): GenerationConfigV1 {
@@ -814,7 +883,7 @@ function validateWreckSurvey(
 }
 
 function validateLineageWrecks(
-  lineage: NavigatorLineageSnapshotV4,
+  lineage: NavigatorLineageSnapshotV5,
   wrecks: readonly ShipwreckState[],
 ): { nextExpeditionId: number; latestFatalExpeditionId?: number } {
   const lostNavigatorByWreckId = new Map<number, {
@@ -890,7 +959,7 @@ function validateLineageWrecks(
 }
 
 function validateReturnedSurveyProvenance(
-  lineage: NavigatorLineageSnapshotV4,
+  lineage: NavigatorLineageSnapshotV5,
   wrecks: readonly ShipwreckState[],
   fishingShoals: readonly FishingShoalReturnedRecordV1[],
 ): void {
@@ -924,15 +993,16 @@ function validateReturnedSurveyProvenance(
 }
 
 function validateVoyageAchievements(
-  lineage: NavigatorLineageSnapshotV4,
-  discoveries: readonly DiscoverySaveRecord[],
+  lineage: NavigatorLineageSnapshotV5,
+  islandDossiers: readonly IslandDossierReturnedRecordV1[],
   fishingShoals: readonly FishingShoalReturnedRecordV1[],
   wrecks: readonly ShipwreckState[],
 ): void {
-  const discoveryById = new Map(discoveries.map((record) => [record.id, record]));
+  const islandDossierById = new Map(islandDossiers.map((record) => [record.islandId, record]));
   const fishingShoalById = new Map(fishingShoals.map((record) => [record.id, record]));
   const wreckById = new Map(wrecks.map((record) => [record.id, record]));
-  const creditedDiscoveries = new Set<number>();
+  const creditedIslandLeads = new Set<number>();
+  const creditedIslandDossiers = new Set<number>();
   const creditedFishingLeads = new Set<string>();
   const creditedFishingSurveys = new Set<string>();
   const creditedWrecks = new Set<number>();
@@ -951,14 +1021,29 @@ function validateVoyageAchievements(
         }
       };
 
-      for (let index = 0; index < voyage.discoveryIds.length; index++) {
-        const id = voyage.discoveryIds[index];
-        const sourcePath = `${path}.discoveryIds[${index}]`;
-        const discovery = discoveryById.get(id);
-        if (!discovery) fail(`does not reference returned discovery ${id}`, sourcePath);
-        validateProvenance(discovery, sourcePath);
-        if (creditedDiscoveries.has(id)) fail(`duplicates discovery ${id}`, sourcePath);
-        creditedDiscoveries.add(id);
+      for (let index = 0; index < voyage.islandLeadIds.length; index++) {
+        const id = voyage.islandLeadIds[index];
+        const sourcePath = `${path}.islandLeadIds[${index}]`;
+        const islandDossier = islandDossierById.get(id);
+        if (!islandDossier) fail(`does not reference returned island lead ${id}`, sourcePath);
+        if (islandDossier.state === "lead") validateProvenance(islandDossier, sourcePath);
+        if (creditedIslandDossiers.has(id)) {
+          fail("must precede the returned island dossier", sourcePath);
+        }
+        if (creditedIslandLeads.has(id)) fail(`duplicates island lead ${id}`, sourcePath);
+        creditedIslandLeads.add(id);
+      }
+
+      for (let index = 0; index < voyage.islandDossierIds.length; index++) {
+        const id = voyage.islandDossierIds[index];
+        const sourcePath = `${path}.islandDossierIds[${index}]`;
+        const islandDossier = islandDossierById.get(id);
+        if (!islandDossier || islandDossier.state !== "dossier") {
+          fail(`does not reference returned island dossier ${id}`, sourcePath);
+        }
+        validateProvenance(islandDossier, sourcePath);
+        if (creditedIslandDossiers.has(id)) fail(`duplicates island dossier ${id}`, sourcePath);
+        creditedIslandDossiers.add(id);
       }
 
       for (let index = 0; index < voyage.fishingLeadIds.length; index++) {
@@ -1000,9 +1085,13 @@ function validateVoyageAchievements(
     }
   }
 
-  for (let index = 0; index < discoveries.length; index++) {
-    if (!creditedDiscoveries.has(discoveries[index].id)) {
-      fail("must be credited to its successful voyage", `save.discoveries.returned[${index}]`);
+  for (let index = 0; index < islandDossiers.length; index++) {
+    const islandDossier = islandDossiers[index];
+    const credited = islandDossier.state === "dossier"
+      ? creditedIslandDossiers.has(islandDossier.islandId)
+      : creditedIslandLeads.has(islandDossier.islandId);
+    if (!credited) {
+      fail("must be credited to its successful voyage", `save.islandDossiers.returned[${index}]`);
     }
   }
   for (let index = 0; index < fishingShoals.length; index++) {
@@ -1027,7 +1116,7 @@ function nextExpeditionId(expeditionId: number): number {
 
 function validateLineageGenerationHandover(
   handover: NavigatorGenerationHandoverV1 | null,
-  lineage: NavigatorLineageSnapshotV4,
+  lineage: NavigatorLineageSnapshotV5,
   pendingRespawn: PendingRespawnSaveState | null,
 ): void {
   if (!handover) return;
@@ -1079,46 +1168,6 @@ function validatePendingWreck(
   }
 }
 
-function validateDiscoveries(
-  value: unknown,
-  expectedReturned: boolean,
-  config: GenerationConfigV1,
-  expeditionId: number,
-  generation: number,
-  path: string,
-): DiscoverySaveRecord[] {
-  if (!Array.isArray(value)) fail("must be an array", path);
-  return value.map((raw, index) => {
-    const itemPath = `${path}[${index}]`;
-    const discovery = record(raw, itemPath);
-    const result = discovery as unknown as DiscoverySaveRecord;
-    positiveSafeInteger(discovery.id, `${itemPath}.id`);
-    const type = nonNegativeSafeInteger(discovery.type, `${itemPath}.type`);
-    if (type > 6) fail("must be a known discovery type", `${itemPath}.type`);
-    const tileX = integer(discovery.tileX, `${itemPath}.tileX`);
-    const tileY = integer(discovery.tileY, `${itemPath}.tileY`);
-    assertTileInBounds(tileX, tileY, config, itemPath);
-    if (boolean(discovery.returned, `${itemPath}.returned`) !== expectedReturned) {
-      fail(`must have returned=${String(expectedReturned)}`, `${itemPath}.returned`);
-    }
-    const islandId = positiveSafeInteger(discovery.islandId, `${itemPath}.islandId`);
-    if (islandId > config.islands.count) fail("does not reference a generated island", `${itemPath}.islandId`);
-    const foundExpedition = unsigned32(discovery.expeditionId, `${itemPath}.expeditionId`, false);
-    if (!expectedReturned && foundExpedition !== expeditionId) {
-      fail("must belong to the active expedition", `${itemPath}.expeditionId`);
-    }
-    const foundGeneration = positiveSafeInteger(discovery.generation, `${itemPath}.generation`);
-    if (foundGeneration > generation) fail("cannot be later than the current generation", `${itemPath}.generation`);
-    requiredString(discovery.name, `${itemPath}.name`);
-    requiredString(discovery.rewardId, `${itemPath}.rewardId`);
-    requiredString(discovery.rewardLabel, `${itemPath}.rewardLabel`);
-    requiredString(discovery.detail, `${itemPath}.detail`);
-    optionalString(discovery.settlementId, `${itemPath}.settlementId`);
-    if (discovery.resourceId !== undefined) nonNegativeSafeInteger(discovery.resourceId, `${itemPath}.resourceId`);
-    return result;
-  });
-}
-
 function validateExpeditionKnowledge(value: unknown, expeditionId: number, active: boolean): void {
   const runs = value as KnowledgeRun[];
   for (let index = 0; index < runs.length; index++) {
@@ -1162,6 +1211,20 @@ function assertWorldPointMatchesTile(
 function record(value: unknown, path: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) fail("must be an object", path);
   return value as Record<string, unknown>;
+}
+
+function assertExactRecordKeys(
+  value: Readonly<Record<string, unknown>>,
+  expectedKeys: readonly string[],
+  path: string,
+): void {
+  const expected = new Set(expectedKeys);
+  for (const key of Object.keys(value)) {
+    if (!expected.has(key)) fail("is not a supported field", `${path}.${key}`);
+  }
+  for (const key of expectedKeys) {
+    if (!Object.prototype.hasOwnProperty.call(value, key)) fail("is required", `${path}.${key}`);
+  }
 }
 
 function boolean(value: unknown, path: string): boolean {
@@ -1208,12 +1271,6 @@ function unsigned32(value: unknown, path: string, allowZero: boolean): number {
     fail(`must be ${allowZero ? "an" : "a non-zero"} unsigned 32-bit integer`, path);
   }
   return result;
-}
-
-function optionalString(value: unknown, path: string): void {
-  if (value !== undefined && (typeof value !== "string" || value.length === 0)) {
-    fail("must be a non-empty string when present", path);
-  }
 }
 
 function requiredString(value: unknown, path: string): string {

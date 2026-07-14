@@ -16,6 +16,10 @@ import {
   type FishingShoalInteractionResultV1,
 } from "../exploration/FishingShoalContracts";
 import {
+  ISLAND_DOSSIER_CONTRACT_VERSION,
+  type IslandDossierInteractionResultV1,
+} from "../exploration/IslandDossierContracts";
+import {
   WRECK_SURVEY_CONTRACT_VERSION,
   type WreckSurveyInteractionResultV1,
 } from "../exploration/WreckSurveyContracts";
@@ -29,11 +33,10 @@ import {
   type GreatHallReturnedVoyage,
 } from "../lineage/GreatHallChronicle";
 import { worldToGrid } from "../world/CoordinateSystem";
-import type { GeneratedIsland } from "../world/IslandGenerator";
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
-import { DiscoveryRenderer } from "./DiscoveryRenderer";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
+import { IslandDossierRenderer } from "./IslandDossierRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
 import { canVisitGreatHall } from "./GreatHallAccess";
@@ -77,6 +80,8 @@ interface BrowserDebugApi {
   navigatorWreckTargets: () => ReadonlyArray<{ id: number; generation: number; x: number; y: number }>;
   performance: () => ReturnType<FrameTimingMonitor["snapshot"]> & { lastSaveSerializationMs: number };
   fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
+  islandDossierTargets: () => ReadonlyArray<{ islandId: number; x: number; y: number }>;
+  surveyIslandDossier: () => IslandDossierInteractionResultV1 | undefined;
   surveyFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
   surveyWreck: () => WreckSurveyInteractionResultV1 | undefined;
   continueGeneration: () => boolean;
@@ -118,7 +123,7 @@ export class WayfindersScene extends Phaser.Scene {
   private knowledgeOverlay!: KnowledgeOverlayRenderer;
   private riskOverlay!: RiskOverlayRenderer;
   private cargoRenderer!: CargoRenderer;
-  private discoveryRenderer!: DiscoveryRenderer;
+  private islandDossierRenderer!: IslandDossierRenderer;
   private fishingShoalRenderer!: FishingShoalRenderer;
   private shipRenderer!: ShipRenderer;
   private wreckRenderer!: WreckRenderer;
@@ -162,7 +167,7 @@ export class WayfindersScene extends Phaser.Scene {
   private lastDiagnosticsInputSuppressed = false;
   private lastWrecksRevision = -1;
   private lastWreckVisibilityVersion = -1;
-  private lastDiscoveryRecordsRevision = -1;
+  private lastIslandDossierRecordsRevision = -1;
   private lastFishingShoalRecordsRevision = -1;
   private lastFishingShoalVisibilityVersion = -1;
   private lastFishingShoalKnowledgeVersion = -1;
@@ -208,7 +213,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
     this.riskOverlay = new RiskOverlayRenderer(this);
     this.cargoRenderer = new CargoRenderer(this);
-    this.discoveryRenderer = new DiscoveryRenderer(this);
+    this.islandDossierRenderer = new IslandDossierRenderer(this);
     this.fishingShoalRenderer = new FishingShoalRenderer(this);
     this.shipRenderer = new ShipRenderer(this);
     this.resetShipPresentation(true);
@@ -400,9 +405,9 @@ export class WayfindersScene extends Phaser.Scene {
       this.lastWrecksRevision = this.simulation.wrecksRevision;
       this.lastWreckVisibilityVersion = this.simulation.world.visibilityVersion;
     }
-    if (force || this.lastDiscoveryRecordsRevision !== this.simulation.discoveryRecordsRevision) {
-      this.discoveryRenderer.sync(this.simulation.discoveries);
-      this.lastDiscoveryRecordsRevision = this.simulation.discoveryRecordsRevision;
+    if (force || this.lastIslandDossierRecordsRevision !== this.simulation.islandDossierRecordsRevision) {
+      this.islandDossierRenderer.sync(this.simulation.islandDossierReadModels);
+      this.lastIslandDossierRecordsRevision = this.simulation.islandDossierRecordsRevision;
     }
     if (
       force
@@ -418,9 +423,15 @@ export class WayfindersScene extends Phaser.Scene {
       this.lastFishingShoalSupportedTopologyVersion = this.simulation.world.supportedTopologyVersion;
     }
     this.wreckRenderer.updateViewport(this.cameras.main);
-    this.discoveryRenderer.updateViewport(this.cameras.main);
+    this.islandDossierRenderer.updateViewport(this.cameras.main);
     this.fishingShoalRenderer.updateViewport(this.cameras.main);
-    this.knowledgeOverlay.sync(this.simulation.world, this.simulation.generated.seed, force);
+    this.knowledgeOverlay.sync(
+      this.simulation.world,
+      this.simulation.generated.seed,
+      force,
+      new Set(this.simulation.revealedIslandIds),
+      this.simulation.islandFogRevealRevision,
+    );
     this.riskOverlay.sync(
       this.simulation.world,
       this.simulation.forwardRange,
@@ -490,8 +501,10 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.wreckSurveyProvisional = String(this.simulation.provisionalWreckSurveys.length);
       host.dataset.wreckSurveyReturned = String(this.simulation.returnedWreckSurveys.length);
       host.dataset.wreckSurveyInteraction = String(this.simulation.wreckSurveyInteraction?.wreckId ?? "");
-      host.dataset.discoveryProvisional = String(this.simulation.provisionalDiscoveries.length);
-      host.dataset.discoveryReturned = String(this.simulation.returnedDiscoveries.length);
+      host.dataset.islandDossierProvisional = String(this.simulation.provisionalIslandDossiers.length);
+      host.dataset.islandDossierReturned = String(this.simulation.returnedIslandDossiers.length);
+      host.dataset.islandDossierRevealed = String(this.simulation.revealedIslandIds.length);
+      host.dataset.islandDossierInteraction = String(this.simulation.islandDossierInteraction?.islandId ?? "");
       host.dataset.fishingShoalAvailable = String(this.simulation.fishingShoalDefinitions.length);
       host.dataset.fishingShoalProvisional = String(this.simulation.provisionalFishingShoals.length);
       host.dataset.fishingShoalReturned = String(this.simulation.returnedFishingShoals.length);
@@ -643,9 +656,9 @@ export class WayfindersScene extends Phaser.Scene {
           <div class="tool-button-grid">
             <button class="tool-button--wide" data-action="regenerate" type="button">Reset world from entered seed</button>
             <button class="tool-button--wide" data-action="return-dock" type="button">Return to home dock (complete voyage)</button>
-            <button data-action="inspect-island" type="button">Inspect next island</button>
-            <button data-action="inspect-fishing-shoal" type="button">Inspect next fishing sign</button>
-            <button data-action="inspect-wreck" type="button">Inspect next navigator wreck</button>
+            <button data-action="inspect-island" type="button">Move to next island dossier</button>
+            <button data-action="inspect-fishing-shoal" type="button">Move to next fishing ground</button>
+            <button data-action="inspect-wreck" type="button">Move to next navigator wreck</button>
             <button data-action="teleport-click" type="button" aria-pressed="false">Teleport by clicking</button>
           </div>
           <div class="tool-row">
@@ -853,33 +866,57 @@ export class WayfindersScene extends Phaser.Scene {
       return;
     }
 
-    const interaction = this.simulation.fishingShoalInteraction;
-    if (!interaction) {
-      ribbon.hidden = true;
-      delete ribbon.dataset.surveyKind;
-      delete ribbon.dataset.surveyTarget;
-      delete ribbon.dataset.shoalId;
-      return;
-    }
-    if (this.surveyRibbonTitle) {
-      this.surveyRibbonTitle.textContent = interaction.state === "returned-lead"
+    const fishingInteraction = this.simulation.fishingShoalInteraction;
+    if (fishingInteraction) {
+      if (this.surveyRibbonTitle) {
+        this.surveyRibbonTitle.textContent = fishingInteraction.state === "returned-lead"
         ? "Returned fishing lead"
         : "Fishing sign nearby";
+      }
+      if (this.surveyRibbonClue) this.surveyRibbonClue.textContent = fishingInteraction.clueLabel;
+      if (this.surveyRibbonCost) this.surveyRibbonCost.textContent = this.surveyBudgetText(fishingInteraction);
+      if (this.surveyButton) this.surveyButton.disabled = !fishingInteraction.canAfford;
+      ribbon.dataset.surveyKind = "fishing-shoal";
+      ribbon.dataset.surveyTarget = fishingInteraction.id;
+      ribbon.dataset.shoalId = fishingInteraction.id;
+      ribbon.hidden = false;
+      return;
     }
-    if (this.surveyRibbonClue) this.surveyRibbonClue.textContent = interaction.clueLabel;
-    if (this.surveyRibbonCost) this.surveyRibbonCost.textContent = this.surveyBudgetText(interaction);
-    if (this.surveyButton) this.surveyButton.disabled = !interaction.canAfford;
-    ribbon.dataset.surveyKind = "fishing-shoal";
-    ribbon.dataset.surveyTarget = interaction.id;
-    ribbon.dataset.shoalId = interaction.id;
-    ribbon.hidden = false;
+
+    const islandInteraction = this.simulation.islandDossierInteraction;
+    if (islandInteraction) {
+      if (this.surveyRibbonTitle) {
+        this.surveyRibbonTitle.textContent = islandInteraction.state === "returned-lead"
+          ? `Returned island lead · ${islandInteraction.name}`
+          : `Island landfall · ${islandInteraction.name}`;
+      }
+      if (this.surveyRibbonClue) {
+        this.surveyRibbonClue.textContent = "Survey from this coastal approach to complete the island dossier.";
+      }
+      if (this.surveyRibbonCost) this.surveyRibbonCost.textContent = this.surveyBudgetText(islandInteraction);
+      if (this.surveyButton) this.surveyButton.disabled = !islandInteraction.canAfford;
+      ribbon.dataset.surveyKind = "island-dossier";
+      ribbon.dataset.surveyTarget = String(islandInteraction.islandId);
+      delete ribbon.dataset.shoalId;
+      ribbon.hidden = false;
+      return;
+    }
+
+    ribbon.hidden = true;
+    delete ribbon.dataset.surveyKind;
+    delete ribbon.dataset.surveyTarget;
+    delete ribbon.dataset.shoalId;
   }
 
-  private performSurveyAction(): FishingShoalInteractionResultV1 | WreckSurveyInteractionResultV1 | undefined {
+  private performSurveyAction():
+    | FishingShoalInteractionResultV1
+    | WreckSurveyInteractionResultV1
+    | IslandDossierInteractionResultV1
+    | undefined {
     if (this.simulation.generationHandoverActive) return undefined;
-    return this.simulation.wreckSurveyInteraction
-      ? this.performWreckSurvey()
-      : this.performFishingShoalSurvey();
+    if (this.simulation.wreckSurveyInteraction) return this.performWreckSurvey();
+    if (this.simulation.fishingShoalInteraction) return this.performFishingShoalSurvey();
+    return this.performIslandDossierSurvey();
   }
 
   private surveyBudgetText(budget: Readonly<SurveyBudgetReadModel>): string {
@@ -932,6 +969,24 @@ export class WayfindersScene extends Phaser.Scene {
     return result;
   }
 
+  private performIslandDossierSurvey(): IslandDossierInteractionResultV1 | undefined {
+    const interaction = this.simulation.islandDossierInteraction;
+    if (!interaction) return undefined;
+    const result = this.simulation.interactWithIslandDossier({
+      contractVersion: ISLAND_DOSSIER_CONTRACT_VERSION,
+      type: "survey",
+      islandId: interaction.islandId,
+    });
+    if (result.status === "surveyed") {
+      this.updatePersistenceOutputs();
+      this.requestLifecycleSave();
+    } else {
+      this.log(`Island dossier survey was not started: ${result.reason}.`);
+    }
+    this.syncSurveyRibbon();
+    return result;
+  }
+
   private mountHomeAction(): void {
     const host = this.gameHost;
     const signal = this.domAbort?.signal;
@@ -969,7 +1024,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   private greatHallChronicleSources(): GreatHallChronicleSources {
     return {
-      discoveries: this.simulation.returnedDiscoveries,
+      islandDossiers: this.simulation.islandDossierDefinitions,
       fishingShoals: this.simulation.fishingShoalDefinitions,
       wrecks: this.simulation.wrecks,
     };
@@ -1343,8 +1398,8 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private expeditionRecordsSummary(): string {
-    return `Discoveries: ${this.simulation.provisionalDiscoveries.length} provisional · `
-      + `${this.simulation.returnedDiscoveries.length} returned · Fishing reports: `
+    return `Island dossiers: ${this.simulation.provisionalIslandDossiers.length} provisional · `
+      + `${this.simulation.returnedIslandDossiers.length} returned · Fishing reports: `
       + `${this.simulation.provisionalFishingShoals.length} provisional · `
       + `${this.simulation.returnedFishingShoals.length} returned · Wreck reports: `
       + `${this.simulation.provisionalWreckSurveys.length} provisional · `
@@ -1588,21 +1643,17 @@ export class WayfindersScene extends Phaser.Scene {
       this.log(lockReason);
       return;
     }
-    const islands = this.simulation.generated.islands;
-    if (islands.length === 0) {
-      this.log("This seed contains no scattered islands.");
+    const definitions = this.simulation.islandDossierDefinitions;
+    if (definitions.length === 0) {
+      this.log("This seed contains no island dossiers.");
       return;
     }
-    const island = islands[this.islandInspectionIndex % islands.length];
+    const definition = definitions[this.islandInspectionIndex % definitions.length];
     this.islandInspectionIndex++;
-    const tile = this.findIslandInspectionTile(island);
-    if (!tile) {
-      this.log(`Could not find a passable inspection point for island ${island.id}.`);
-      return;
-    }
     this.teleportForDeveloper(
-      tile,
-      `Inspecting ${island.size} ${island.kind} ${island.id} from ${tile.x}, ${tile.y}.`,
+      definition.canonicalApproach,
+      `Inspecting island dossier ${definition.name} (${definition.islandId}) from `
+        + `${definition.canonicalApproach.x}, ${definition.canonicalApproach.y}.`,
     );
   }
 
@@ -1645,41 +1696,6 @@ export class WayfindersScene extends Phaser.Scene {
     return inspected;
   }
 
-  private findIslandInspectionTile(island: GeneratedIsland): { x: number; y: number } | undefined {
-    let closestWater: { x: number; y: number } | undefined;
-    let closestDistance = Number.POSITIVE_INFINITY;
-    for (let y = island.bounds.minY; y <= island.bounds.maxY; y++) {
-      for (let x = island.bounds.minX; x <= island.bounds.maxX; x++) {
-        if (!this.simulation.world.inBounds(x, y) || this.simulation.world.isMovementBlocked(x, y)) continue;
-        if (this.simulation.world.getTile(x, y).islandId !== island.id) continue;
-        const distance = Math.hypot(x - island.center.x, y - island.center.y);
-        if (distance >= closestDistance) continue;
-        closestDistance = distance;
-        closestWater = { x, y };
-      }
-    }
-    if (closestWater) return closestWater;
-
-    // A configured morphology could paint no passable interior. Keep a bounded
-    // outside-ring fallback so the inspection control still cannot hang.
-    const baseRadius = Math.ceil(island.outerRadius + 1);
-    for (let extra = 0; extra <= 3; extra++) {
-      const radius = baseRadius + extra;
-      for (let step = 0; step < 24; step++) {
-        const angle = island.rotation + step / 24 * Math.PI * 2;
-        const tile = {
-          x: Math.round(island.center.x + Math.cos(angle) * radius),
-          y: Math.round(island.center.y + Math.sin(angle) * radius),
-        };
-        if (
-          this.simulation.world.inBounds(tile.x, tile.y)
-          && !this.simulation.world.isMovementBlocked(tile.x, tile.y)
-        ) return tile;
-      }
-    }
-    return undefined;
-  }
-
   private installBrowserDebugApi(): void {
     const api: BrowserDebugApi = {
       snapshot: () => this.simulation.snapshot(),
@@ -1712,6 +1728,12 @@ export class WayfindersScene extends Phaser.Scene {
         x: tile.x,
         y: tile.y,
       })),
+      islandDossierTargets: () => this.simulation.islandDossierDefinitions.map((definition) => ({
+        islandId: definition.islandId,
+        x: definition.canonicalApproach.x,
+        y: definition.canonicalApproach.y,
+      })),
+      surveyIslandDossier: () => this.performIslandDossierSurvey(),
       surveyFishingShoal: () => this.performFishingShoalSurvey(),
       surveyWreck: () => this.performWreckSurvey(),
       continueGeneration: () => this.dismissGenerationHandover(),
@@ -1831,13 +1853,28 @@ export class WayfindersScene extends Phaser.Scene {
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
-      this.simulation.events.on("discoveryFound", ({ name, detail }) => {
+      this.simulation.events.on("islandSighted", ({ name }) => {
         this.showLifecycleCue(
-          `DISCOVERY SIGHTED\n${name.toUpperCase()}\nRETURN HOME TO SECURE IT`,
+          `ISLAND SIGHTED\n${name.toUpperCase()}\nSURVEY NOW OR RETURN WITH THE LEAD`,
           "#b9fff5",
           5_000,
         );
-        this.log(`Provisional discovery: ${name}. ${detail}`);
+        this.log(`Provisional island lead: ${name}. Its dossier remains hidden until surveyed.`);
+        this.updatePersistenceOutputs();
+        this.requestLifecycleSave();
+      }),
+      this.simulation.events.on("islandDossierSurveyed", ({
+        name,
+        dossier,
+        presentationMs,
+        provisionsSpent,
+      }) => {
+        this.showLifecycleCue(
+          `ISLAND DOSSIER COMPLETE\n${name.toUpperCase()}\n${dossier.findingLabel.toUpperCase()}\nRETURN HOME TO REPORT IT`,
+          "#ffddb0",
+          presentationMs,
+        );
+        this.log(`Surveyed ${name} for ${provisionsSpent} bundles: ${dossier.detail}`);
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
@@ -1887,14 +1924,27 @@ export class WayfindersScene extends Phaser.Scene {
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
-      this.simulation.events.on("discoveriesReturned", ({ discoveries }) => {
-        const names = discoveries.map(({ name }) => name).join(", ");
-        this.log(`Returned discoveries secured: ${names}.`);
+      this.simulation.events.on("islandDossiersReturned", ({ leads, dossiers }) => {
+        const nameFor = (islandId: number): string => this.simulation.islandDossierDefinitions
+          .find((definition) => definition.islandId === islandId)?.name ?? `island ${islandId}`;
+        const leadNames = leads.map(({ islandId }) => nameFor(islandId));
+        const dossierNames = dossiers.map(({ islandId }) => nameFor(islandId));
+        this.log(
+          `Island knowledge secured: ${[
+            leadNames.length > 0 ? `leads for ${leadNames.join(", ")}` : "",
+            dossierNames.length > 0 ? `dossiers for ${dossierNames.join(", ")}` : "",
+          ].filter(Boolean).join("; ")}.`,
+        );
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
-      this.simulation.events.on("discoveriesLost", ({ discoveries }) => {
-        this.log(`Unreturned discoveries lost with the ship: ${discoveries.map(({ name }) => name).join(", ")}.`);
+      this.simulation.events.on("islandDossiersLost", ({ records }) => {
+        const sighted = records.filter(({ state }) => state === "sighted").length;
+        const surveyed = records.length - sighted;
+        this.log(
+          `Unreturned island work lost with the ship: ${sighted} lead${sighted === 1 ? "" : "s"}, `
+          + `${surveyed} dossier${surveyed === 1 ? "" : "s"}. Earlier returned leads remain inherited.`,
+        );
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
@@ -2013,7 +2063,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.knowledgeOverlay.destroy();
     this.riskOverlay.destroy();
     this.cargoRenderer.destroy();
-    this.discoveryRenderer.destroy();
+    this.islandDossierRenderer.destroy();
     this.fishingShoalRenderer.destroy();
     this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);

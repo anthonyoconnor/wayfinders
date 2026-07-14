@@ -1,23 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
-import type { GeneratedIsland } from "../src/wayfinders/world/IslandGenerator";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
-
-function inspectionTile(simulation: GameSimulation, island: GeneratedIsland): { x: number; y: number } {
-  for (let y = island.bounds.minY; y <= island.bounds.maxY; y++) {
-    for (let x = island.bounds.minX; x <= island.bounds.maxX; x++) {
-      if (
-        simulation.world.inBounds(x, y)
-        && !simulation.world.isMovementBlocked(x, y)
-        && simulation.world.getTile(x, y).islandId === island.id
-      ) return { x, y };
-    }
-  }
-  throw new Error(`No passable discovery tile for island ${island.id}`);
-}
 
 function terrainSignature(simulation: GameSimulation): number[] {
   const signature: number[] = [];
@@ -97,11 +83,11 @@ describe("GameSimulation save/load", () => {
     expect(regeneratedRead).toHaveBeenCalled();
   });
 
-  it("round-trips inherited routes, wrecks, generations and discoveries", () => {
+  it("round-trips inherited routes, wrecks, generations and island dossiers", () => {
     const original = new GameSimulation();
-    expect(original.teleport(inspectionTile(original, original.generated.islands[1]))).toBe(true);
+    expect(original.teleport(original.islandDossierDefinitions[1].canonicalApproach)).toBe(true);
     expect(original.teleport(original.generated.landmarks.homeReturnTile)).toBe(true);
-    expect(original.returnedDiscoveries).toHaveLength(1);
+    expect(original.returnedIslandDossiers).toHaveLength(1);
 
     expect(original.teleport({ x: 4, y: 4 })).toBe(true);
     expect(original.forceWreck()).toBe(true);
@@ -112,8 +98,8 @@ describe("GameSimulation save/load", () => {
     expect(original.teleport({ x: 4, y: 4 })).toBe(true);
     expect(original.wrecks[0].discovered).toBe(true);
 
-    expect(original.teleport(inspectionTile(original, original.generated.islands[2]))).toBe(true);
-    expect(original.provisionalDiscoveries).toHaveLength(1);
+    expect(original.teleport(original.islandDossierDefinitions[2].canonicalApproach)).toBe(true);
+    expect(original.provisionalIslandDossiers).toHaveLength(1);
     original.setProvisions(7);
     original.ship.provisionAccumulator = 0.375;
     original.refreshRiskOverlays();
@@ -135,8 +121,8 @@ describe("GameSimulation save/load", () => {
     expect(restoredSnapshot.knowledge).toEqual(originalSnapshot.knowledge);
     expect(restoredSnapshot.expedition).toEqual(originalSnapshot.expedition);
     expect(restored.wrecks).toEqual(original.wrecks);
-    expect(restored.returnedDiscoveries).toEqual(original.returnedDiscoveries);
-    expect(restored.provisionalDiscoveries).toEqual(original.provisionalDiscoveries);
+    expect(restored.returnedIslandDossiers).toEqual(original.returnedIslandDossiers);
+    expect(restored.provisionalIslandDossiers).toEqual(original.provisionalIslandDossiers);
     expect(restored.generated.islands).toEqual(original.generated.islands);
     expect(terrainSignature(restored)).toEqual(originalTerrain);
     expect(knowledgeSignature(restored)).toEqual(originalKnowledge);
@@ -152,8 +138,8 @@ describe("GameSimulation save/load", () => {
     expect(restored.returnPaths.returnCost).toBe(original.returnPaths.returnCost);
 
     expect(restored.teleport(restored.generated.landmarks.homeReturnTile)).toBe(true);
-    expect(restored.provisionalDiscoveries).toHaveLength(0);
-    expect(restored.returnedDiscoveries).toHaveLength(2);
+    expect(restored.provisionalIslandDossiers).toHaveLength(0);
+    expect(restored.returnedIslandDossiers).toHaveLength(2);
   });
 
   it("restores an in-progress wreck hold and advances exactly once", () => {

@@ -12,20 +12,21 @@ import {
   parseNavigatorId,
   parseNavigatorLineageSnapshot,
   parseNavigatorSuccessionKey,
-  type NavigatorLineageSnapshotV4,
-  type NavigatorVoyageAchievementInputV1,
+  type NavigatorLineageSnapshotV5,
+  type NavigatorVoyageAchievementInputV2,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 
 function jsonClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function emptyVoyage(expeditionId: number): NavigatorVoyageAchievementInputV1 {
+function emptyVoyage(expeditionId: number): NavigatorVoyageAchievementInputV2 {
   return {
     expeditionId,
     supportedTileCount: 0,
     closedUnknownTileCount: 0,
-    discoveryIds: [],
+    islandLeadIds: [],
+    islandDossierIds: [],
     fishingLeadIds: [],
     fishingSurveyIds: [],
     wreckIds: [],
@@ -241,7 +242,8 @@ describe("NavigatorLineageSystem", () => {
       expeditionId: 1,
       supportedTileCount: 7,
       closedUnknownTileCount: 2,
-      discoveryIds: [1, 3],
+      islandLeadIds: [1, 3],
+      islandDossierIds: [4, 6],
       fishingLeadIds: [createFishingShoalId(0)],
       fishingSurveyIds: [createFishingShoalId(1), createFishingShoalId(2)],
       wreckIds: [9],
@@ -253,18 +255,21 @@ describe("NavigatorLineageSystem", () => {
       voyageNumber: 1,
     });
     expect(Object.isFrozen(result.voyage)).toBe(true);
-    expect(Object.isFrozen(result.voyage.discoveryIds)).toBe(true);
+    expect(Object.isFrozen(result.voyage.islandLeadIds)).toBe(true);
+    expect(Object.isFrozen(result.voyage.islandDossierIds)).toBe(true);
     expect(Object.isFrozen(result.voyage.fishingLeadIds)).toBe(true);
     expect(Object.isFrozen(result.voyage.fishingSurveyIds)).toBe(true);
     expect(Object.isFrozen(result.voyage.wreckIds)).toBe(true);
     expect(Object.isFrozen(lineage.currentNavigator.successfulVoyages)).toBe(true);
 
-    input.discoveryIds.push(5);
+    input.islandLeadIds.push(5);
+    input.islandDossierIds.push(8);
     input.fishingLeadIds.push(createFishingShoalId(3));
     input.fishingSurveyIds.length = 0;
     input.wreckIds.push(10);
     expect(result.voyage).toMatchObject({
-      discoveryIds: [1, 3],
+      islandLeadIds: [1, 3],
+      islandDossierIds: [4, 6],
       fishingLeadIds: [createFishingShoalId(0)],
       fishingSurveyIds: [createFishingShoalId(1), createFishingShoalId(2)],
       wreckIds: [9],
@@ -273,12 +278,48 @@ describe("NavigatorLineageSystem", () => {
     const source = jsonClone(lineage.snapshot());
     const restored = NavigatorLineageSystem.fromSnapshot(source);
     const sourceVoyage = source.navigators[0].successfulVoyages[0] as unknown as {
-      discoveryIds: number[];
+      islandLeadIds: number[];
+      islandDossierIds: number[];
     };
-    sourceVoyage.discoveryIds.push(99);
-    expect(restored.currentNavigator.successfulVoyages[0].discoveryIds).toEqual([1, 3]);
+    sourceVoyage.islandLeadIds.push(99);
+    sourceVoyage.islandDossierIds.push(100);
+    expect(restored.currentNavigator.successfulVoyages[0].islandLeadIds).toEqual([1, 3]);
+    expect(restored.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual([4, 6]);
     expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0])).toBe(true);
-    expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0].discoveryIds)).toBe(true);
+    expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0].islandLeadIds)).toBe(true);
+    expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0].islandDossierIds)).toBe(true);
+  });
+
+  it("credits each island transition once while allowing a later dossier to resolve its lead", () => {
+    const lineage = new NavigatorLineageSystem();
+    lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(1),
+      islandLeadIds: [7],
+    });
+
+    expect(() => lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(2),
+      islandLeadIds: [7],
+    })).toThrow(/must not repeat an island lead/);
+    expect(lineage.currentNavigator.completedVoyages).toBe(1);
+
+    expect(lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(2),
+      islandDossierIds: [7],
+    }).voyage).toMatchObject({
+      islandLeadIds: [],
+      islandDossierIds: [7],
+    });
+
+    expect(() => lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(3),
+      islandDossierIds: [7],
+    })).toThrow(/must not repeat an island dossier/);
+    expect(() => lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(3),
+      islandLeadIds: [7],
+    })).toThrow(/cannot record an island lead after its dossier/);
+    expect(lineage.currentNavigator.completedVoyages).toBe(2);
   });
 
   it("rejects malformed, non-canonical, or chronologically inconsistent voyage achievements", () => {
@@ -295,22 +336,23 @@ describe("NavigatorLineageSystem", () => {
       voyageNumber: number;
       supportedTileCount: number;
       closedUnknownTileCount: number;
-      discoveryIds: number[];
+      islandLeadIds: number[];
+      islandDossierIds: number[];
       fishingLeadIds: string[];
       fishingSurveyIds: string[];
       wreckIds: number[];
     };
     const voyage = (
-      snapshot: NavigatorLineageSnapshotV4,
+      snapshot: NavigatorLineageSnapshotV5,
       navigatorIndex: number,
     ): MutableVoyage => snapshot.navigators[navigatorIndex].successfulVoyages[0] as unknown as MutableVoyage;
     const successfulVoyages = (
-      snapshot: NavigatorLineageSnapshotV4,
+      snapshot: NavigatorLineageSnapshotV5,
       navigatorIndex: number,
     ): MutableVoyage[] => snapshot.navigators[navigatorIndex].successfulVoyages as unknown as MutableVoyage[];
 
     const corruptions: Array<{
-      corrupt: (snapshot: NavigatorLineageSnapshotV4) => void;
+      corrupt: (snapshot: NavigatorLineageSnapshotV5) => void;
       message: RegExp;
     }> = [
       {
@@ -326,12 +368,40 @@ describe("NavigatorLineageSystem", () => {
         message: /lineage chronology with expedition 3/,
       },
       {
-        corrupt: (snapshot) => { voyage(snapshot, 0).discoveryIds = [2, 1]; },
+        corrupt: (snapshot) => { voyage(snapshot, 0).islandLeadIds = [2, 1]; },
         message: /sorted with no duplicates/,
       },
       {
-        corrupt: (snapshot) => { voyage(snapshot, 0).discoveryIds = [0]; },
+        corrupt: (snapshot) => { voyage(snapshot, 0).islandDossierIds = [0]; },
         message: /positive safe integer/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).islandLeadIds = [2];
+          voyage(snapshot, 0).islandDossierIds = [2];
+        },
+        message: /cannot also be recorded as an island lead/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).islandLeadIds = [3];
+          voyage(snapshot, 1).islandLeadIds = [3];
+        },
+        message: /must not repeat an island lead/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).islandDossierIds = [4];
+          voyage(snapshot, 1).islandDossierIds = [4];
+        },
+        message: /must not repeat an island dossier/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).islandDossierIds = [5];
+          voyage(snapshot, 1).islandLeadIds = [5];
+        },
+        message: /cannot record an island lead after its dossier/,
       },
       {
         corrupt: (snapshot) => { voyage(snapshot, 0).fishingLeadIds = [fishingId, fishingId]; },
@@ -367,8 +437,10 @@ describe("NavigatorLineageSystem", () => {
     lineage.completeSuccession(first.transition.key);
     const valid = jsonClone(lineage.snapshot());
 
-    const corruptions: Array<(snapshot: NavigatorLineageSnapshotV4) => void> = [
-      (snapshot) => { (snapshot as { contractVersion: number }).contractVersion = 3; },
+    const corruptions: Array<(snapshot: NavigatorLineageSnapshotV5) => void> = [
+      (snapshot) => {
+        (snapshot as { contractVersion: number }).contractVersion = NAVIGATOR_LINEAGE_CONTRACT_VERSION - 1;
+      },
       (snapshot) => { (snapshot.navigators[1] as { id: string }).id = "navigator:v1:g7"; },
       (snapshot) => { (snapshot.navigators[1] as { generation: number }).generation = 4; },
       (snapshot) => { (snapshot.navigators[0] as { state: string }).state = "active"; },

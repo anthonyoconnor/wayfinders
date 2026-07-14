@@ -1,8 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-3.1` work is complete and accepted. The authorized
-GP-3 batch is continuing directly into `GP-3.2` and `GP-3.3`.
+ordered `GP-0.1` through `GP-3.2` work is complete and accepted. The authorized
+GP-3 batch is continuing directly into active `GP-3.3`.
 
 ## Roadmap model
 
@@ -54,8 +54,8 @@ The current build already provides:
 - continuous sailing, fog, current sight and Unknown, Personal and Supported
   water knowledge;
 - provisions, forward/return guidance and exact-dock expedition commitment;
-- Supported-route inheritance, deterministic island discoveries and
-  provisional-to-returned records;
+- Supported-route inheritance, deterministic island dossiers and their
+  provisional sighting/survey to returned lead/dossier records;
 - wreck rollback, persistent wrecks and exactly-once generation advancement
   per resolved wreck;
 - versioned navigator identities, four-voyage tenures and exactly-once
@@ -71,9 +71,9 @@ Generation is backed by a versioned navigator lineage with distinct active,
 completed and lost records. Exact-dock active-expedition returns complete one
 of a navigator's four voyages, while fatal wrecks and completed-tenure
 transitions share one idempotent succession authority.
-Discoveries are descriptive records and do not yet create active resources or
-a tribe economy. Save/load is functional infrastructure rather than a complete
-player-facing game-management flow.
+Island dossier findings are descriptive records and do not create active
+resources or a tribe economy. Save/load is functional infrastructure rather
+than a complete player-facing game-management flow.
 
 ## Cross-cutting gameplay gates
 
@@ -376,7 +376,8 @@ and rollback, and a clean warning/error console. The full pipeline passes 215
 tests across 23 files plus typecheck and production build.
 
 - Complete one numbered voyage only on an active expedition's successful
-  exact-home-dock return, after its discoveries, surveys and knowledge commit.
+  exact-home-dock return, after its island leads, dossiers, surveys and
+  knowledge commit.
 - After returns one through three, replenish and begin the next voyage with
   the same navigator; after return four, complete the tenure and create exactly
   one successor through the shared succession authority.
@@ -386,9 +387,9 @@ tests across 23 files plus typecheck and production build.
 - At each fourth-return or fatal-wreck succession, show the required handover
   mode of the shared Great Hall for the outgoing navigator. For every safely
   returned voyage, list the
-  Supported-route and enclosed-water counts, returned discovery names, fishing
-  leads and surveys, and returned navigator-wreck identities committed on that
-  exact-dock return. Show an explicit no-new-findings message when all those
+  Supported-route and enclosed-water counts, returned island leads and dossier
+  findings, fishing leads and surveys, and returned navigator-wreck identities
+  committed on that exact-dock return. Show an explicit no-new-findings message when all those
   categories are empty. Follow the committed rows with **Lost at sea** at the
   fatal voyage when applicable, and never credit that voyage's provisional
   results. Persist the unacknowledged handover and per-voyage records, reopen
@@ -424,8 +425,8 @@ committed voyage records and fatal voyage, suppresses sailing while open and
 never displays provisional achievements. A
 runtime wreck is reported at most once to its correct lost navigator; sight,
 survey, repeat input, exact-dock return, survey-expedition loss and reload are
-idempotent, and a failed report never restores the lost expedition's Personal
-chart or provisional discoveries.
+  idempotent, and a failed report never restores the lost expedition's Personal
+  chart or provisional findings.
 
 #### GP-2.3 — Great Hall voyage chronicle
 
@@ -433,7 +434,7 @@ Status: accepted.
 
 Acceptance evidence (2026-07-13): one versioned, ephemeral chronicle read model
 derives active, completed and lost navigator entries directly from the
-authoritative lineage and returned discovery, fishing and runtime-wreck
+authoritative lineage and returned island-dossier, fishing and runtime-wreck
 records. Stable navigator/voyage/achievement keys, per-navigator totals and
 lineage totals are derived rather than persisted. The required GP-2.2
 succession gate and the optional archive render the same navigator entry: the
@@ -525,15 +526,37 @@ fishing-ground and navigator-wreck surveys share a configurable two-bundle
 cost, expose remaining supply and projected return margin, and commit the spend
 with provisional state atomically. Multiple targets can be surveyed during one
 journey, fractional travel spend is included in affordability, and steering
-remains live while the prompt is visible. Exact-version schema 10 rejects old
-saves. The complete typecheck, 227-test suite and production build pass.
+remains live while the prompt is visible. At this historical GP-3.1 acceptance
+gate, exact-version schema 10 rejected old saves; accepted GP-3.2 subsequently
+bumped the current schema to V11. The GP-3.1 typecheck, 227-test suite and
+production build passed.
 
 #### GP-3.2 — Island landfalls and single-dossier surveys
 
-Status: proposed.
+Status: accepted.
 
 Depends on GP-3.1's provision-funded survey transaction and the accepted stable
-island identity, discovery and exact-dock expedition boundaries.
+island identity, sight and exact-dock expedition boundaries.
+
+Acceptance evidence (2026-07-13): island-dossier content V1 derives exactly one
+stable definition, deterministic name and descriptive result from each non-home
+island ID. Every exact-island footprint has a sorted set of passable,
+dock-reachable coastal approaches within 1.5 tile widths; the canonical
+approach is a developer/presentation convenience rather than the only valid
+interaction point. Current sight records a free provisional lead without
+exposing the hidden result. The shared provision-funded **Survey** transaction
+upgrades either that sighting or a returned lead exactly once. Exact-dock return
+commits a lead or dossier with expedition/generation provenance, while wreck
+rollback removes only the active expedition's provisional work. Surveyed state
+suppresses fog on every tile carrying that exact island ID and on no surrounding
+water or other island, without mutating knowledge, topology, travel cost or
+route credit. The legacy `DiscoverySystem` and its island discovery records are
+removed. Exact save schema V11 validates island-dossier content V1 and lineage
+contract V5; the Great Hall V2 read model gives distinct, idempotent island-lead
+and island-dossier achievements and lineage totals. Developer placeholder
+markers, a Survey-only coastal prompt and next-island-dossier inspection support
+the complete loop. The GP-3.2 typecheck, 244-test suite across 26 files and
+production build pass.
 
 - Make first sight of a non-home island free. It records a provisional island
   lead without spending provisions or revealing the island's full dossier.
@@ -545,9 +568,9 @@ island identity, discovery and exact-dock expedition boundaries.
 - Give each exact island ID one deterministic dossier and at most one dossier
   survey state. Surveying from any valid approach tile uses GP-3.1's cost and
   transaction; repeated approach tiles cannot create duplicate dossiers.
-- Fold the accepted one-per-island generated discovery into that dossier's
+- Fold the former one-per-island generated discovery into that dossier's
   descriptive result. Retire its `HistoricWreck` and `FishingGround` outcomes
-  as separate island-discovery target types when GP-3.2 ships: GP-3.3 sites and
+  as separate island-discovery target types: GP-3.3 sites and
   GP-1 shoals are the only authoritative historic-wreck and fishing targets.
 - Preserve the returned-lead branch. Exact-dock return of a sighted but
   unsurveyed island commits an inherited lead. Surveying a provisional sighting
@@ -574,7 +597,7 @@ duplicate a GP-1 shoal or GP-3.3 site.
 
 #### GP-3.3 — Extensible survey sites
 
-Status: proposed.
+Status: active in the authorized GP-3 batch.
 
 Depends on GP-3.1's survey transaction and GP-3.2's accepted separation between
 island dossiers, fog presentation and generated terrain.

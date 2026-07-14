@@ -1,5 +1,9 @@
 import type { GridPoint, ShipwreckState } from "./types";
-import type { DiscoveryRecord } from "../exploration/DiscoverySystem";
+import type {
+  IslandDossierProvisionalRecordV1,
+  IslandDossierReturnedRecordV1,
+  IslandDossierSurveyedResultV1,
+} from "../exploration/IslandDossierContracts";
 import type {
   FishingShoalClue,
   FishingShoalId,
@@ -14,7 +18,7 @@ import type {
 import type {
   NavigatorId,
   NavigatorSuccessionReason,
-  NavigatorVoyageAchievementRecordV1,
+  NavigatorVoyageAchievementRecordV2,
 } from "../lineage/NavigatorLineageSystem";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
@@ -50,7 +54,7 @@ export interface GameEventMap {
     /** Enclosed Unknown tiles separately inferred by the return cleanup. */
     closedUnknownTileCount: number;
     /** Immutable exact-dock achievement record stored in the navigator lineage. */
-    achievements: Readonly<NavigatorVoyageAchievementRecordV1>;
+    achievements: Readonly<NavigatorVoyageAchievementRecordV2>;
   };
   shipWrecked: {
     wreckId: number;
@@ -86,7 +90,25 @@ export interface GameEventMap {
     generation: number;
     reports: readonly Readonly<WreckSurveyReportV1>[];
   };
-  discoveryFound: Readonly<DiscoveryRecord>;
+  islandSighted: {
+    islandId: number;
+    name: string;
+    canonicalApproach: Readonly<GridPoint>;
+  };
+  islandDossierSurveyed: Readonly<IslandDossierSurveyedResultV1> & {
+    canonicalApproach: Readonly<GridPoint>;
+  };
+  islandDossiersReturned: {
+    expeditionId: number;
+    generation: number;
+    leads: readonly Readonly<IslandDossierReturnedRecordV1>[];
+    dossiers: readonly Readonly<IslandDossierReturnedRecordV1>[];
+  };
+  islandDossiersLost: {
+    expeditionId: number;
+    generation: number;
+    records: readonly Readonly<IslandDossierProvisionalRecordV1>[];
+  };
   fishingShoalSighted: {
     id: FishingShoalId;
     tile: Readonly<GridPoint>;
@@ -105,16 +127,6 @@ export interface GameEventMap {
     expeditionId: number;
     generation: number;
     records: readonly Readonly<FishingShoalProvisionalRecordV1>[];
-  };
-  discoveriesReturned: {
-    expeditionId: number;
-    generation: number;
-    discoveries: readonly Readonly<DiscoveryRecord>[];
-  };
-  discoveriesLost: {
-    expeditionId: number;
-    generation: number;
-    discoveries: readonly Readonly<DiscoveryRecord>[];
   };
   gameLoaded: { schemaVersion: number; seed: number };
   expeditionFailed: {

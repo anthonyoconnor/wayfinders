@@ -15,6 +15,15 @@ interface MaskChunkView {
 
 const MASK_SCALE = 4;
 const MASK_PADDING_TILES = 1;
+const NO_REVEALED_ISLANDS: ReadonlySet<number> = new Set<number>();
+
+/** Island dossiers reveal only the exact generated non-home island footprint. */
+export function isExactIslandTileRevealed(
+  islandId: number,
+  revealedIslandIds: ReadonlySet<number>,
+): boolean {
+  return islandId > 0 && revealedIslandIds.has(islandId);
+}
 
 /**
  * Reusable, bilinear knowledge mask. Each chunk owns a small padded texture;
@@ -30,6 +39,7 @@ export class KnowledgeOverlayRenderer {
   private lastSignature = "";
   private lastKnowledgeVersion = -1;
   private lastVisibilityVersion = -1;
+  private lastRevealedIslandsRevision = -1;
   private observedRevisions = new WeakMap<WorldChunk, number>();
 
   constructor(private readonly scene: Phaser.Scene) {
@@ -41,7 +51,13 @@ export class KnowledgeOverlayRenderer {
     this.textureKeyPrefix = `${String(scene.sys.settings.key)}-knowledge-mask`;
   }
 
-  sync(world: WorldGrid, seed: number, force = false): void {
+  sync(
+    world: WorldGrid,
+    seed: number,
+    force = false,
+    revealedIslandIds: ReadonlySet<number> = NO_REVEALED_ISLANDS,
+    revealedIslandsRevision = 0,
+  ): void {
     const signature = [
       prototypeConfig.overlays.fogBlend,
       prototypeConfig.overlays.fogNoise,
@@ -54,6 +70,7 @@ export class KnowledgeOverlayRenderer {
       this.observedRevisions = new WeakMap();
       this.lastKnowledgeVersion = -1;
       this.lastVisibilityVersion = -1;
+      this.lastRevealedIslandsRevision = -1;
     }
     this.lastWorld = world;
     this.lastSignature = signature;
@@ -62,8 +79,9 @@ export class KnowledgeOverlayRenderer {
     const redrawAll = force || worldChanged || styleChanged;
     const knowledgeChanged = world.knowledgeVersion !== this.lastKnowledgeVersion;
     const visibilityChanged = world.visibilityVersion !== this.lastVisibilityVersion;
+    const revealedIslandsChanged = revealedIslandsRevision !== this.lastRevealedIslandsRevision;
     const chunksChanged = chunks.length !== this.views.size;
-    if (!redrawAll && !knowledgeChanged && !visibilityChanged && !chunksChanged) return;
+    if (!redrawAll && !knowledgeChanged && !visibilityChanged && !revealedIslandsChanged && !chunksChanged) return;
 
     const dirtyChunks = new Set<WorldChunk>();
 
@@ -71,7 +89,7 @@ export class KnowledgeOverlayRenderer {
       this.getOrCreateChunkView(chunk);
       const revisionChanged = this.observedRevisions.get(chunk) !== chunk.revision;
       this.observedRevisions.set(chunk, chunk.revision);
-      if (redrawAll) {
+      if (redrawAll || revealedIslandsChanged) {
         dirtyChunks.add(chunk);
       } else if (revisionChanged) {
         addPaddedChunkNeighbours(world, chunk, MASK_PADDING_TILES, dirtyChunks);
@@ -81,12 +99,13 @@ export class KnowledgeOverlayRenderer {
     for (const chunk of dirtyChunks) {
       const view = this.views.get(this.chunkKey(chunk));
       if (!view) continue;
-      this.renderChunk(world, chunk, seed, view.texture);
+      this.renderChunk(world, chunk, seed, revealedIslandIds, view.texture);
       view.texture.refresh();
     }
 
     this.lastKnowledgeVersion = world.knowledgeVersion;
     this.lastVisibilityVersion = world.visibilityVersion;
+    this.lastRevealedIslandsRevision = revealedIslandsRevision;
   }
 
   destroy(): void {
@@ -94,6 +113,7 @@ export class KnowledgeOverlayRenderer {
     this.lastWorld = undefined;
     this.lastKnowledgeVersion = -1;
     this.lastVisibilityVersion = -1;
+    this.lastRevealedIslandsRevision = -1;
   }
 
   private getOrCreateChunkView(chunk: WorldChunk): MaskChunkView {
@@ -148,6 +168,7 @@ export class KnowledgeOverlayRenderer {
     world: WorldGrid,
     chunk: WorldChunk,
     seed: number,
+    revealedIslandIds: ReadonlySet<number>,
     texture: Phaser.Textures.CanvasTexture,
   ): void {
     const scratchContext = this.scratch.getContext("2d");
@@ -170,6 +191,7 @@ export class KnowledgeOverlayRenderer {
           continue;
         }
         if (world.isVisibleNow(worldX, worldY) || world.getKnowledge(worldX, worldY) === KnowledgeState.Supported) continue;
+        if (isExactIslandTileRevealed(world.getIslandId(worldX, worldY), revealedIslandIds)) continue;
 
         const noise = (seededValue(seed + 809, worldX, worldY) - 0.5) * prototypeConfig.overlays.fogNoise;
         if (world.getKnowledge(worldX, worldY) === KnowledgeState.Unknown) {
@@ -191,6 +213,26 @@ export class KnowledgeOverlayRenderer {
     filteredContext.filter = `blur(${blurPixels}px)`;
     filteredContext.drawImage(this.scratch, 0, 0);
     filteredContext.restore();
+
+    // Filtering softens ordinary fog boundaries, but a completed island
+    // dossier owns an exact generated footprint. Clear those pixels after
+    // the blur so fog from adjacent water cannot bleed back over the island.
+    for (let localY = -padding; localY < chunk.size + padding; localY++) {
+      for (let localX = -padding; localX < chunk.size + padding; localX++) {
+        const worldX = chunk.chunkX * chunk.size + localX;
+        const worldY = chunk.chunkY * chunk.size + localY;
+        if (
+          !world.inBounds(worldX, worldY)
+          || !isExactIslandTileRevealed(world.getIslandId(worldX, worldY), revealedIslandIds)
+        ) continue;
+        filteredContext.clearRect(
+          (localX + padding) * MASK_SCALE,
+          (localY + padding) * MASK_SCALE,
+          MASK_SCALE,
+          MASK_SCALE,
+        );
+      }
+    }
 
     targetContext.clearRect(0, 0, texture.width, texture.height);
     targetContext.drawImage(this.filtered, 0, 0);

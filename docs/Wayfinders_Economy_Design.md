@@ -27,8 +27,9 @@ GP-3 supplies stable survey sites and the shared sighting/survey lifecycle, but
 does not place idols, reveal idol-specific clues, carry relics or award
 collection credit.
 
-This document describes the intended forward design. The active roadmap remains
-authoritative, and nothing here authorizes implementation by itself.
+This document describes the accepted GP-3.1/GP-3.2 design and the forward
+GP-3.3/GP-4 direction. The active roadmap remains authoritative, and nothing
+here authorizes implementation by itself.
 
 ## 1. Purpose
 
@@ -106,14 +107,11 @@ footprint. A dock-reachable passable water tile is a valid approach when the
 Euclidean distance between its center and the center of at least one tile
 carrying that exact island ID is at most 1.5 tile widths. A canonical anchor
 may still support labels, developer tools and tests, but it never restricts the
-player to one approach. The survey consumes provisions and may report several
-characteristics in the same dossier, for example:
-
-- freshwater, crops or useful growing conditions;
-- timber, fibre, stone, metal or craft material;
-- a protected anchorage or navigational landmark;
-- signs of former habitation or a living community;
-- specialised local knowledge or an unusual natural feature.
+player to one approach. The survey consumes provisions and reveals one
+deterministic descriptive result. The implemented V1 themes are a welcoming
+community, useful materials, a sheltered anchorage, a charted reef passage or a
+weather watchpoint. The catalog can extend its result vocabulary without
+changing the one-dossier-per-island lifecycle.
 
 These characteristics are descriptive returned knowledge and Great Hall
 credit in GP-3. They do not refill provisions, alter travel, create an economy
@@ -131,8 +129,8 @@ reveal, while an island lead returned by an earlier journey remains available
 to survey again. Multiple characteristics belong to the one dossier rather
 than becoming unrelated discovery records around the same island.
 
-GP-3.2 folds the current one-per-island generated discovery into the dossier's
-descriptive result. Its legacy `HistoricWreck` and `FishingGround` outcomes do
+Accepted GP-3.2 folded the former one-per-island generated discovery into the
+dossier's descriptive result. Its legacy `HistoricWreck` and `FishingGround` outcomes do
 not remain separate target types: GP-3.3 sites and GP-1 fishing shoals are the
 only authoritative historic-wreck and fishing targets.
 
@@ -146,7 +144,7 @@ discarded and the wreck remains available to survey again.
 
 Runtime navigator wrecks remain distinct from generated historic-wreck sites.
 The identification survey does not restore the fatal expedition's Personal
-chart, provisional discoveries or achievements.
+  chart, provisional island/site findings or achievements.
 
 ### 3.4 Generic survey sites
 
@@ -353,7 +351,7 @@ A wreck ends the current navigator's tenure and loses:
 
 It preserves:
 
-- all Supported routes and returned discoveries;
+- all Supported routes and returned knowledge;
 - earlier returned island dossiers, leads and surveys;
 - the four-journey records already committed for that navigator;
 - the new runtime wreck as a later-discoverable marker; and
@@ -492,12 +490,12 @@ fate reporting already obey the provisional/exact-dock boundary.
 
 ### GP-3: survey choices and discoverable places
 
-- GP-3.1 replaces survey cases with provision-funded surveying, allows multiple
+- GP-3.1 is accepted: it replaces survey cases with provision-funded surveying, allows multiple
   surveys when provisions permit and simplifies the non-modal prompt to
   **Survey** only.
-- GP-3.2 gives every non-home island one sightable and surveyable dossier with
+- GP-3.2 is accepted: it gives every non-home island one sightable and surveyable dossier with
   exact-footprint fog reveal that does not alter water knowledge or travel cost.
-- GP-3.3 adds the shared generic-site catalog with historic wreck, coastal ruin
+- GP-3.3 is active: it adds the shared generic-site catalog with historic wreck, coastal ruin
   and tidal cave as its only shipped types.
 
 All GP-3 records use stable IDs, deterministic results, exact-dock commitment,
@@ -527,6 +525,7 @@ Production assets, fishing and trade boat presentation, richer island/site
 markers, transition scenes and environmental polish belong to the separate
 `GR-*` track. Developer graphics remain the gameplay fallback. Traffic may be
 derived from returned records but is not a prerequisite for accepting GP-3.
+The production-art gate remains after GP-3.3 acceptance.
 
 ### Later expansion
 
@@ -563,8 +562,8 @@ The forward design succeeds only if playtesting and automated checks show that:
 
 ## 14. Remaining design decisions
 
-- What fixed provision cost creates a meaningful survey-versus-range choice at
-  the current twelve-bundle journey allocation?
+- Does the implemented default two-bundle survey cost create a sufficiently
+  meaningful survey-versus-range choice at the twelve-bundle allocation?
 - What warning language best communicates a tight or impossible estimated
   return after surveying without making the decision for the player?
 - Which island dossier characteristics produce the clearest and most memorable
