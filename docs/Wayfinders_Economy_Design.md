@@ -27,8 +27,8 @@ GP-3 supplies stable survey sites and the shared sighting/survey lifecycle, but
 does not place idols, reveal idol-specific clues, carry relics or award
 collection credit.
 
-This document describes the accepted GP-3.1/GP-3.2 design and the forward
-GP-3.3/GP-4 direction. The active roadmap remains authoritative, and nothing
+This document describes the accepted GP-3 design and the forward GP-4
+direction. The active roadmap remains authoritative, and nothing
 here authorizes implementation by itself.
 
 ## 1. Purpose
@@ -148,7 +148,7 @@ The identification survey does not restore the fatal expedition's Personal
 
 ### 3.4 Generic survey sites
 
-GP-3.3 ships exactly three generic site families:
+GP-3.3 ships exactly one site from each of three generic families:
 
 | Site type | Visual and clue language | Initial result family |
 | --- | --- | --- |
@@ -495,13 +495,15 @@ fate reporting already obey the provisional/exact-dock boundary.
   **Survey** only.
 - GP-3.2 is accepted: it gives every non-home island one sightable and surveyable dossier with
   exact-footprint fog reveal that does not alter water knowledge or travel cost.
-- GP-3.3 is active: it adds the shared generic-site catalog with historic wreck, coastal ruin
-  and tidal cave as its only shipped types.
+- GP-3.3 is accepted: it adds exactly one seed-derived historic wreck, coastal
+  ruin and tidal cave through the shared descriptor-extensible site lifecycle.
 
 All GP-3 records use stable IDs, deterministic results, exact-dock commitment,
 wreck rollback and Great Hall credit. GP-3 does not include the discarded tribe
 capacity, fishing activation/output, loadout, economic wreck-recovery or
 automatic-trade milestones.
+The accepted boundary uses survey-site content V1, save schema V12, lineage V6
+voyage records V3 and Great Hall read model V3.
 
 ### GP-4: idols, relic wing and optional completion
 
@@ -525,7 +527,8 @@ Production assets, fishing and trade boat presentation, richer island/site
 markers, transition scenes and environmental polish belong to the separate
 `GR-*` track. Developer graphics remain the gameplay fallback. Traffic may be
 derived from returned records but is not a prerequisite for accepting GP-3.
-The production-art gate remains after GP-3.3 acceptance.
+GP-3.3 acceptance has opened the production-art dependency gate, but GR-1
+remains proposed and requires explicit authorization.
 
 ### Later expansion
 

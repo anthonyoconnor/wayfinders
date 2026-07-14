@@ -5,6 +5,14 @@ import type {
   IslandDossierSurveyedResultV1,
 } from "../exploration/IslandDossierContracts";
 import type {
+  SurveySiteClue,
+  SurveySiteId,
+  SurveySiteProvisionalRecord,
+  SurveySiteReturnedRecord,
+  SurveySiteSurveyedResult,
+  SurveySiteType,
+} from "../exploration/SurveySiteContracts";
+import type {
   FishingShoalClue,
   FishingShoalId,
   FishingShoalSurveyedResultV1,
@@ -18,7 +26,7 @@ import type {
 import type {
   NavigatorId,
   NavigatorSuccessionReason,
-  NavigatorVoyageAchievementRecordV2,
+  NavigatorVoyageAchievementRecordV3,
 } from "../lineage/NavigatorLineageSystem";
 
 export type ReplenishmentReason = "dock" | "return" | "respawn";
@@ -54,7 +62,7 @@ export interface GameEventMap {
     /** Enclosed Unknown tiles separately inferred by the return cleanup. */
     closedUnknownTileCount: number;
     /** Immutable exact-dock achievement record stored in the navigator lineage. */
-    achievements: Readonly<NavigatorVoyageAchievementRecordV2>;
+    achievements: Readonly<NavigatorVoyageAchievementRecordV3>;
   };
   shipWrecked: {
     wreckId: number;
@@ -108,6 +116,29 @@ export interface GameEventMap {
     expeditionId: number;
     generation: number;
     records: readonly Readonly<IslandDossierProvisionalRecordV1>[];
+  };
+  surveySiteSighted: {
+    id: SurveySiteId;
+    type: SurveySiteType;
+    typeLabel: string;
+    tile: Readonly<GridPoint>;
+    serviceAnchor: Readonly<GridPoint>;
+    clue: Readonly<SurveySiteClue>;
+  };
+  surveySiteSurveyed: Readonly<SurveySiteSurveyedResult> & {
+    tile: Readonly<GridPoint>;
+    serviceAnchor: Readonly<GridPoint>;
+  };
+  surveySitesReturned: {
+    expeditionId: number;
+    generation: number;
+    leads: readonly Readonly<SurveySiteReturnedRecord>[];
+    reports: readonly Readonly<SurveySiteReturnedRecord>[];
+  };
+  surveySitesLost: {
+    expeditionId: number;
+    generation: number;
+    records: readonly Readonly<SurveySiteProvisionalRecord>[];
   };
   fishingShoalSighted: {
     id: FishingShoalId;

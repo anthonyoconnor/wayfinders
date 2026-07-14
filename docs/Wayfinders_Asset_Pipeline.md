@@ -25,9 +25,10 @@ The forward roadmap separates graphics work from gameplay work:
 The start gate for `GR-1` is acceptance of `GP-3.3`: island dossiers and the
 extensible historic-wreck/coastal-ruin/tidal-cave site contract must first
 complete the sight, provision-funded survey, exact-dock return, wreck rollback
-and Great Hall loop using developer graphics. GP-3.2 is accepted; production
-asset work remains deferred while GP-3.3 is active. Changing that gate requires
-explicit roadmap approval.
+and Great Hall loop using developer graphics. GP-3.3 is now accepted, so this
+dependency gate is open. GR-1 and production-asset work remain proposed and are
+not authorized to begin. Changing scope still requires explicit roadmap
+approval.
 
 ## Foundation contracts
 

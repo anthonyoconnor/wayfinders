@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import { makeConfig } from "./helpers.ts";
 import { IndexedDbSaveStore } from "../src/wayfinders/persistence/IndexedDbSaveStore.ts";
 import { createFishingShoalId } from "../src/wayfinders/exploration/FishingShoalContracts.ts";
+import { createSurveySiteId } from "../src/wayfinders/exploration/SurveySiteContracts.ts";
 import {
   NavigatorLineageSystem,
-  type NavigatorVoyageAchievementInputV1,
+  type NavigatorVoyageAchievementInputV3,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 import {
   SAVE_SCHEMA_VERSION,
@@ -13,6 +14,7 @@ import {
   UnsupportedFishingShoalContentVersionError,
   UnsupportedIslandDossierContentVersionError,
   UnsupportedSaveSchemaVersionError,
+  UnsupportedSurveySiteContentVersionError,
   UnsupportedWorldGeneratorVersionError,
   applyGenerationConfig,
   captureGenerationConfig,
@@ -40,14 +42,16 @@ function makeLineage(generation: number, pendingWreckId?: number) {
 
 function makeVoyage(
   expeditionId: number,
-  overrides: Partial<NavigatorVoyageAchievementInputV1> = {},
-): NavigatorVoyageAchievementInputV1 {
+  overrides: Partial<NavigatorVoyageAchievementInputV3> = {},
+): NavigatorVoyageAchievementInputV3 {
   return {
     expeditionId,
     supportedTileCount: 0,
     closedUnknownTileCount: 0,
     islandLeadIds: [],
     islandDossierIds: [],
+    surveySiteLeadIds: [],
+    surveySiteReportIds: [],
     fishingLeadIds: [],
     fishingSurveyIds: [],
     wreckIds: [],
@@ -74,7 +78,7 @@ function makePendingValidLineage(wreckId: number) {
 
 function addSuccessfulVoyage(
   save: SaveGame,
-  overrides: Partial<NavigatorVoyageAchievementInputV1> = {},
+  overrides: Partial<NavigatorVoyageAchievementInputV3> = {},
 ): number {
   const expeditionId = save.expedition.id;
   const lineage = NavigatorLineageSystem.fromSnapshot(save.navigatorLineage);
@@ -95,7 +99,7 @@ function makeValidSave(): SaveGame {
       seed: config.world.seed,
       generatorVersion: WORLD_GENERATOR_VERSION,
       generationConfig: captureGenerationConfig(config),
-      contentVersions: { fishingShoals: 1, islandDossiers: 1 },
+      contentVersions: { fishingShoals: 1, islandDossiers: 1, surveySites: 1 },
     },
     generation: 2,
     expedition: {
@@ -140,6 +144,7 @@ function makeValidSave(): SaveGame {
       }],
     },
     fishingShoals: { provisional: [], returned: [] },
+    surveySites: { provisional: [], returned: [] },
     navigatorLineage: makeValidLineage(),
     terrainPatches: [],
   };
@@ -422,6 +427,196 @@ describe("save-game validation", () => {
       .successfulVoyages[1] as { islandLeadIds: number[] };
     lateVoyage.islandLeadIds = [1];
     expect(() => parseSaveGame(lateLead)).toThrow(/after its dossier|precede the returned island dossier/);
+  });
+
+  it("round-trips only minimal current-version survey-site records with exact keys", () => {
+    const save = makeValidSave();
+    const id = createSurveySiteId("historic-wreck", 0);
+    save.expedition.active = true;
+    save.surveySites.provisional.push({
+      id,
+      state: "surveyed",
+      expeditionId: save.expedition.id,
+      generation: save.generation,
+    });
+
+    const roundTripped = JSON.parse(JSON.stringify(save)) as unknown;
+    expect(parseSaveGame(roundTripped)).toEqual(save);
+    expect(save.surveySites).toEqual({
+      provisional: [{
+        id,
+        state: "surveyed",
+        expeditionId: 4,
+        generation: 2,
+      }],
+      returned: [],
+    });
+    expect(JSON.stringify(save.surveySites)).not.toMatch(/clue|result|detail|presentation/);
+
+    const leakedResult = structuredClone(save) as unknown as {
+      surveySites: { provisional: Array<Record<string, unknown>> };
+    };
+    leakedResult.surveySites.provisional[0].result = "Hidden result";
+    expect(() => parseSaveGame(leakedResult)).toThrow(/supported field/);
+
+    const extraContainerField = structuredClone(save) as unknown as {
+      surveySites: Record<string, unknown>;
+    };
+    extraContainerField.surveySites.catalog = [];
+    expect(() => parseSaveGame(extraContainerField)).toThrow(/supported field/);
+  });
+
+  it("validates survey-site IDs, canonical order, active provenance, and overlap", () => {
+    const firstId = createSurveySiteId("coastal-ruin", 0);
+    const secondId = createSurveySiteId("historic-wreck", 0);
+    const active = makeValidSave();
+    active.expedition.active = true;
+    active.surveySites.provisional.push(
+      {
+        id: firstId,
+        state: "sighted",
+        expeditionId: active.expedition.id,
+        generation: active.generation,
+      },
+      {
+        id: secondId,
+        state: "surveyed",
+        expeditionId: active.expedition.id,
+        generation: active.generation,
+      },
+    );
+    expect(parseSaveGame(active)).toBe(active);
+
+    const unsupportedId = structuredClone(active) as unknown as {
+      surveySites: { provisional: Array<{ id: string }> };
+    };
+    unsupportedId.surveySites.provisional[0].id = "survey-site:v2:coastal-ruin:0000";
+    expect(() => parseSaveGame(unsupportedId)).toThrow(/invalid or unsupported survey-site ID/);
+
+    const unsorted = structuredClone(active);
+    unsorted.surveySites.provisional.reverse();
+    expect(() => parseSaveGame(unsorted)).toThrow(/uniquely sorted by survey-site ID/);
+
+    const duplicate = structuredClone(active);
+    duplicate.surveySites.provisional[1] = { ...duplicate.surveySites.provisional[0] };
+    expect(() => parseSaveGame(duplicate)).toThrow(/uniquely sorted by survey-site ID/);
+
+    const returnedOrder = makeValidSave();
+    const returnedExpeditionId = addSuccessfulVoyage(returnedOrder, {
+      surveySiteLeadIds: [firstId, secondId],
+    });
+    returnedOrder.surveySites.returned.push(
+      {
+        id: firstId,
+        state: "lead",
+        expeditionId: returnedExpeditionId,
+        generation: returnedOrder.generation,
+      },
+      {
+        id: secondId,
+        state: "lead",
+        expeditionId: returnedExpeditionId,
+        generation: returnedOrder.generation,
+      },
+    );
+    expect(parseSaveGame(returnedOrder)).toBe(returnedOrder);
+    const unsortedReturned = structuredClone(returnedOrder);
+    unsortedReturned.surveySites.returned.reverse();
+    expect(() => parseSaveGame(unsortedReturned)).toThrow(/uniquely sorted by survey-site ID/);
+    const duplicateReturned = structuredClone(returnedOrder);
+    duplicateReturned.surveySites.returned[1] = { ...duplicateReturned.surveySites.returned[0] };
+    expect(() => parseSaveGame(duplicateReturned)).toThrow(/uniquely sorted by survey-site ID/);
+
+    const inactive = structuredClone(active);
+    inactive.expedition.active = false;
+    expect(() => parseSaveGame(inactive)).toThrow(/requires an active expedition/);
+
+    const staleExpedition = structuredClone(active);
+    staleExpedition.surveySites.provisional[0].expeditionId--;
+    expect(() => parseSaveGame(staleExpedition)).toThrow(/active expedition/);
+
+    const staleGeneration = structuredClone(active);
+    staleGeneration.surveySites.provisional[0].generation--;
+    expect(() => parseSaveGame(staleGeneration)).toThrow(/current generation/);
+
+    const upgrade = makeValidSave();
+    const leadExpeditionId = addSuccessfulVoyage(upgrade, { surveySiteLeadIds: [firstId] });
+    upgrade.surveySites.returned.push({
+      id: firstId,
+      state: "lead",
+      expeditionId: leadExpeditionId,
+      generation: upgrade.generation,
+    });
+    upgrade.expedition.active = true;
+    upgrade.surveySites.provisional.push({
+      id: firstId,
+      state: "surveyed",
+      expeditionId: upgrade.expedition.id,
+      generation: upgrade.generation,
+    });
+    expect(parseSaveGame(upgrade)).toBe(upgrade);
+
+    const sightedOverlap = structuredClone(upgrade);
+    sightedOverlap.surveySites.provisional[0].state = "sighted";
+    expect(() => parseSaveGame(sightedOverlap)).toThrow(/returned lead with a provisional survey/);
+
+    const reportOverlap = structuredClone(upgrade);
+    reportOverlap.surveySites.returned[0].state = "report";
+    expect(() => parseSaveGame(reportOverlap)).toThrow(/returned lead with a provisional survey/);
+
+    const futureReturned = structuredClone(upgrade);
+    futureReturned.surveySites.returned[0].generation = futureReturned.generation + 1;
+    expect(() => parseSaveGame(futureReturned)).toThrow(/later than the current generation/);
+  });
+
+  it("reconciles returned survey-site leads and reports with their successful voyages", () => {
+    const leadId = createSurveySiteId("tidal-cave", 0);
+    const leadSave = makeValidSave();
+    const leadExpeditionId = addSuccessfulVoyage(leadSave, { surveySiteLeadIds: [leadId] });
+    leadSave.surveySites.returned.push({
+      id: leadId,
+      state: "lead",
+      expeditionId: leadExpeditionId,
+      generation: leadSave.generation,
+    });
+    expect(parseSaveGame(leadSave)).toBe(leadSave);
+
+    const upgradedReportExpeditionId = addSuccessfulVoyage(leadSave, {
+      surveySiteReportIds: [leadId],
+    });
+    leadSave.surveySites.returned[0] = {
+      id: leadId,
+      state: "report",
+      expeditionId: upgradedReportExpeditionId,
+      generation: leadSave.generation,
+    };
+    expect(parseSaveGame(leadSave)).toBe(leadSave);
+
+    const reportId = createSurveySiteId("historic-wreck", 0);
+    const reportSave = makeValidSave();
+    const reportExpeditionId = addSuccessfulVoyage(reportSave, { surveySiteReportIds: [reportId] });
+    reportSave.surveySites.returned.push({
+      id: reportId,
+      state: "report",
+      expeditionId: reportExpeditionId,
+      generation: reportSave.generation,
+    });
+    expect(parseSaveGame(reportSave)).toBe(reportSave);
+
+    const missingCredit = structuredClone(reportSave);
+    const creditedVoyage = missingCredit.navigatorLineage.navigators.at(-1)?.successfulVoyages.at(-1) as {
+      surveySiteReportIds: string[];
+    };
+    creditedVoyage.surveySiteReportIds = [];
+    expect(() => parseSaveGame(missingCredit)).toThrow(/credited to its successful voyage/);
+
+    const wrongProvenance = structuredClone(reportSave);
+    wrongProvenance.surveySites.returned[0].expeditionId--;
+    expect(() => parseSaveGame(wrongProvenance)).toThrow(/this navigator and voyage/);
+
+    const missingRecord = makeValidSave();
+    addSuccessfulVoyage(missingRecord, { surveySiteLeadIds: [leadId] });
+    expect(() => parseSaveGame(missingRecord)).toThrow(/does not reference returned survey-site lead/);
   });
 
   it("validates current fishing-shoal records and permits multiple surveys in the active expedition", () => {
@@ -756,7 +951,7 @@ describe("save-game validation", () => {
   });
 
   it("requires exact schema and format versions and rejects corrupt current data", () => {
-    expect(SAVE_SCHEMA_VERSION).toBe(11);
+    expect(SAVE_SCHEMA_VERSION).toBe(12);
     for (const version of [SAVE_SCHEMA_VERSION - 1, SAVE_SCHEMA_VERSION + 1]) {
       const mismatchedSchema = makeValidSave() as SaveGame & { schemaVersion: number };
       mismatchedSchema.schemaVersion = version;
@@ -781,6 +976,20 @@ describe("save-game validation", () => {
     expect(() => parseSaveGame(futureIslandDossiers)).toThrow(
       UnsupportedIslandDossierContentVersionError,
     );
+
+    const futureSurveySites = makeValidSave() as unknown as {
+      world: { contentVersions: { surveySites: number } };
+    };
+    futureSurveySites.world.contentVersions.surveySites = 2;
+    expect(() => parseSaveGame(futureSurveySites)).toThrow(
+      UnsupportedSurveySiteContentVersionError,
+    );
+
+    const extraContentVersion = structuredClone(makeValidSave()) as unknown as {
+      world: { contentVersions: Record<string, unknown> };
+    };
+    extraContentVersion.world.contentVersions.legacySurveySites = 1;
+    expect(() => parseSaveGame(extraContentVersion)).toThrow(/supported field/);
 
     const oldLineageContract = structuredClone(makeValidSave()) as unknown as {
       navigatorLineage: { contractVersion: number };

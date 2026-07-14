@@ -1,18 +1,20 @@
 import { describe, expect, it } from "vitest";
 import type { ShipwreckState } from "../src/wayfinders/core/types.ts";
 import { createFishingShoalId } from "../src/wayfinders/exploration/FishingShoalContracts.ts";
+import { createSurveySiteId } from "../src/wayfinders/exploration/SurveySiteContracts.ts";
 import {
   buildGreatHallChronicle,
   type GreatHallChronicleSources,
 } from "../src/wayfinders/lineage/GreatHallChronicle.ts";
 import {
   NavigatorLineageSystem,
-  type NavigatorVoyageAchievementInputV2,
+  type NavigatorVoyageAchievementInputV3,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 
 const FISHING_LEAD_ID = createFishingShoalId(0);
 const FISHING_SURVEY_ID = createFishingShoalId(1);
 const SECOND_FISHING_LEAD_ID = createFishingShoalId(2);
+const SURVEY_SITE_ID = createSurveySiteId("historic-wreck", 0);
 const ISLAND_DOSSIER = {
   islandId: 7,
   name: "Amber Haven",
@@ -23,17 +25,30 @@ const ISLAND_DOSSIER = {
     developerArtId: "developer:island-dossier:v1:anchorage",
   },
 } as const;
+const SURVEY_SITE = {
+  id: SURVEY_SITE_ID,
+  type: "historic-wreck" as const,
+  typeLabel: "Historic wreck",
+  clue: { id: "broken-mast", label: "A broken mast above the tide" },
+  result: {
+    id: "forgotten-route",
+    label: "evidence of a forgotten route",
+    detail: "The timbers carry marks from an older crossing.",
+  },
+} as const;
 
 function voyage(
   expeditionId: number,
-  overrides: Partial<NavigatorVoyageAchievementInputV2> = {},
-): NavigatorVoyageAchievementInputV2 {
+  overrides: Partial<NavigatorVoyageAchievementInputV3> = {},
+): NavigatorVoyageAchievementInputV3 {
   return {
     expeditionId,
     supportedTileCount: 0,
     closedUnknownTileCount: 0,
     islandLeadIds: [],
     islandDossierIds: [],
+    surveySiteLeadIds: [],
+    surveySiteReportIds: [],
     fishingLeadIds: [],
     fishingSurveyIds: [],
     wreckIds: [],
@@ -58,12 +73,16 @@ function threeGenerationHistory(): {
     supportedTileCount: 5,
     closedUnknownTileCount: 2,
   }));
-  lineage.completeSuccessfulVoyage(voyage(2, { islandLeadIds: [7] }));
+  lineage.completeSuccessfulVoyage(voyage(2, {
+    islandLeadIds: [7],
+    surveySiteLeadIds: [SURVEY_SITE_ID],
+  }));
   lineage.completeSuccessfulVoyage(voyage(3, {
     fishingLeadIds: [FISHING_LEAD_ID, SECOND_FISHING_LEAD_ID],
   }));
   lineage.completeSuccessfulVoyage(voyage(4, {
     islandDossierIds: [7],
+    surveySiteReportIds: [SURVEY_SITE_ID],
     fishingSurveyIds: [FISHING_SURVEY_ID],
   }));
 
@@ -76,6 +95,7 @@ function threeGenerationHistory(): {
     lineage,
     sources: {
       islandDossiers: [ISLAND_DOSSIER],
+      surveySites: [SURVEY_SITE],
       fishingShoals: [
         { id: FISHING_LEAD_ID, quality: "steady" },
         { id: FISHING_SURVEY_ID, quality: "rich" },
@@ -102,7 +122,7 @@ describe("Great Hall chronicle read model", () => {
 
     const chronicle = buildGreatHallChronicle(lineage.navigators, sources);
 
-    expect(chronicle.readModelVersion).toBe(2);
+    expect(chronicle.readModelVersion).toBe(3);
     expect(chronicle.navigators.map(({ generation, state, completedVoyages }) => ({
       generation,
       state,
@@ -135,13 +155,13 @@ describe("Great Hall chronicle read model", () => {
 
     expect(chronicle.navigators[0].voyages[0].achievements).toEqual([
       {
-        key: "great-hall:v2:navigator:v1:g1:voyage:1:achievement:supported-route-tiles",
+        key: "great-hall:v3:navigator:v1:g1:voyage:1:achievement:supported-route-tiles",
         kind: "supported-route-tiles",
         tileCount: 5,
         label: "Supported 5 route tiles",
       },
       {
-        key: "great-hall:v2:navigator:v1:g1:voyage:1:achievement:mapped-enclosed-water-tiles",
+        key: "great-hall:v3:navigator:v1:g1:voyage:1:achievement:mapped-enclosed-water-tiles",
         kind: "mapped-enclosed-water-tiles",
         tileCount: 2,
         label: "Mapped 2 enclosed water tiles",
@@ -149,16 +169,25 @@ describe("Great Hall chronicle read model", () => {
     ]);
     expect(chronicle.navigators[0].voyages[1].achievements).toEqual([
       expect.objectContaining({
-        key: "great-hall:v2:navigator:v1:g1:voyage:2:achievement:island-lead:7",
+        key: "great-hall:v3:navigator:v1:g1:voyage:2:achievement:island-lead:7",
         kind: "island-lead",
         islandId: 7,
         name: "Amber Haven",
         label: "Recorded a lead for Amber Haven",
       }),
+      expect.objectContaining({
+        key: `great-hall:v3:navigator:v1:g1:voyage:2:achievement:survey-site-lead:${SURVEY_SITE_ID}`,
+        kind: "survey-site-lead",
+        surveySiteId: SURVEY_SITE_ID,
+        siteType: "historic-wreck",
+        typeLabel: "Historic wreck",
+        clueLabel: "A broken mast above the tide",
+        label: "Recorded a historic wreck lead — A broken mast above the tide",
+      }),
     ]);
     expect(chronicle.navigators[0].voyages[2].achievements).toEqual([
       expect.objectContaining({
-        key: "great-hall:v2:navigator:v1:g1:voyage:3:achievement:fishing-leads",
+        key: "great-hall:v3:navigator:v1:g1:voyage:3:achievement:fishing-leads",
         kind: "fishing-leads",
         fishingShoalIds: [FISHING_LEAD_ID, SECOND_FISHING_LEAD_ID],
         leadCount: 2,
@@ -167,12 +196,21 @@ describe("Great Hall chronicle read model", () => {
     ]);
     expect(chronicle.navigators[0].voyages[3].achievements).toEqual([
       expect.objectContaining({
-        key: "great-hall:v2:navigator:v1:g1:voyage:4:achievement:island-dossier:7",
+        key: "great-hall:v3:navigator:v1:g1:voyage:4:achievement:island-dossier:7",
         kind: "island-dossier",
         islandId: 7,
         name: "Amber Haven",
         findingLabel: "sheltered anchorage",
         label: "Surveyed Amber Haven — sheltered anchorage",
+      }),
+      expect.objectContaining({
+        key: `great-hall:v3:navigator:v1:g1:voyage:4:achievement:survey-site-report:${SURVEY_SITE_ID}`,
+        kind: "survey-site-report",
+        surveySiteId: SURVEY_SITE_ID,
+        siteType: "historic-wreck",
+        typeLabel: "Historic wreck",
+        resultLabel: "evidence of a forgotten route",
+        label: "Surveyed historic wreck — evidence of a forgotten route",
       }),
       expect.objectContaining({
         kind: "fishing-survey",
@@ -182,7 +220,7 @@ describe("Great Hall chronicle read model", () => {
     ]);
     expect(chronicle.navigators[2].voyages[0].achievements).toEqual([
       expect.objectContaining({
-        key: "great-hall:v2:navigator:v1:g3:voyage:1:achievement:wreck-report:31",
+        key: "great-hall:v3:navigator:v1:g3:voyage:1:achievement:wreck-report:31",
         kind: "wreck-report",
         wreckId: 31,
         lostNavigatorId: "navigator:v1:g2",
@@ -203,8 +241,8 @@ describe("Great Hall chronicle read model", () => {
       returnedByNavigatorId: "navigator:v1:g3",
       returnedByGeneration: 3,
       returnedOnVoyage: 1,
-      returnedVoyageKey: "great-hall:v2:navigator:v1:g3:voyage:1",
-      achievementKey: "great-hall:v2:navigator:v1:g3:voyage:1:achievement:wreck-report:31",
+      returnedVoyageKey: "great-hall:v3:navigator:v1:g3:voyage:1",
+      achievementKey: "great-hall:v3:navigator:v1:g3:voyage:1:achievement:wreck-report:31",
     });
     expect(lostNavigator.totals.wreckReports).toBe(0);
     expect(chronicle.navigators[2].totals.wreckReports).toBe(1);
@@ -224,6 +262,7 @@ describe("Great Hall chronicle read model", () => {
         islandId: 99,
         name: "Provisional Secret",
       }],
+      surveySites: [],
       fishingShoals: [],
       wrecks: [wreck(12, 1, survey)],
     });
@@ -233,7 +272,7 @@ describe("Great Hall chronicle read model", () => {
     expect(lostNavigator.wreckFate).toEqual({ state: "unlocated" });
     expect("wreckId" in (lostNavigator.wreckFate ?? {})).toBe(false);
     expect(fatalVoyage).toEqual({
-      key: "great-hall:v2:navigator:v1:g1:voyage:2",
+      key: "great-hall:v3:navigator:v1:g1:voyage:2",
       voyageNumber: 2,
       outcome: "lost-at-sea",
       achievements: [],
@@ -243,6 +282,8 @@ describe("Great Hall chronicle read model", () => {
       lostVoyages: 1,
       islandLeads: 0,
       islandDossiers: 0,
+      surveySiteLeads: 0,
+      surveySiteReports: 0,
       confirmedWreckFates: 0,
       unlocatedWreckFates: 1,
     });
@@ -260,6 +301,7 @@ describe("Great Hall chronicle read model", () => {
 
       const chronicle = buildGreatHallChronicle(lineage.navigators, {
         islandDossiers: [],
+        surveySites: [],
         fishingShoals: [],
         wrecks: [wreck(wreckId, 1, { state: "unexamined" })],
       });
@@ -270,7 +312,7 @@ describe("Great Hall chronicle read model", () => {
         ({ outcome }) => outcome === "returned",
       )).toBe(true);
       expect(lostNavigator.voyages.at(-1)).toEqual({
-        key: `great-hall:v2:navigator:v1:g1:voyage:${completedVoyages + 1}`,
+        key: `great-hall:v3:navigator:v1:g1:voyage:${completedVoyages + 1}`,
         voyageNumber: completedVoyages + 1,
         outcome: "lost-at-sea",
         achievements: [],
@@ -292,6 +334,8 @@ describe("Great Hall chronicle read model", () => {
       mappedEnclosedWaterTiles: 2,
       islandLeads: 1,
       islandDossiers: 1,
+      surveySiteLeads: 1,
+      surveySiteReports: 1,
       fishingLeads: 2,
       fishingSurveys: 1,
       wreckReports: 1,
@@ -309,6 +353,8 @@ describe("Great Hall chronicle read model", () => {
       "mappedEnclosedWaterTiles",
       "islandLeads",
       "islandDossiers",
+      "surveySiteLeads",
+      "surveySiteReports",
       "fishingLeads",
       "fishingSurveys",
       "wreckReports",
@@ -337,6 +383,25 @@ describe("Great Hall chronicle read model", () => {
     expect(first.navigators.flatMap(({ voyages }) => voyages).every(Object.isFrozen)).toBe(true);
   });
 
+  it("requires one deterministic source for every credited survey site", () => {
+    const lineage = new NavigatorLineageSystem();
+    lineage.completeSuccessfulVoyage(voyage(1, { surveySiteReportIds: [SURVEY_SITE_ID] }));
+    const baseSources = {
+      islandDossiers: [],
+      fishingShoals: [],
+      wrecks: [],
+    } as const;
+
+    expect(() => buildGreatHallChronicle(lineage.navigators, {
+      ...baseSources,
+      surveySites: [],
+    })).toThrow(/unknown survey site/);
+    expect(() => buildGreatHallChronicle(lineage.navigators, {
+      ...baseSources,
+      surveySites: [SURVEY_SITE, SURVEY_SITE],
+    })).toThrow(/Duplicate survey site source/);
+  });
+
   it("rejects a wreck-report achievement unless that exact voyage returned it", () => {
     const lineage = new NavigatorLineageSystem();
     const loss = lineage.beginSuccession("wreck", 1);
@@ -345,6 +410,7 @@ describe("Great Hall chronicle read model", () => {
 
     const baseSources = {
       islandDossiers: [],
+      surveySites: [],
       fishingShoals: [],
     } as const;
     expect(() => buildGreatHallChronicle(lineage.navigators, {

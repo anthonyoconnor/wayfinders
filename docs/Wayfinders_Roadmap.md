@@ -1,8 +1,9 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-3.2` work is complete and accepted. The authorized
-GP-3 batch is continuing directly into active `GP-3.3`.
+ordered `GP-0.1` through `GP-3.3` work is complete and accepted. `GP-4.1` is the
+next proposed gameplay milestone; no later gameplay or graphics minor is
+authorized by this roadmap status.
 
 ## Roadmap model
 
@@ -56,6 +57,8 @@ The current build already provides:
 - provisions, forward/return guidance and exact-dock expedition commitment;
 - Supported-route inheritance, deterministic island dossiers and their
   provisional sighting/survey to returned lead/dossier records;
+- one directly sightable seed-derived historic wreck, coastal ruin and tidal
+  cave using one extensible lead/report lifecycle;
 - wreck rollback, persistent wrecks and exactly-once generation advancement
   per resolved wreck;
 - versioned navigator identities, four-voyage tenures and exactly-once
@@ -71,9 +74,9 @@ Generation is backed by a versioned navigator lineage with distinct active,
 completed and lost records. Exact-dock active-expedition returns complete one
 of a navigator's four voyages, while fatal wrecks and completed-tenure
 transitions share one idempotent succession authority.
-Island dossier findings are descriptive records and do not create active
-resources or a tribe economy. Save/load is functional infrastructure rather
-than a complete player-facing game-management flow.
+Island dossier and survey-site findings are descriptive records and do not
+create active resources or a tribe economy. Save/load is functional
+infrastructure rather than a complete player-facing game-management flow.
 
 ## Cross-cutting gameplay gates
 
@@ -597,10 +600,28 @@ duplicate a GP-1 shoal or GP-3.3 site.
 
 #### GP-3.3 — Extensible survey sites
 
-Status: active in the authorized GP-3 batch.
+Status: accepted.
 
 Depends on GP-3.1's survey transaction and GP-3.2's accepted separation between
 island dossiers, fog presentation and generated terrain.
+
+Acceptance evidence (2026-07-13): survey-site content V1 derives exactly one
+historic wreck, one coastal ruin and one tidal cave from the seed, each with a
+stable typed ID, independently sightable clue tile, passable dock-reachable
+service anchor, deterministic hidden result and developer placeholder
+presentation. All three descriptors use the same free `sighted`, shared two-
+bundle `surveyed`, returned `lead` / `report` and wreck-rollback lifecycle.
+Island dossiers neither spawn nor unlock sites; historic sites remain distinct
+from runtime navigator wrecks. A synthetic fourth descriptor passes the shared
+catalog/lifecycle contract without a new command, reducer or persistence
+fragment. Exact-dock site credit uses lineage V6 voyage records V3 and Great
+Hall V3 lead/report achievements and totals. Save schema V12 accepts only exact
+survey-site content V1 and persists minimal provenance records; definitions and
+hidden results regenerate. Developer controls move directly to each initial
+type's service anchor. Typecheck, 262 tests across 28 files and the production
+build pass. Browser acceptance confirms the three matching service-anchor
+interactions, live unsuppressed input with the drawer open, Survey-only prompt,
+developer placeholder art and a clean warning/error console.
 
 - Add one versioned, seed-derived survey-site catalog whose only content types
   shipped in GP-3.3 are **historic wreck**, **coastal ruin** and **tidal cave**.
@@ -769,8 +790,8 @@ not define collision, identity or rules.
 
 ### GR-1 — Minimal asset runtime
 
-Do not begin before GP-3.3 is accepted unless this start gate is explicitly
-reapproved.
+Start gate: open because GP-3.3 is accepted. GR-1 remains proposed and is not
+authorized to begin.
 
 #### GR-1.1 — Semantic asset contracts
 
@@ -984,8 +1005,8 @@ each minor is planned; they are not permanent product rules.
 
 ## Explicitly deferred
 
-- Production-asset replacement before GP-3.3 accepts the provision-funded
-  island-dossier and extensible survey-site contracts.
+- Production-asset replacement until a GR-1 minor is explicitly authorized,
+  despite its GP-3.3 dependency gate now being open.
 - Authoritative tribe economy/output, selectable voyage loadouts, generic wreck
   salvage/recovery and automatic trade gameplay.
 - Chained discovery quests, island dossiers that spawn separate site leads and
@@ -1022,9 +1043,8 @@ authorized ordered batch:
 5. A safely returned but unsurveyed sighting becomes an inactive persistent
    lead that can be surveyed later. A wreck loses only the current expedition's
    provisional state and preserves any earlier returned lead.
-6. GR-1 remains deferred until GP-3.3 accepts the provision-funded island-
-   dossier and extensible survey-site contracts, unless that start gate is
-   explicitly reapproved.
+6. GP-3.3 has opened the GR-1 dependency gate, but GR-1 remains proposed and
+   requires explicit authorization before implementation.
 
 Additional product decisions are recorded here for later milestones:
 

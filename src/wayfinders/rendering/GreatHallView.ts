@@ -232,6 +232,8 @@ export class GreatHallView {
       ["mapped-water-tiles", totals.mappedEnclosedWaterTiles, "Enclosed waters mapped"],
       ["island-leads", totals.islandLeads, "Island leads"],
       ["island-dossiers", totals.islandDossiers, "Island dossiers"],
+      ["survey-site-leads", totals.surveySiteLeads, "Site leads"],
+      ["survey-site-reports", totals.surveySiteReports, "Site reports"],
       ["fishing-leads", totals.fishingLeads, "Fishing leads"],
       ["fishing-surveys", totals.fishingSurveys, "Fishing surveys"],
       ["confirmed-wrecks", totals.confirmedWreckFates, "Wrecks confirmed"],

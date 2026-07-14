@@ -91,6 +91,7 @@ function unknownWater(simulation: GameSimulation): GridPoint {
 function chronicleFor(simulation: GameSimulation) {
   return buildGreatHallChronicle(simulation.navigatorLineage, {
     islandDossiers: simulation.islandDossierDefinitions,
+    surveySites: simulation.surveySiteDefinitions,
     fishingShoals: simulation.fishingShoalDefinitions,
     wrecks: simulation.wrecks,
   });

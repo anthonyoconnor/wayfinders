@@ -369,11 +369,11 @@ the permanent Great Hall chronicle. The same chronicle supplies optional home
 browsing and lineage totals rather than maintaining a separate succession
 summary.
 
-`GreatHallChronicle` V2 is a versioned ephemeral read model, not save authority.
+`GreatHallChronicle` V3 is a versioned ephemeral read model, not save authority.
 It derives structured achievement keys, active / completed / lost navigator
-entries, distinct island-lead/island-dossier achievements and totals, lineage
-totals and returned wreck-fate links from the authoritative lineage and returned
-world records. The player-facing
+entries, distinct island-lead/dossier and survey-site lead/report achievements
+and totals, lineage totals and returned wreck-fate links from the authoritative
+lineage and returned world records. The player-facing
 record remains permanent because those source records persist; the derived view
 is rebuilt rather than saved independently. The optional home mode is available
 only through **Go ashore · Great Hall** at the exact home dock; there is no
@@ -395,7 +395,7 @@ not implied by the boundary. Neither wall-clock waiting nor handover display
 time advances authoritative gameplay; the pending handover itself remains
 authoritative input-gating state until acknowledgement.
 
-## 11. Island dossiers
+## 11. Island dossiers and survey sites
 
 `generateIslandDossierCatalog` derives exactly one immutable content V1
 definition for every non-home island from the seed, regenerated world and stable
@@ -424,17 +424,31 @@ or travel costs, and rollback restores fog for a failed provisional survey.
 
 The legacy `DiscoverySystem`, discovery events/save fragment and its generated
 `HistoricWreck` / `FishingGround` island outcomes are removed. GP-1 fishing
-shoals remain authoritative fishing targets; GP-3.3 owns independent historic-
-wreck sites. Island dossier findings are descriptive Great Hall knowledge and
+shoals remain authoritative fishing targets. Island dossier findings are descriptive Great Hall knowledge and
 do not create settlement or economy authority.
+
+`generateSurveySiteCatalog` content V1 derives exactly one historic wreck, one
+coastal ruin and one tidal cave from the seed. Every definition has a current
+typed ID, directly sightable clue tile, passable dock-reachable service anchor,
+hidden deterministic result and developer presentation descriptor. Placement,
+clues, results and presentation are descriptor data; the generic catalog and
+`SurveySiteSystem` accept a synthetic later non-idol type without a new command,
+reducer or persistence fragment. Sites are independent of island dossiers and
+runtime navigator wrecks.
+
+All initial types share one state branch: current sight creates provisional
+`sighted`; the configured two-bundle provision transaction upgrades it—or a
+returned lead—to `surveyed`; exact-dock return commits `lead` or `report`; wreck rollback removes
+only the active expedition's provisional records. Stable IDs and expedition /
+generation provenance make observation, survey, return and reload idempotent.
 
 ## 12. Persistence
 
 ### Exact-version save boundary
 
-The current exact-version save schema is V11, the navigator-lineage contract is
-V5, island-dossier content is V1 and the generation-handover contract is V1. It
-stores:
+The current exact-version save schema is V12, the navigator-lineage contract is
+V6 with voyage records V3, island-dossier and survey-site content are V1, and
+the generation-handover contract is V1. It stores:
 
 - save, world-generator, content and serialized-format versions;
 - seed and generation-affecting configuration;
@@ -448,13 +462,16 @@ stores:
   identity/fate reports;
 - minimal provisional and returned island-dossier records with island,
   expedition and generation provenance;
+- minimal provisional and returned survey-site records with stable typed ID,
+  state, expedition and generation provenance;
 - provisional and returned fishing-shoal records;
 - an empty reserved terrain-patch list.
 
-The current schema requires the current island-dossier content,
-navigator-lineage and runtime-wreck contracts. Lineage V5 contains
+The current schema requires the current island-dossier/survey-site content,
+navigator-lineage and runtime-wreck contracts. Lineage V6 contains
 `completedVoyages`, exact-dock-committed voyage result records with distinct
-`islandLeadIds` / `islandDossierIds`, `active` / `completed` / `lost` states and
+island lead/dossier and survey-site lead/report ID arrays, `active` /
+`completed` / `lost` states and
 `tenure` / `wreck` succession reasons. Runtime-wreck records distinguish an
 unidentified sighting, an expedition-owned provisional survey and an exact-
 dock-committed report associated with one lost navigator. Earlier shapes are
@@ -462,7 +479,8 @@ deleted under the exact-version policy rather than migrated.
 
 The save does not contain base terrain, generated island descriptors,
 island-dossier definitions/results/approach sets, visibility or dossier-derived
-fog masks, range masks, return paths, renderer state or caches.
+fog masks, survey-site definitions/results/service anchors, range masks, return
+paths, renderer state or caches.
 
 Restore requires exact equality for every schema, generator, content and
 serialized-format version, then validates structure before mutating the running
@@ -513,13 +531,13 @@ The game uses WebGL through Phaser.
   it does not destroy and rebuild the static world.
 - No texture is allocated per simulation frame.
 - The ship is interpolated between deterministic fixed steps. Runtime wrecks
-  and island-dossier markers are separate, viewport-culled, version-driven
-  renderers above world and fog layers.
+  island-dossier markers and survey-site markers are separate, viewport-culled,
+  version-driven renderers above world and fog layers.
 - The cargo rack and lifecycle cues are screen-space presentation.
 
 Island sightings announce a named lead while keeping the dossier result hidden.
 Exact-dock return with any notable committed finding (island lead/dossier,
-fishing report or wreck identity)
+survey-site lead/report, fishing report or wreck identity)
 combines achievements, Supported-route growth and replenishment into one
 five-second message. A return with route growth only uses a 3.5-second cue.
 Only one lifecycle cue may exist at a time.
@@ -528,8 +546,8 @@ The fourth safe return replaces the ordinary cue after all voyage results
 commit. A wreck hold identifies the navigator as lost, states that their wreck
 remains and compresses the tribe's mourning and elapsed time. Either path then
 opens the required focused handover mode of the Great Hall. Each safe-voyage row
-mirrors the dock report with route-support counts, island leads/dossiers,
-fishing leads and survey qualities, and returned wreck identities; a safe voyage with
+  mirrors the dock report with route-support counts, island leads/dossiers,
+  survey-site leads/reports, fishing leads and survey qualities, and returned wreck identities; a safe voyage with
 none says that no new findings were returned. A fatal-voyage row reports **Lost
 at sea** and states that no findings from that journey were returned; it never
 exposes provisional achievements. The rows are derived from the committed
@@ -584,6 +602,10 @@ islandSighted
 islandDossierSurveyed
 islandDossiersReturned
 islandDossiersLost
+surveySiteSighted
+surveySiteSurveyed
+surveySitesReturned
+surveySitesLost
 fishingShoalSighted
 fishingShoalSurveyed
 fishingShoalsReturned
@@ -602,6 +624,7 @@ Developer UI capabilities:
 - regenerate from a seed;
 - inspect island dossiers at deterministic coastal approaches in stable ID
   order;
+- move to the service anchor for each initial survey-site type;
 - teleport by water-tile coordinate or click;
 - add/remove bundles and force a wreck;
 - save/load a manual checkpoint and clear browser saves;
@@ -651,9 +674,13 @@ visibility, knowledge asymmetry, provisions, forward/return calculations,
 overlay invalidation, island navigation, expedition success/failure,
 four-journey tenure and succession, Great Hall chronicle derivation and
 exact-home-dock access, Unknown pocket cleanup, island dossiers and exact-island
-fog reveal, save validation,
+fog reveal, extensible survey-site generation/lifecycle, save validation,
 runtime-wreck survey commit/rollback and idempotence, persistence round trips,
 save dirtiness, cached encoding, frame telemetry and ship interpolation.
+At the GP-3.3 boundary, typecheck, 262 tests across 28 files and the production
+build pass. Browser verification also covers the three typed service-anchor
+developer moves, the Survey-only site prompt, placeholder presentation and
+unsuppressed sailing input while developer tools remain open.
 
 Browser verification targets WebGL startup, controls, island/fishing cues,
 combined return presentation, fourth-return automatic succession, fatal-wreck mourning
@@ -677,9 +704,10 @@ shared permanent Great Hall chronicle with focused handover presentation,
 exact-home-dock browsing and derived lineage totals. It also includes returned
 identity/fate reports for runtime navigator wrecks and GP-3.1's shared
 provision-funded survey transaction. It now also includes GP-3.2's returned
-island leads/dossiers, exact-island fog reveal, lineage V5 credit and Great Hall
-V2 presentation. The forward roadmap may add extensible historic and maritime
-survey sites, idols, the full save/load experience, production assets and
+island leads/dossiers and exact-island fog reveal. GP-3.3 adds exactly one
+historic wreck, coastal ruin and tidal cave through a descriptor-extensible
+lifecycle, with lineage V6 voyage records V3 and Great Hall V3 credit. The
+forward roadmap may add idols, the full save/load experience, production assets and
 environmental polish. It no longer places tribe economics, loadouts,
 generic cargo or automatic trade in GP-3. Those remaining roadmap items are
 proposed extensions, not implemented baseline behavior.

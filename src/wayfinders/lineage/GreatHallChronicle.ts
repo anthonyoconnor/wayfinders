@@ -5,16 +5,20 @@ import type {
   FishingShoalId,
   FishingShoalQuality,
 } from "../exploration/FishingShoalContracts";
+import type {
+  SurveySiteDefinition,
+  SurveySiteId,
+} from "../exploration/SurveySiteContracts";
 import {
   NAVIGATOR_VOYAGE_LIMIT,
   parseNavigatorSuccessionKey,
   type NavigatorId,
   type NavigatorLifecycleState,
-  type NavigatorRecordV5,
-  type NavigatorVoyageAchievementRecordV2,
+  type NavigatorRecordV6,
+  type NavigatorVoyageAchievementRecordV3,
 } from "./NavigatorLineageSystem";
 
-export const GREAT_HALL_CHRONICLE_READ_MODEL_VERSION = 2 as const;
+export const GREAT_HALL_CHRONICLE_READ_MODEL_VERSION = 3 as const;
 
 const greatHallVoyageKeyBrand: unique symbol = Symbol("GreatHallVoyageKey");
 const greatHallAchievementKeyBrand: unique symbol = Symbol("GreatHallAchievementKey");
@@ -27,6 +31,11 @@ export interface GreatHallChronicleSources {
   readonly islandDossiers: readonly Readonly<Pick<
     IslandDossierDefinitionV1,
     "islandId" | "name" | "dossier"
+  >>[];
+  /** Deterministic labels and results for stable survey-site IDs credited by lineage voyages. */
+  readonly surveySites: readonly Readonly<Pick<
+    SurveySiteDefinition<string>,
+    "id" | "type" | "typeLabel" | "clue" | "result"
   >>[];
   /** Deterministic labels for stable fishing IDs already committed to lineage voyages. */
   readonly fishingShoals: readonly Readonly<Pick<FishingShoalDefinition, "id" | "quality">>[];
@@ -62,6 +71,22 @@ export interface GreatHallIslandDossierAchievement extends GreatHallAchievementB
   readonly findingLabel: string;
 }
 
+export interface GreatHallSurveySiteLeadAchievement extends GreatHallAchievementBase {
+  readonly kind: "survey-site-lead";
+  readonly surveySiteId: SurveySiteId;
+  readonly siteType: string;
+  readonly typeLabel: string;
+  readonly clueLabel: string;
+}
+
+export interface GreatHallSurveySiteReportAchievement extends GreatHallAchievementBase {
+  readonly kind: "survey-site-report";
+  readonly surveySiteId: SurveySiteId;
+  readonly siteType: string;
+  readonly typeLabel: string;
+  readonly resultLabel: string;
+}
+
 export interface GreatHallFishingLeadAchievement extends GreatHallAchievementBase {
   readonly kind: "fishing-leads";
   readonly fishingShoalIds: readonly FishingShoalId[];
@@ -86,6 +111,8 @@ export type GreatHallAchievement =
   | GreatHallMappedWaterAchievement
   | GreatHallIslandLeadAchievement
   | GreatHallIslandDossierAchievement
+  | GreatHallSurveySiteLeadAchievement
+  | GreatHallSurveySiteReportAchievement
   | GreatHallFishingLeadAchievement
   | GreatHallFishingSurveyAchievement
   | GreatHallWreckReportAchievement;
@@ -117,6 +144,8 @@ export interface GreatHallVoyageTotals {
   readonly mappedEnclosedWaterTiles: number;
   readonly islandLeads: number;
   readonly islandDossiers: number;
+  readonly surveySiteLeads: number;
+  readonly surveySiteReports: number;
   readonly fishingLeads: number;
   readonly fishingSurveys: number;
   readonly wreckReports: number;
@@ -189,14 +218,18 @@ interface SourceIndexes {
     IslandDossierDefinitionV1,
     "islandId" | "name" | "dossier"
   >>>;
+  readonly surveySiteById: ReadonlyMap<SurveySiteId, Readonly<Pick<
+    SurveySiteDefinition<string>,
+    "id" | "type" | "typeLabel" | "clue" | "result"
+  >>>;
   readonly fishingQualityById: ReadonlyMap<FishingShoalId, FishingShoalQuality>;
   readonly wreckById: ReadonlyMap<number, Readonly<Pick<ShipwreckState, "id" | "generation" | "survey">>>;
-  readonly navigatorByGeneration: ReadonlyMap<number, Readonly<NavigatorRecordV5>>;
+  readonly navigatorByGeneration: ReadonlyMap<number, Readonly<NavigatorRecordV6>>;
 }
 
 /** Builds the complete home/succession chronicle without creating duplicate authority. */
 export function buildGreatHallChronicle(
-  navigators: readonly Readonly<NavigatorRecordV5>[],
+  navigators: readonly Readonly<NavigatorRecordV6>[],
   sources: Readonly<GreatHallChronicleSources>,
 ): Readonly<GreatHallChronicle> {
   if (navigators.length === 0) throw new RangeError("A Great Hall chronicle requires a navigator lineage");
@@ -281,8 +314,8 @@ export function createGreatHallVoyageKey(
 }
 
 function buildReturnedAchievements(
-  navigator: Readonly<NavigatorRecordV5>,
-  voyage: Readonly<NavigatorVoyageAchievementRecordV2>,
+  navigator: Readonly<NavigatorRecordV6>,
+  voyage: Readonly<NavigatorVoyageAchievementRecordV3>,
   voyageKey: GreatHallVoyageKey,
   indexes: Readonly<SourceIndexes>,
   usedAchievementKeys: Set<string>,
@@ -337,6 +370,38 @@ function buildReturnedAchievements(
       name: definition.name,
       findingLabel: definition.dossier.findingLabel,
       label: `Surveyed ${definition.name} — ${definition.dossier.findingLabel}`,
+    });
+  }
+
+  for (const surveySiteId of voyage.surveySiteLeadIds) {
+    const definition = indexes.surveySiteById.get(surveySiteId);
+    if (!definition) {
+      throw new RangeError(`Voyage ${voyage.voyageNumber} references unknown survey site ${surveySiteId}`);
+    }
+    add({
+      key: createAchievementKey(voyageKey, "survey-site-lead", surveySiteId),
+      kind: "survey-site-lead",
+      surveySiteId,
+      siteType: definition.type,
+      typeLabel: definition.typeLabel,
+      clueLabel: definition.clue.label,
+      label: `Recorded a ${definition.typeLabel.toLowerCase()} lead — ${definition.clue.label}`,
+    });
+  }
+
+  for (const surveySiteId of voyage.surveySiteReportIds) {
+    const definition = indexes.surveySiteById.get(surveySiteId);
+    if (!definition) {
+      throw new RangeError(`Voyage ${voyage.voyageNumber} references unknown survey site ${surveySiteId}`);
+    }
+    add({
+      key: createAchievementKey(voyageKey, "survey-site-report", surveySiteId),
+      kind: "survey-site-report",
+      surveySiteId,
+      siteType: definition.type,
+      typeLabel: definition.typeLabel,
+      resultLabel: definition.result.label,
+      label: `Surveyed ${definition.typeLabel.toLowerCase()} — ${definition.result.label}`,
     });
   }
 
@@ -409,7 +474,7 @@ function buildReturnedAchievements(
 }
 
 function resolveLostNavigatorFate(
-  navigator: Readonly<NavigatorRecordV5> & { readonly state: "lost" },
+  navigator: Readonly<NavigatorRecordV6> & { readonly state: "lost" },
   indexes: Readonly<SourceIndexes>,
   wreckReportCredits: ReadonlyMap<number, Readonly<WreckReportCredit>>,
 ): Readonly<GreatHallWreckFate> {
@@ -434,7 +499,7 @@ function resolveLostNavigatorFate(
 }
 
 function createSourceIndexes(
-  navigators: readonly Readonly<NavigatorRecordV5>[],
+  navigators: readonly Readonly<NavigatorRecordV6>[],
   sources: Readonly<GreatHallChronicleSources>,
 ): SourceIndexes {
   return {
@@ -443,6 +508,12 @@ function createSourceIndexes(
       ({ islandId }) => islandId,
       (definition) => definition,
       "island dossier",
+    ),
+    surveySiteById: uniqueMap(
+      sources.surveySites,
+      ({ id }) => id,
+      (definition) => definition,
+      "survey site",
     ),
     fishingQualityById: uniqueMap(
       sources.fishingShoals,
@@ -475,7 +546,7 @@ function uniqueMap<T, K, V>(
   return map;
 }
 
-function validateNavigatorVoyages(navigator: Readonly<NavigatorRecordV5>): void {
+function validateNavigatorVoyages(navigator: Readonly<NavigatorRecordV6>): void {
   if (navigator.successfulVoyages.length !== navigator.completedVoyages) {
     throw new RangeError(`Navigator ${navigator.id} voyage records do not match its completed count`);
   }
@@ -492,7 +563,7 @@ function validateNavigatorVoyages(navigator: Readonly<NavigatorRecordV5>): void 
   }
 }
 
-function terminalWreckId(navigator: Readonly<NavigatorRecordV5> & { readonly state: "lost" }): number {
+function terminalWreckId(navigator: Readonly<NavigatorRecordV6> & { readonly state: "lost" }): number {
   const parsed = parseNavigatorSuccessionKey(navigator.endedBySuccessionKey);
   if (parsed?.reason !== "wreck") {
     throw new RangeError(`Lost navigator ${navigator.id} has no valid wreck succession key`);
@@ -534,6 +605,12 @@ function totalVoyages(voyages: readonly Readonly<GreatHallVoyage>[]): Readonly<G
           break;
         case "island-dossier":
           totals.islandDossiers++;
+          break;
+        case "survey-site-lead":
+          totals.surveySiteLeads++;
+          break;
+        case "survey-site-report":
+          totals.surveySiteReports++;
           break;
         case "fishing-leads":
           totals.fishingLeads += achievement.leadCount;
@@ -588,6 +665,8 @@ function mutableVoyageTotals(): MutableGreatHallVoyageTotals {
     mappedEnclosedWaterTiles: 0,
     islandLeads: 0,
     islandDossiers: 0,
+    surveySiteLeads: 0,
+    surveySiteReports: 0,
     fishingLeads: 0,
     fishingSurveys: 0,
     wreckReports: 0,
@@ -604,6 +683,8 @@ function addVoyageTotals(
   target.mappedEnclosedWaterTiles += source.mappedEnclosedWaterTiles;
   target.islandLeads += source.islandLeads;
   target.islandDossiers += source.islandDossiers;
+  target.surveySiteLeads += source.surveySiteLeads;
+  target.surveySiteReports += source.surveySiteReports;
   target.fishingLeads += source.fishingLeads;
   target.fishingSurveys += source.fishingSurveys;
   target.wreckReports += source.wreckReports;

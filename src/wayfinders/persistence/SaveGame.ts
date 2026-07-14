@@ -20,6 +20,12 @@ import {
   type IslandDossierReturnedRecordV1,
 } from "../exploration/IslandDossierContracts";
 import {
+  SURVEY_SITE_CONTENT_VERSION,
+  isCurrentSurveySiteId,
+  type SurveySiteProvisionalRecord,
+  type SurveySiteReturnedRecord,
+} from "../exploration/SurveySiteContracts";
+import {
   NAVIGATOR_GENERATION_HANDOVER_VERSION,
   NavigatorLineageValidationError,
   createNavigatorId,
@@ -27,12 +33,12 @@ import {
   parseNavigatorSuccessionKey,
   parseNavigatorLineageSnapshot,
   type NavigatorGenerationHandoverV1,
-  type NavigatorLineageSnapshotV5,
+  type NavigatorLineageSnapshotV6,
 } from "../lineage/NavigatorLineageSystem";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
-export const SAVE_SCHEMA_VERSION = 11 as const;
+export const SAVE_SCHEMA_VERSION = 12 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -70,6 +76,7 @@ export interface SaveGame {
     contentVersions: {
       fishingShoals: typeof FISHING_SHOAL_CONTENT_VERSION;
       islandDossiers: typeof ISLAND_DOSSIER_CONTENT_VERSION;
+      surveySites: typeof SURVEY_SITE_CONTENT_VERSION;
     };
   };
   generation: number;
@@ -93,7 +100,11 @@ export interface SaveGame {
     provisional: FishingShoalProvisionalRecordV1[];
     returned: FishingShoalReturnedRecordV1[];
   };
-  navigatorLineage: NavigatorLineageSnapshotV5;
+  surveySites: {
+    provisional: SurveySiteProvisionalRecord[];
+    returned: SurveySiteReturnedRecord[];
+  };
+  navigatorLineage: NavigatorLineageSnapshotV6;
   terrainPatches: [];
 }
 
@@ -147,6 +158,13 @@ export class UnsupportedIslandDossierContentVersionError extends Error {
   constructor(readonly version: number) {
     super(`Unsupported island-dossier content version ${version}`);
     this.name = "UnsupportedIslandDossierContentVersionError";
+  }
+}
+
+export class UnsupportedSurveySiteContentVersionError extends Error {
+  constructor(readonly version: number) {
+    super(`Unsupported survey-site content version ${version}`);
+    this.name = "UnsupportedSurveySiteContentVersionError";
   }
 }
 
@@ -351,6 +369,11 @@ export function parseSaveGame(value: unknown): SaveGame {
     throw new UnsupportedWorldGeneratorVersionError(generatorVersion);
   }
   const contentVersions = record(world.contentVersions, "save.world.contentVersions");
+  assertExactRecordKeys(
+    contentVersions,
+    ["fishingShoals", "islandDossiers", "surveySites"],
+    "save.world.contentVersions",
+  );
   const fishingShoalContentVersion = integer(
     contentVersions.fishingShoals,
     "save.world.contentVersions.fishingShoals",
@@ -364,6 +387,13 @@ export function parseSaveGame(value: unknown): SaveGame {
   );
   if (islandDossierContentVersion !== ISLAND_DOSSIER_CONTENT_VERSION) {
     throw new UnsupportedIslandDossierContentVersionError(islandDossierContentVersion);
+  }
+  const surveySiteContentVersion = integer(
+    contentVersions.surveySites,
+    "save.world.contentVersions.surveySites",
+  );
+  if (surveySiteContentVersion !== SURVEY_SITE_CONTENT_VERSION) {
+    throw new UnsupportedSurveySiteContentVersionError(surveySiteContentVersion);
   }
   const generationConfig = validateGenerationConfig(world.generationConfig, seed);
   const tileCount = generationConfig.world.width * generationConfig.world.height;
@@ -430,6 +460,27 @@ export function parseSaveGame(value: unknown): SaveGame {
     }
   }
 
+  const surveySites = record(root.surveySites, "save.surveySites");
+  assertExactRecordKeys(surveySites, ["provisional", "returned"], "save.surveySites");
+  const provisionalSurveySites = validateSurveySiteProvisional(
+    surveySites.provisional,
+    expeditionId,
+    generation,
+    expeditionActive,
+  );
+  const returnedSurveySites = validateSurveySiteReturned(surveySites.returned, generation);
+  const returnedSurveySiteById = new Map(returnedSurveySites.map((item) => [item.id, item]));
+  for (let index = 0; index < provisionalSurveySites.length; index++) {
+    const item = provisionalSurveySites[index];
+    const prior = returnedSurveySiteById.get(item.id);
+    if (prior && !(prior.state === "lead" && item.state === "surveyed")) {
+      fail(
+        "may overlap returned state only for a returned lead with a provisional survey upgrade",
+        `save.surveySites.provisional[${index}].id`,
+      );
+    }
+  }
+
   if (!Array.isArray(root.terrainPatches) || root.terrainPatches.length !== 0) {
     fail("must be an empty array in the current schema", "save.terrainPatches");
   }
@@ -452,7 +503,7 @@ export function parseSaveGame(value: unknown): SaveGame {
       );
     }
   }
-  let navigatorLineage: NavigatorLineageSnapshotV5;
+  let navigatorLineage: NavigatorLineageSnapshotV6;
   try {
     navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
   } catch (error) {
@@ -481,6 +532,7 @@ export function parseSaveGame(value: unknown): SaveGame {
     navigatorLineage,
     returnedIslandDossiers,
     returnedFishingShoals,
+    returnedSurveySites,
     wrecks,
   );
   validateReturnedSurveyProvenance(navigatorLineage, wrecks, returnedFishingShoals);
@@ -648,6 +700,70 @@ function validateIslandDossierReturned(
     }
   }
   return value as IslandDossierReturnedRecordV1[];
+}
+
+function validateSurveySiteProvisional(
+  value: unknown,
+  expeditionId: number,
+  generation: number,
+  expeditionActive: boolean,
+): SurveySiteProvisionalRecord[] {
+  const rootPath = "save.surveySites.provisional";
+  if (!Array.isArray(value)) fail("must be an array", rootPath);
+  let previousId = "";
+  for (let index = 0; index < value.length; index++) {
+    const path = `${rootPath}[${index}]`;
+    const item = record(value[index], path);
+    assertExactRecordKeys(item, ["id", "state", "expeditionId", "generation"], path);
+    const id = requiredString(item.id, `${path}.id`);
+    if (!isCurrentSurveySiteId(id)) {
+      fail("has an invalid or unsupported survey-site ID", `${path}.id`);
+    }
+    if (id <= previousId) fail("must be uniquely sorted by survey-site ID", `${path}.id`);
+    previousId = id;
+    if (item.state !== "sighted" && item.state !== "surveyed") {
+      fail("must be sighted or surveyed", `${path}.state`);
+    }
+    const recordExpeditionId = unsigned32(item.expeditionId, `${path}.expeditionId`, false);
+    const recordGeneration = positiveSafeInteger(item.generation, `${path}.generation`);
+    if (!expeditionActive) fail("requires an active expedition", path);
+    if (recordExpeditionId !== expeditionId) {
+      fail("must belong to the active expedition", `${path}.expeditionId`);
+    }
+    if (recordGeneration !== generation) {
+      fail("must belong to the current generation", `${path}.generation`);
+    }
+  }
+  return value as SurveySiteProvisionalRecord[];
+}
+
+function validateSurveySiteReturned(
+  value: unknown,
+  generation: number,
+): SurveySiteReturnedRecord[] {
+  const rootPath = "save.surveySites.returned";
+  if (!Array.isArray(value)) fail("must be an array", rootPath);
+  let previousId = "";
+  for (let index = 0; index < value.length; index++) {
+    const path = `${rootPath}[${index}]`;
+    const item = record(value[index], path);
+    assertExactRecordKeys(item, ["id", "state", "expeditionId", "generation"], path);
+    const id = requiredString(item.id, `${path}.id`);
+    if (!isCurrentSurveySiteId(id)) {
+      fail("has an invalid or unsupported survey-site ID", `${path}.id`);
+    }
+    if (id <= previousId) fail("must be uniquely sorted by survey-site ID", `${path}.id`);
+    previousId = id;
+    if (item.state !== "lead" && item.state !== "report") {
+      fail("must be a returned lead or report", `${path}.state`);
+    }
+    unsigned32(item.expeditionId, `${path}.expeditionId`, false);
+    const recordGeneration = positiveSafeInteger(item.generation, `${path}.generation`);
+    if (recordGeneration > generation) {
+      fail("cannot be later than the current generation", `${path}.generation`);
+    }
+  }
+  return value as SurveySiteReturnedRecord[];
 }
 
 function validateGenerationConfig(value: unknown, seed: number): GenerationConfigV1 {
@@ -883,7 +999,7 @@ function validateWreckSurvey(
 }
 
 function validateLineageWrecks(
-  lineage: NavigatorLineageSnapshotV5,
+  lineage: NavigatorLineageSnapshotV6,
   wrecks: readonly ShipwreckState[],
 ): { nextExpeditionId: number; latestFatalExpeditionId?: number } {
   const lostNavigatorByWreckId = new Map<number, {
@@ -959,7 +1075,7 @@ function validateLineageWrecks(
 }
 
 function validateReturnedSurveyProvenance(
-  lineage: NavigatorLineageSnapshotV5,
+  lineage: NavigatorLineageSnapshotV6,
   wrecks: readonly ShipwreckState[],
   fishingShoals: readonly FishingShoalReturnedRecordV1[],
 ): void {
@@ -993,18 +1109,22 @@ function validateReturnedSurveyProvenance(
 }
 
 function validateVoyageAchievements(
-  lineage: NavigatorLineageSnapshotV5,
+  lineage: NavigatorLineageSnapshotV6,
   islandDossiers: readonly IslandDossierReturnedRecordV1[],
   fishingShoals: readonly FishingShoalReturnedRecordV1[],
+  surveySites: readonly SurveySiteReturnedRecord[],
   wrecks: readonly ShipwreckState[],
 ): void {
   const islandDossierById = new Map(islandDossiers.map((record) => [record.islandId, record]));
   const fishingShoalById = new Map(fishingShoals.map((record) => [record.id, record]));
+  const surveySiteById = new Map(surveySites.map((record) => [record.id, record]));
   const wreckById = new Map(wrecks.map((record) => [record.id, record]));
   const creditedIslandLeads = new Set<number>();
   const creditedIslandDossiers = new Set<number>();
   const creditedFishingLeads = new Set<string>();
   const creditedFishingSurveys = new Set<string>();
+  const creditedSurveySiteLeads = new Set<string>();
+  const creditedSurveySiteReports = new Set<string>();
   const creditedWrecks = new Set<number>();
 
   for (let navigatorIndex = 0; navigatorIndex < lineage.navigators.length; navigatorIndex++) {
@@ -1044,6 +1164,31 @@ function validateVoyageAchievements(
         validateProvenance(islandDossier, sourcePath);
         if (creditedIslandDossiers.has(id)) fail(`duplicates island dossier ${id}`, sourcePath);
         creditedIslandDossiers.add(id);
+      }
+
+      for (let index = 0; index < voyage.surveySiteLeadIds.length; index++) {
+        const id = voyage.surveySiteLeadIds[index];
+        const sourcePath = `${path}.surveySiteLeadIds[${index}]`;
+        const surveySite = surveySiteById.get(id);
+        if (!surveySite) fail(`does not reference returned survey-site lead ${id}`, sourcePath);
+        if (surveySite.state === "lead") validateProvenance(surveySite, sourcePath);
+        if (creditedSurveySiteReports.has(id)) {
+          fail("must precede the returned survey-site report", sourcePath);
+        }
+        if (creditedSurveySiteLeads.has(id)) fail(`duplicates survey-site lead ${id}`, sourcePath);
+        creditedSurveySiteLeads.add(id);
+      }
+
+      for (let index = 0; index < voyage.surveySiteReportIds.length; index++) {
+        const id = voyage.surveySiteReportIds[index];
+        const sourcePath = `${path}.surveySiteReportIds[${index}]`;
+        const surveySite = surveySiteById.get(id);
+        if (!surveySite || surveySite.state !== "report") {
+          fail(`does not reference returned survey-site report ${id}`, sourcePath);
+        }
+        validateProvenance(surveySite, sourcePath);
+        if (creditedSurveySiteReports.has(id)) fail(`duplicates survey-site report ${id}`, sourcePath);
+        creditedSurveySiteReports.add(id);
       }
 
       for (let index = 0; index < voyage.fishingLeadIds.length; index++) {
@@ -1103,6 +1248,15 @@ function validateVoyageAchievements(
       fail("must be credited to its successful voyage", `save.fishingShoals.returned[${index}]`);
     }
   }
+  for (let index = 0; index < surveySites.length; index++) {
+    const surveySite = surveySites[index];
+    const credited = surveySite.state === "report"
+      ? creditedSurveySiteReports.has(surveySite.id)
+      : creditedSurveySiteLeads.has(surveySite.id);
+    if (!credited) {
+      fail("must be credited to its successful voyage", `save.surveySites.returned[${index}]`);
+    }
+  }
   for (let index = 0; index < wrecks.length; index++) {
     if (wrecks[index].survey.state === "returned" && !creditedWrecks.has(wrecks[index].id)) {
       fail("must be credited to its successful voyage", `save.wrecks[${index}].survey`);
@@ -1116,7 +1270,7 @@ function nextExpeditionId(expeditionId: number): number {
 
 function validateLineageGenerationHandover(
   handover: NavigatorGenerationHandoverV1 | null,
-  lineage: NavigatorLineageSnapshotV5,
+  lineage: NavigatorLineageSnapshotV6,
   pendingRespawn: PendingRespawnSaveState | null,
 ): void {
   if (!handover) return;

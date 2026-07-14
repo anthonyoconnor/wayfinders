@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createFishingShoalId } from "../src/wayfinders/exploration/FishingShoalContracts.ts";
+import { createSurveySiteId } from "../src/wayfinders/exploration/SurveySiteContracts.ts";
 import {
   NAVIGATOR_LINEAGE_CONTRACT_VERSION,
   NAVIGATOR_VOYAGE_LIMIT,
@@ -12,21 +13,23 @@ import {
   parseNavigatorId,
   parseNavigatorLineageSnapshot,
   parseNavigatorSuccessionKey,
-  type NavigatorLineageSnapshotV5,
-  type NavigatorVoyageAchievementInputV2,
+  type NavigatorLineageSnapshotV6,
+  type NavigatorVoyageAchievementInputV3,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 
 function jsonClone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function emptyVoyage(expeditionId: number): NavigatorVoyageAchievementInputV2 {
+function emptyVoyage(expeditionId: number): NavigatorVoyageAchievementInputV3 {
   return {
     expeditionId,
     supportedTileCount: 0,
     closedUnknownTileCount: 0,
     islandLeadIds: [],
     islandDossierIds: [],
+    surveySiteLeadIds: [],
+    surveySiteReportIds: [],
     fishingLeadIds: [],
     fishingSurveyIds: [],
     wreckIds: [],
@@ -244,6 +247,11 @@ describe("NavigatorLineageSystem", () => {
       closedUnknownTileCount: 2,
       islandLeadIds: [1, 3],
       islandDossierIds: [4, 6],
+      surveySiteLeadIds: [
+        createSurveySiteId("historic-wreck", 0),
+        createSurveySiteId("tidal-cave", 0),
+      ],
+      surveySiteReportIds: [createSurveySiteId("coastal-ruin", 0)],
       fishingLeadIds: [createFishingShoalId(0)],
       fishingSurveyIds: [createFishingShoalId(1), createFishingShoalId(2)],
       wreckIds: [9],
@@ -257,6 +265,8 @@ describe("NavigatorLineageSystem", () => {
     expect(Object.isFrozen(result.voyage)).toBe(true);
     expect(Object.isFrozen(result.voyage.islandLeadIds)).toBe(true);
     expect(Object.isFrozen(result.voyage.islandDossierIds)).toBe(true);
+    expect(Object.isFrozen(result.voyage.surveySiteLeadIds)).toBe(true);
+    expect(Object.isFrozen(result.voyage.surveySiteReportIds)).toBe(true);
     expect(Object.isFrozen(result.voyage.fishingLeadIds)).toBe(true);
     expect(Object.isFrozen(result.voyage.fishingSurveyIds)).toBe(true);
     expect(Object.isFrozen(result.voyage.wreckIds)).toBe(true);
@@ -264,12 +274,19 @@ describe("NavigatorLineageSystem", () => {
 
     input.islandLeadIds.push(5);
     input.islandDossierIds.push(8);
+    input.surveySiteLeadIds.push(createSurveySiteId("tidal-cave", 1));
+    input.surveySiteReportIds.push(createSurveySiteId("coastal-ruin", 1));
     input.fishingLeadIds.push(createFishingShoalId(3));
     input.fishingSurveyIds.length = 0;
     input.wreckIds.push(10);
     expect(result.voyage).toMatchObject({
       islandLeadIds: [1, 3],
       islandDossierIds: [4, 6],
+      surveySiteLeadIds: [
+        createSurveySiteId("historic-wreck", 0),
+        createSurveySiteId("tidal-cave", 0),
+      ],
+      surveySiteReportIds: [createSurveySiteId("coastal-ruin", 0)],
       fishingLeadIds: [createFishingShoalId(0)],
       fishingSurveyIds: [createFishingShoalId(1), createFishingShoalId(2)],
       wreckIds: [9],
@@ -280,14 +297,27 @@ describe("NavigatorLineageSystem", () => {
     const sourceVoyage = source.navigators[0].successfulVoyages[0] as unknown as {
       islandLeadIds: number[];
       islandDossierIds: number[];
+      surveySiteLeadIds: string[];
+      surveySiteReportIds: string[];
     };
     sourceVoyage.islandLeadIds.push(99);
     sourceVoyage.islandDossierIds.push(100);
+    sourceVoyage.surveySiteLeadIds.push(createSurveySiteId("historic-wreck", 9));
+    sourceVoyage.surveySiteReportIds.push(createSurveySiteId("tidal-cave", 9));
     expect(restored.currentNavigator.successfulVoyages[0].islandLeadIds).toEqual([1, 3]);
     expect(restored.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual([4, 6]);
+    expect(restored.currentNavigator.successfulVoyages[0].surveySiteLeadIds).toEqual([
+      createSurveySiteId("historic-wreck", 0),
+      createSurveySiteId("tidal-cave", 0),
+    ]);
+    expect(restored.currentNavigator.successfulVoyages[0].surveySiteReportIds).toEqual([
+      createSurveySiteId("coastal-ruin", 0),
+    ]);
     expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0])).toBe(true);
     expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0].islandLeadIds)).toBe(true);
     expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0].islandDossierIds)).toBe(true);
+    expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0].surveySiteLeadIds)).toBe(true);
+    expect(Object.isFrozen(restored.currentNavigator.successfulVoyages[0].surveySiteReportIds)).toBe(true);
   });
 
   it("credits each island transition once while allowing a later dossier to resolve its lead", () => {
@@ -322,6 +352,39 @@ describe("NavigatorLineageSystem", () => {
     expect(lineage.currentNavigator.completedVoyages).toBe(2);
   });
 
+  it("credits each survey-site transition once while allowing a later report to resolve its lead", () => {
+    const lineage = new NavigatorLineageSystem();
+    const siteId = createSurveySiteId("historic-wreck", 0);
+    lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(1),
+      surveySiteLeadIds: [siteId],
+    });
+
+    expect(() => lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(2),
+      surveySiteLeadIds: [siteId],
+    })).toThrow(/must not repeat a survey-site lead/);
+    expect(lineage.currentNavigator.completedVoyages).toBe(1);
+
+    expect(lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(2),
+      surveySiteReportIds: [siteId],
+    }).voyage).toMatchObject({
+      surveySiteLeadIds: [],
+      surveySiteReportIds: [siteId],
+    });
+
+    expect(() => lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(3),
+      surveySiteReportIds: [siteId],
+    })).toThrow(/must not repeat a survey-site report/);
+    expect(() => lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(3),
+      surveySiteLeadIds: [siteId],
+    })).toThrow(/cannot record a survey-site lead after its report/);
+    expect(lineage.currentNavigator.completedVoyages).toBe(2);
+  });
+
   it("rejects malformed, non-canonical, or chronologically inconsistent voyage achievements", () => {
     const lineage = new NavigatorLineageSystem();
     lineage.completeSuccessfulVoyage(emptyVoyage(1));
@@ -330,6 +393,8 @@ describe("NavigatorLineageSystem", () => {
     lineage.completeSuccessfulVoyage(emptyVoyage(3));
     const valid = jsonClone(lineage.snapshot());
     const fishingId = createFishingShoalId(0);
+    const surveySiteId = createSurveySiteId("historic-wreck", 0);
+    const laterSurveySiteId = createSurveySiteId("tidal-cave", 0);
 
     type MutableVoyage = {
       expeditionId: number;
@@ -338,21 +403,23 @@ describe("NavigatorLineageSystem", () => {
       closedUnknownTileCount: number;
       islandLeadIds: number[];
       islandDossierIds: number[];
+      surveySiteLeadIds: string[];
+      surveySiteReportIds: string[];
       fishingLeadIds: string[];
       fishingSurveyIds: string[];
       wreckIds: number[];
     };
     const voyage = (
-      snapshot: NavigatorLineageSnapshotV5,
+      snapshot: NavigatorLineageSnapshotV6,
       navigatorIndex: number,
     ): MutableVoyage => snapshot.navigators[navigatorIndex].successfulVoyages[0] as unknown as MutableVoyage;
     const successfulVoyages = (
-      snapshot: NavigatorLineageSnapshotV5,
+      snapshot: NavigatorLineageSnapshotV6,
       navigatorIndex: number,
     ): MutableVoyage[] => snapshot.navigators[navigatorIndex].successfulVoyages as unknown as MutableVoyage[];
 
     const corruptions: Array<{
-      corrupt: (snapshot: NavigatorLineageSnapshotV5) => void;
+      corrupt: (snapshot: NavigatorLineageSnapshotV6) => void;
       message: RegExp;
     }> = [
       {
@@ -404,6 +471,46 @@ describe("NavigatorLineageSystem", () => {
         message: /cannot record an island lead after its dossier/,
       },
       {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).surveySiteLeadIds = [laterSurveySiteId, surveySiteId];
+        },
+        message: /sorted with no duplicates/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).surveySiteLeadIds = ["survey-site:v2:historic-wreck:0000"];
+        },
+        message: /current survey-site IDs/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).surveySiteLeadIds = [surveySiteId];
+          voyage(snapshot, 0).surveySiteReportIds = [surveySiteId];
+        },
+        message: /cannot also be recorded as a survey-site lead/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).surveySiteLeadIds = [surveySiteId];
+          voyage(snapshot, 1).surveySiteLeadIds = [surveySiteId];
+        },
+        message: /must not repeat a survey-site lead/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).surveySiteReportIds = [surveySiteId];
+          voyage(snapshot, 1).surveySiteReportIds = [surveySiteId];
+        },
+        message: /must not repeat a survey-site report/,
+      },
+      {
+        corrupt: (snapshot) => {
+          voyage(snapshot, 0).surveySiteReportIds = [surveySiteId];
+          voyage(snapshot, 1).surveySiteLeadIds = [surveySiteId];
+        },
+        message: /cannot record a survey-site lead after its report/,
+      },
+      {
         corrupt: (snapshot) => { voyage(snapshot, 0).fishingLeadIds = [fishingId, fishingId]; },
         message: /sorted with no duplicates/,
       },
@@ -437,7 +544,7 @@ describe("NavigatorLineageSystem", () => {
     lineage.completeSuccession(first.transition.key);
     const valid = jsonClone(lineage.snapshot());
 
-    const corruptions: Array<(snapshot: NavigatorLineageSnapshotV5) => void> = [
+    const corruptions: Array<(snapshot: NavigatorLineageSnapshotV6) => void> = [
       (snapshot) => {
         (snapshot as { contractVersion: number }).contractVersion = NAVIGATOR_LINEAGE_CONTRACT_VERSION - 1;
       },
