@@ -243,8 +243,8 @@ describe("NavigatorLineageSystem", () => {
       closedUnknownTileCount: 2,
       discoveryIds: [1, 3],
       fishingLeadIds: [createFishingShoalId(0)],
-      fishingSurveyIds: [createFishingShoalId(1)],
-      wreckIds: [] as number[],
+      fishingSurveyIds: [createFishingShoalId(1), createFishingShoalId(2)],
+      wreckIds: [9],
     };
 
     const result = lineage.completeSuccessfulVoyage(input);
@@ -260,14 +260,14 @@ describe("NavigatorLineageSystem", () => {
     expect(Object.isFrozen(lineage.currentNavigator.successfulVoyages)).toBe(true);
 
     input.discoveryIds.push(5);
-    input.fishingLeadIds.push(createFishingShoalId(2));
+    input.fishingLeadIds.push(createFishingShoalId(3));
     input.fishingSurveyIds.length = 0;
-    input.wreckIds.push(9);
+    input.wreckIds.push(10);
     expect(result.voyage).toMatchObject({
       discoveryIds: [1, 3],
       fishingLeadIds: [createFishingShoalId(0)],
-      fishingSurveyIds: [createFishingShoalId(1)],
-      wreckIds: [],
+      fishingSurveyIds: [createFishingShoalId(1), createFishingShoalId(2)],
+      wreckIds: [9],
     });
 
     const source = jsonClone(lineage.snapshot());
@@ -344,13 +344,6 @@ describe("NavigatorLineageSystem", () => {
       {
         corrupt: (snapshot) => { voyage(snapshot, 0).supportedTileCount = -1; },
         message: /non-negative safe integer/,
-      },
-      {
-        corrupt: (snapshot) => {
-          voyage(snapshot, 0).fishingSurveyIds = [fishingId];
-          voyage(snapshot, 0).wreckIds = [1];
-        },
-        message: /more than one survey case/,
       },
       {
         corrupt: (snapshot) => {

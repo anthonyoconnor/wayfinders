@@ -303,7 +303,7 @@ describe("save-game validation", () => {
     expect(parseSaveGame(save)).toBe(save);
   });
 
-  it("validates current fishing-shoal records against the one-case active expedition", () => {
+  it("validates current fishing-shoal records and permits multiple surveys in the active expedition", () => {
     const save = makeValidSave();
     save.expedition.active = true;
     save.fishingShoals.provisional.push({
@@ -331,7 +331,7 @@ describe("save-game validation", () => {
       ...duplicateCaseUse.fishingShoals.provisional[0],
       id: createFishingShoalId(1),
     });
-    expect(() => parseSaveGame(duplicateCaseUse)).toThrow(/one-case allocation/);
+    expect(parseSaveGame(duplicateCaseUse)).toBe(duplicateCaseUse);
 
     const wrongState = structuredClone(save) as unknown as {
       fishingShoals: { provisional: Array<{ state: string }> };
@@ -451,63 +451,62 @@ describe("save-game validation", () => {
     expect(() => parseSaveGame(chargedShip)).toThrow(/fractional provision/);
   });
 
-  it("enforces one provisional wreck survey and one shared survey-case allocation", () => {
-    const duplicateWreckSurvey = makeValidSave();
-    duplicateWreckSurvey.generation = 3;
-    duplicateWreckSurvey.expedition.active = true;
-    duplicateWreckSurvey.navigatorLineage = makeLineage(3);
-    duplicateWreckSurvey.wrecks[0].survey = {
-      state: "provisional",
-      expeditionId: duplicateWreckSurvey.expedition.id,
-      generation: duplicateWreckSurvey.generation,
+  it("permits multiple provisional and returned surveys in one expedition", () => {
+    const multipleWreckSurveys = makeValidSave();
+    multipleWreckSurveys.generation = 3;
+    multipleWreckSurveys.expedition.id = 3;
+    multipleWreckSurveys.expedition.active = true;
+    multipleWreckSurveys.navigatorLineage = makeLineage(3);
+    multipleWreckSurveys.discoveries.returned = [];
+    multipleWreckSurveys.wrecks[0] = {
+      ...multipleWreckSurveys.wrecks[0],
+      generation: 1,
+      expeditionId: 1,
+      survey: { state: "provisional", expeditionId: 3, generation: 3 },
     };
-    duplicateWreckSurvey.wrecks.push({
-      ...duplicateWreckSurvey.wrecks[0],
+    multipleWreckSurveys.wrecks.push({
+      ...multipleWreckSurveys.wrecks[0],
       id: 2,
       generation: 2,
-      survey: {
-        state: "provisional",
-        expeditionId: duplicateWreckSurvey.expedition.id,
-        generation: duplicateWreckSurvey.generation,
-      },
+      expeditionId: 2,
+      survey: { state: "provisional", expeditionId: 3, generation: 3 },
     });
-    expect(() => parseSaveGame(duplicateWreckSurvey)).toThrow(/one-case allocation/);
+    expect(parseSaveGame(multipleWreckSurveys)).toBe(multipleWreckSurveys);
 
-    const sharedCase = makeValidSave();
-    sharedCase.expedition.active = true;
-    sharedCase.wrecks[0].survey = {
+    const mixedProvisional = makeValidSave();
+    mixedProvisional.expedition.active = true;
+    mixedProvisional.wrecks[0].survey = {
       state: "provisional",
-      expeditionId: sharedCase.expedition.id,
-      generation: sharedCase.generation,
+      expeditionId: mixedProvisional.expedition.id,
+      generation: mixedProvisional.generation,
     };
-    sharedCase.fishingShoals.provisional.push({
+    mixedProvisional.fishingShoals.provisional.push({
       id: createFishingShoalId(0),
       state: "surveyed",
-      expeditionId: sharedCase.expedition.id,
-      generation: sharedCase.generation,
+      expeditionId: mixedProvisional.expedition.id,
+      generation: mixedProvisional.generation,
     });
-    expect(() => parseSaveGame(sharedCase)).toThrow(/one-case allocation/);
+    expect(parseSaveGame(mixedProvisional)).toBe(mixedProvisional);
 
-    const duplicateReturnedCase = makeValidSave();
-    const duplicateCaseExpeditionId = addSuccessfulVoyage(duplicateReturnedCase, {
-      fishingSurveyIds: [createFishingShoalId(0)],
+    const multipleReturned = makeValidSave();
+    const returnedExpeditionId = addSuccessfulVoyage(multipleReturned, {
+      fishingSurveyIds: [createFishingShoalId(0), createFishingShoalId(1)],
+      wreckIds: [1],
     });
-    duplicateReturnedCase.navigatorLineage = structuredClone(duplicateReturnedCase.navigatorLineage);
-    const duplicateVoyage = duplicateReturnedCase.navigatorLineage.navigators[1]
-      .successfulVoyages[0] as { wreckIds: number[] };
-    duplicateVoyage.wreckIds = [1];
-    duplicateReturnedCase.wrecks[0].survey = {
+    multipleReturned.wrecks[0].survey = {
       state: "returned",
-      expeditionId: duplicateCaseExpeditionId,
+      expeditionId: returnedExpeditionId,
       generation: 2,
     };
-    duplicateReturnedCase.fishingShoals.returned.push({
-      id: createFishingShoalId(0),
-      state: "survey",
-      expeditionId: duplicateCaseExpeditionId,
-      generation: 2,
-    });
-    expect(() => parseSaveGame(duplicateReturnedCase)).toThrow(/one survey case/);
+    for (const id of [createFishingShoalId(0), createFishingShoalId(1)]) {
+      multipleReturned.fishingShoals.returned.push({
+        id,
+        state: "survey",
+        expeditionId: returnedExpeditionId,
+        generation: 2,
+      });
+    }
+    expect(parseSaveGame(multipleReturned)).toBe(multipleReturned);
 
     const futureReturnedCase = makeValidSave();
     const wreckReportExpeditionId = addSuccessfulVoyage(futureReturnedCase, { wreckIds: [1] });
@@ -636,6 +635,7 @@ describe("save-game validation", () => {
   });
 
   it("requires exact schema and format versions and rejects corrupt current data", () => {
+    expect(SAVE_SCHEMA_VERSION).toBe(10);
     for (const version of [SAVE_SCHEMA_VERSION - 1, SAVE_SCHEMA_VERSION + 1]) {
       const mismatchedSchema = makeValidSave() as SaveGame & { schemaVersion: number };
       mismatchedSchema.schemaVersion = version;

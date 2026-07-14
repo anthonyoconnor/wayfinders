@@ -1,15 +1,15 @@
 import type { GridPoint } from "../core/types";
 import type { NavigatorId } from "../lineage/NavigatorLineageSystem";
+import type { SurveyBudgetReadModel } from "./SurveyContracts";
 
-export const WRECK_SURVEY_CONTRACT_VERSION = 1 as const;
+export const WRECK_SURVEY_CONTRACT_VERSION = 2 as const;
 export const WRECK_SURVEY_INTERACTION_RANGE_TILES = 1.5 as const;
 export const WRECK_SURVEY_PRESENTATION_MS = 4_000 as const;
 
-export interface WreckSurveyInteractionReadModelV1 {
+export interface WreckSurveyInteractionReadModelV1 extends SurveyBudgetReadModel {
   contractVersion: typeof WRECK_SURVEY_CONTRACT_VERSION;
   wreckId: number;
   tile: Readonly<GridPoint>;
-  surveyCasesRemaining: 0 | 1;
 }
 
 export interface SurveyWreckCommandV1 {
@@ -18,13 +18,7 @@ export interface SurveyWreckCommandV1 {
   wreckId: number;
 }
 
-export interface LeaveWreckCommandV1 {
-  contractVersion: typeof WRECK_SURVEY_CONTRACT_VERSION;
-  type: "leave";
-  wreckId: number;
-}
-
-export type WreckSurveyInteractionCommandV1 = SurveyWreckCommandV1 | LeaveWreckCommandV1;
+export type WreckSurveyInteractionCommandV1 = SurveyWreckCommandV1;
 
 export type WreckSurveyRejectionReasonV1 =
   | "unsupported-contract"
@@ -35,7 +29,7 @@ export type WreckSurveyRejectionReasonV1 =
   | "out-of-range"
   | "current-generation"
   | "already-surveyed"
-  | "no-survey-case"
+  | "insufficient-provisions"
   | "wreck-hold"
   | "generation-handover";
 
@@ -45,14 +39,9 @@ export interface WreckSurveyedResultV1 {
   wreckId: number;
   navigatorId: NavigatorId;
   lostGeneration: number;
-  casesRemaining: 0;
+  provisionsSpent: number;
+  availableProvisionUnitsRemaining: number;
   presentationMs: typeof WRECK_SURVEY_PRESENTATION_MS;
-}
-
-export interface WreckSurveyLeftResultV1 {
-  contractVersion: typeof WRECK_SURVEY_CONTRACT_VERSION;
-  status: "left";
-  wreckId: number;
 }
 
 export interface WreckSurveyRejectedResultV1 {
@@ -64,7 +53,6 @@ export interface WreckSurveyRejectedResultV1 {
 
 export type WreckSurveyInteractionResultV1 =
   | WreckSurveyedResultV1
-  | WreckSurveyLeftResultV1
   | WreckSurveyRejectedResultV1;
 
 export interface WreckSurveyReportV1 {

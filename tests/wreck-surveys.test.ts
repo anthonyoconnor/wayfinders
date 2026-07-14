@@ -60,7 +60,10 @@ describe("lost navigator wreck surveys", () => {
     }]);
     expect(simulation.wreckSurveyInteraction).toMatchObject({
       wreckId: 1,
-      surveyCasesRemaining: 1,
+      surveyCost: 2,
+      availableProvisionUnits: 12,
+      remainingProvisionUnits: 10,
+      canAfford: true,
     });
 
     const result = surveyCurrentWreck(simulation);
@@ -69,14 +72,15 @@ describe("lost navigator wreck surveys", () => {
       wreckId: 1,
       navigatorId: "navigator:v1:g1",
       lostGeneration: 1,
-      casesRemaining: 0,
+      provisionsSpent: 2,
+      availableProvisionUnitsRemaining: 10,
     });
     expect(simulation.wrecks[0].survey).toEqual({
       state: "provisional",
       expeditionId: simulation.currentExpeditionId,
       generation: 2,
     });
-    expect(simulation.surveyCasesRemaining).toBe(0);
+    expect(simulation.ship.provisions).toBe(10);
     expect(simulation.wreckSurveyInteraction).toBeUndefined();
     expect(surveyed).toEqual([expect.objectContaining({
       navigatorId: "navigator:v1:g1",
@@ -155,21 +159,31 @@ describe("lost navigator wreck surveys", () => {
     });
   });
 
-  it("shares the one survey case with fishing surveys", () => {
+  it("allows mixed wreck and fishing surveys while provisions remain", () => {
     const simulation = new GameSimulation();
     const wreckTile = loseFirstNavigator(simulation);
     expect(simulation.teleport(wreckTile)).toBe(true);
     expect(surveyCurrentWreck(simulation).status).toBe("surveyed");
+    expect(simulation.ship.provisions).toBe(10);
 
     const shoal = simulation.fishingShoalDefinitions[0];
     expect(simulation.teleport(shoal.tile)).toBe(true);
     const interaction = simulation.fishingShoalInteraction;
-    expect(interaction).toMatchObject({ id: shoal.id, surveyCasesRemaining: 0 });
+    expect(interaction).toMatchObject({
+      id: shoal.id,
+      surveyCost: 2,
+      availableProvisionUnits: 10,
+      remainingProvisionUnits: 8,
+      canAfford: true,
+    });
     expect(simulation.interactWithFishingShoal({
-      contractVersion: 1,
+      contractVersion: 2,
       type: "survey",
       id: shoal.id,
-    })).toMatchObject({ status: "rejected", reason: "no-survey-case" });
+    })).toMatchObject({ status: "surveyed", provisionsSpent: 2 });
+    expect(simulation.ship.provisions).toBe(8);
+    expect(simulation.provisionalWreckSurveys).toHaveLength(1);
+    expect(simulation.provisionalFishingShoals.filter(({ state }) => state === "surveyed")).toHaveLength(1);
   });
 
   it("starts a journey when a wreck in Supported water is surveyed", () => {
@@ -214,7 +228,30 @@ describe("lost navigator wreck surveys", () => {
     expect(callbackSurvey).toMatchObject({ status: "rejected", reason: "interaction-busy" });
     expect(simulation.expeditionActive).toBe(true);
     expect(simulation.wrecks[0].survey).toMatchObject({ state: "provisional", generation: 2 });
+    expect(simulation.ship.provisions).toBe(10);
     expect(() => new GameSimulation(simulation.config).restoreSave(simulation.createSave())).not.toThrow();
+  });
+
+  it("rejects a wreck survey without enough provisions and changes nothing", () => {
+    const simulation = new GameSimulation();
+    const wreckTile = loseFirstNavigator(simulation);
+    expect(simulation.teleport(wreckTile)).toBe(true);
+    simulation.setProvisions(1);
+    const saveRevisionBefore = simulation.saveRevision;
+    expect(simulation.wreckSurveyInteraction).toMatchObject({
+      surveyCost: 2,
+      availableProvisionUnits: 1,
+      remainingProvisionUnits: 0,
+      canAfford: false,
+    });
+
+    expect(surveyCurrentWreck(simulation)).toMatchObject({
+      status: "rejected",
+      reason: "insufficient-provisions",
+    });
+    expect(simulation.wrecks[0].survey).toEqual({ state: "unexamined" });
+    expect(simulation.ship.provisions).toBe(1);
+    expect(simulation.saveRevision).toBe(saveRevisionBefore);
   });
 
   it("rejects stale contracts and unknown commands without changing the wreck", () => {
@@ -223,16 +260,16 @@ describe("lost navigator wreck surveys", () => {
     expect(simulation.teleport(wreckTile)).toBe(true);
 
     expect(simulation.interactWithWreck({
-      contractVersion: 2,
+      contractVersion: 1,
       type: "survey",
       wreckId: 1,
     } as never)).toMatchObject({ status: "rejected", reason: "unsupported-contract" });
     expect(simulation.interactWithWreck({
       contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
-      type: "salvage",
+      type: "leave",
       wreckId: 1,
     } as never)).toMatchObject({ status: "rejected", reason: "invalid-command" });
     expect(simulation.wrecks[0].survey).toEqual({ state: "unexamined" });
-    expect(simulation.surveyCasesRemaining).toBe(1);
+    expect(simulation.ship.provisions).toBe(12);
   });
 });

@@ -22,7 +22,6 @@ const READY: SceneMovementInputContext = {
   textEntryFocused: false,
   generationHandoverActive: false,
   greatHallOpen: false,
-  surveyActionActive: false,
 };
 
 describe("scene movement input policy", () => {
@@ -52,8 +51,9 @@ describe("scene movement input policy", () => {
     })).toEqual({ turn: 1, throttle: 1 });
   });
 
-  it("protects other text entry while retaining lifecycle and survey-action locks", () => {
+  it("keeps ordinary sailing non-modal while retaining text-entry and lifecycle locks", () => {
     const moving = { ...RELEASED_KEYS, right: true, forward: true };
+    expect(resolveSceneMovementInput(moving, READY)).toEqual({ turn: 1, throttle: 1 });
     expect(resolveSceneMovementInput(moving, {
       ...READY,
       developerToolsOpen: true,
@@ -66,10 +66,6 @@ describe("scene movement input policy", () => {
     expect(resolveSceneMovementInput(moving, {
       ...READY,
       greatHallOpen: true,
-    })).toEqual({ turn: 0, throttle: 0 });
-    expect(resolveSceneMovementInput(moving, {
-      ...READY,
-      surveyActionActive: true,
     })).toEqual({ turn: 0, throttle: 0 });
   });
 });

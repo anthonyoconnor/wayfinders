@@ -23,9 +23,17 @@ import {
   type DiscoveryRecord,
 } from "../exploration/DiscoverySystem";
 import { KnowledgeSystem } from "../exploration/KnowledgeSystem";
-import { ProvisionSystem, knowledgeTravelCost } from "../exploration/ProvisionSystem";
+import {
+  ProvisionSystem,
+  availableProvisionUnits,
+  knowledgeTravelCost,
+} from "../exploration/ProvisionSystem";
 import { ReturnPathSystem, type ReturnPathResult } from "../exploration/ReturnPathSystem";
 import { VisibilitySystem } from "../exploration/VisibilitySystem";
+import {
+  createSurveyBudget,
+  type SurveyBudgetReadModel,
+} from "../exploration/SurveyContracts";
 import {
   WRECK_SURVEY_CONTRACT_VERSION,
   WRECK_SURVEY_INTERACTION_RANGE_TILES,
@@ -126,7 +134,7 @@ export interface SimulationSnapshot {
     provisional: number;
     returned: number;
     activationEligible: number;
-    surveyCasesRemaining: 0 | 1;
+    surveyCost: number;
     interaction?: Readonly<FishingShoalInteractionReadModel>;
     records: readonly Readonly<FishingShoalReadModel>[];
   };
@@ -327,21 +335,20 @@ export class GameSimulation {
     return this.fishingShoalSystem.recordsRevision;
   }
 
-  get surveyCasesRemaining(): 0 | 1 {
-    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return 0;
-    const wreckSurveyUsed = this.shipwrecks.some(({ survey }) => (
-      survey.state === "provisional" && survey.expeditionId === this.expeditionId
-    ));
-    return wreckSurveyUsed ? 0 : this.fishingShoalSystem.surveyCasesRemaining;
+  get surveyBudget(): Readonly<SurveyBudgetReadModel> {
+    return createSurveyBudget(
+      this.config.provisions.surveyCost,
+      availableProvisionUnits(this.ship),
+      this.returnPaths.returnCost,
+    );
   }
 
   get fishingShoalInteraction(): Readonly<FishingShoalInteractionReadModel> | undefined {
     if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
-    const interaction = this.fishingShoalSystem.interactionNear({
+    return this.fishingShoalSystem.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
-    });
-    return interaction ? { ...interaction, surveyCasesRemaining: this.surveyCasesRemaining } : undefined;
+    }, this.surveyBudget);
   }
 
   get wreckSurveyInteraction(): Readonly<WreckSurveyInteractionReadModelV1> | undefined {
@@ -369,7 +376,7 @@ export class GameSimulation {
       contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
       wreckId: closest.wreck.id,
       tile: Object.freeze({ x: closest.wreck.tileX, y: closest.wreck.tileY }),
-      surveyCasesRemaining: this.surveyCasesRemaining,
+      ...this.surveyBudget,
     });
   }
 
@@ -601,6 +608,27 @@ export class GameSimulation {
     this.setProvisions(this.ship.provisions + Math.trunc(delta));
   }
 
+  private applySurveyProvisionCharge(cost: number): void {
+    if (!Number.isSafeInteger(cost) || cost <= 0) throw new RangeError("Survey cost must be a positive integer");
+    if (availableProvisionUnits(this.ship) + 1e-10 < cost || this.ship.provisions < cost) {
+      throw new RangeError("Survey provision charge exceeds the available supply");
+    }
+    const previous = this.ship.provisions;
+    this.ship.provisions -= cost;
+    for (let remaining = previous - 1; remaining >= this.ship.provisions; remaining--) {
+      this.events.emit("provisionConsumed", { remaining });
+    }
+    this.events.emit("provisionsChanged", { previous, current: this.ship.provisions });
+    this.updateRiskOverlayBudgets();
+  }
+
+  private resolveSurveyExhaustion(): void {
+    if (this.ship.provisions > 0 || this.isInSupportedWater()) return;
+    const knowledgeChanged = this.failExpedition();
+    if (knowledgeChanged > 0) this.events.emit("knowledgeChanged", { count: knowledgeChanged });
+    this.recalculateRiskOverlays();
+  }
+
   interactWithFishingShoal(
     command: Readonly<FishingShoalInteractionCommandV1>,
   ): FishingShoalInteractionResultV1 {
@@ -608,7 +636,6 @@ export class GameSimulation {
       return {
         contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
         status: "rejected",
-        id: command.id,
         reason: "interaction-busy",
       };
     }
@@ -616,7 +643,6 @@ export class GameSimulation {
       return {
         contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
         status: "rejected",
-        id: command.id,
         reason: "generation-handover",
       };
     }
@@ -624,46 +650,39 @@ export class GameSimulation {
       return {
         contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
         status: "rejected",
-        id: command.id,
         reason: "wreck-hold",
       };
     }
-    const interaction = this.fishingShoalInteraction;
-    if (
-      command.type === "survey"
-      && this.surveyCasesRemaining === 0
-      && this.fishingShoalSystem.surveyCasesRemaining === 1
-      && interaction?.id === command.id
-    ) {
-      return {
-        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
-        status: "rejected",
-        id: command.id,
-        reason: "no-survey-case",
-      };
-    }
-    if (
-      command.type === "survey"
-      && !this.activeExpedition
-      && this.surveyCasesRemaining === 1
-      && interaction?.id === command.id
-      && interaction.state === "returned-lead"
-    ) this.startExpedition();
-    const result = this.fishingShoalSystem.applyInteraction(command, {
-      x: this.ship.currentTileX,
-      y: this.ship.currentTileY,
-    }, this.expeditionId, this.generation);
-    if (result.status !== "surveyed") return result;
+    this.interactionTransactionActive = true;
+    try {
+      const result = this.fishingShoalSystem.applyInteraction(command, {
+        x: this.ship.currentTileX,
+        y: this.ship.currentTileY,
+      }, this.expeditionId, this.generation, this.surveyBudget);
+      if (result.status !== "surveyed") return result;
 
-    const definition = this.fishingShoalSystem.definitionFor(result.id);
-    if (!definition) throw new Error(`Surveyed fishing shoal ${result.id} has no definition`);
-    this.revision++;
-    this.saveRevision++;
-    this.events.emit("fishingShoalSurveyed", {
-      ...result,
-      tile: definition.tile,
-    });
-    return result;
+      const expeditionStarted = !this.activeExpedition;
+      if (expeditionStarted) this.activeExpedition = true;
+      this.applySurveyProvisionCharge(result.provisionsSpent);
+      const definition = this.fishingShoalSystem.definitionFor(result.id);
+      if (!definition) throw new Error(`Surveyed fishing shoal ${result.id} has no definition`);
+      this.revision++;
+      this.saveRevision++;
+      if (expeditionStarted) {
+        this.events.emit("expeditionStarted", {
+          expeditionId: this.expeditionId,
+          generation: this.generation,
+        });
+      }
+      this.events.emit("fishingShoalSurveyed", {
+        ...result,
+        tile: definition.tile,
+      });
+      this.resolveSurveyExhaustion();
+      return result;
+    } finally {
+      this.interactionTransactionActive = false;
+    }
   }
 
   interactWithWreck(
@@ -674,7 +693,7 @@ export class GameSimulation {
     if (!raw || raw.contractVersion !== WRECK_SURVEY_CONTRACT_VERSION) {
       return this.rejectWreckSurvey(wreckId, "unsupported-contract");
     }
-    if (raw.type !== "survey" && raw.type !== "leave") {
+    if (raw.type !== "survey") {
       return this.rejectWreckSurvey(wreckId, "invalid-command");
     }
     if (this.interactionTransactionActive) {
@@ -700,16 +719,8 @@ export class GameSimulation {
     if (wreck.survey.state !== "unexamined") {
       return this.rejectWreckSurvey(wreckId, "already-surveyed");
     }
-    if (raw.type === "leave") {
-      return {
-        contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
-        status: "left",
-        wreckId: wreck.id,
-      };
-    }
-    if (this.surveyCasesRemaining === 0) {
-      return this.rejectWreckSurvey(wreckId, "no-survey-case");
-    }
+    const surveyBudget = this.surveyBudget;
+    if (!surveyBudget.canAfford) return this.rejectWreckSurvey(wreckId, "insufficient-provisions");
     const expeditionStarted = !this.activeExpedition;
     this.interactionTransactionActive = true;
     try {
@@ -719,6 +730,7 @@ export class GameSimulation {
         expeditionId: this.expeditionId,
         generation: this.generation,
       };
+      this.applySurveyProvisionCharge(surveyBudget.surveyCost);
       this.wrecksRevision++;
       this.revision++;
       this.saveRevision++;
@@ -728,7 +740,8 @@ export class GameSimulation {
         wreckId: wreck.id,
         navigatorId: createNavigatorId(wreck.generation),
         lostGeneration: wreck.generation,
-        casesRemaining: 0,
+        provisionsSpent: surveyBudget.surveyCost,
+        availableProvisionUnitsRemaining: surveyBudget.remainingProvisionUnits,
         presentationMs: WRECK_SURVEY_PRESENTATION_MS,
       } as const;
       if (expeditionStarted) {
@@ -741,6 +754,7 @@ export class GameSimulation {
         ...result,
         tile: { x: wreck.tileX, y: wreck.tileY },
       });
+      this.resolveSurveyExhaustion();
       return result;
     } finally {
       this.interactionTransactionActive = false;
@@ -994,7 +1008,7 @@ export class GameSimulation {
         provisional: this.provisionalFishingShoals.length,
         returned: this.returnedFishingShoals.length,
         activationEligible: this.activationEligibleFishingShoals.length,
-        surveyCasesRemaining: this.surveyCasesRemaining,
+        surveyCost: this.config.provisions.surveyCost,
         interaction: this.fishingShoalInteraction
           ? { ...this.fishingShoalInteraction, tile: { ...this.fishingShoalInteraction.tile } }
           : undefined,

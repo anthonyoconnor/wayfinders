@@ -10,13 +10,14 @@ and return, expedition inheritance, deterministic discoveries, cross-session
 persistence, versioned navigator succession, four-voyage navigator tenures
 with exact-dock-committed achievements in a permanent Great Hall chronicle,
 the shared required generation-handover view, returned identity/fate reports
-for runtime navigator wrecks and the performance foundation.
+for runtime navigator wrecks, provision-funded surveying and the performance
+foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
-`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-2.3` work is
-complete and accepted. Implementation is paused before `GP-3.1`, which is not
-currently authorized.
+`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-3.1` work is
+complete and accepted. The current authorized batch continues through
+`GP-3.2` and `GP-3.3` without an intermediate stop.
 
 ## Run and verify
 
@@ -38,7 +39,7 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 220 automated tests pass across 24 files.
+- 227 automated tests pass across 24 files.
 - The production Vite build passes.
 - Existing browser acceptance covers discovery and fishing return,
   returned-lead upgrade,
@@ -153,7 +154,7 @@ Current verification baseline:
 - Runtime player wrecks and generated historic-wreck discoveries are separate
   record types and presentations.
 - A later generation first sights a runtime player wreck as unidentified.
-  **Survey wreck** spends the existing one-per-voyage survey case and gives the
+  **Survey wreck** spends the displayed shared provision cost and gives the
   active expedition a provisional identity/fate report for the navigator lost
   there. Only exact-dock return permanently reports that association to the
   tribe and lineage. If the surveying navigator wrecks, the provisional report
@@ -171,18 +172,19 @@ Current verification baseline:
   lifecycle state. Actual activation eligibility is derived only when the
   returned survey's exact service anchor has a cardinal, passable Supported
   connection to the exact home-return tile.
-- A temporary proximity ribbon presents clue text, the current one-case
-  allocation and explicit Survey / Leave buttons. `F` surveys, `Escape` leaves,
-  and ordinary pointer/contextual-touch activation uses the same authoritative
-  commands. Surveying reveals deterministic quality, spends the case, survives
-  reload and intentionally replenishes only on the next dock or respawn
-  allocation; unused cases never stack.
+- A temporary non-modal proximity ribbon presents clue text, the provision
+  cost, remaining usable supply and projected known-return margin. `F`, the
+  Survey button and ordinary pointer/contextual-touch activation use the same
+  authoritative command. Sailing remains live and leaving range defers for
+  free. A successful survey spends provisions atomically, refreshes risk
+  guidance immediately and remains provisional until dock; multiple surveys
+  are allowed while supplies remain.
 - Schema-versioned saves persist the authoritative ship, provisions,
   expedition/generation state, navigator lineage, completed-voyage counts and
   exact-dock-committed per-voyage achievement summaries, knowledge and stamps,
   runtime wrecks, pending wreck holds and unacknowledged generation handovers,
   provisional/returned wreck identity reports, provisional/returned
-  discoveries and provisional/returned fishing records. Save schema V9
+  discoveries and provisional/returned fishing records. Save schema V10
   requires the exact current V4 lineage, generation-handover V1 contract and
   current wreck shape; non-current records are not migrated.
   Fishing connectivity and its path are derived after load, never serialized.
@@ -220,7 +222,7 @@ Current verification baseline:
   succession. GR-3.4 may polish this presentation without changing the shared
   read model or authoritative voyage records.
 - Discovered, unreported runtime wrecks use an unidentified marker and a
-  contextual **Survey wreck / Leave** action. The aboard result names the lost
+  contextual **Survey wreck** action. The aboard result names the lost
   navigator provisionally; exact-dock return makes the report permanent.
 - Developer tools provide compact generation, navigator, voyage, lifecycle and
   wreck-report diagnostics; exact-dock return; island, fishing-sign and
@@ -284,12 +286,13 @@ Current verification baseline:
 
 ## Known limits
 
-- Gameplay track: the accepted `GP-1` fishing loop still uses one separate
-  survey case and an explicit **Leave** action. Proposed `GP-3.1` replaces that
-  interaction with provision-funded, sail-away-to-defer surveying; it is not
-  implemented yet. Returned fishing knowledge and the Great Hall records remain
-  authoritative, while numerical fishing output and tribe economics are no
-  longer part of the approved GP-3 direction.
+- Gameplay track: `GP-3.1` has replaced the accepted historical `GP-1` survey
+  case and **Leave** action with a shared configurable two-bundle provision
+  cost. The prompt is Survey-only and non-modal, sailing away is free, multiple
+  surveys are allowed while supplies remain, and fishing-ground and navigator-
+  wreck results still commit only at the exact dock or roll back on wreck.
+  Returned fishing knowledge and Great Hall records remain authoritative;
+  numerical fishing output and tribe economics are outside GP-3.
 - Gameplay track: navigator identity, succession and the four-voyage tenure
   are authoritative, and the permanent Great Hall chronicle is implemented.
   Island sightings currently reveal their complete generated discovery without
@@ -309,10 +312,10 @@ Current verification baseline:
   baseline. Touch-first sailing is not implemented, and representative
   mid-range mobile rendering/performance validation remains outstanding.
 
-## Paused checkpoint
+## Active checkpoint
 
-`GP-2.3` is accepted. Implementation is paused before `GP-3.1`, which has no
-active authorization.
+`GP-3.1` is accepted. The authorized batch is now implementing `GP-3.2` and
+will continue directly through `GP-3.3`.
 
 The completed milestones are:
 
@@ -321,7 +324,7 @@ The completed milestones are:
 2. `GP-0.2` — accepted: versioned GP-1 integration boundaries;
 3. `GP-1.1` — accepted: deterministic fishing-shoal definitions and clues;
 4. `GP-1.2` — accepted historical baseline: the one-case Survey / Leave action
-   and interaction cue, explicitly superseded by proposed `GP-3.1`;
+   and interaction cue, explicitly superseded by accepted `GP-3.1`;
 5. `GP-1.3` — accepted: exact-dock returned leads/surveys and wreck rollback;
 6. `GP-1.4` — accepted: derived Supported-water home-connection proof and cue;
 7. `GP-2.1` — accepted: stable navigator identity and idempotent succession;
@@ -333,11 +336,13 @@ The completed milestones are:
    focused succession handover, optional exact-home-dock browsing, active /
    completed / lost navigator history, derived lineage totals and returned
    wreck-fate confirmation.
+10. `GP-3.1` — accepted: a shared provision-funded Survey-only transaction,
+    multiple surveys per journey, projected return impact, exact-dock commit,
+    wreck rollback and no separate survey allocation.
 
-The next proposed gameplay milestone is `GP-3.1`, provision-funded surveying.
-It removes the separate survey case and **Leave** command, makes sighting and
-sailing away free, and charges the shared provision supply only when a survey
-is performed. It requires renewed authorization and remains untouched.
+The active gameplay milestone is `GP-3.2`, island landfalls and one deterministic
+dossier per non-home island. `GP-3.3` follows in the same authorization batch
+with historic-wreck, coastal-ruin and tidal-cave survey sites.
 
 The graphics track remains deferred until `GP-3.3` accepts stable island and
 generic survey-site identities/read models. Fishing, trade and other routine

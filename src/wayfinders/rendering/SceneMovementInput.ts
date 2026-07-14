@@ -17,7 +17,6 @@ export interface SceneMovementInputContext {
   readonly textEntryFocused: boolean;
   readonly generationHandoverActive: boolean;
   readonly greatHallOpen: boolean;
-  readonly surveyActionActive: boolean;
 }
 
 const STOPPED_INPUT: Readonly<MovementInput> = Object.freeze({ turn: 0, throttle: 0 });
@@ -29,7 +28,6 @@ export function isSceneMovementInputSuppressed(
     && context.developerNumberFocused;
   return context.generationHandoverActive
     || context.greatHallOpen
-    || context.surveyActionActive
     || (context.textEntryFocused && !liveDeveloperNumber);
 }
 

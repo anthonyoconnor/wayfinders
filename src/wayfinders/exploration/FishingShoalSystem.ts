@@ -18,6 +18,7 @@ import {
   type FishingShoalSurveyedReadModel,
 } from "./FishingShoalContracts";
 import { SupportedConnectivitySystem } from "./SupportedConnectivitySystem";
+import type { SurveyBudgetReadModel } from "./SurveyContracts";
 
 export interface FishingShoalObservation {
   found: readonly Readonly<FishingShoalProvisionalRecordV1>[];
@@ -77,19 +78,14 @@ export class FishingShoalSystem {
     return this.recordsRevisionValue;
   }
 
-  /** One non-stacking case is available unless this allocation already surveyed a shoal. */
-  get surveyCasesRemaining(): 0 | 1 {
-    for (const record of this.provisionalById.values()) {
-      if (record.state === "surveyed") return 0;
-    }
-    return 1;
-  }
-
   definitionFor(id: string): Readonly<FishingShoalDefinition> | undefined {
     return this.definitionById.get(id);
   }
 
-  interactionNear(tile: Readonly<{ x: number; y: number }>): FishingShoalInteractionReadModel | undefined {
+  interactionNear(
+    tile: Readonly<{ x: number; y: number }>,
+    surveyBudget: Readonly<SurveyBudgetReadModel>,
+  ): FishingShoalInteractionReadModel | undefined {
     let closest: {
       definition: Readonly<FishingShoalDefinition>;
       distance: number;
@@ -119,7 +115,7 @@ export class FishingShoalSystem {
       tile: closest.definition.tile,
       state: closest.state,
       clueLabel: closest.definition.clue.label,
-      surveyCasesRemaining: this.surveyCasesRemaining,
+      ...surveyBudget,
     };
   }
 
@@ -128,40 +124,38 @@ export class FishingShoalSystem {
     shipTile: Readonly<{ x: number; y: number }>,
     expeditionId: number,
     generation: number,
+    surveyBudget: Readonly<SurveyBudgetReadModel>,
   ): FishingShoalInteractionResultV1 {
-    const definition = this.definitionById.get(command.id);
-    if (!definition) return this.reject(command.id, "unknown-opportunity");
+    const raw = command as unknown as Record<string, unknown> | null;
+    const id = raw && isCurrentFishingShoalId(raw.id) ? raw.id : undefined;
+    if (!raw || raw.contractVersion !== FISHING_SHOAL_CONTRACT_VERSION) {
+      return this.reject(id, "unsupported-contract");
+    }
+    if (raw.type !== "survey") return this.reject(id, "invalid-command");
+    if (!id) return this.reject(undefined, "unknown-opportunity");
+    const definition = this.definitionById.get(id);
+    if (!definition) return this.reject(id, "unknown-opportunity");
     if (
       Math.hypot(definition.tile.x - shipTile.x, definition.tile.y - shipTile.y)
       > FISHING_SHOAL_INTERACTION_RANGE_TILES
-    ) return this.reject(command.id, "out-of-range");
+    ) return this.reject(id, "out-of-range");
 
-    const provisional = this.provisionalById.get(command.id);
-    const returned = this.returnedById.get(command.id);
-    if (command.type === "leave") {
-      if (provisional?.state !== "sighted" && (!returned || returned.state !== "lead")) {
-        return this.reject(command.id, returned?.state === "survey" ? "already-surveyed" : "not-sighted");
-      }
-      return {
-        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
-        status: "left",
-        id: command.id,
-      };
-    }
+    const provisional = this.provisionalById.get(id);
+    const returned = this.returnedById.get(id);
 
     if (returned?.state === "survey" || provisional?.state === "surveyed") {
-      return this.reject(command.id, "already-surveyed");
+      return this.reject(id, "already-surveyed");
     }
     if (provisional?.state !== "sighted" && returned?.state !== "lead") {
-      return this.reject(command.id, "not-sighted");
+      return this.reject(id, "not-sighted");
     }
-    if (this.surveyCasesRemaining === 0) return this.reject(command.id, "no-survey-case");
+    if (!surveyBudget.canAfford) return this.reject(id, "insufficient-provisions");
 
     if (provisional) {
       provisional.state = "surveyed";
     } else {
-      this.provisionalById.set(command.id, {
-        id: command.id,
+      this.provisionalById.set(id, {
+        id,
         state: "surveyed",
         expeditionId,
         generation,
@@ -171,9 +165,10 @@ export class FishingShoalSystem {
     return {
       contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
       status: "surveyed",
-      id: command.id,
+      id,
       quality: definition.quality,
-      casesRemaining: 0,
+      provisionsSpent: surveyBudget.surveyCost,
+      availableProvisionUnitsRemaining: surveyBudget.remainingProvisionUnits,
       presentationMs: FISHING_SHOAL_SURVEY_PRESENTATION_MS,
     };
   }
@@ -269,7 +264,6 @@ export class FishingShoalSystem {
       if (this.returnedById.has(saved.id)) throw new RangeError(`Returned fishing shoal ${saved.id} is duplicated`);
       this.returnedById.set(saved.id, { ...saved });
     }
-    let surveyedCount = 0;
     for (const saved of provisionalRecords) {
       if (!isCurrentFishingShoalId(saved.id) || !this.definitionById.has(saved.id)) {
         throw new RangeError(`Fishing shoal ${saved.id} does not match the regenerated catalog`);
@@ -277,9 +271,6 @@ export class FishingShoalSystem {
       if (this.provisionalById.has(saved.id)) throw new RangeError(`Fishing shoal ${saved.id} is duplicated`);
       if (saved.state !== "sighted" && saved.state !== "surveyed") {
         throw new RangeError(`Fishing shoal ${saved.id} has an invalid provisional state`);
-      }
-      if (saved.state === "surveyed" && ++surveyedCount > 1) {
-        throw new RangeError("Only one fishing shoal may consume the fixed survey-case allocation");
       }
       const returned = this.returnedById.get(saved.id);
       if (returned && !(returned.state === "lead" && saved.state === "surveyed")) {
@@ -370,7 +361,7 @@ export class FishingShoalSystem {
   }
 
   private reject(
-    id: FishingShoalProvisionalRecordV1["id"],
+    id: FishingShoalProvisionalRecordV1["id"] | undefined,
     reason: Extract<FishingShoalInteractionResultV1, { status: "rejected" }>["reason"],
   ): Extract<FishingShoalInteractionResultV1, { status: "rejected" }> {
     return {

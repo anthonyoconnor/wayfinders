@@ -1,8 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-2.3` work is complete and accepted. Work is
-paused before `GP-3.1`; further implementation requires a new authorization.
+ordered `GP-0.1` through `GP-3.1` work is complete and accepted. The authorized
+GP-3 batch is continuing directly into `GP-3.2` and `GP-3.3`.
 
 ## Roadmap model
 
@@ -490,7 +490,7 @@ voyage loadouts, automatic trade or generic wreck-salvage system.
 
 #### GP-3.1 — Provision-funded surveying
 
-Status: proposed.
+Status: accepted.
 
 This milestone supersedes GP-1's accepted fixed, non-stacking survey case while
 leaving that historical acceptance record intact.
@@ -519,6 +519,14 @@ repeat input and current-version reload cannot spend or award twice; fishing-
 ground and navigator-wreck surveys retain exact-dock commitment and wreck
 rollback; the non-modal prompt never suppresses sailing and sail-away dismissal
 requires no Leave action.
+
+Acceptance evidence: the fixed survey allocation and Leave path are absent;
+fishing-ground and navigator-wreck surveys share a configurable two-bundle
+cost, expose remaining supply and projected return margin, and commit the spend
+with provisional state atomically. Multiple targets can be surveyed during one
+journey, fractional travel spend is included in affordability, and steering
+remains live while the prompt is visible. Exact-version schema 10 rejects old
+saves. The complete typecheck, 227-test suite and production build pass.
 
 #### GP-3.2 — Island landfalls and single-dossier surveys
 

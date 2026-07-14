@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ProvisionSystem, availableProvisionUnits } from "../src/wayfinders/exploration/ProvisionSystem.ts";
+import { createSurveyBudget } from "../src/wayfinders/exploration/SurveyContracts.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 import { makeConfig, makeSegment, makeShip } from "./helpers.ts";
@@ -15,6 +16,36 @@ it("keeps overlay reach equal to the remaining physical bundle capacity", () => 
   expect(availableProvisionUnits(makeShip(12, 0))).toBe(12);
   expect(availableProvisionUnits(makeShip(12, 0.25))).toBe(11.75);
   expect(availableProvisionUnits(makeShip(0, 0.5))).toBe(0);
+});
+
+describe("survey provision budget", () => {
+it("quotes the fixed cost against fractional availability and the known return route", () => {
+  expect(createSurveyBudget(2, 11.625, 3.5)).toEqual({
+    surveyCost: 2,
+    availableProvisionUnits: 11.625,
+    remainingProvisionUnits: 9.625,
+    returnCost: 3.5,
+    projectedReturnMargin: 6.125,
+    canAfford: true,
+  });
+});
+
+it("reports unaffordable and unknown-return projections without negative remaining supply", () => {
+  expect(createSurveyBudget(2, 1, Number.POSITIVE_INFINITY)).toEqual({
+    surveyCost: 2,
+    availableProvisionUnits: 1,
+    remainingProvisionUnits: 0,
+    returnCost: null,
+    projectedReturnMargin: null,
+    canAfford: false,
+  });
+});
+
+it("rejects invalid costs and availability", () => {
+  expect(() => createSurveyBudget(0, 12, 0)).toThrow(/positive safe integer/);
+  expect(() => createSurveyBudget(1.5, 12, 0)).toThrow(/positive safe integer/);
+  expect(() => createSurveyBudget(2, Number.NaN, 0)).toThrow(/finite and non-negative/);
+});
 });
 
 it("uses config-driven costs for Supported, Personal, and Unknown water", () => {

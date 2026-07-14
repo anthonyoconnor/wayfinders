@@ -324,9 +324,10 @@ navigator who died there; generated historic-wreck discoveries remain separate
 content records and have no lineage navigator.
 
 During a later active expedition, an unidentified runtime wreck in interaction
-range can be deliberately surveyed with the existing one-per-voyage survey
-case. The action spends that case and creates an expedition-owned provisional
-identity/fate report. The surveying crew can identify whose wreck it is, but
+range can be deliberately surveyed through the shared provision-funded survey
+transaction. The action spends the displayed provisions and creates an
+expedition-owned provisional identity/fate report. The surveying crew can
+identify whose wreck it is, but
 the tribe and permanent lineage do not receive the report until exact-home-dock
 return. Successful return commits the report once to the wreck and correct lost
 navigator. A fatal surveying expedition discards its provisional report while
@@ -334,8 +335,8 @@ leaving the wreck discovered, unidentified and available to survey again.
 Repeated input, revisit, dock and reload cannot duplicate either the survey
 cost or returned report. This baseline report does not salvage cargo, restore
 Personal chart knowledge, commit the lost expedition's provisional discoveries
-or apply an economy reward. Proposed GP-3.1 replaces the separate survey case
-with an atomic provision charge; physical idol recovery remains GP-4.2 work.
+or apply an economy reward. Multiple surveys may be made in one journey while
+the shared supply remains; physical idol recovery remains GP-4.2 work.
 
 ### Navigator tenure and transition time
 
@@ -531,14 +532,13 @@ ordinary shell status and return overlays expose **Voyage n of 4** so the
 bounded tenure is legible without a retirement decision control.
 
 A discovered but unreported runtime wreck uses an unidentified marker and a
-contextual **Survey wreck / Leave** action. Surveying exposes the navigator's
+contextual **Survey wreck** action. Surveying exposes the navigator's
 identity only as aboard, provisional knowledge. Exact-dock commitment changes
 the persistent presentation to a returned fate report. Historic generated
 wreck discoveries keep their distinct marker and never claim a lineage link.
-This describes the accepted baseline. Proposed GP-3.1 removes the authoritative
-Leave command and separate survey allocation: the contextual prompt stays
-non-modal, sailing out of range defers the opportunity, and surveying spends a
-displayed provision cost.
+The contextual prompt has no authoritative Leave command or separate survey
+allocation: it stays non-modal, sailing out of range defers the opportunity,
+and surveying spends a displayed provision cost.
 
 The camera follows the interpolated ship smoothly during play. World regeneration and
 checkpoint restore are discontinuities, so the camera snaps to the
@@ -662,12 +662,13 @@ The accepted baseline includes fishing surveys, navigator lineage, GP-2.2's
 four-journey tenure, death, succession and required handover gate, and GP-2.3's
 shared permanent Great Hall chronicle with focused handover presentation,
 exact-home-dock browsing and derived lineage totals. It also includes returned
-identity/fate reports for runtime navigator wrecks. The forward roadmap may add
-provision-funded surveying, returned island dossiers, extensible historic and
+identity/fate reports for runtime navigator wrecks and GP-3.1's shared
+provision-funded survey transaction. The forward roadmap may add returned
+island dossiers, extensible historic and
 maritime survey sites, idols, the full save/load experience, production assets
 and environmental polish. It no longer places tribe economics, loadouts,
-generic cargo or automatic trade in GP-3. These are proposed extensions, not
-implemented baseline behavior.
+generic cargo or automatic trade in GP-3. Those remaining roadmap items are
+proposed extensions, not implemented baseline behavior.
 
 For proposed GP-3.2, a surveyed island's full-map reveal is a presentation
 derivation from its provisional or returned dossier record. The fog renderer

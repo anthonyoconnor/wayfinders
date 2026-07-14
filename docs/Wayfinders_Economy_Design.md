@@ -479,9 +479,9 @@ the confirmed direction as follows.
 ### GP-1: fishing grounds and the accepted survey baseline
 
 GP-1 established deterministic fishing clues, sighting/survey/returned records,
-exact-dock commitment and wreck rollback. Its implemented one-case allocation
-and **Survey / Leave** prompt are accepted historical baseline behavior that
-GP-3.1 deliberately replaces; they are not the forward cross-content model.
+exact-dock commitment and wreck rollback. Its one-case allocation and
+**Survey / Leave** prompt remain historical acceptance evidence; GP-3.1 has
+replaced them with the forward cross-content model.
 
 ### GP-2: navigators, generations and lineage history
 

@@ -1,6 +1,7 @@
 import type { GridPoint } from "../core/types";
+import type { SurveyBudgetReadModel } from "./SurveyContracts";
 
-export const FISHING_SHOAL_CONTRACT_VERSION = 1 as const;
+export const FISHING_SHOAL_CONTRACT_VERSION = 2 as const;
 export const FISHING_SHOAL_CONTENT_VERSION = 1 as const;
 export const FISHING_SHOAL_PERSISTENCE_OWNER = "fishing-shoals" as const;
 export const FISHING_SHOAL_SURVEY_PRESENTATION_MS = 1_200 as const;
@@ -117,13 +118,12 @@ export type FishingShoalReadModel =
   | FishingShoalSurveyedReadModel
   | FishingShoalReturnedSurveyReadModel;
 
-export interface FishingShoalInteractionReadModel {
+export interface FishingShoalInteractionReadModel extends SurveyBudgetReadModel {
   contractVersion: typeof FISHING_SHOAL_CONTRACT_VERSION;
   id: FishingShoalId;
   tile: Readonly<GridPoint>;
   state: "sighted" | "returned-lead";
   clueLabel: string;
-  surveyCasesRemaining: 0 | 1;
 }
 
 export interface SurveyFishingShoalCommandV1 {
@@ -132,19 +132,15 @@ export interface SurveyFishingShoalCommandV1 {
   id: FishingShoalId;
 }
 
-export interface LeaveFishingShoalCommandV1 {
-  contractVersion: typeof FISHING_SHOAL_CONTRACT_VERSION;
-  type: "leave";
-  id: FishingShoalId;
-}
-
-export type FishingShoalInteractionCommandV1 = SurveyFishingShoalCommandV1 | LeaveFishingShoalCommandV1;
+export type FishingShoalInteractionCommandV1 = SurveyFishingShoalCommandV1;
 
 export type FishingShoalSurveyRejectionReason =
+  | "unsupported-contract"
+  | "invalid-command"
   | "unknown-opportunity"
   | "out-of-range"
   | "not-sighted"
-  | "no-survey-case"
+  | "insufficient-provisions"
   | "already-surveyed"
   | "wreck-hold"
   | "interaction-busy"
@@ -155,14 +151,9 @@ export interface FishingShoalSurveyedResultV1 {
   status: "surveyed";
   id: FishingShoalId;
   quality: FishingShoalQuality;
-  casesRemaining: 0;
+  provisionsSpent: number;
+  availableProvisionUnitsRemaining: number;
   presentationMs: typeof FISHING_SHOAL_SURVEY_PRESENTATION_MS;
-}
-
-export interface FishingShoalLeftResultV1 {
-  contractVersion: typeof FISHING_SHOAL_CONTRACT_VERSION;
-  status: "left";
-  id: FishingShoalId;
 }
 
 export interface FishingShoalRejectedResultV1 {
@@ -174,5 +165,4 @@ export interface FishingShoalRejectedResultV1 {
 
 export type FishingShoalInteractionResultV1 =
   | FishingShoalSurveyedResultV1
-  | FishingShoalLeftResultV1
   | FishingShoalRejectedResultV1;

@@ -25,7 +25,7 @@ import {
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 
-export const SAVE_SCHEMA_VERSION = 9 as const;
+export const SAVE_SCHEMA_VERSION = 10 as const;
 export const WORLD_GENERATOR_VERSION = 1 as const;
 
 export type KnowledgeRun = readonly [
@@ -453,14 +453,6 @@ export function parseSaveGame(value: unknown): SaveGame {
       );
     }
   }
-  const provisionalWreckSurveyIndex = wrecks.findIndex(({ survey }) => survey.state === "provisional");
-  const provisionalFishingSurveyIndex = provisionalFishingShoals.findIndex(({ state }) => state === "surveyed");
-  if (provisionalWreckSurveyIndex >= 0 && provisionalFishingSurveyIndex >= 0) {
-    fail(
-      `cannot coexist with provisional wreck survey ${wrecks[provisionalWreckSurveyIndex].id} under the one-case allocation`,
-      `save.fishingShoals.provisional[${provisionalFishingSurveyIndex}].state`,
-    );
-  }
   let navigatorLineage: NavigatorLineageSnapshotV4;
   try {
     navigatorLineage = parseNavigatorLineageSnapshot(root.navigatorLineage);
@@ -492,7 +484,7 @@ export function parseSaveGame(value: unknown): SaveGame {
     returnedFishingShoals,
     wrecks,
   );
-  validateReturnedSurveyCases(navigatorLineage, wrecks, returnedFishingShoals);
+  validateReturnedSurveyProvenance(navigatorLineage, wrecks, returnedFishingShoals);
   const pendingSuccession = navigatorLineage.pendingSuccession;
   if (pendingRespawn === null && pendingSuccession !== null) {
     fail("cannot be pending without a wreck hold", "save.navigatorLineage.pendingSuccession");
@@ -547,7 +539,6 @@ function validateFishingShoalProvisional(
 ): FishingShoalProvisionalRecordV1[] {
   if (!Array.isArray(value)) fail("must be an array", "save.fishingShoals.provisional");
   let previousId = "";
-  let surveyedCount = 0;
   for (let index = 0; index < value.length; index++) {
     const path = `save.fishingShoals.provisional[${index}]`;
     const item = record(value[index], path);
@@ -557,9 +548,6 @@ function validateFishingShoalProvisional(
     previousId = id;
     if (item.state !== "sighted" && item.state !== "surveyed") {
       fail("must be sighted or surveyed", `${path}.state`);
-    }
-    if (item.state === "surveyed" && ++surveyedCount > 1) {
-      fail("cannot consume more than the one-case allocation", `${path}.state`);
     }
     const recordExpeditionId = unsigned32(item.expeditionId, `${path}.expeditionId`, false);
     const recordGeneration = positiveSafeInteger(item.generation, `${path}.generation`);
@@ -754,7 +742,6 @@ function validateWrecks(
 ): ShipwreckState[] {
   if (!Array.isArray(value)) fail("must be an array", "save.wrecks");
   const ids = new Set<number>();
-  let provisionalSurveyCount = 0;
   return value.map((raw, index) => {
     const path = `save.wrecks[${index}]`;
     const wreck = record(raw, path);
@@ -769,9 +756,6 @@ function validateWrecks(
       currentExpeditionId,
       expeditionActive,
     );
-    if (survey.state === "provisional" && ++provisionalSurveyCount > 1) {
-      fail("cannot consume more than the one-case allocation", `${path}.survey.state`);
-    }
     const result: ShipwreckState = {
       id: positiveSafeInteger(wreck.id, `${path}.id`),
       generation,
@@ -905,7 +889,7 @@ function validateLineageWrecks(
   };
 }
 
-function validateReturnedSurveyCases(
+function validateReturnedSurveyProvenance(
   lineage: NavigatorLineageSnapshotV4,
   wrecks: readonly ShipwreckState[],
   fishingShoals: readonly FishingShoalReturnedRecordV1[],
@@ -920,15 +904,11 @@ function validateReturnedSurveyCases(
     if (navigator.state === "lost") expeditionId = nextExpeditionId(expeditionId);
   }
 
-  const caseUse = new Map<string, string>();
   const register = (generation: number, surveyExpeditionId: number, path: string): void => {
     const key = `${generation}:${surveyExpeditionId}`;
     if (!completedVoyages.has(key)) {
       fail("must match a completed voyage for its navigator", path);
     }
-    const priorPath = caseUse.get(key);
-    if (priorPath) fail(`duplicates the one survey case already used by ${priorPath}`, path);
-    caseUse.set(key, path);
   };
 
   for (let index = 0; index < wrecks.length; index++) {

@@ -109,6 +109,19 @@ describe("prototype configuration", () => {
     expect(prototypeConfig.provisions.unknownCost).toBe(0);
   });
 
+  it("uses a configurable positive-integer two-bundle survey cost", () => {
+    expect(DEFAULT_PROTOTYPE_CONFIG.provisions.surveyCost).toBe(2);
+    patchPrototypeConfig({ provisions: { surveyCost: 3 } });
+    expect(prototypeConfig.provisions.surveyCost).toBe(3);
+
+    for (const value of [0, -1, 1.5]) {
+      expect(() => patchPrototypeConfig({ provisions: { surveyCost: value } })).toThrow(
+        "provisions.surveyCost must be a positive integer",
+      );
+      expect(prototypeConfig.provisions.surveyCost).toBe(3);
+    }
+  });
+
   it("accepts forward cone half-angles from 1 through 180 degrees", () => {
     for (const value of [1, 60, 180]) {
       patchPrototypeConfig({ overlays: { forwardConeHalfAngleDegrees: value } });

@@ -667,9 +667,6 @@ function parseVoyageAchievement(
   for (const id of fishingSurveyIds) {
     if (leadIds.has(id)) fail("cannot also be recorded as a fishing lead", `${path}.fishingSurveyIds`);
   }
-  if (fishingSurveyIds.length + wreckIds.length > 1) {
-    fail("cannot spend more than one survey case", path);
-  }
   return Object.freeze({
     expeditionId,
     voyageNumber,

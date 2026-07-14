@@ -37,6 +37,7 @@ export interface PrototypeConfig {
   };
   provisions: {
     startingBundles: number;
+    surveyCost: number;
     supportedCost: number;
     personalCost: number;
     unknownCost: number;
@@ -125,6 +126,7 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
   },
   provisions: {
     startingBundles: 12,
+    surveyCost: 2,
     supportedCost: 0,
     // Zero disables provision consumption in Personal water, which is useful for testing.
     personalCost: 0.1,
@@ -323,6 +325,7 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   }
 
   nonNegativeInteger(config.provisions.startingBundles, "provisions.startingBundles");
+  positiveInteger(config.provisions.surveyCost, "provisions.surveyCost");
   nonNegative(config.provisions.supportedCost, "provisions.supportedCost");
   nonNegative(config.provisions.personalCost, "provisions.personalCost");
   // All travel costs may be zero for developer testing sessions.

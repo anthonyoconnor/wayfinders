@@ -13,7 +13,6 @@ import {
 function resultStatus(result: FishingShoalInteractionResultV1): string {
   switch (result.status) {
     case "surveyed": return `${result.status}:${result.quality}`;
-    case "left": return result.status;
     case "rejected": return `${result.status}:${result.reason}`;
   }
 }
@@ -55,14 +54,14 @@ describe("versioned fishing-shoal contracts", () => {
     expect(readModel).not.toHaveProperty("homeConnected");
   });
 
-  it("fixes ownership and interaction-result discriminators at contract version one", () => {
-    expect(FISHING_SHOAL_CONTRACT_VERSION).toBe(1);
+  it("fixes ownership and Survey-only interaction discriminators at contract version two", () => {
+    expect(FISHING_SHOAL_CONTRACT_VERSION).toBe(2);
     expect(FISHING_SHOAL_CONTENT_VERSION).toBe(1);
     expect(FISHING_SHOAL_PERSISTENCE_OWNER).toBe("fishing-shoals");
     expect(resultStatus({
-      contractVersion: 1,
+      contractVersion: 2,
       status: "rejected",
-      reason: "no-survey-case",
-    })).toBe("rejected:no-survey-case");
+      reason: "insufficient-provisions",
+    })).toBe("rejected:insufficient-provisions");
   });
 });

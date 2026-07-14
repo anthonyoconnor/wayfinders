@@ -19,6 +19,7 @@ import {
   WRECK_SURVEY_CONTRACT_VERSION,
   type WreckSurveyInteractionResultV1,
 } from "../exploration/WreckSurveyContracts";
+import type { SurveyBudgetReadModel } from "../exploration/SurveyContracts";
 import type { SaveStore } from "../persistence/IndexedDbSaveStore";
 import { loadExactSaveSlot } from "../persistence/SaveGame";
 import {
@@ -59,7 +60,7 @@ interface MovementKeys {
   zoomIn: Phaser.Input.Keyboard.Key;
   zoomOut: Phaser.Input.Keyboard.Key;
   survey: Phaser.Input.Keyboard.Key;
-  leave: Phaser.Input.Keyboard.Key;
+  cancel: Phaser.Input.Keyboard.Key;
 }
 
 interface BrowserDebugApi {
@@ -77,9 +78,7 @@ interface BrowserDebugApi {
   performance: () => ReturnType<FrameTimingMonitor["snapshot"]> & { lastSaveSerializationMs: number };
   fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
   surveyFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
-  leaveFishingShoal: () => FishingShoalInteractionResultV1 | undefined;
   surveyWreck: () => WreckSurveyInteractionResultV1 | undefined;
-  leaveWreck: () => WreckSurveyInteractionResultV1 | undefined;
   continueGeneration: () => boolean;
   visitGreatHall: () => boolean;
   closeGreatHall: () => boolean;
@@ -142,16 +141,12 @@ export class WayfindersScene extends Phaser.Scene {
   private surveyRibbon?: HTMLElement;
   private surveyRibbonTitle?: HTMLElement;
   private surveyRibbonClue?: HTMLElement;
-  private surveyRibbonCase?: HTMLElement;
+  private surveyRibbonCost?: HTMLElement;
   private surveyButton?: HTMLButtonElement;
-  private leaveButton?: HTMLButtonElement;
   private homeAction?: HTMLElement;
   private homeActionButton?: HTMLButtonElement;
   private greatHallView?: GreatHallView;
   private greatHallUpdated = false;
-  private dismissedFishingShoalId?: string;
-  private dismissedWreckId?: number;
-  private surveyActionUntil = Number.NEGATIVE_INFINITY;
   private teleportOnClick = false;
   private islandInspectionIndex = 0;
   private fishingShoalInspectionIndex = 0;
@@ -236,7 +231,7 @@ export class WayfindersScene extends Phaser.Scene {
       zoomIn: Phaser.Input.Keyboard.KeyCodes.E,
       zoomOut: Phaser.Input.Keyboard.KeyCodes.Q,
       survey: Phaser.Input.Keyboard.KeyCodes.F,
-      leave: Phaser.Input.Keyboard.KeyCodes.ESC,
+      cancel: Phaser.Input.Keyboard.KeyCodes.ESC,
     }, false) as MovementKeys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
@@ -282,9 +277,8 @@ export class WayfindersScene extends Phaser.Scene {
     if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && !greatHallOpen && Phaser.Input.Keyboard.JustDown(this.keys.survey)) {
       if (!this.openGreatHallAtHome()) this.performSurveyAction();
     }
-    if (!developerToolsOpen && !textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.leave)) {
+    if (!developerToolsOpen && !textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.cancel)) {
       if (this.greatHallView?.mode === "home") this.closeGreatHallHome();
-      else if (!this.simulation.generationHandoverActive && !greatHallOpen) this.performSurveyLeave();
     }
     const movementInput = this.readMovementInput();
     let keepAdvancing = true;
@@ -323,7 +317,6 @@ export class WayfindersScene extends Phaser.Scene {
       textEntryFocused: this.isTextEntryElement(activeElement),
       generationHandoverActive: this.simulation.generationHandoverActive,
       greatHallOpen: this.greatHallView?.isOpen ?? false,
-      surveyActionActive: this.time.now < this.surveyActionUntil,
     };
   }
 
@@ -505,7 +498,7 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.fishingShoalActivationEligible = String(this.simulation.activationEligibleFishingShoals.length);
       host.dataset.fishingShoalConnectivityBuilds = String(this.simulation.fishingShoalConnectivityBuildCount);
       host.dataset.fishingShoalVisible = String(this.simulation.fishingShoalReadModels.length);
-      host.dataset.surveyCases = String(this.simulation.surveyCasesRemaining);
+      host.dataset.surveyCost = String(this.simulation.config.provisions.surveyCost);
       host.dataset.fishingShoalInteraction = this.simulation.fishingShoalInteraction?.id ?? "";
       host.dataset.persistenceStatus = this.persistenceStatus;
       host.dataset.wreckPresentation = String(this.simulation.wreckPresentationActive);
@@ -639,7 +632,7 @@ export class WayfindersScene extends Phaser.Scene {
             <div><dt>Lifecycle</dt><dd data-state="lifecycle"></dd></div>
             <div><dt>Lineage</dt><dd data-state="lineage"></dd></div>
             <div><dt>Wreck reports</dt><dd data-state="wreck-reports"></dd></div>
-            <div><dt>Survey cases</dt><dd data-state="survey-cases"></dd></div>
+            <div><dt>Survey cost</dt><dd data-state="survey-cost"></dd></div>
           </dl>
           <p class="tool-lock-message" data-output="lock-reason" role="status" hidden></p>
         </section>
@@ -699,6 +692,7 @@ export class WayfindersScene extends Phaser.Scene {
             <p class="tool-live-note">Tune while sailing: WASD stays active when a number has focus; arrows edit that number.</p>
             ${this.numberMarkup("sight-radius", "Sight radius", prototypeConfig.navigation.sightRadius, 1, 14, 1)}
             ${this.numberMarkup("starting-bundles", "Default voyage bundles", prototypeConfig.provisions.startingBundles, 1, 24, 1)}
+            ${this.numberMarkup("survey-cost", "Survey cost (bundles)", prototypeConfig.provisions.surveyCost, 1, 12, 1)}
             ${this.numberMarkup("supported-cost", "Supported cost", prototypeConfig.provisions.supportedCost, 0, 3, 0.1)}
             ${this.numberMarkup("personal-cost", "Personal cost", prototypeConfig.provisions.personalCost, 0, 3, 0.1)}
             ${this.numberMarkup("unknown-cost", "Unknown cost", prototypeConfig.provisions.unknownCost, 0, 4, 0.1)}
@@ -822,21 +816,18 @@ export class WayfindersScene extends Phaser.Scene {
       <div>
         <strong data-survey-title>Fishing sign nearby</strong>
         <span data-survey-clue></span>
-        <span data-survey-case></span>
+        <span data-survey-cost></span>
       </div>
       <div class="survey-ribbon__actions">
         <button data-survey-action="survey" type="button">Survey <kbd>F</kbd></button>
-        <button data-survey-action="leave" type="button">Leave <kbd>Esc</kbd></button>
       </div>`;
     host.append(ribbon);
     this.surveyRibbon = ribbon;
     this.surveyRibbonTitle = ribbon.querySelector<HTMLElement>("[data-survey-title]") ?? undefined;
     this.surveyRibbonClue = ribbon.querySelector<HTMLElement>("[data-survey-clue]") ?? undefined;
-    this.surveyRibbonCase = ribbon.querySelector<HTMLElement>("[data-survey-case]") ?? undefined;
+    this.surveyRibbonCost = ribbon.querySelector<HTMLElement>("[data-survey-cost]") ?? undefined;
     this.surveyButton = ribbon.querySelector<HTMLButtonElement>("[data-survey-action='survey']") ?? undefined;
-    this.leaveButton = ribbon.querySelector<HTMLButtonElement>("[data-survey-action='leave']") ?? undefined;
     this.surveyButton?.addEventListener("click", () => this.performSurveyAction(), { signal });
-    this.leaveButton?.addEventListener("click", () => this.performSurveyLeave(), { signal });
   }
 
   private syncSurveyRibbon(): void {
@@ -849,24 +840,12 @@ export class WayfindersScene extends Phaser.Scene {
 
     const wreckInteraction = this.simulation.wreckSurveyInteraction;
     if (wreckInteraction) {
-      this.dismissedFishingShoalId = undefined;
-      if (this.dismissedWreckId !== undefined && this.dismissedWreckId !== wreckInteraction.wreckId) {
-        this.dismissedWreckId = undefined;
-      }
-      if (this.dismissedWreckId === wreckInteraction.wreckId || this.time.now < this.surveyActionUntil) {
-        ribbon.hidden = true;
-        return;
-      }
       if (this.surveyRibbonTitle) this.surveyRibbonTitle.textContent = "Unidentified navigator wreck";
       if (this.surveyRibbonClue) {
         this.surveyRibbonClue.textContent = "Survey the remains to identify the lost navigator.";
       }
-      if (this.surveyRibbonCase) {
-        this.surveyRibbonCase.textContent = wreckInteraction.surveyCasesRemaining === 1
-          ? "Survey case ready — the identity report must be brought home."
-          : "No survey case remains on this voyage.";
-      }
-      if (this.surveyButton) this.surveyButton.disabled = wreckInteraction.surveyCasesRemaining === 0;
+      if (this.surveyRibbonCost) this.surveyRibbonCost.textContent = this.surveyBudgetText(wreckInteraction);
+      if (this.surveyButton) this.surveyButton.disabled = !wreckInteraction.canAfford;
       ribbon.dataset.surveyKind = "wreck";
       ribbon.dataset.surveyTarget = String(wreckInteraction.wreckId);
       delete ribbon.dataset.shoalId;
@@ -874,36 +853,22 @@ export class WayfindersScene extends Phaser.Scene {
       return;
     }
 
-    this.dismissedWreckId = undefined;
     const interaction = this.simulation.fishingShoalInteraction;
     if (!interaction) {
       ribbon.hidden = true;
-      this.dismissedFishingShoalId = undefined;
       delete ribbon.dataset.surveyKind;
       delete ribbon.dataset.surveyTarget;
       delete ribbon.dataset.shoalId;
       return;
     }
-    if (this.dismissedFishingShoalId && this.dismissedFishingShoalId !== interaction.id) {
-      this.dismissedFishingShoalId = undefined;
-    }
-    if (this.dismissedFishingShoalId === interaction.id || this.time.now < this.surveyActionUntil) {
-      ribbon.hidden = true;
-      return;
-    }
-
     if (this.surveyRibbonTitle) {
       this.surveyRibbonTitle.textContent = interaction.state === "returned-lead"
         ? "Returned fishing lead"
         : "Fishing sign nearby";
     }
     if (this.surveyRibbonClue) this.surveyRibbonClue.textContent = interaction.clueLabel;
-    if (this.surveyRibbonCase) {
-      this.surveyRibbonCase.textContent = interaction.surveyCasesRemaining === 1
-        ? "Survey case ready — surveying spends it for this voyage."
-        : "No survey case remains on this voyage.";
-    }
-    if (this.surveyButton) this.surveyButton.disabled = interaction.surveyCasesRemaining === 0;
+    if (this.surveyRibbonCost) this.surveyRibbonCost.textContent = this.surveyBudgetText(interaction);
+    if (this.surveyButton) this.surveyButton.disabled = !interaction.canAfford;
     ribbon.dataset.surveyKind = "fishing-shoal";
     ribbon.dataset.surveyTarget = interaction.id;
     ribbon.dataset.shoalId = interaction.id;
@@ -917,24 +882,29 @@ export class WayfindersScene extends Phaser.Scene {
       : this.performFishingShoalSurvey();
   }
 
-  private performSurveyLeave(): FishingShoalInteractionResultV1 | WreckSurveyInteractionResultV1 | undefined {
-    if (this.simulation.generationHandoverActive) return undefined;
-    return this.simulation.wreckSurveyInteraction
-      ? this.performWreckLeave()
-      : this.performFishingShoalLeave();
+  private surveyBudgetText(budget: Readonly<SurveyBudgetReadModel>): string {
+    const remaining = budget.remainingProvisionUnits.toFixed(1).replace(/\.0$/, "");
+    if (!budget.canAfford) {
+      const available = budget.availableProvisionUnits.toFixed(1).replace(/\.0$/, "");
+      return `Costs ${budget.surveyCost} bundles — only ${available} usable remain. Keep sailing to defer.`;
+    }
+    const returnMessage = budget.projectedReturnMargin === null
+      ? "return route currently unknown"
+      : budget.projectedReturnMargin >= 0
+        ? `${budget.projectedReturnMargin.toFixed(1)} bundle projected return margin`
+        : `${Math.abs(budget.projectedReturnMargin).toFixed(1)} bundles short of the known return`;
+    return `Costs ${budget.surveyCost} bundles · ${remaining} usable remain · ${returnMessage} · provisional until dock.`;
   }
 
   private performWreckSurvey(): WreckSurveyInteractionResultV1 | undefined {
     const interaction = this.simulation.wreckSurveyInteraction;
-    if (!interaction || this.time.now < this.surveyActionUntil) return undefined;
+    if (!interaction) return undefined;
     const result = this.simulation.interactWithWreck({
       contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
       type: "survey",
       wreckId: interaction.wreckId,
     });
     if (result.status === "surveyed") {
-      this.surveyActionUntil = this.time.now + result.presentationMs;
-      this.dismissedWreckId = interaction.wreckId;
       this.updatePersistenceOutputs();
       this.requestLifecycleSave();
     } else if (result.status === "rejected") {
@@ -944,57 +914,19 @@ export class WayfindersScene extends Phaser.Scene {
     return result;
   }
 
-  private performWreckLeave(): WreckSurveyInteractionResultV1 | undefined {
-    const interaction = this.simulation.wreckSurveyInteraction;
-    if (!interaction || this.time.now < this.surveyActionUntil) return undefined;
-    const result = this.simulation.interactWithWreck({
-      contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
-      type: "leave",
-      wreckId: interaction.wreckId,
-    });
-    if (result.status === "left") {
-      this.dismissedWreckId = interaction.wreckId;
-      this.log("Left the unidentified wreck unexamined; the survey case was preserved.");
-    } else if (result.status === "rejected") {
-      this.log(`Could not leave the wreck prompt: ${result.reason}.`);
-    }
-    this.syncSurveyRibbon();
-    return result;
-  }
-
   private performFishingShoalSurvey(): FishingShoalInteractionResultV1 | undefined {
     const interaction = this.simulation.fishingShoalInteraction;
-    if (!interaction || this.time.now < this.surveyActionUntil) return undefined;
+    if (!interaction) return undefined;
     const result = this.simulation.interactWithFishingShoal({
       contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
       type: "survey",
       id: interaction.id,
     });
     if (result.status === "surveyed") {
-      this.surveyActionUntil = this.time.now + result.presentationMs;
-      this.dismissedFishingShoalId = interaction.id;
       this.updatePersistenceOutputs();
       this.requestLifecycleSave();
     } else if (result.status === "rejected") {
       this.log(`Fishing-shoal survey was not started: ${result.reason}.`);
-    }
-    this.syncSurveyRibbon();
-    return result;
-  }
-
-  private performFishingShoalLeave(): FishingShoalInteractionResultV1 | undefined {
-    const interaction = this.simulation.fishingShoalInteraction;
-    if (!interaction || this.time.now < this.surveyActionUntil) return undefined;
-    const result = this.simulation.interactWithFishingShoal({
-      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
-      type: "leave",
-      id: interaction.id,
-    });
-    if (result.status === "left") {
-      this.dismissedFishingShoalId = interaction.id;
-      this.log("Left the fishing sign unexamined; the survey case was preserved.");
-    } else if (result.status === "rejected") {
-      this.log(`Could not leave the fishing-shoal prompt: ${result.reason}.`);
     }
     this.syncSurveyRibbon();
     return result;
@@ -1217,7 +1149,10 @@ export class WayfindersScene extends Phaser.Scene {
       "wreck-reports",
       `${this.simulation.provisionalWreckSurveys.length} provisional · ${this.simulation.returnedWreckSurveys.length} returned`,
     );
-    set("survey-cases", `${this.simulation.surveyCasesRemaining} remaining`);
+    set(
+      "survey-cost",
+      `${this.simulation.config.provisions.surveyCost} bundles · ${this.simulation.surveyBudget.availableProvisionUnits.toFixed(1)} usable now`,
+    );
   }
 
   private syncDeveloperToolAvailability(): void {
@@ -1298,6 +1233,7 @@ export class WayfindersScene extends Phaser.Scene {
     switch (id) {
       case "sight-radius": return prototypeConfig.navigation.sightRadius;
       case "starting-bundles": return prototypeConfig.provisions.startingBundles;
+      case "survey-cost": return prototypeConfig.provisions.surveyCost;
       case "supported-cost": return prototypeConfig.provisions.supportedCost;
       case "personal-cost": return prototypeConfig.provisions.personalCost;
       case "unknown-cost": return prototypeConfig.provisions.unknownCost;
@@ -1331,6 +1267,7 @@ export class WayfindersScene extends Phaser.Scene {
       case "starting-bundles":
         patch = { provisions: { startingBundles: value } };
         break;
+      case "survey-cost": patch = { provisions: { surveyCost: value } }; break;
       case "supported-cost": patch = { provisions: { supportedCost: value } }; break;
       case "personal-cost": patch = { provisions: { personalCost: value } }; break;
       case "unknown-cost": patch = { provisions: { unknownCost: value } }; break;
@@ -1354,6 +1291,7 @@ export class WayfindersScene extends Phaser.Scene {
         "supported-cost",
         "personal-cost",
         "unknown-cost",
+        "survey-cost",
         "risk-comfortable",
         "risk-warning",
         "risk-critical",
@@ -1411,7 +1349,7 @@ export class WayfindersScene extends Phaser.Scene {
       + `${this.simulation.returnedFishingShoals.length} returned · Wreck reports: `
       + `${this.simulation.provisionalWreckSurveys.length} provisional · `
       + `${this.simulation.returnedWreckSurveys.length} returned · `
-      + `${this.simulation.surveyCasesRemaining} survey case${this.simulation.surveyCasesRemaining === 1 ? "" : "s"}`;
+      + `Survey cost ${this.simulation.config.provisions.surveyCost} bundles`;
   }
 
   private updatePersistenceOutputs(): void {
@@ -1631,9 +1569,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.lastDiagnosticsRevision = -1;
     this.lastDiagnosticsOverlayRevision = -1;
     this.lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
-    this.dismissedFishingShoalId = undefined;
-    this.dismissedWreckId = undefined;
-    this.surveyActionUntil = Number.NEGATIVE_INFINITY;
     this.pendingGenerationHandoverPresentation = false;
     this.greatHallUpdated = false;
     this.greatHallView?.hide();
@@ -1684,8 +1619,6 @@ export class WayfindersScene extends Phaser.Scene {
     }
     const definition = definitions[this.fishingShoalInspectionIndex % definitions.length];
     this.fishingShoalInspectionIndex++;
-    this.dismissedFishingShoalId = undefined;
-    this.surveyActionUntil = Number.NEGATIVE_INFINITY;
     this.teleportForDeveloper(
       definition.tile,
       `Inspecting fishing sign ${definition.id} at ${definition.tile.x}, ${definition.tile.y}.`,
@@ -1704,8 +1637,6 @@ export class WayfindersScene extends Phaser.Scene {
       return false;
     }
     const target = targets.find(({ id }) => id > this.lastInspectedWreckId) ?? targets[0];
-    this.dismissedWreckId = undefined;
-    this.surveyActionUntil = Number.NEGATIVE_INFINITY;
     const inspected = this.teleportForDeveloper(
       { x: target.x, y: target.y },
       `Inspecting navigator wreck ${target.id} from generation ${target.generation} at ${target.x}, ${target.y}.`,
@@ -1782,9 +1713,7 @@ export class WayfindersScene extends Phaser.Scene {
         y: tile.y,
       })),
       surveyFishingShoal: () => this.performFishingShoalSurvey(),
-      leaveFishingShoal: () => this.performFishingShoalLeave(),
       surveyWreck: () => this.performWreckSurvey(),
-      leaveWreck: () => this.performWreckLeave(),
       continueGeneration: () => this.dismissGenerationHandover(),
       visitGreatHall: () => this.openGreatHallAtHome(),
       closeGreatHall: () => this.closeGreatHallHome(),
@@ -1878,13 +1807,13 @@ export class WayfindersScene extends Phaser.Scene {
         this.log(`Found unidentified navigator wreck ${wreckId}. Survey it to learn whose vessel it was.`);
         this.requestLifecycleSave();
       }),
-      this.simulation.events.on("wreckSurveyed", ({ lostGeneration, presentationMs }) => {
+      this.simulation.events.on("wreckSurveyed", ({ lostGeneration, presentationMs, provisionsSpent }) => {
         this.showLifecycleCue(
           `WRECK IDENTIFIED\nGENERATION ${lostGeneration} NAVIGATOR\nRETURN HOME TO REPORT THEIR FATE`,
           "#f0d7a2",
           presentationMs,
         );
-        this.log(`Wreck survey identified generation ${lostGeneration}'s navigator; the report is provisional.`);
+        this.log(`Wreck survey spent ${provisionsSpent} bundles and identified generation ${lostGeneration}'s navigator; the report is provisional.`);
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
@@ -1922,13 +1851,13 @@ export class WayfindersScene extends Phaser.Scene {
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
-      this.simulation.events.on("fishingShoalSurveyed", ({ quality, presentationMs }) => {
+      this.simulation.events.on("fishingShoalSurveyed", ({ quality, presentationMs, provisionsSpent }) => {
         this.showLifecycleCue(
           `FISHING GROUND SURVEYED\n${quality.toUpperCase()} QUALITY\nRETURN HOME TO REPORT IT`,
           "#ffe1b6",
           presentationMs,
         );
-        this.log(`Fishing ground surveyed: ${quality} quality. The voyage's survey case was spent.`);
+        this.log(`Fishing ground surveyed: ${quality} quality for ${provisionsSpent} bundles.`);
         this.updatePersistenceOutputs();
         this.requestLifecycleSave();
       }),
@@ -2073,9 +2002,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveyRibbon = undefined;
     this.surveyRibbonTitle = undefined;
     this.surveyRibbonClue = undefined;
-    this.surveyRibbonCase = undefined;
+    this.surveyRibbonCost = undefined;
     this.surveyButton = undefined;
-    this.leaveButton = undefined;
     this.homeAction?.remove();
     this.homeAction = undefined;
     this.homeActionButton = undefined;
