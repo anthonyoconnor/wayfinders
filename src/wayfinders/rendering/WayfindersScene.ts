@@ -21,7 +21,12 @@ import {
 } from "../exploration/WreckSurveyContracts";
 import type { SaveStore } from "../persistence/IndexedDbSaveStore";
 import { loadExactSaveSlot } from "../persistence/SaveGame";
-import type { NavigatorVoyageAchievementRecordV1 } from "../lineage/NavigatorLineageSystem";
+import {
+  buildGreatHallChronicle,
+  type GreatHallChronicle,
+  type GreatHallChronicleSources,
+  type GreatHallReturnedVoyage,
+} from "../lineage/GreatHallChronicle";
 import { worldToGrid } from "../world/CoordinateSystem";
 import type { GeneratedIsland } from "../world/IslandGenerator";
 import { KnowledgeState } from "../world/TileData";
@@ -30,6 +35,8 @@ import { DiscoveryRenderer } from "./DiscoveryRenderer";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
+import { canVisitGreatHall } from "./GreatHallAccess";
+import { GreatHallView } from "./GreatHallView";
 import {
   isSceneMovementInputSuppressed,
   resolveSceneMovementInput,
@@ -39,12 +46,6 @@ import { ShipRenderer } from "./ShipRenderer";
 import type { ShipRenderPose } from "./ShipPose";
 import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
-import {
-  buildNavigatorGenerationSummary,
-  describeNavigatorVoyageAchievements,
-  type NavigatorAchievementSources,
-  type NavigatorGenerationSummary,
-} from "./NavigatorGenerationSummary";
 
 interface MovementKeys {
   left: Phaser.Input.Keyboard.Key;
@@ -80,6 +81,10 @@ interface BrowserDebugApi {
   surveyWreck: () => WreckSurveyInteractionResultV1 | undefined;
   leaveWreck: () => WreckSurveyInteractionResultV1 | undefined;
   continueGeneration: () => boolean;
+  visitGreatHall: () => boolean;
+  closeGreatHall: () => boolean;
+  selectGreatHallGeneration: (generation: number) => boolean;
+  greatHall: () => Readonly<GreatHallChronicle>;
 }
 
 export interface PersistenceBootState {
@@ -140,17 +145,13 @@ export class WayfindersScene extends Phaser.Scene {
   private surveyRibbonCase?: HTMLElement;
   private surveyButton?: HTMLButtonElement;
   private leaveButton?: HTMLButtonElement;
+  private homeAction?: HTMLElement;
+  private homeActionButton?: HTMLButtonElement;
+  private greatHallView?: GreatHallView;
+  private greatHallUpdated = false;
   private dismissedFishingShoalId?: string;
   private dismissedWreckId?: number;
   private surveyActionUntil = Number.NEGATIVE_INFINITY;
-  private generationSummaryDialog?: HTMLDialogElement;
-  private generationSummaryEyebrow?: HTMLElement;
-  private generationSummaryTitle?: HTMLElement;
-  private generationSummaryJourneys?: HTMLOListElement;
-  private generationSummaryFindings?: HTMLElement;
-  private generationSummaryHandover?: HTMLElement;
-  private generationSummaryContinue?: HTMLButtonElement;
-  private generationSummaryVisible = false;
   private teleportOnClick = false;
   private islandInspectionIndex = 0;
   private fishingShoalInspectionIndex = 0;
@@ -183,9 +184,9 @@ export class WayfindersScene extends Phaser.Scene {
   private browserDebugApi?: BrowserDebugApi;
   private activeLifecycleCue?: Phaser.GameObjects.Text;
   private returnCueScheduled = false;
-  private pendingReturnedVoyage?: Readonly<NavigatorVoyageAchievementRecordV1>;
+  private pendingReturnedVoyage?: Readonly<GreatHallReturnedVoyage>;
   private pendingReturnVoyagesRemaining?: number;
-  private pendingGenerationSummary?: Readonly<NavigatorGenerationSummary>;
+  private pendingGenerationHandoverPresentation = false;
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
   private lastSaveSerializationMs = 0;
@@ -249,10 +250,11 @@ export class WayfindersScene extends Phaser.Scene {
     this.domAbort = new AbortController();
     this.mountDeveloperTools();
     this.mountSurveyRibbon();
-    this.mountGenerationSummaryDialog();
+    this.mountHomeAction();
+    this.mountGreatHall();
     this.installBrowserDebugApi();
     this.bindSimulationEvents();
-    this.showPendingGenerationSummary();
+    this.showPendingGenerationHandover();
     this.syncPresentation(true);
     this.log(this.persistenceBoot.message);
     void this.refreshCheckpointAvailability();
@@ -270,17 +272,19 @@ export class WayfindersScene extends Phaser.Scene {
     const activeElement = document.activeElement;
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const textInputFocused = this.isTextEntryElement(activeElement);
-    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) {
+    const greatHallOpen = this.greatHallView?.isOpen ?? false;
+    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && !greatHallOpen && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) {
       this.changeZoom(0.1);
     }
-    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) {
+    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && !greatHallOpen && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) {
       this.changeZoom(-0.1);
     }
-    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.survey)) {
-      this.performSurveyAction();
+    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && !greatHallOpen && Phaser.Input.Keyboard.JustDown(this.keys.survey)) {
+      if (!this.openGreatHallAtHome()) this.performSurveyAction();
     }
-    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && Phaser.Input.Keyboard.JustDown(this.keys.leave)) {
-      this.performSurveyLeave();
+    if (!developerToolsOpen && !textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.leave)) {
+      if (this.greatHallView?.mode === "home") this.closeGreatHallHome();
+      else if (!this.simulation.generationHandoverActive && !greatHallOpen) this.performSurveyLeave();
     }
     const movementInput = this.readMovementInput();
     let keepAdvancing = true;
@@ -318,6 +322,7 @@ export class WayfindersScene extends Phaser.Scene {
       developerNumberFocused: this.isDeveloperNumberInput(activeElement),
       textEntryFocused: this.isTextEntryElement(activeElement),
       generationHandoverActive: this.simulation.generationHandoverActive,
+      greatHallOpen: this.greatHallView?.isOpen ?? false,
       surveyActionActive: this.time.now < this.surveyActionUntil,
     };
   }
@@ -433,7 +438,9 @@ export class WayfindersScene extends Phaser.Scene {
     );
     this.cargoRenderer.sync(this.simulation.ship.provisions);
     this.syncSurveyRibbon();
+    this.syncHomeAction();
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
+    const greatHallOpen = this.greatHallView?.isOpen ?? false;
     const inputSuppressed = this.simulation.wreckPresentationActive
       || isSceneMovementInputSuppressed(this.sceneMovementInputContext());
     const diagnosticsDirty = this.lastDiagnosticsRevision !== this.simulation.revision
@@ -447,6 +454,7 @@ export class WayfindersScene extends Phaser.Scene {
         || Math.abs(this.simulation.ship.speed) > 0
         || this.simulation.wreckPresentationActive
         || this.simulation.generationHandoverActive
+        || greatHallOpen
       )
     );
     const host = this.gameHost;
@@ -480,6 +488,11 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.successfulReturns = String(this.simulation.successfulReturns);
       host.dataset.failedExpeditions = String(this.simulation.failedExpeditions);
       host.dataset.atDock = String(this.simulation.atDock);
+      host.dataset.greatHallAvailable = String(this.canVisitGreatHall());
+      host.dataset.greatHallOpen = String(greatHallOpen);
+      host.dataset.greatHallMode = this.greatHallView?.mode ?? "";
+      host.dataset.greatHallSelectedGeneration = String(this.greatHallView?.selectedGeneration ?? "");
+      host.dataset.greatHallUpdated = String(this.greatHallUpdated);
       host.dataset.wrecks = String(this.simulation.wrecks.length);
       host.dataset.wreckSurveyProvisional = String(this.simulation.provisionalWreckSurveys.length);
       host.dataset.wreckSurveyReturned = String(this.simulation.returnedWreckSurveys.length);
@@ -499,7 +512,9 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.respawnSeconds = this.simulation.respawnSecondsRemaining.toFixed(3);
       host.dataset.lifecyclePhase = this.simulation.generationHandoverActive
         ? "generation-summary"
-        : this.simulation.wreckPresentationActive
+        : greatHallOpen
+          ? "great-hall"
+          : this.simulation.wreckPresentationActive
           ? "wreck-hold"
           : "active";
       host.dataset.inputSuppressed = String(inputSuppressed);
@@ -568,7 +583,9 @@ export class WayfindersScene extends Phaser.Scene {
     }
     if (diagnosticsDue && this.gameStatus) {
       const voyage = `Voyage ${this.simulation.navigatorVoyageNumber} of 4`;
-      const message = this.simulation.generationHandoverActive
+      const message = this.greatHallView?.mode === "home"
+        ? "Great Hall · lineage chronicle open at the home dock"
+        : this.simulation.generationHandoverActive
         ? "A navigator's journeys are being remembered · continue to begin the next generation"
         : this.simulation.wreckPresentationActive
         ? `Home mourns · a new navigator takes the helm in ${this.simulation.respawnSecondsRemaining.toFixed(1)}s`
@@ -825,7 +842,7 @@ export class WayfindersScene extends Phaser.Scene {
   private syncSurveyRibbon(): void {
     const ribbon = this.surveyRibbon;
     if (!ribbon) return;
-    if (this.simulation.generationHandoverActive) {
+    if (this.simulation.generationHandoverActive || this.greatHallView?.isOpen) {
       ribbon.hidden = true;
       return;
     }
@@ -983,107 +1000,42 @@ export class WayfindersScene extends Phaser.Scene {
     return result;
   }
 
-  private mountGenerationSummaryDialog(): void {
+  private mountHomeAction(): void {
     const host = this.gameHost;
     const signal = this.domAbort?.signal;
     if (!host || !signal) return;
-    const dialog = document.createElement("dialog");
-    dialog.className = "generation-summary";
-    dialog.setAttribute("aria-labelledby", "generation-summary-title");
-    dialog.innerHTML = `
-      <div class="generation-summary__panel">
-        <p class="generation-summary__eyebrow" data-generation-summary-eyebrow></p>
-        <h2 id="generation-summary-title" data-generation-summary-title></h2>
-        <ol class="generation-summary__journeys" data-generation-summary-journeys></ol>
-        <p class="generation-summary__findings" data-generation-summary-findings></p>
-        <p class="generation-summary__handover" data-generation-summary-handover></p>
-        <button data-generation-summary-continue type="button">Continue</button>
-      </div>`;
-    host.append(dialog);
-    this.generationSummaryDialog = dialog;
-    this.generationSummaryEyebrow = dialog.querySelector<HTMLElement>("[data-generation-summary-eyebrow]") ?? undefined;
-    this.generationSummaryTitle = dialog.querySelector<HTMLElement>("[data-generation-summary-title]") ?? undefined;
-    this.generationSummaryJourneys = dialog.querySelector<HTMLOListElement>("[data-generation-summary-journeys]") ?? undefined;
-    this.generationSummaryFindings = dialog.querySelector<HTMLElement>("[data-generation-summary-findings]") ?? undefined;
-    this.generationSummaryHandover = dialog.querySelector<HTMLElement>("[data-generation-summary-handover]") ?? undefined;
-    this.generationSummaryContinue = dialog.querySelector<HTMLButtonElement>("[data-generation-summary-continue]") ?? undefined;
-    this.generationSummaryContinue?.addEventListener("click", () => this.dismissGenerationSummary(), { signal });
-    dialog.addEventListener("cancel", (event) => event.preventDefault(), { signal });
+    const action = document.createElement("aside");
+    action.className = "home-action";
+    action.dataset.homeAction = "great-hall";
+    action.hidden = true;
+    action.setAttribute("aria-label", "Home shore action");
+    action.innerHTML = `
+      <div>
+        <strong>Home shore</strong>
+        <span>The Great Hall preserves every journey returned to the tribe.</span>
+      </div>
+      <button data-visit-great-hall type="button">Go ashore · Great Hall <kbd>F</kbd></button>`;
+    host.append(action);
+    this.homeAction = action;
+    this.homeActionButton = action.querySelector<HTMLButtonElement>("[data-visit-great-hall]") ?? undefined;
+    this.homeActionButton?.addEventListener("click", () => this.openGreatHallAtHome(), { signal });
   }
 
-  private showGenerationSummary(summary: Readonly<NavigatorGenerationSummary>): void {
-    const dialog = this.generationSummaryDialog;
-    if (!dialog) return;
-    if (this.generationSummaryEyebrow) {
-      this.generationSummaryEyebrow.textContent = `Generation ${summary.generation} navigator`;
-    }
-    if (this.generationSummaryTitle) {
-      this.generationSummaryTitle.textContent = summary.outcome === "tenure-completed"
-        ? "Four journeys completed"
-        : "Lost at sea";
-    }
-    if (this.generationSummaryJourneys) {
-      this.generationSummaryJourneys.replaceChildren(...summary.journeys.map((journey) => {
-        const row = document.createElement("li");
-        row.dataset.outcome = journey.outcome;
-        const heading = document.createElement("div");
-        heading.className = "generation-summary__journey-heading";
-        const label = document.createElement("strong");
-        label.textContent = `Journey ${journey.voyageNumber}`;
-        const outcome = document.createElement("span");
-        outcome.textContent = journey.outcome === "returned" ? "Returned safely" : "Lost at sea";
-        heading.append(label, outcome);
-        const achievements = document.createElement("ul");
-        achievements.className = "generation-summary__achievements";
-        achievements.replaceChildren(...journey.achievements.map((achievement) => {
-          const item = document.createElement("li");
-          item.textContent = achievement;
-          return item;
-        }));
-        row.append(heading, achievements);
-        return row;
-      }));
-    }
-    if (this.generationSummaryFindings) {
-      this.generationSummaryFindings.textContent = summary.outcome === "tenure-completed"
-        ? "All findings returned during these journeys are secured with the tribe."
-        : "Findings returned before the final voyage remain secured with the tribe.";
-    }
-    if (this.generationSummaryHandover) {
-      this.generationSummaryHandover.textContent = summary.outcome === "tenure-completed"
-        ? `Their four journeys enter the tribe's memory. Time passes, and generation ${summary.nextGeneration} takes the helm.`
-        : `The tribe mourns, time passes, and generation ${summary.nextGeneration} takes the helm.`;
-    }
-    if (this.generationSummaryContinue) {
-      this.generationSummaryContinue.textContent = `Begin generation ${summary.nextGeneration}`;
-    }
-    dialog.dataset.outcome = summary.outcome;
-    dialog.dataset.generation = String(summary.generation);
-    dialog.dataset.nextGeneration = String(summary.nextGeneration);
-    this.generationSummaryVisible = true;
-    // Keep the developer drawer reachable for checkpoint testing while the
-    // simulation's handover state remains the authoritative gameplay gate.
-    if (!dialog.open) {
-      if (typeof dialog.show === "function") dialog.show();
-      else dialog.setAttribute("open", "");
-    }
-    this.lastDiagnosticsRevision = -1;
-    this.syncSurveyRibbon();
-    this.generationSummaryContinue?.focus();
+  private mountGreatHall(): void {
+    const host = this.gameHost;
+    const signal = this.domAbort?.signal;
+    if (!host || !signal) return;
+    this.greatHallView = new GreatHallView(host, signal, {
+      closeHome: () => { this.closeGreatHallHome(); },
+      continueHandover: () => { this.dismissGenerationHandover(); },
+    });
   }
 
-  private showPendingGenerationSummary(): boolean {
-    const handover = this.simulation.pendingGenerationHandover;
-    if (!handover) return false;
-    const navigator = this.simulation.navigatorLineage.find(({ id }) => id === handover.fromNavigatorId);
-    if (!navigator || navigator.state === "active") {
-      throw new Error(`Terminal navigator ${handover.fromNavigatorId} is missing from the lineage`);
-    }
-    this.showGenerationSummary(buildNavigatorGenerationSummary(navigator, this.navigatorAchievementSources()));
-    return true;
+  private greatHallChronicle(): Readonly<GreatHallChronicle> {
+    return buildGreatHallChronicle(this.simulation.navigatorLineage, this.greatHallChronicleSources());
   }
 
-  private navigatorAchievementSources(): NavigatorAchievementSources {
+  private greatHallChronicleSources(): GreatHallChronicleSources {
     return {
       discoveries: this.simulation.returnedDiscoveries,
       fishingShoals: this.simulation.fishingShoalDefinitions,
@@ -1091,10 +1043,72 @@ export class WayfindersScene extends Phaser.Scene {
     };
   }
 
-  private dismissGenerationSummary(): boolean {
-    if (!this.generationSummaryDialog || !this.generationSummaryVisible) return false;
+  private canVisitGreatHall(): boolean {
+    return canVisitGreatHall({
+      atDock: this.simulation.atDock,
+      expeditionActive: this.simulation.expeditionActive,
+      wreckPresentationActive: this.simulation.wreckPresentationActive,
+      generationHandoverActive: this.simulation.generationHandoverActive,
+      greatHallOpen: this.greatHallView?.isOpen ?? false,
+    });
+  }
+
+  private openGreatHallAtHome(): boolean {
+    const view = this.greatHallView;
+    if (!view || !this.canVisitGreatHall()) return false;
+    view.showHome(this.greatHallChronicle(), this.simulation.currentNavigator.id);
+    this.greatHallUpdated = false;
+    this.lastDiagnosticsRevision = -1;
+    this.syncHomeAction();
+    this.syncSurveyRibbon();
+    this.syncRiskLegend();
+    this.log("Went ashore to visit the Great Hall lineage chronicle.");
+    return true;
+  }
+
+  private closeGreatHallHome(restoreFocus = true): boolean {
+    const view = this.greatHallView;
+    if (!view || view.mode !== "home") return false;
+    view.hide();
+    this.lastDiagnosticsRevision = -1;
+    this.syncHomeAction();
+    this.syncSurveyRibbon();
+    this.syncRiskLegend();
+    if (restoreFocus) (this.homeActionButton ?? this.gameHost)?.focus({ preventScroll: true });
+    return true;
+  }
+
+  private selectGreatHallGeneration(generation: number): boolean {
+    const selected = this.greatHallView?.selectGeneration(Math.trunc(generation)) ?? false;
+    if (selected) this.lastDiagnosticsRevision = -1;
+    return selected;
+  }
+
+  private showPendingGenerationHandover(): boolean {
+    const handover = this.simulation.pendingGenerationHandover;
+    const view = this.greatHallView;
+    if (!handover || !view) return false;
+    const navigator = this.simulation.navigatorLineage.find(({ id }) => id === handover.fromNavigatorId);
+    if (!navigator || navigator.state === "active") {
+      throw new Error(`Terminal navigator ${handover.fromNavigatorId} is missing from the lineage`);
+    }
+    view.showHandover(this.greatHallChronicle(), handover.fromNavigatorId, handover.nextGeneration);
+    this.greatHallUpdated = false;
+    this.lastDiagnosticsRevision = -1;
+    this.syncHomeAction();
+    this.syncSurveyRibbon();
+    this.syncRiskLegend();
+    return true;
+  }
+
+  private dismissGenerationHandover(): boolean {
+    if (this.greatHallView?.mode !== "handover") return false;
     if (!this.simulation.acknowledgeGenerationHandover()) return false;
-    this.closeGenerationSummaryPresentation();
+    this.greatHallView.hide();
+    this.lastDiagnosticsRevision = -1;
+    this.syncHomeAction();
+    this.syncSurveyRibbon();
+    this.syncRiskLegend();
     this.requestLifecycleSave();
     const focusTarget = document.documentElement.dataset.developerTools === "open"
       ? document.querySelector<HTMLElement>("#developer-tools-close")
@@ -1103,16 +1117,15 @@ export class WayfindersScene extends Phaser.Scene {
     return true;
   }
 
-  private closeGenerationSummaryPresentation(): boolean {
-    const dialog = this.generationSummaryDialog;
-    if (!dialog) return false;
-    const wasVisible = this.generationSummaryVisible || dialog.open;
-    if (typeof dialog.close === "function" && dialog.open) dialog.close();
-    else dialog.removeAttribute("open");
-    this.generationSummaryVisible = false;
-    this.lastDiagnosticsRevision = -1;
-    this.syncSurveyRibbon();
-    return wasVisible;
+  private syncHomeAction(): void {
+    const action = this.homeAction;
+    if (!action) return;
+    if (this.greatHallView?.mode === "home" && !this.simulation.atDock) {
+      this.closeGreatHallHome(false);
+      this.log("The Great Hall closed because the ship left the exact home dock.");
+    }
+    action.hidden = !this.canVisitGreatHall();
+    action.dataset.updated = String(this.greatHallUpdated);
   }
 
   private toggleMarkup(name: keyof GameSimulation["debug"], label: string): string {
@@ -1277,6 +1290,7 @@ export class WayfindersScene extends Phaser.Scene {
       entry.hidden = !visibility[name];
     });
     legend.hidden = this.simulation.generationHandoverActive
+      || (this.greatHallView?.isOpen ?? false)
       || (!visibility.forwardRange && !visibility.returnViability);
   }
 
@@ -1620,11 +1634,12 @@ export class WayfindersScene extends Phaser.Scene {
     this.dismissedFishingShoalId = undefined;
     this.dismissedWreckId = undefined;
     this.surveyActionUntil = Number.NEGATIVE_INFINITY;
-    this.pendingGenerationSummary = undefined;
-    this.closeGenerationSummaryPresentation();
+    this.pendingGenerationHandoverPresentation = false;
+    this.greatHallUpdated = false;
+    this.greatHallView?.hide();
     this.resetShipPresentation(true);
     this.updateProvisionOutput();
-    this.showPendingGenerationSummary();
+    this.showPendingGenerationHandover();
     this.syncPresentation(true);
     // Camera follow deliberately uses smoothing during play. A restored or
     // regenerated world is a discontinuity, so snap to the authoritative ship
@@ -1770,7 +1785,11 @@ export class WayfindersScene extends Phaser.Scene {
       leaveFishingShoal: () => this.performFishingShoalLeave(),
       surveyWreck: () => this.performWreckSurvey(),
       leaveWreck: () => this.performWreckLeave(),
-      continueGeneration: () => this.dismissGenerationSummary(),
+      continueGeneration: () => this.dismissGenerationHandover(),
+      visitGreatHall: () => this.openGreatHallAtHome(),
+      closeGreatHall: () => this.closeGreatHallHome(),
+      selectGreatHallGeneration: (generation) => this.selectGreatHallGeneration(generation),
+      greatHall: () => this.greatHallChronicle(),
     };
     this.browserDebugApi = api;
     window.__WAYFINDERS__ = api;
@@ -1790,15 +1809,24 @@ export class WayfindersScene extends Phaser.Scene {
   private bindSimulationEvents(): void {
     this.eventUnsubscribers.push(
       this.simulation.events.on("expeditionReturned", ({
+        navigatorId,
         voyageNumber,
         voyagesRemaining,
+        tenureCompleted,
         supportedTileCount,
         closedUnknownTileCount,
-        achievements,
       }) => {
         this.worldRenderer.refreshKnowledge(this.simulation.generated);
-        this.pendingReturnedVoyage = achievements;
+        const entry = this.greatHallChronicle().navigators.find(({ navigatorId: id }) => id === navigatorId);
+        const voyage = entry?.voyages.find((record) => (
+          record.voyageNumber === voyageNumber && record.outcome === "returned"
+        ));
+        if (!voyage || voyage.outcome !== "returned") {
+          throw new Error(`Returned voyage ${navigatorId}:${voyageNumber} is missing from the Great Hall chronicle`);
+        }
+        this.pendingReturnedVoyage = voyage;
         this.pendingReturnVoyagesRemaining = voyagesRemaining;
+        this.greatHallUpdated = !tenureCompleted;
         this.scheduleReturnCue();
         this.log(
           `Voyage ${voyageNumber} of 4 returned: ${supportedTileCount} Personal tiles and `
@@ -1807,17 +1835,11 @@ export class WayfindersScene extends Phaser.Scene {
         this.requestLifecycleSave();
       }),
       this.simulation.events.on("navigatorTenureCompleted", ({
-        navigatorId,
         generation,
         completedVoyages,
         nextGeneration,
       }) => {
-        const navigator = this.simulation.navigatorLineage.find(({ id }) => id === navigatorId);
-        if (!navigator) throw new Error(`Completed navigator ${navigatorId} is missing from the lineage`);
-        this.pendingGenerationSummary = buildNavigatorGenerationSummary(
-          navigator,
-          this.navigatorAchievementSources(),
-        );
+        this.pendingGenerationHandoverPresentation = true;
         this.scheduleReturnCue();
         this.log(
           `Generation ${generation}'s navigator completed ${completedVoyages} successful voyages; `
@@ -1840,12 +1862,7 @@ export class WayfindersScene extends Phaser.Scene {
       this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
         this.resetShipPresentation(false);
         this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
-        const navigator = this.simulation.navigatorLineage.find((record) => record.generation === generation);
-        if (!navigator) throw new Error(`Lost navigator from generation ${generation} is missing from the lineage`);
-        this.showGenerationSummary(buildNavigatorGenerationSummary(
-          navigator,
-          this.navigatorAchievementSources(),
-        ));
+        this.showPendingGenerationHandover();
         this.log(
           `Generation ${generation} lost ${forgottenTiles} unreturned tiles; `
           + `generation ${nextGeneration} now carries the inherited chart.`,
@@ -1970,12 +1987,12 @@ export class WayfindersScene extends Phaser.Scene {
       this.pendingReturnedVoyage = undefined;
       const voyagesRemaining = this.pendingReturnVoyagesRemaining;
       this.pendingReturnVoyagesRemaining = undefined;
-      const generationSummary = this.pendingGenerationSummary;
-      this.pendingGenerationSummary = undefined;
-      if (!voyage && !generationSummary) return;
+      const generationHandover = this.pendingGenerationHandoverPresentation;
+      this.pendingGenerationHandoverPresentation = false;
+      if (!voyage && !generationHandover) return;
 
-      if (generationSummary) {
-        this.showGenerationSummary(generationSummary);
+      if (generationHandover) {
+        this.showPendingGenerationHandover();
         return;
       }
       if (!voyage) return;
@@ -1984,16 +2001,15 @@ export class WayfindersScene extends Phaser.Scene {
       const remainingLine = voyagesRemaining === undefined
         ? ""
         : `${voyagesRemaining} VOYAGE${voyagesRemaining === 1 ? "" : "S"} REMAIN · `;
-      const achievements = describeNavigatorVoyageAchievements(
-        voyage,
-        this.navigatorAchievementSources(),
+      const achievements = (voyage.achievements.length > 0
+        ? voyage.achievements.map(({ label }) => label)
+        : ["No new findings returned."]
       ).map((achievement) => achievement.toUpperCase()).join("\n");
-      const hasNotableFindings = voyage.discoveryIds.length > 0
-        || voyage.fishingLeadIds.length > 0
-        || voyage.fishingSurveyIds.length > 0
-        || voyage.wreckIds.length > 0;
+      const hasNotableFindings = voyage.achievements.some(({ kind }) => (
+        kind !== "supported-route-tiles" && kind !== "mapped-enclosed-water-tiles"
+      ));
       this.showLifecycleCue(
-        `${voyageHeading}\n${achievements}\nADDED TO THE INHERITED CHART\n`
+        `${voyageHeading}\n${achievements}\nRECORDED IN THE GREAT HALL\n`
         + `${remainingLine}PROVISIONS REPLENISHED`,
         hasNotableFindings ? "#eadb9f" : "#d9fff5",
         hasNotableFindings ? 5_000 : 3_500,
@@ -2060,15 +2076,11 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveyRibbonCase = undefined;
     this.surveyButton = undefined;
     this.leaveButton = undefined;
-    this.generationSummaryDialog?.remove();
-    this.generationSummaryDialog = undefined;
-    this.generationSummaryEyebrow = undefined;
-    this.generationSummaryTitle = undefined;
-    this.generationSummaryJourneys = undefined;
-    this.generationSummaryFindings = undefined;
-    this.generationSummaryHandover = undefined;
-    this.generationSummaryContinue = undefined;
-    this.generationSummaryVisible = false;
+    this.homeAction?.remove();
+    this.homeAction = undefined;
+    this.homeActionButton = undefined;
+    this.greatHallView?.destroy();
+    this.greatHallView = undefined;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.knowledgeOverlay.destroy();
     this.riskOverlay.destroy();

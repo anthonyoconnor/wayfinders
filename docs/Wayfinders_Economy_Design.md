@@ -131,7 +131,9 @@ An idol aboard a wrecked ship is not credited as collected. It should become rec
 
 ### 5.4 Great Hall voyage record and lineage archive
 
-The player-facing permanent record is a diegetic **Great Hall** rather than an arcade score screen. It is opened at the home island, after an important return or from a generation handover. It is not a permanent sailing HUD. GP-2.2's required handover modal is deliberately smaller: for each numbered safe voyage it lists the route-support counts, named discoveries, fishing leads and surveys, and navigator-wreck identities committed at the exact dock. For an early death it follows the earlier committed rows with the numbered voyage on which the navigator was lost at sea and shows none of that fatal voyage's provisional work. Permanent browsing, later achievement categories and lineage aggregates remain Great Hall work.
+The player-facing permanent record is a diegetic **Great Hall** rather than an arcade score screen. GP-2.2 owns the four-journey tenure, death, succession and required handover gate. GP-2.3 turns that handover into the focused, non-dismissible view of the same Great Hall chronicle used for permanent browsing; it is not a separate summary. For each numbered safe voyage it lists the route-support counts, named discoveries, fishing leads and surveys, and navigator-wreck identities committed at the exact dock. For an early death it follows the earlier committed rows with the numbered voyage on which the navigator was lost at sea and shows none of that fatal voyage's provisional work.
+
+Outside succession, the player may browse every generation through **Go ashore · Great Hall** only at the exact home dock. The current navigator appears as **In progress**. Ordinary returns update the chronicle and may show a session-only update cue, but do not force the Hall open; there is no at-sea Great Hall or permanent sailing HUD. The chronicle entries and lineage totals are a shared, derived read model over authoritative lineage and returned-world records. The source records provide permanence while the Hall view is rebuilt; it is not a second archive, separately persisted aggregates or saved viewed/update state.
 
 Each navigator receives four numbered voyage positions. A navigator who completes their tenure fills all four with safely returned voyages. A navigator who dies in a wreck keeps their earlier completed voyages, receives a respectful terminal lost-voyage record and cannot use the remaining positions.
 
@@ -144,7 +146,7 @@ Each navigator receives four numbered voyage positions. A navigator who complete
 | Idols recovered | Named relics returned by that navigator |
 | Navigator's fate | Completed four-voyage tenure, or lost at sea with the wreck initially unlocated and a later returned wreck report when found |
 
-The lineage archive aggregates permanent progress across every generation. It may show a restrained completion count such as **Idols recovered: 4 of 12**, recovered silhouettes and named exhibits. It must not reveal the remaining locations.
+The lineage view aggregates permanent progress across every generation. It may show a restrained completion count such as **Idols recovered: 4 of 12**, recovered silhouettes and named exhibits. These totals are derived when the Great Hall is presented rather than stored as separate lineage state, and they must not reveal the remaining locations.
 
 Only returned achievements count as permanent legacy. Sighted and surveyed-but-unreturned opportunities remain provisional and are lost after a wreck. The terminal lost-voyage entry records that the navigator did not return, not the fatal expedition's provisional achievements. A later navigator's exact-dock-committed wreck survey can confirm whose wreck was found and attach that location/fate report to the lost record. This keeps exact-dock return as the game's clear commitment boundary.
 
@@ -266,7 +268,7 @@ The player does not open a route-management screen. Their return report and Supp
 
 Economic simulation should advance on meaningful voyage transitions, not through a requirement to idle at the dock.
 
-Authoritative succession remains immediate, but every safe-tenure or fatal-wreck generation boundary presents GP-2.2's required committed-voyage summary before sailing resumes. A safe return or fatal-wreck succession represents elapsed world time between voyages. Connected communities are assumed to have been fishing, trading and working; after a loss, the tribe has also determined that its navigator will not return, mourned them and nominated a successor. The transition settles the effects of that elapsed period. Later presentation can replace the summary with a richer world-facing handover or mourning scene without imposing real-time waiting.
+Authoritative succession remains immediate, but every safe-tenure or fatal-wreck generation boundary creates GP-2.2's required handover gate before sailing resumes. GP-2.3 presents that gate as the outgoing navigator's focused Great Hall entry. A safe return or fatal-wreck succession represents elapsed world time between voyages. Connected communities are assumed to have been fishing, trading and working; after a loss, the tribe has also determined that its navigator will not return, mourned them and nominated a successor. The transition settles the effects of that elapsed period. Later presentation can enrich the handover or mourning scene without imposing real-time waiting or replacing the shared chronicle.
 
 This supports the desired pacing:
 
@@ -374,7 +376,7 @@ Begin with deterministic fishing-shoal clues, limited survey cases, an explicit 
 
 ### GP-2: explorers, generations and lineage history
 
-Add persistent navigator identity, a maximum four-voyage tenure, automatic succession after the fourth safe return and fatal early succession on wreck. Every succession summarizes the exact-dock-committed achievements of each safe voyage and excludes provisional fatal-voyage work; the later Great Hall makes those voyage positions permanently browsable and adds lineage aggregates. A later navigator can survey an unidentified runtime wreck with the existing survey case and permanently report whose wreck it is only after exact-dock return. GP-2 does not salvage cargo, restore chart knowledge or apply economy rewards from that wreck.
+GP-2.2 adds persistent navigator identity, the four-journey tenure, automatic succession after the fourth safe return, fatal early succession on wreck and the required handover gate. GP-2.3 presents that handover as the focused view of the permanent Great Hall chronicle, adds optional exact-home-dock browsing across generations and derives lineage totals. Every succession shows the exact-dock-committed achievements of each safe voyage and excludes provisional fatal-voyage work. A later navigator can survey an unidentified runtime wreck with the existing survey case and permanently report whose wreck it is only after exact-dock return. GP-2 does not salvage cargo, restore chart knowledge or apply economy rewards from that wreck.
 
 ### GP-3: tribe economy, support and recovery
 

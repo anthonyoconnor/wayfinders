@@ -8,15 +8,15 @@ The current implementation is the accepted starting point. It includes
 developer tooling, home waters, exploration knowledge, provision-aware risk
 and return, expedition inheritance, deterministic discoveries, cross-session
 persistence, versioned navigator succession, four-voyage navigator tenures
-with exact-dock-committed achievement summaries at generation handover,
-returned identity/fate reports for runtime navigator wrecks and the
-performance foundation.
+with exact-dock-committed achievements in a permanent Great Hall chronicle,
+the shared required generation-handover view, returned identity/fate reports
+for runtime navigator wrecks and the performance foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
-`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-2.2` work is
-complete and accepted. The user explicitly requested a pause after `GP-2.2`;
-`GP-2.3` and `GP-3.1` are not currently authorized.
+`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-2.3` work is
+complete and accepted. Implementation is paused before `GP-3.1`, which is not
+currently authorized.
 
 ## Run and verify
 
@@ -38,14 +38,17 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 215 automated tests pass across 23 files.
+- 220 automated tests pass across 24 files.
 - The production Vite build passes.
-- Browser tests cover discovery and fishing return, returned-lead upgrade,
+- Existing browser acceptance covers discovery and fishing return,
+  returned-lead upgrade,
   autosave reload, manual checkpoint restore, exact ship/camera restoration,
   the home-linked fishing-ground cue, wreck-hold reload, generation
-  advancement, save clearing, four-voyage automatic succession, both
-  generation-summary outcomes, runtime-wreck survey/reporting and a clean
-  warning/error console.
+  advancement, save clearing, four-voyage automatic succession,
+  runtime-wreck survey/reporting and a clean warning/error console. The shared
+  Great Hall model and exact-dock access policy are automated; an interactive
+  pass over its focused handover and optional browsing modes remains
+  outstanding.
 - The Phaser bundle-size warning remains informational.
 
 ## Current playable foundation
@@ -125,8 +128,9 @@ Current verification baseline:
   outgoing navigator is already recorded as lost during that hold; completion
   then respawns a supplied ship at the dock and creates exactly one successor.
   Reloading during the hold resumes the same persisted succession key.
-- Every fourth-return or fatal-wreck succession presents a required handover
-  modal derived from the committed outgoing navigator. Each safely returned
+- Every fourth-return or fatal-wreck succession presents the required focused
+  handover mode of the shared Great Hall, derived from the committed outgoing
+  navigator. Each safely returned
   voyage lists its Supported-route counts, named discoveries, recorded fishing
   leads, returned fishing surveys and returned navigator-wreck identities. A
   safe voyage with no such result explicitly says that no new findings were
@@ -208,10 +212,13 @@ Current verification baseline:
   surveys retain their ordinary returned mark.
 - Voyage progress is presented as a bounded **Voyage n of 4** navigator cue.
   The obsolete retirement-choice ribbon and age HUD are absent.
-- The required generation modal summarizes each safe voyage's committed
-  achievements and the navigator's terminal outcome, but it is not the
-  permanent Great Hall or a lineage-wide aggregate. GR-3.4 may polish or
-  replace it without changing authoritative voyage records.
+- The permanent Great Hall is optionally opened only from the exact home dock
+  through **Go ashore · Great Hall**. It browses active, completed and lost
+  navigators, their exact-dock-committed journeys and derived lineage totals.
+  Returns one through three update it without forcing it open. The same
+  navigator entry becomes the required, non-dismissible handover mode at
+  succession. GR-3.4 may polish this presentation without changing the shared
+  read model or authoritative voyage records.
 - Discovered, unreported runtime wrecks use an unidentified marker and a
   contextual **Survey wreck / Leave** action. The aboard result names the lost
   navigator provisionally; exact-dock return makes the report permanent.
@@ -279,14 +286,15 @@ Current verification baseline:
 
 - Gameplay track: discovery rewards, settlements and resources are records
   only. The complete `GP-1` fishing survey loop ends at a derived connected
-  returned-ground cue; the handover now records returned voyage achievements,
-  but authoritative fishing activation/output, tribe economics, the permanent
-  Great Hall and idols are not yet implemented.
+  returned-ground cue; the Great Hall records returned voyage achievements,
+  but authoritative fishing activation/output, tribe economics and idols are
+  not yet implemented.
 - Gameplay track: navigator identity, succession and the four-voyage tenure
-  are authoritative. The Great Hall voyage chronicle remains proposed as
-  `GP-2.3`. Runtime wreck identity/fate surveying and reporting are implemented;
-  salvage, bounded chart restoration, cargo and economy recovery remain
-  `GP-3.4` work.
+  are authoritative, and the permanent Great Hall chronicle is implemented.
+  Later landfall, connection, trade and idol categories join it only at their
+  owning milestones. Runtime wreck identity/fate surveying and reporting are
+  implemented; salvage, bounded chart restoration, cargo and economy recovery
+  remain `GP-3.4` work.
 - Gameplay track: autosave and a stable manual checkpoint exist, but a final
   player-facing saved-game model has not been chosen.
 - `GP-3`: there are no fishing boats, trade vessels or
@@ -299,8 +307,8 @@ Current verification baseline:
 
 ## Paused checkpoint
 
-`GP-2.2` is accepted. Per the user's instruction, implementation is paused
-before `GP-2.3`; neither `GP-2.3` nor `GP-3.1` has active authorization.
+`GP-2.3` is accepted. Implementation is paused before `GP-3.1`, which has no
+active authorization.
 
 The completed milestones are:
 
@@ -315,11 +323,15 @@ The completed milestones are:
 8. `GP-2.2` — accepted: four exact-return voyages, automatic tenure
    succession, fatal-wreck early succession, per-safe-voyage committed
    achievement summaries and exact-dock-committed runtime-wreck identity/fate
-   reports.
+   reports;
+9. `GP-2.3` — accepted: one shared Great Hall chronicle read model, required
+   focused succession handover, optional exact-home-dock browsing, active /
+   completed / lost navigator history, derived lineage totals and returned
+   wreck-fate confirmation.
 
-The next proposed gameplay milestone is `GP-2.3`, the Great Hall voyage
-chronicle.
-It requires renewed authorization. `GP-3.1` remains untouched.
+The next proposed gameplay milestone is `GP-3.1`, tribe capacity and the
+protected recovery floor. It requires renewed authorization and remains
+untouched.
 
 The graphics track remains deferred until `GP-3.2` is accepted, proving the
 survey-to-active-fishing and visible tribe-benefit loop with developer

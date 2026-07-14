@@ -1,8 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-2.2` work is complete and accepted. Work is
-paused before `GP-2.3`; further implementation requires a new authorization.
+ordered `GP-0.1` through `GP-2.3` work is complete and accepted. Work is
+paused before `GP-3.1`; further implementation requires a new authorization.
 
 ## Roadmap model
 
@@ -60,8 +60,8 @@ The current build already provides:
   per resolved wreck;
 - versioned navigator identities, four-voyage tenures and exactly-once
   succession after either a completed tenure or a fatal wreck;
-- exact-dock-committed achievement records for each safe voyage and a
-  generation-handover summary that presents them;
+- exact-dock-committed achievement records for each safe voyage and a shared
+  Great Hall chronicle whose focused handover mode presents them at succession;
 - schema-validated IndexedDB autosave, a stable manual checkpoint and exact
   ship/camera restoration;
 - functional developer graphics, developer controls, diagnostics and the
@@ -351,14 +351,15 @@ completes the navigator's tenure, immediately creating exactly one successor
 without a retirement choice or fifth voyage. A wreck during any voyage is
 fatal: it records the navigator as lost, preserves the four-second wreck
 presentation and creates exactly one successor after the pending transition.
-Every succession presents a required generation summary: a completed tenure
-shows the exact-dock-committed achievements from all four safe voyages, while
-an early loss shows the committed earlier voyages followed by the numbered
-voyage on which the navigator was lost at sea. The summary includes route-
+Every succession presents the required handover mode of the Great Hall: a
+completed tenure shows the exact-dock-committed achievements from all four safe
+voyages, while an early loss shows the committed earlier voyages followed by
+the numbered voyage on which the navigator was lost at sea. The focused
+handover entry includes route-
 support counts, discovery names, fishing leads and surveys, and returned wreck
 identities; it never credits provisional results from a fatal voyage. The
-permanent Great Hall and lineage aggregates remain GP-2.3 work. A later
-navigator can sight an
+GP-2.3 chronicle reuses that same focused navigator entry in the permanent home
+archive and adds derived lineage aggregates. A later navigator can sight an
 unidentified runtime wreck, spend the existing one-per-voyage survey case to
 identify it provisionally, and commit that identity/fate report only by
 returning to the exact home dock. Retirement actions and their dock ribbon are
@@ -375,8 +376,9 @@ tests across 23 files plus typecheck and production build.
 - Let a wreck during any voyage kill the navigator early, preserve the
   existing four-second wreck sequence and create exactly one successor when
   that persisted transition completes.
-- At each fourth-return or fatal-wreck succession, show a required handover
-  modal for the outgoing navigator. For every safely returned voyage, list the
+- At each fourth-return or fatal-wreck succession, show the required handover
+  mode of the shared Great Hall for the outgoing navigator. For every safely
+  returned voyage, list the
   Supported-route and enclosed-water counts, returned discovery names, fishing
   leads and surveys, and returned navigator-wreck identities committed on that
   exact-dock return. Show an explicit no-new-findings message when all those
@@ -397,8 +399,8 @@ tests across 23 files plus typecheck and production build.
   wall-clock wait and no economy accumulation. The acknowledgement gate still
   suppresses sailing. The required committed-achievement summary makes the
   generation handover legible;
-  later milestones may settle community activity there or replace the modal
-  with a richer handover/mourning presentation.
+  later milestones may settle community activity there or give the shared
+  handover mode a richer mourning/ceremony presentation.
 - Keep the limit legible through the existing navigator status and return cues
   as **Voyage n of 4**; add no retirement decision interface.
 
@@ -408,10 +410,10 @@ wreck at any voyage count ends that navigator without crediting the failed
 expedition; reload cannot consume, skip or duplicate a voyage or succession;
 inactive docking consumes no voyage; and inherited world state survives both
 completion and loss. Status/checkpoint restoration shows the correct next
-voyage and no retirement control remains. The transition modal reconciles
-exactly with the outgoing navigator's safe-return count, committed voyage
-records and fatal voyage, suppresses sailing while open and never displays
-provisional achievements. A
+voyage and no retirement control remains. The required Great Hall handover
+mode reconciles exactly with the outgoing navigator's safe-return count,
+committed voyage records and fatal voyage, suppresses sailing while open and
+never displays provisional achievements. A
 runtime wreck is reported at most once to its correct lost navigator; sight,
 survey, repeat input, exact-dock return, survey-expedition loss and reload are
 idempotent, and a failed report never restores the lost expedition's Personal
@@ -419,7 +421,24 @@ chart or provisional discoveries.
 
 #### GP-2.3 — Great Hall voyage chronicle
 
-Status: proposed.
+Status: accepted.
+
+Acceptance evidence (2026-07-13): one versioned, ephemeral chronicle read model
+derives active, completed and lost navigator entries directly from the
+authoritative lineage and returned discovery, fishing and runtime-wreck
+records. Stable navigator/voyage/achievement keys, per-navigator totals and
+lineage totals are derived rather than persisted. The required GP-2.2
+succession gate and the optional archive render the same navigator entry: the
+handover mode focuses the outgoing navigator and can only continue through
+**Begin generation n**, while home mode is dismissible and browses every
+generation, including the active navigator's committed returns. **Go ashore ·
+Great Hall** is available only at the exact home dock; returns one through
+three update the chronicle and retain their concise dock cue without forcing it
+open. A lost navigator remains **Wreck not yet located** until a later
+exact-dock-returned identity report links that fate confirmation back to the
+lost entry while preserving credit on the reporting voyage. No new save state,
+schema migration or aggregate ledger was added. The full pipeline passes 220
+tests across 24 files plus typecheck and production build.
 
 - Present GP-2.2's four numbered, committed voyage records as a permanent,
   browsable Great Hall history and extend their stable achievement categories
@@ -427,11 +446,13 @@ Status: proposed.
 - Show all four returned voyages for a completed tenure. For a navigator lost
   early, show their completed voyages plus a respectful terminal lost-voyage
   record; never credit provisional achievements from that fatal expedition.
-- Maintain lineage-wide aggregates and present history at home, after important
-  returns or during succession—not as a sailing score HUD.
-- Reuse GP-2.2's committed transition records in the permanent chronicle; the
-  bounded handover modal is not itself the Great Hall and does not provide
-  lineage browsing or aggregates.
+- Maintain lineage-wide aggregates. Optional browsing is available only from
+  the exact home dock; important returns update the archive without forcing it
+  open, and succession opens it automatically. It is never a sailing score HUD.
+- Reuse GP-2.2's committed transition records in the permanent chronicle. The
+  bounded handover is the required succession mode of that shared Great Hall;
+  generation browsing and aggregates remain exclusive to its optional home
+  mode.
 - Show a lost navigator as **Lost at sea** before their wreck is located. When
   GP-2.2's provisional wreck-identity survey is returned, attach the confirmed
   wreck and fate report to the correct navigator. Deeper salvage, bounded chart
@@ -771,9 +792,9 @@ not require a permanent numerical panel.
 
 #### GR-3.4 — Lineage, idol and completion presentation
 
-Status: proposed. Add navigator/voyage cues, Great Hall and chronicle
-presentation, replace or polish GP-2.2's required achievement-summary
-handover/mourning modal, and add idol cargo, archive exhibits and
+Status: proposed. Add production navigator/voyage cues, polish the accepted
+Great Hall chronicle and its required handover/mourning mode, and add idol
+cargo, archive exhibits and
 optional-ending celebration without leaking hidden state.
 
 Acceptance gate: presentation matches authoritative navigator/idol records,

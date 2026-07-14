@@ -349,22 +349,42 @@ and runtime-wreck IDs. Presentation resolves those stable IDs to discovery
 names, fishing qualities and lost-navigator identities from their authoritative
 records. There is no age, retirement choice or fifth-voyage state.
 
-Authoritative tenure completion or wreck succession commits exactly once before
-its presentation can affect play. Every generation boundary then creates a
-persisted, unacknowledged handover and opens a required summary modal for the
-outgoing navigator. The simulation suppresses sailing until the handover is
-acknowledged; reload reopens the same modal rather than bypassing it. A
-completed tenure lists voyages one through four with the achievements committed
-at each exact-dock return. An early loss lists the preceding safe-return records
-and the next numbered voyage as **Lost at sea**, explicitly crediting nothing
-from that fatal expedition. This modal is a bounded generation transition, not
-the permanent, browsable or lineage-aggregate Great Hall planned for GP-2.3.
+GP-2.2 owns the four-journey tenure, death, succession and required handover
+gate. Authoritative tenure completion or wreck succession commits exactly once
+before its presentation can affect play. Every generation boundary then creates
+a persisted, unacknowledged handover. The simulation suppresses sailing until
+the handover is acknowledged; reload reopens the same outgoing-navigator entry
+rather than bypassing it. A completed tenure lists voyages one through four
+with the achievements committed at each exact-dock return. An early loss lists
+the preceding safe-return records and the next numbered voyage as **Lost at
+sea**, explicitly crediting nothing from that fatal expedition.
+
+GP-2.3 presents that GP-2.2 gate as the bounded, non-dismissible focused mode of
+the permanent Great Hall chronicle. The same chronicle supplies optional home
+browsing and lineage totals rather than maintaining a separate succession
+summary.
+
+`GreatHallChronicle` is a versioned ephemeral read model, not save authority.
+It derives structured achievement keys, active / completed / lost navigator
+entries, per-navigator totals, lineage totals and returned wreck-fate links
+from the authoritative lineage and returned world records. The player-facing
+record remains permanent because those source records persist; the derived view
+is rebuilt rather than saved independently. The optional home mode is available
+only through **Go ashore · Great Hall** at the exact home dock; there is no
+at-sea Great Hall access. It defaults to the active navigator, labels that
+navigator **In progress** and can browse every generation. Ordinary returns
+update the chronicle but do not force it open. Return presentation may set a
+session-only Great Hall update cue, but that cue resets with the session. A lost
+navigator exposes no wreck identity until a later exact-dock-returned survey
+links the confirmation to the lost record and preserves credit on the reporting
+voyage. No archive copy, aggregate counter, update cue or viewed-state flag is
+serialized.
 
 Narratively, that boundary represents elapsed world time: the tribe can act on
 returned findings, or determine that a lost navigator will not return, mourn
 them and nominate a successor. Future economy systems settle at this event
-boundary, and future presentation may replace the placeholder with a richer
-handover or mourning scene. Neither wall-clock waiting nor modal display time
+boundary, and future presentation may enrich the handover with a fuller
+ceremony or mourning scene. Neither wall-clock waiting nor handover display time
 advances authoritative gameplay or economy time; the pending handover itself
 remains authoritative input-gating state until acknowledgement.
 
@@ -487,16 +507,18 @@ Only one lifecycle cue may exist at a time.
 The fourth safe return replaces the ordinary cue after all voyage results
 commit. A wreck hold identifies the navigator as lost, states that their wreck
 remains and compresses the tribe's mourning and elapsed time. Either path then
-opens the required generation summary. Each safe-voyage row mirrors the dock
-report with route-support counts, named discoveries, fishing leads and survey
-qualities, and returned wreck identities; a safe voyage with none says that no
-new findings were returned. A fatal-voyage row reports **Lost at sea** and
-states that no findings from that journey were returned; it never exposes
-provisional achievements. The rows are derived from the committed
-outgoing lineage record, the modal does not create the successor or settle
-economy state, and sailing input remains suppressed until dismissal. GR-3.4 may
-polish or replace this transition without changing the authoritative records.
-The ordinary shell status and return overlays expose **Voyage n of 4** so the
+opens the required focused handover mode of the Great Hall. Each safe-voyage row
+mirrors the dock report with route-support counts, named discoveries, fishing
+leads and survey qualities, and returned wreck identities; a safe voyage with
+none says that no new findings were returned. A fatal-voyage row reports **Lost
+at sea** and states that no findings from that journey were returned; it never
+exposes provisional achievements. The rows are derived from the committed
+outgoing lineage record, the view does not create the successor or settle
+economy state, and sailing input remains suppressed until acknowledgement.
+Outside succession, **Go ashore · Great Hall** opens the dismissible browsing
+mode only at the exact home dock; it is never part of the sailing HUD. GR-3.4
+may polish this transition without changing the authoritative records. The
+ordinary shell status and return overlays expose **Voyage n of 4** so the
 bounded tenure is legible without a retirement decision control.
 
 A discovered but unreported runtime wreck uses an unidentified marker and a
@@ -602,18 +624,18 @@ is still required; no Web Worker is justified without new profiling evidence.
 The automated suite covers configuration, deterministic generation, movement,
 visibility, knowledge asymmetry, provisions, forward/return calculations,
 overlay invalidation, island navigation, expedition success/failure,
-four-voyage tenure and succession, Unknown pocket cleanup, discoveries, save
-validation, runtime-wreck survey commit/rollback and idempotence, persistence
-round trips, save dirtiness, cached encoding, frame telemetry and ship
-interpolation.
+four-journey tenure and succession, Great Hall chronicle derivation and
+exact-home-dock access, Unknown pocket cleanup, discoveries, save validation,
+runtime-wreck survey commit/rollback and idempotence, persistence round trips,
+save dirtiness, cached encoding, frame telemetry and ship interpolation.
 
-Browser verification covers WebGL startup, controls, discovery cues, combined
+Browser verification targets WebGL startup, controls, discovery cues, combined
 return presentation, fourth-return automatic succession, fatal-wreck mourning
-and succession, committed-achievement and fatal-voyage generation summaries,
+and succession, focused Great Hall handover entries, exact-home-dock browsing,
 unidentified wreck survey and exact-dock reporting, rolling reload, stable
-manual checkpoints, exact ship/camera restoration, pending wreck reload, save
-clearing, live sailing and speed tuning with the developer drawer open, and
-console health.
+manual checkpoints, exact ship/camera restoration, pending handover and wreck
+reload, save clearing, live sailing and speed tuning with the developer drawer
+open, and console health.
 
 Desktop keyboard/pointer play is the validated target. Responsive resize is
 implemented. Touch-first sailing is not implemented and requires a separately
@@ -623,13 +645,14 @@ performance validation belongs to later graphics/platform hardening.
 
 ## 17. Baseline extension and exact-version boundary
 
-The accepted baseline includes fishing surveys, navigator lineage, the
-four-voyage tenure, exact-dock-committed achievement summaries at succession
-and returned identity/fate reports for runtime navigator wrecks. The forward
-roadmap may add the permanent Great Hall and lineage aggregates, wreck salvage
-and bounded chart/economy recovery, tribe economics, idols, the full save/load
-experience, production assets and environmental polish. These are proposed
-extensions, not implemented baseline behavior.
+The accepted baseline includes fishing surveys, navigator lineage, GP-2.2's
+four-journey tenure, death, succession and required handover gate, and GP-2.3's
+shared permanent Great Hall chronicle with focused handover presentation,
+exact-home-dock browsing and derived lineage totals. It also includes returned
+identity/fate reports for runtime navigator wrecks. The forward roadmap may add
+wreck salvage and bounded chart/economy recovery, tribe economics, idols, the
+full save/load experience, production assets and environmental polish. These
+are proposed extensions, not implemented baseline behavior.
 
 Presentation-only extensions may preserve the current save shape when they add
 no authoritative state. Gameplay extensions must define deterministic identity,

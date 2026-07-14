@@ -21,6 +21,7 @@ const READY: SceneMovementInputContext = {
   developerNumberFocused: false,
   textEntryFocused: false,
   generationHandoverActive: false,
+  greatHallOpen: false,
   surveyActionActive: false,
 };
 
@@ -61,6 +62,10 @@ describe("scene movement input policy", () => {
     expect(resolveSceneMovementInput(moving, {
       ...READY,
       generationHandoverActive: true,
+    })).toEqual({ turn: 0, throttle: 0 });
+    expect(resolveSceneMovementInput(moving, {
+      ...READY,
+      greatHallOpen: true,
     })).toEqual({ turn: 0, throttle: 0 });
     expect(resolveSceneMovementInput(moving, {
       ...READY,

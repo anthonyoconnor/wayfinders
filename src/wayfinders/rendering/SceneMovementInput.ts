@@ -16,6 +16,7 @@ export interface SceneMovementInputContext {
   readonly developerNumberFocused: boolean;
   readonly textEntryFocused: boolean;
   readonly generationHandoverActive: boolean;
+  readonly greatHallOpen: boolean;
   readonly surveyActionActive: boolean;
 }
 
@@ -27,6 +28,7 @@ export function isSceneMovementInputSuppressed(
   const liveDeveloperNumber = context.developerToolsOpen
     && context.developerNumberFocused;
   return context.generationHandoverActive
+    || context.greatHallOpen
     || context.surveyActionActive
     || (context.textEntryFocused && !liveDeveloperNumber);
 }
