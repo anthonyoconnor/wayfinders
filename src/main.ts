@@ -7,6 +7,8 @@ import {
 import {
   prototypeConfig,
 } from "./wayfinders/config/prototypeConfig";
+import { applicationModeHref, resolveWayfindersApplicationMode } from "./wayfinders/assets/AssetAppMode";
+import { AssetViewerScene } from "./wayfinders/assets/AssetViewerScene";
 import { GameSimulation } from "./wayfinders/core/GameSimulation";
 import { WayfindersScene } from "./wayfinders/rendering/WayfindersScene";
 import "./styles.css";
@@ -41,7 +43,9 @@ const developerLogClear = requireElement<HTMLButtonElement>("#developer-log-clea
 const developerLogFeedback = requireElement<HTMLOutputElement>("#developer-log-feedback");
 const rendererStatus = requireElement<HTMLElement>("#renderer-status");
 const phaserVersion = requireElement<HTMLElement>("#phaser-version");
+const assetModeLink = requireElement<HTMLAnchorElement>("#asset-mode-link");
 let suppressEscapeUntilKeyUp = false;
+const applicationMode = resolveWayfindersApplicationMode(window.location.search);
 
 function setDeveloperToolsOpen(open: boolean): void {
   toolsPanel.hidden = !open;
@@ -154,15 +158,25 @@ window.addEventListener("keyup", (event) => {
 window.addEventListener("blur", () => { suppressEscapeUntilKeyUp = false; });
 
 phaserVersion.textContent = Phaser.VERSION;
+assetModeLink.href = applicationModeHref(applicationMode);
+assetModeLink.textContent = applicationMode === "assets" ? "Back to game" : "Asset tools";
+toolsToggle.textContent = applicationMode === "assets" ? "Asset controls" : "Developer tools";
+const toolsTitle = document.querySelector<HTMLElement>("#developer-tools-title");
+if (toolsTitle) toolsTitle.textContent = applicationMode === "assets" ? "Asset workbench" : "Developer tools";
+const toolsEyebrow = document.querySelector<HTMLElement>(".developer-tools__header .eyebrow");
+if (toolsEyebrow) toolsEyebrow.textContent = applicationMode === "assets" ? "GR-2 tooling" : "Prototype sandbox";
+const riskLegend = document.querySelector<HTMLElement>("#risk-legend");
+if (riskLegend && applicationMode === "assets") riskLegend.hidden = true;
 document.documentElement.dataset.appReady = "true";
+document.documentElement.dataset.applicationMode = applicationMode;
 
 export let wayfindersGame: Phaser.Game | undefined;
 
 try {
-  const simulation = new GameSimulation(prototypeConfig);
-  wayfindersGame = createWayfindersGame([
-    new WayfindersScene(simulation),
-  ]);
+  const scenes = applicationMode === "assets"
+    ? [new AssetViewerScene()]
+    : [new WayfindersScene(new GameSimulation(prototypeConfig))];
+  wayfindersGame = createWayfindersGame(scenes);
   window.dispatchEvent(
     new CustomEvent("wayfinders:shell-ready", {
       detail: { shell: wayfindersShell, game: wayfindersGame },

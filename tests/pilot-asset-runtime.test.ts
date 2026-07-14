@@ -21,6 +21,7 @@ describe("GR-1.2 pilot asset loading", () => {
     queuePilotAssetPackages({
       json: (key, url) => queued.push(`json:${key}:${url}`),
       image: (key, url) => queued.push(`image:${key}:${url}`),
+      spritesheet: (key, url) => queued.push(`spritesheet:${key}:${url}`),
     });
     expect(queued).toHaveLength(7);
     expect(queued[0]).toContain("metadata:home-island");

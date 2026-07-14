@@ -1,6 +1,7 @@
 import Phaser from "phaser";
-import { AUTHORED_ASSET_IDS, type AuthoredFishingShoalMetadata } from "../assets/AuthoredAssetContracts";
-import type { PilotAssetRuntime } from "../assets/PilotAssetRuntime";
+import type { AuthoredFishingShoalMetadata } from "../assets/AuthoredAssetContracts";
+import { createAuthoredFishingShoalVisual } from "../assets/AuthoredAssetPresentation";
+import type { AuthoredAssetRuntime } from "../assets/PilotAssetRuntime";
 import { prototypeConfig } from "../config/prototypeConfig";
 import { createFishingShoalId, type FishingShoalReadModel } from "../exploration/FishingShoalContracts";
 import { gridToWorld } from "../world/CoordinateSystem";
@@ -71,17 +72,18 @@ export class FishingShoalRenderer {
   private readonly viewPool: FishingShoalView[] = [];
 
   private readonly authoredMetadata?: Readonly<AuthoredFishingShoalMetadata>;
-  private readonly authoredTextureKey?: string;
+  private readonly authoredAssets?: Readonly<AuthoredAssetRuntime>;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    pilotAssets?: Readonly<PilotAssetRuntime>,
+    pilotAssets?: Readonly<AuthoredAssetRuntime>,
   ) {
-    const metadata = pilotAssets?.metadata(AUTHORED_ASSET_IDS.fishingShoal);
-    if (metadata?.kind === "fishing-shoal") {
-      this.authoredMetadata = metadata;
-      this.authoredTextureKey = pilotAssets?.textureKey(metadata.visual.imageId);
-    }
+    this.authoredAssets = pilotAssets;
+    const authored = pilotAssets
+      ? createAuthoredFishingShoalVisual(scene, pilotAssets)
+      : undefined;
+    this.authoredMetadata = authored?.metadata;
+    authored?.image.destroy();
   }
 
   sync(records: readonly Readonly<FishingShoalReadModel>[]): void {
@@ -145,10 +147,8 @@ export class FishingShoalRenderer {
   }
 
   private createView(): FishingShoalView {
-    const authoredVisual = this.authoredMetadata && this.authoredTextureKey
-      ? this.scene.add.image(0, 0, this.authoredTextureKey)
-        .setOrigin(this.authoredMetadata.visual.origin.x, this.authoredMetadata.visual.origin.y)
-        .setScale(this.authoredMetadata.visual.scale)
+    const authoredVisual = this.authoredAssets
+      ? createAuthoredFishingShoalVisual(this.scene, this.authoredAssets)?.image
       : undefined;
     const connectivityCue = this.scene.add.graphics();
     const marker = this.scene.add.graphics();

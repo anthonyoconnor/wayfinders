@@ -8,6 +8,10 @@ export interface PilotImageCatalogEntry {
   imageId: string;
   textureKey: string;
   url: string;
+  frameConfig?: Readonly<{
+    frameWidth: number;
+    frameHeight: number;
+  }>;
 }
 
 export interface PilotPackageCatalogEntry {
@@ -41,11 +45,13 @@ export const PILOT_ASSET_CATALOG: readonly Readonly<PilotPackageCatalogEntry>[] 
         imageId: "player.boat.primary.frames",
         textureKey: "wayfinders:image:player-boat",
         url: imageUrl("player-boat.png"),
+        frameConfig: Object.freeze({ frameWidth: 64, frameHeight: 64 }),
       }),
       Object.freeze({
         imageId: "player.boat.primary.wake",
         textureKey: "wayfinders:image:player-wake",
         url: imageUrl("player-wake.png"),
+        frameConfig: Object.freeze({ frameWidth: 96, frameHeight: 64 }),
       }),
     ]),
   }),
@@ -66,12 +72,20 @@ export const PILOT_ASSET_CATALOG: readonly Readonly<PilotPackageCatalogEntry>[] 
 export interface PilotAssetLoader {
   json(key: string, url: string): unknown;
   image(key: string, url: string): unknown;
+  spritesheet(
+    key: string,
+    url: string,
+    config: Readonly<{ frameWidth: number; frameHeight: number }>,
+  ): unknown;
 }
 
 export function queuePilotAssetPackages(loader: PilotAssetLoader): void {
   for (const entry of PILOT_ASSET_CATALOG) {
     loader.json(entry.metadataKey, entry.metadataUrl);
-    for (const image of entry.images) loader.image(image.textureKey, image.url);
+    for (const image of entry.images) {
+      if (image.frameConfig) loader.spritesheet(image.textureKey, image.url, image.frameConfig);
+      else loader.image(image.textureKey, image.url);
+    }
   }
 }
 

@@ -68,4 +68,23 @@ describe("GR-1.4 ship and wake animation", () => {
     expect(later.wake.alpha).not.toBe(first.wake.alpha);
     expect(later.wake.scaleX).not.toBe(first.wake.scaleX);
   });
+
+  it("selects row-major directional and motion frames without rotating directional art", () => {
+    const directional = validateAuthoredAssetMetadata({
+      ...playerBoatPackage,
+      visual: {
+        ...playerBoatPackage.visual,
+        headingMode: "directional",
+        directionCount: 8,
+        motionFramesPerDirection: 3,
+      },
+    });
+    if (directional.kind !== "player-boat") throw new TypeError("Expected player boat metadata");
+
+    const east = resolveShipAnimationState(directional, 0, 80, 0);
+    const south = resolveShipAnimationState(directional, 90, 80, 200);
+    expect(east.boatFrame).toBe(0);
+    expect(south.boatFrame).toBe(7);
+    expect(south.boatRotationDegrees).toBe(0);
+  });
 });

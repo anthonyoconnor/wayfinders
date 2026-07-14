@@ -689,9 +689,75 @@ a:focus-visible {
   pointer-events: auto;
 }
 
+.tool-link {
+  display: inline-grid;
+  min-height: 2.25rem;
+  place-items: center;
+  color: var(--shell-ink);
+  text-decoration: none;
+}
+
 .tool-toggle:hover {
   border-color: rgba(141, 216, 207, 0.7);
   background: rgba(11, 43, 52, 0.94);
+}
+
+.asset-viewer-controls {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.asset-viewer-controls > h3 {
+  margin: 0;
+}
+
+.asset-viewer-controls > label {
+  display: grid;
+  grid-template-columns: minmax(5rem, 0.45fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.asset-viewer-controls select,
+.asset-viewer-controls input {
+  min-width: 0;
+  min-height: 2rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+  color: var(--shell-ink);
+  background: rgba(13, 45, 55, 0.8);
+}
+
+.asset-viewer-controls select,
+.asset-viewer-controls input[type="number"] {
+  width: 100%;
+  padding: 0.3rem 0.45rem;
+}
+
+.asset-viewer-checks {
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--shell-line);
+}
+
+.asset-viewer-checks label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.asset-viewer-checks input {
+  min-height: 1rem;
+}
+
+.asset-viewer-diagnostics {
+  padding: 0.6rem;
+  color: var(--shell-muted);
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+  background: rgba(2, 12, 17, 0.6);
+  white-space: pre-wrap;
 }
 
 .developer-tools {

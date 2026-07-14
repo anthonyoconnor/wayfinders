@@ -19,6 +19,12 @@ export interface PilotAssetDiagnostic {
   message: string;
 }
 
+/** Minimal presentation contract shared by the game, asset viewer and candidate preview. */
+export interface AuthoredAssetRuntime {
+  metadata(assetId: AuthoredAssetId): Readonly<AuthoredAssetMetadata> | undefined;
+  textureKey(imageId: string): string | undefined;
+}
+
 function referencedImageIds(metadata: Readonly<AuthoredAssetMetadata>): readonly string[] {
   switch (metadata.kind) {
     case "home-island": return metadata.render.slices.map(({ imageId }) => imageId);

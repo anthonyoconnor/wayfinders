@@ -1,9 +1,11 @@
 import type { AuthoredPlayerBoatMetadata } from "../assets/AuthoredAssetContracts";
 
 export interface ShipAnimationState {
+  boatFrame: number;
   boatRotationDegrees: number;
   boatScale: number;
   wake: {
+    frame: number;
     visible: boolean;
     rotationDegrees: number;
     offsetX: number;
@@ -42,11 +44,27 @@ export function resolveShipAnimationState(
   const boatMotionAmount = 0.004 + speedRatio * 0.006;
   const wakeBaseAlpha = 0.22 + speedRatio * 0.58;
 
+  const moving = speed >= metadata.wake.minimumSpeedPixelsPerSecond;
+  const motionFrame = moving
+    ? Math.floor(nowMilliseconds / 1_000 * metadata.visual.framesPerSecond)
+      % metadata.visual.motionFramesPerDirection
+    : 0;
+  const directionStep = 360 / metadata.visual.directionCount;
+  const directionFrame = metadata.visual.headingMode === "directional"
+    ? Math.round(wrapDegrees(headingDegrees - metadata.visual.sourceHeadingDegrees) / directionStep)
+      % metadata.visual.directionCount
+    : 0;
+
   return {
-    boatRotationDegrees: wrapDegrees(headingDegrees - metadata.visual.sourceHeadingDegrees),
+    boatFrame: directionFrame * metadata.visual.motionFramesPerDirection + motionFrame,
+    boatRotationDegrees: metadata.visual.headingMode === "rotate"
+      ? wrapDegrees(headingDegrees - metadata.visual.sourceHeadingDegrees)
+      : 0,
     boatScale: metadata.visual.scale * (1 + boatPulse * boatMotionAmount),
     wake: {
-      visible: speed >= metadata.wake.minimumSpeedPixelsPerSecond,
+      frame: Math.floor(nowMilliseconds / 1_000 * metadata.wake.framesPerSecond)
+        % metadata.wake.frameCount,
+      visible: moving,
       rotationDegrees: wakeRotationDegrees,
       offsetX: metadata.wake.offset.x * Math.cos(wakeRadians)
         - metadata.wake.offset.y * Math.sin(wakeRadians),

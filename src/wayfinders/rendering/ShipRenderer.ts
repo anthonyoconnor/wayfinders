@@ -1,9 +1,7 @@
 import Phaser from "phaser";
-import {
-  AUTHORED_ASSET_IDS,
-  type AuthoredPlayerBoatMetadata,
-} from "../assets/AuthoredAssetContracts";
-import type { PilotAssetRuntime } from "../assets/PilotAssetRuntime";
+import type { AuthoredPlayerBoatMetadata } from "../assets/AuthoredAssetContracts";
+import { createAuthoredPlayerBoatVisual } from "../assets/AuthoredAssetPresentation";
+import type { AuthoredAssetRuntime } from "../assets/PilotAssetRuntime";
 import { prototypeConfig } from "../config/prototypeConfig";
 import { interpolateShipPose, type ShipRenderPose } from "./ShipPose";
 import { resolveShipAnimationState } from "./ShipAnimation";
@@ -21,7 +19,7 @@ export class ShipRenderer {
 
   constructor(
     private readonly scene: Phaser.Scene,
-    pilotAssets?: Readonly<PilotAssetRuntime>,
+    pilotAssets?: Readonly<AuthoredAssetRuntime>,
   ) {
     const size = prototypeConfig.navigation.tileSize;
     this.developerWake = scene.add.graphics();
@@ -44,23 +42,16 @@ export class ShipRenderer {
     this.hull.lineStyle(2, 0xd2a95e, 1);
     this.hull.lineBetween(-size * 0.08, -size * 0.68, -size * 0.08, size * 0.23);
 
-    const metadata = pilotAssets?.metadata(AUTHORED_ASSET_IDS.playerBoat);
-    if (metadata?.kind === "player-boat") {
-      const boatTextureKey = pilotAssets?.textureKey(metadata.visual.imageId);
-      const wakeTextureKey = pilotAssets?.textureKey(metadata.wake.imageId);
-      if (boatTextureKey && wakeTextureKey) {
-        this.authoredMetadata = metadata;
-        this.authoredBoat = scene.add.image(0, 0, boatTextureKey)
-          .setOrigin(metadata.visual.origin.x, metadata.visual.origin.y)
-          .setScale(metadata.visual.scale);
-        this.authoredWake = scene.add.image(0, 0, wakeTextureKey)
-          .setOrigin(metadata.wake.origin.x, metadata.wake.origin.y)
-          .setScale(metadata.wake.scale)
-          .setDepth(metadata.wake.depth)
-          .setVisible(false);
-        this.hull.setVisible(false);
-        this.developerWake.setVisible(false);
-      }
+    const authored = pilotAssets
+      ? createAuthoredPlayerBoatVisual(scene, pilotAssets)
+      : undefined;
+    const metadata = authored?.metadata;
+    if (authored) {
+      this.authoredMetadata = authored.metadata;
+      this.authoredBoat = authored.boat;
+      this.authoredWake = authored.wake;
+      this.hull.setVisible(false);
+      this.developerWake.setVisible(false);
     }
     this.sourceHeadingDegrees = metadata?.kind === "player-boat"
       ? metadata.visual.sourceHeadingDegrees
@@ -103,8 +94,9 @@ export class ShipRenderer {
         this.scene.time.now,
       );
       this.container.setRotation(Phaser.Math.DegToRad(animation.boatRotationDegrees));
-      this.authoredBoat.setScale(animation.boatScale);
+      this.authoredBoat.setFrame(animation.boatFrame).setScale(animation.boatScale);
       this.authoredWake
+        .setFrame(animation.wake.frame)
         .setPosition(worldX + animation.wake.offsetX, worldY + animation.wake.offsetY)
         .setRotation(Phaser.Math.DegToRad(animation.wake.rotationDegrees))
         .setScale(animation.wake.scaleX, animation.wake.scaleY)
