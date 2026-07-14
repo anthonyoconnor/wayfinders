@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import homeIsland from "../public/assets/gr1/packages/home-island.json";
-import playerBoat from "../public/assets/gr1/packages/player-boat.json";
-import fishingShoal from "../public/assets/gr1/packages/fishing-shoal.json";
+import homeIsland from "../src/wayfinders/assets/packages/home-island.json";
+import playerBoat from "../src/wayfinders/assets/packages/player-boat.json";
+import fishingShoal from "../src/wayfinders/assets/packages/fishing-shoal.json";
 import { AUTHORED_ASSET_IDS } from "../src/wayfinders/assets/AuthoredAssetContracts";
 import {
   PILOT_ASSET_CATALOG,

@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { AUTHORED_ASSET_IDS } from "../assets/AuthoredAssetContracts";
+import type { PilotAssetRuntime } from "../assets/PilotAssetRuntime";
 import { prototypeConfig } from "../config/prototypeConfig";
 import { interpolateShipPose, type ShipRenderPose } from "./ShipPose";
 
@@ -8,8 +10,13 @@ export class ShipRenderer {
 
   private readonly wake: Phaser.GameObjects.Graphics;
   private readonly hull: Phaser.GameObjects.Graphics;
+  private readonly authoredBoat?: Phaser.GameObjects.Image;
+  private readonly sourceHeadingDegrees: number;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(
+    private readonly scene: Phaser.Scene,
+    pilotAssets?: Readonly<PilotAssetRuntime>,
+  ) {
     const size = prototypeConfig.navigation.tileSize;
     this.wake = scene.add.graphics();
     this.hull = scene.add.graphics();
@@ -31,7 +38,23 @@ export class ShipRenderer {
     this.hull.lineStyle(2, 0xd2a95e, 1);
     this.hull.lineBetween(-size * 0.08, -size * 0.68, -size * 0.08, size * 0.23);
 
-    this.container = scene.add.container(0, 0, [this.wake, this.hull]).setDepth(50);
+    const metadata = pilotAssets?.metadata(AUTHORED_ASSET_IDS.playerBoat);
+    if (metadata?.kind === "player-boat") {
+      const textureKey = pilotAssets?.textureKey(metadata.visual.imageId);
+      if (textureKey) {
+        this.authoredBoat = scene.add.image(0, 0, textureKey)
+          .setOrigin(metadata.visual.origin.x, metadata.visual.origin.y)
+          .setScale(metadata.visual.scale);
+        this.hull.setVisible(false);
+      }
+    }
+    this.sourceHeadingDegrees = metadata?.kind === "player-boat"
+      ? metadata.visual.sourceHeadingDegrees
+      : 0;
+    const children: Phaser.GameObjects.GameObject[] = [this.wake, this.hull];
+    if (this.authoredBoat) children.push(this.authoredBoat);
+    this.container = scene.add.container(0, 0, children)
+      .setDepth(metadata?.kind === "player-boat" ? metadata.visual.depth : 50);
   }
 
   sync(state: Readonly<ShipRenderPose>, visible = true): void {
@@ -58,7 +81,7 @@ export class ShipRenderer {
     this.container
       .setVisible(visible)
       .setPosition(worldX, worldY)
-      .setRotation(Phaser.Math.DegToRad(heading));
+      .setRotation(Phaser.Math.DegToRad(heading - this.sourceHeadingDegrees));
     const moving = Math.abs(speed) > prototypeConfig.navigation.tileSize * 0.05;
     this.wake.setVisible(moving);
     if (moving) {

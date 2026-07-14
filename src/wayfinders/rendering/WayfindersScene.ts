@@ -195,15 +195,15 @@ export class WayfindersScene extends Phaser.Scene {
 
   create(): void {
     this.pilotAssets = createPilotAssetRuntime(this);
-    this.worldRenderer = new WorldRenderer(this);
+    this.worldRenderer = new WorldRenderer(this, this.pilotAssets);
     this.wreckRenderer = new WreckRenderer(this);
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
     this.riskOverlay = new RiskOverlayRenderer(this);
     this.cargoRenderer = new CargoRenderer(this);
     this.islandDossierRenderer = new IslandDossierRenderer(this);
     this.surveySiteRenderer = new SurveySiteRenderer(this);
-    this.fishingShoalRenderer = new FishingShoalRenderer(this);
-    this.shipRenderer = new ShipRenderer(this);
+    this.fishingShoalRenderer = new FishingShoalRenderer(this, this.pilotAssets);
+    this.shipRenderer = new ShipRenderer(this, this.pilotAssets);
     this.resetShipPresentation(true);
     this.gridGraphics = this.add.graphics().setDepth(70);
     this.debugGraphics = this.add.graphics().setDepth(71);

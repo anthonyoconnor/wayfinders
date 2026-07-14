@@ -1,4 +1,6 @@
 import Phaser from "phaser";
+import { AUTHORED_ASSET_IDS, type AuthoredHomeIslandMetadata } from "../assets/AuthoredAssetContracts";
+import type { PilotAssetRuntime } from "../assets/PilotAssetRuntime";
 import { prototypeConfig } from "../config/prototypeConfig";
 import { gridToWorld } from "../world/CoordinateSystem";
 import { IslandKind, type GeneratedIsland } from "../world/IslandGenerator";
@@ -117,17 +119,35 @@ interface ChunkView {
 export class WorldRenderer {
   private readonly ocean: Phaser.GameObjects.Rectangle;
   private readonly homeStructures: Phaser.GameObjects.Graphics;
+  private readonly homeImage?: Phaser.GameObjects.Image;
+  private readonly homeMetadata?: Readonly<AuthoredHomeIslandMetadata>;
   private readonly labels: Phaser.GameObjects.Text[] = [];
   private chunks: ChunkView[] = [];
   private lastWorld?: GeneratedWorld["grid"];
   private observedKnowledgeRevisions = new WeakMap<WorldChunk, number>();
   private destroyed = false;
 
-  constructor(private readonly scene: Phaser.Scene) {
+  constructor(
+    private readonly scene: Phaser.Scene,
+    pilotAssets?: Readonly<PilotAssetRuntime>,
+  ) {
     this.ocean = scene.add.rectangle(0, 0, 1, 1, COLORS.ocean, 1).setOrigin(0).setDepth(0);
     // Home structures are a constant-size overlay. Keeping them separate avoids
     // coupling their cross-chunk dock geometry to a single chunk's visibility.
     this.homeStructures = scene.add.graphics().setDepth(5.5);
+    const metadata = pilotAssets?.metadata(AUTHORED_ASSET_IDS.homeIsland);
+    if (metadata?.kind === "home-island" && metadata.render.slices.length === 1) {
+      const slice = metadata.render.slices[0];
+      const textureKey = pilotAssets?.textureKey(slice.imageId);
+      if (textureKey) {
+        this.homeMetadata = metadata;
+        this.homeImage = scene.add.image(0, 0, textureKey)
+          .setOrigin(0)
+          .setDisplaySize(slice.pixelSize.width * slice.scale, slice.pixelSize.height * slice.scale)
+          .setDepth(slice.depth)
+          .setVisible(false);
+      }
+    }
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
   }
 
@@ -155,6 +175,14 @@ export class WorldRenderer {
       const px = (x - chunk.chunkX * grid.chunkSize) * size;
       const py = (y - chunk.chunkY * grid.chunkSize) * size;
       const supported = tile.knowledge === KnowledgeState.Supported;
+      if (this.isAuthoredHomeFootprint(generated, x, y)) {
+        if (supported) {
+          const water = this.getLayer(chunk, "water");
+          water.fillStyle(COLORS.supported, 1);
+          water.fillRect(px, py, size + 1, size + 1);
+        }
+        return;
+      }
       const island = islandsById.get(tile.islandId);
       const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
 
@@ -255,6 +283,7 @@ export class WorldRenderer {
     this.clear();
     this.ocean.destroy();
     this.homeStructures.destroy();
+    this.homeImage?.destroy();
   }
 
   private createChunkViews(generated: GeneratedWorld): ChunkView[] {
@@ -321,6 +350,14 @@ export class WorldRenderer {
       for (let x = startX; x < endX; x++) {
         const tile = grid.getTile(x, y);
         const supported = tile.knowledge === KnowledgeState.Supported;
+        if (this.isAuthoredHomeFootprint(generated, x, y)) {
+          if (supported) {
+            const water = this.getLayer(chunk, "water");
+            water.fillStyle(COLORS.supported, 1);
+            water.fillRect((x - startX) * size, (y - startY) * size, size + 1, size + 1);
+          }
+          continue;
+        }
         const island = islandsById.get(tile.islandId);
         const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
         let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
@@ -414,6 +451,13 @@ export class WorldRenderer {
   private drawHome(generated: GeneratedWorld): void {
     const { homeCenter, harbour, dock } = generated.landmarks;
     const size = prototypeConfig.navigation.tileSize;
+    if (this.homeImage && this.homeMetadata) {
+      const topLeftX = homeCenter.x - this.homeMetadata.anchors.homeCenter.x;
+      const topLeftY = homeCenter.y - this.homeMetadata.anchors.homeCenter.y;
+      this.homeImage.setPosition(topLeftX * size, topLeftY * size).setVisible(true);
+      this.homeStructures.clear();
+      return;
+    }
     const center = gridToWorld(homeCenter);
     const harbourWorld = gridToWorld(harbour);
     const dockWorld = gridToWorld(dock);
@@ -448,8 +492,19 @@ export class WorldRenderer {
     }
   }
 
+  private isAuthoredHomeFootprint(generated: GeneratedWorld, x: number, y: number): boolean {
+    if (!this.homeImage || !this.homeMetadata) return false;
+    const topLeftX = generated.landmarks.homeCenter.x - this.homeMetadata.anchors.homeCenter.x;
+    const topLeftY = generated.landmarks.homeCenter.y - this.homeMetadata.anchors.homeCenter.y;
+    return x >= topLeftX
+      && y >= topLeftY
+      && x < topLeftX + this.homeMetadata.grid.width
+      && y < topLeftY + this.homeMetadata.grid.height;
+  }
+
   private clear(): void {
     this.ocean.setVisible(false);
+    this.homeImage?.setVisible(false);
     this.homeStructures.clear();
     for (const chunk of this.chunks) {
       for (const renderer of chunk.renderers) renderer.destroy();

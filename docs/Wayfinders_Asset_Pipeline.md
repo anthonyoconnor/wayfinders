@@ -1,7 +1,7 @@
 # Wayfinders authored-asset direction
 
-Status: active. `GR-1.1` and `GR-1.2` are implemented and accepted; the ordered
-`GR-1.3` through `GR-1.4` pilot is authorized.
+Status: active. `GR-1.1` through `GR-1.3` are implemented and accepted;
+`GR-1.4` is authorized.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
@@ -109,6 +109,12 @@ reported while the renderer can continue with developer graphics.
    performance in the running game.
 4. `GR-1.4` completes the boat with correct all-heading presentation, restrained
    motion and a speed-responsive animated wake.
+
+The accepted three-asset proof stamps the home package's complete fixed cell
+map at the procedural home center, draws its one authored image without
+assembling terrain tiles, binds the boat image to the existing interpolated
+ship pose, and gives only the ordinal-zero fishing shoal the authored cue. The
+shoal remains passable and visible only through its existing read model.
 
 The four minors are ordered. Each one must meet its acceptance gate before the
 next changes shared world-generation or rendering code.

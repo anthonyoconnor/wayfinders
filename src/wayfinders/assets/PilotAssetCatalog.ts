@@ -17,47 +17,47 @@ export interface PilotPackageCatalogEntry {
   images: readonly Readonly<PilotImageCatalogEntry>[];
 }
 
-const ROOT = "./assets/gr1";
+const imageUrl = (filename: string): string => `./assets/gr1/images/${filename}`;
 
 export const PILOT_ASSET_CATALOG: readonly Readonly<PilotPackageCatalogEntry>[] = Object.freeze([
   Object.freeze({
     assetId: AUTHORED_ASSET_IDS.homeIsland,
     metadataKey: "wayfinders:metadata:home-island",
-    metadataUrl: `${ROOT}/packages/home-island.json`,
+    metadataUrl: new URL("./packages/home-island.json", import.meta.url).href,
     images: Object.freeze([
       Object.freeze({
         imageId: "home.island.primary.complete",
         textureKey: "wayfinders:image:home-island",
-        url: `${ROOT}/images/home-island.png`,
+        url: imageUrl("home-island.png"),
       }),
     ]),
   }),
   Object.freeze({
     assetId: AUTHORED_ASSET_IDS.playerBoat,
     metadataKey: "wayfinders:metadata:player-boat",
-    metadataUrl: `${ROOT}/packages/player-boat.json`,
+    metadataUrl: new URL("./packages/player-boat.json", import.meta.url).href,
     images: Object.freeze([
       Object.freeze({
         imageId: "player.boat.primary.frames",
         textureKey: "wayfinders:image:player-boat",
-        url: `${ROOT}/images/player-boat.png`,
+        url: imageUrl("player-boat.png"),
       }),
       Object.freeze({
         imageId: "player.boat.primary.wake",
         textureKey: "wayfinders:image:player-wake",
-        url: `${ROOT}/images/player-wake.png`,
+        url: imageUrl("player-wake.png"),
       }),
     ]),
   }),
   Object.freeze({
     assetId: AUTHORED_ASSET_IDS.fishingShoal,
     metadataKey: "wayfinders:metadata:fishing-shoal",
-    metadataUrl: `${ROOT}/packages/fishing-shoal.json`,
+    metadataUrl: new URL("./packages/fishing-shoal.json", import.meta.url).href,
     images: Object.freeze([
       Object.freeze({
         imageId: "shoal.fishing.primary.complete",
         textureKey: "wayfinders:image:fishing-shoal",
-        url: `${ROOT}/images/fishing-shoal.png`,
+        url: imageUrl("fishing-shoal.png"),
       }),
     ]),
   }),

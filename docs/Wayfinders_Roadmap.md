@@ -1,8 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-4.1` work and `GR-1.1` through `GR-1.2` are complete
-and accepted. The ordered `GR-1.3` through `GR-1.4` batch is authorized. No other later
+ordered `GP-0.1` through `GP-4.1` work and `GR-1.1` through `GR-1.3` are complete
+and accepted. `GR-1.4` is authorized. No other later
 gameplay or graphics minor is authorized by this roadmap status.
 
 ### Saving policy
@@ -760,7 +760,7 @@ not define collision, identity or rules.
 ### GR-1 — Authored-asset runtime pilot
 
 Start gate: satisfied because GP-3.3 is accepted. The ordered `GR-1.1` through
-`GR-1.4` batch is authorized; `GR-1.1` and `GR-1.2` are accepted.
+`GR-1.4` batch is authorized; `GR-1.1` through `GR-1.3` are accepted.
 
 Goal: prove the smallest useful path from externally generated source art to
 grid-aligned runtime assets. Asset generation and preparation happen before the
@@ -838,7 +838,7 @@ production-build gate passes.
 
 #### GR-1.3 — Home island, boat and shoal proof
 
-Status: authorized; next in the ordered batch.
+Status: implemented and accepted.
 
 Generate new grid-ready art for the current game rather than using the example
 assets directly. Integrate:
@@ -864,9 +864,19 @@ readable at normal zoom under fog and overlays; unchanged gameplay outside the
 home layout passes regression tests; and the approved startup, memory, draw-call
 and frame-time budgets pass.
 
+Implementation evidence: the validated fixed home layout now replaces the
+seeded radius/noise home painter and stamps terrain, collision, home identity
+and anchors at the procedural world center without entering the non-home island
+catalog. The complete authored island image replaces home developer art over a
+seamless ocean backdrop; the generated boat follows the existing continuous
+position and heading; and only `fishing-shoal:v1:0000` receives the authored
+passable shoal cue through its existing fog-filtered read model. Missing
+packages still use developer presentation. The clean typecheck, 253-test,
+production-build and local-browser visual gate passes.
+
 #### GR-1.4 — Directional boat and wake animation
 
-Status: authorized; pending GR-1.3 acceptance.
+Status: authorized; next in the ordered batch.
 
 Turn the GR-1.3 player-boat proof into a finished animated vessel. Use the
 simplest animation approach that remains convincing at the game's normal zoom:

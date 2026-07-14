@@ -1,12 +1,15 @@
 import Phaser from "phaser";
+import { AUTHORED_ASSET_IDS, type AuthoredFishingShoalMetadata } from "../assets/AuthoredAssetContracts";
+import type { PilotAssetRuntime } from "../assets/PilotAssetRuntime";
 import { prototypeConfig } from "../config/prototypeConfig";
-import type { FishingShoalReadModel } from "../exploration/FishingShoalContracts";
+import { createFishingShoalId, type FishingShoalReadModel } from "../exploration/FishingShoalContracts";
 import { gridToWorld } from "../world/CoordinateSystem";
 
 type FishingShoalState = FishingShoalReadModel["state"];
 
 interface FishingShoalView {
   container: Phaser.GameObjects.Container;
+  authoredVisual?: Phaser.GameObjects.Image;
   connectivityCue: Phaser.GameObjects.Graphics;
   marker: Phaser.GameObjects.Graphics;
   badge: Phaser.GameObjects.Text;
@@ -55,6 +58,8 @@ const MARKER_STYLES: Readonly<Record<FishingShoalState, Readonly<MarkerStyle>>> 
   },
 };
 
+const PILOT_SHOAL_ID = createFishingShoalId(0);
+
 /**
  * Developer-art presentation for the fog-filtered fishing-shoal read model.
  *
@@ -65,7 +70,19 @@ export class FishingShoalRenderer {
   private readonly viewsById = new Map<string, FishingShoalView>();
   private readonly viewPool: FishingShoalView[] = [];
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  private readonly authoredMetadata?: Readonly<AuthoredFishingShoalMetadata>;
+  private readonly authoredTextureKey?: string;
+
+  constructor(
+    private readonly scene: Phaser.Scene,
+    pilotAssets?: Readonly<PilotAssetRuntime>,
+  ) {
+    const metadata = pilotAssets?.metadata(AUTHORED_ASSET_IDS.fishingShoal);
+    if (metadata?.kind === "fishing-shoal") {
+      this.authoredMetadata = metadata;
+      this.authoredTextureKey = pilotAssets?.textureKey(metadata.visual.imageId);
+    }
+  }
 
   sync(records: readonly Readonly<FishingShoalReadModel>[]): void {
     const liveIds = new Set<string>();
@@ -117,6 +134,10 @@ export class FishingShoalRenderer {
   private acquire(id: string): FishingShoalView {
     const view = this.viewPool.pop() ?? this.createView();
     view.container.setActive(true).setVisible(true).setName(id);
+    const usesAuthoredVisual = id === PILOT_SHOAL_ID && view.authoredVisual !== undefined;
+    view.authoredVisual?.setVisible(usesAuthoredVisual);
+    view.marker.setVisible(!usesAuthoredVisual);
+    view.badge.setVisible(!usesAuthoredVisual);
     view.renderedState = undefined;
     view.renderedHomeConnected = undefined;
     this.viewsById.set(id, view);
@@ -124,6 +145,11 @@ export class FishingShoalRenderer {
   }
 
   private createView(): FishingShoalView {
+    const authoredVisual = this.authoredMetadata && this.authoredTextureKey
+      ? this.scene.add.image(0, 0, this.authoredTextureKey)
+        .setOrigin(this.authoredMetadata.visual.origin.x, this.authoredMetadata.visual.origin.y)
+        .setScale(this.authoredMetadata.visual.scale)
+      : undefined;
     const connectivityCue = this.scene.add.graphics();
     const marker = this.scene.add.graphics();
     const badge = this.scene.add.text(0, 0, "F?", {
@@ -142,8 +168,12 @@ export class FishingShoalRenderer {
       stroke: "#041419",
       strokeThickness: 4,
     }).setOrigin(0.5, 0);
-    const container = this.scene.add.container(0, 0, [connectivityCue, marker, badge, label]).setDepth(43);
-    return { container, connectivityCue, marker, badge, label };
+    const children: Phaser.GameObjects.GameObject[] = [];
+    if (authoredVisual) children.push(authoredVisual);
+    children.push(connectivityCue, marker, badge, label);
+    const container = this.scene.add.container(0, 0, children)
+      .setDepth(this.authoredMetadata?.visual.depth ?? 43);
+    return { container, authoredVisual, connectivityCue, marker, badge, label };
   }
 
   private redraw(view: FishingShoalView, state: FishingShoalState, homeConnected: boolean): void {

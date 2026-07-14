@@ -1,5 +1,6 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { stampAuthoredHomeIsland } from "../assets/AuthoredHomeIsland";
 import { IslandGenerator, type GeneratedIsland } from "./IslandGenerator";
 import { seededValue } from "./SeededRandom";
 import { KnowledgeState, TerrainType } from "./TileData";
@@ -54,16 +55,14 @@ export class WorldGenerator {
     );
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
 
-    const homeCenter = {
+    const homePlacement = {
       x: Math.floor(grid.width / 2),
       y: Math.floor(grid.height / 2),
     };
-    const homeRadius = this.config.world.homeIslandRadius;
-    const harbour = { x: homeCenter.x + homeRadius, y: homeCenter.y };
-    const dock = { x: harbour.x + 1, y: harbour.y };
 
-    this.paintSupportedWater(grid, seed, homeCenter);
-    this.paintHomeIsland(grid, seed, homeCenter, harbour, dock);
+    this.paintSupportedWater(grid, seed, homePlacement);
+    const home = stampAuthoredHomeIsland(grid, homePlacement);
+    const { homeCenter, harbour, dock, homeReturnTile } = home.landmarks;
 
     const islands = new IslandGenerator(this.config).generate(grid, seed, homeCenter, dock);
     const hiddenObstacleCenter = { ...islands[0].center };
@@ -79,7 +78,7 @@ export class WorldGenerator {
         homeCenter,
         harbour,
         dock,
-        homeReturnTile: { ...dock },
+        homeReturnTile,
         hiddenObstacleCenter,
         hiddenResource,
       },
@@ -111,47 +110,6 @@ export class WorldGenerator {
     }
   }
 
-  private paintHomeIsland(
-    grid: WorldGrid,
-    seed: number,
-    center: GridPoint,
-    harbour: GridPoint,
-    dock: GridPoint,
-  ): void {
-    const landRadius = this.config.world.homeIslandRadius;
-    const shallowRadius = this.config.world.shallowWaterRadius;
-
-    for (let y = center.y - shallowRadius; y <= center.y + shallowRadius; y++) {
-      for (let x = center.x - shallowRadius; x <= center.x + shallowRadius; x++) {
-        if (!grid.inBounds(x, y)) continue;
-        const distance = Math.hypot(x - center.x, y - center.y);
-        const edgeNoise = (seededValue(seed + 11, x, y) - 0.5) * 0.9;
-
-        if (distance <= landRadius + edgeNoise) {
-          this.setTerrain(grid, x, y, TerrainType.Land);
-          grid.setIslandId(x, y, 0);
-        } else if (distance <= shallowRadius + edgeNoise) {
-          const protectsHarbourApproach = x >= center.x + landRadius - 1
-            && Math.abs(y - center.y) <= this.config.islands.safeCorridorHalfWidth;
-          const reefChance = seededValue(seed + 79, x, y);
-          const terrain = !protectsHarbourApproach && distance > shallowRadius - 1.2 && reefChance > 0.88
-            ? TerrainType.Reef
-            : TerrainType.ShallowOcean;
-          this.setTerrain(grid, x, y, terrain);
-        }
-      }
-    }
-
-    // Carve a readable east-facing harbour and a passable dock approach.
-    for (let x = center.x + landRadius - 1; x <= dock.x; x++) {
-      this.setTerrain(grid, x, center.y, TerrainType.ShallowOcean);
-      grid.setIslandId(x, center.y, -1);
-      grid.setKnowledge(x, center.y, KnowledgeState.Supported, 0);
-    }
-    this.setTerrain(grid, harbour.x, harbour.y, TerrainType.ShallowOcean);
-    this.setTerrain(grid, dock.x, dock.y, TerrainType.ShallowOcean);
-  }
-
   private chooseHiddenResource(grid: WorldGrid, seed: number, home: GridPoint, obstacle: GridPoint): GridPoint {
     const offsetSign = seededValue(seed + 307, 0, 0) < 0.5 ? -1 : 1;
     const candidate = {
@@ -166,7 +124,4 @@ export class WorldGenerator {
     };
   }
 
-  private setTerrain(grid: WorldGrid, x: number, y: number, terrain: TerrainType): void {
-    grid.setTerrain(x, y, terrain);
-  }
 }
