@@ -5,11 +5,13 @@ import type {
   GreatHallVoyage,
 } from "../lineage/GreatHallChronicle";
 
-export type GreatHallViewMode = "home" | "handover";
+export type GreatHallViewMode = "home" | "handover" | "completion";
 
 export interface GreatHallViewCallbacks {
   readonly closeHome: () => void;
   readonly continueHandover: () => void;
+  readonly continueCompletedWorld: () => void;
+  readonly startNewGame: () => void;
 }
 
 /** Shared GP-2.3 presentation for optional home browsing and required succession. */
@@ -28,7 +30,9 @@ export class GreatHallView {
   private readonly entryFate: HTMLElement;
   private readonly voyageList: HTMLOListElement;
   private readonly handoverCopy: HTMLElement;
+  private readonly completionCopy: HTMLElement;
   private readonly primaryButton: HTMLButtonElement;
+  private readonly newGameButton: HTMLButtonElement;
   private chronicle?: Readonly<GreatHallChronicle>;
   private selectedNavigatorId?: NavigatorId;
   private nextGeneration?: number;
@@ -69,7 +73,9 @@ export class GreatHallView {
           </article>
         </div>
         <p class="great-hall__handover" data-great-hall-handover></p>
+        <p class="great-hall__completion" data-great-hall-completion></p>
         <footer class="great-hall__footer">
+          <button class="great-hall__new-game" data-great-hall-new-game type="button">Start new game</button>
           <button data-great-hall-primary type="button">Return to ship</button>
         </footer>
       </section>`;
@@ -88,12 +94,18 @@ export class GreatHallView {
     this.entryFate = requiredElement(dialog, "[data-great-hall-entry-fate]");
     this.voyageList = requiredElement(dialog, "[data-great-hall-voyages]");
     this.handoverCopy = requiredElement(dialog, "[data-great-hall-handover]");
+    this.completionCopy = requiredElement(dialog, "[data-great-hall-completion]");
     this.primaryButton = requiredElement(dialog, "[data-great-hall-primary]");
+    this.newGameButton = requiredElement(dialog, "[data-great-hall-new-game]");
 
     this.closeButton.addEventListener("click", () => this.requestHomeClose(), { signal });
     this.primaryButton.addEventListener("click", () => {
       if (this.modeValue === "handover") this.callbacks.continueHandover();
+      else if (this.modeValue === "completion") this.callbacks.continueCompletedWorld();
       else this.requestHomeClose();
+    }, { signal });
+    this.newGameButton.addEventListener("click", () => {
+      if (this.modeValue === "completion") this.callbacks.startNewGame();
     }, { signal });
     dialog.addEventListener("cancel", (event) => {
       event.preventDefault();
@@ -150,6 +162,26 @@ export class GreatHallView {
     this.primaryButton.focus();
   }
 
+  showCompletion(
+    chronicle: Readonly<GreatHallChronicle>,
+    findingNavigatorId: NavigatorId,
+  ): void {
+    if (!chronicle.idolProgress.complete) {
+      throw new RangeError("Great Hall completion requires every idol location to be returned");
+    }
+    const finder = chronicle.navigators.find(({ navigatorId }) => navigatorId === findingNavigatorId);
+    if (!finder) {
+      throw new RangeError(`Great Hall completion requires finding navigator ${findingNavigatorId}`);
+    }
+    this.chronicle = chronicle;
+    this.modeValue = "completion";
+    this.selectedNavigatorId = finder.navigatorId;
+    this.nextGeneration = undefined;
+    this.render();
+    this.showDialog();
+    this.primaryButton.focus();
+  }
+
   refresh(chronicle: Readonly<GreatHallChronicle>): void {
     if (!this.isOpen) return;
     this.chronicle = chronicle;
@@ -158,7 +190,7 @@ export class GreatHallView {
   }
 
   selectGeneration(generation: number): boolean {
-    if (this.modeValue !== "home" || !this.chronicle) return false;
+    if (!this.canBrowseNavigators() || !this.chronicle) return false;
     const entry = this.chronicle.navigators.find((navigator) => navigator.generation === generation);
     if (!entry) return false;
     this.selectedNavigatorId = entry.navigatorId;
@@ -180,6 +212,7 @@ export class GreatHallView {
     delete this.dialog.dataset.navigatorState;
     delete this.dialog.dataset.outcome;
     delete this.dialog.dataset.nextGeneration;
+    delete this.dialog.dataset.idolProgress;
     return wasOpen;
   }
 
@@ -199,31 +232,52 @@ export class GreatHallView {
     this.dialog.dataset.selectedGeneration = String(entry.generation);
     this.dialog.dataset.navigatorState = entry.state;
     this.dialog.dataset.outcome = entry.state === "completed" ? "tenure-completed" : entry.state === "lost" ? "lost-at-sea" : "active";
+    this.dialog.dataset.idolProgress = `${chronicle.idolProgress.found}/${chronicle.idolProgress.total}`;
     if (this.nextGeneration === undefined) delete this.dialog.dataset.nextGeneration;
     else this.dialog.dataset.nextGeneration = String(this.nextGeneration);
 
     const homeMode = mode === "home";
-    this.title.textContent = homeMode ? "Lineage chronicle" : "A navigator is remembered";
+    const handoverMode = mode === "handover";
+    const completionMode = mode === "completion";
+    this.title.textContent = homeMode
+      ? "Lineage chronicle"
+      : handoverMode
+        ? "A navigator is remembered"
+        : "Every lost idol is found";
     this.description.textContent = homeMode
       ? "Only journeys and findings returned to the exact home dock are remembered here."
-      : `Generation ${entry.generation}'s committed journeys enter the tribe's permanent memory.`;
+      : handoverMode
+        ? `Generation ${entry.generation}'s committed journeys enter the tribe's permanent memory.`
+        : `The final location returned by Generation ${entry.generation} completes the tribe's long search.`;
     this.closeButton.hidden = !homeMode;
-    this.totals.hidden = !homeMode;
-    this.navigatorNav.hidden = !homeMode;
+    this.totals.hidden = handoverMode;
+    this.navigatorNav.hidden = handoverMode;
     this.renderTotals(chronicle);
     this.renderNavigatorNavigation(chronicle, entry);
     this.renderEntry(entry);
 
-    this.handoverCopy.hidden = homeMode;
-    this.handoverCopy.textContent = homeMode ? "" : handoverText(entry, this.nextGeneration);
+    this.handoverCopy.hidden = !handoverMode;
+    this.handoverCopy.textContent = handoverMode ? handoverText(entry, this.nextGeneration) : "";
+    this.completionCopy.hidden = !completionMode;
+    this.completionCopy.textContent = completionMode
+      ? "The final Great Hall is complete. Continue this world without another ending, or begin again in a different world."
+      : "";
+    this.newGameButton.hidden = !completionMode;
     this.primaryButton.textContent = homeMode
       ? "Return to ship"
-      : `Begin generation ${this.nextGeneration}`;
+      : handoverMode
+        ? `Begin generation ${this.nextGeneration}`
+        : "Continue exploring";
   }
 
   private renderTotals(chronicle: Readonly<GreatHallChronicle>): void {
     const { totals } = chronicle;
-    const facts: ReadonlyArray<readonly [string, number, string]> = [
+    const facts: ReadonlyArray<readonly [string, number | string, string]> = [
+      [
+        "idol-locations",
+        `${chronicle.idolProgress.found} / ${chronicle.idolProgress.total}`,
+        "Idol locations found",
+      ],
       ["navigators", totals.navigators, "Navigators"],
       ["returned-voyages", totals.returnedVoyages, "Safe journeys"],
       ["completed-navigators", totals.completedNavigators, "Tenures completed"],
@@ -241,6 +295,9 @@ export class GreatHallView {
     this.totals.replaceChildren(...facts.map(([key, value, label]) => {
       const wrapper = document.createElement("div");
       wrapper.dataset.total = key;
+      if (key === "idol-locations") {
+        wrapper.dataset.complete = String(chronicle.idolProgress.complete);
+      }
       const term = document.createElement("dt");
       term.textContent = label;
       const detail = document.createElement("dd");
@@ -267,7 +324,7 @@ export class GreatHallView {
       state.textContent = navigatorStateLabel(entry);
       button.append(generation, state);
       button.addEventListener("click", () => {
-        if (this.modeValue !== "home") return;
+        if (!this.canBrowseNavigators()) return;
         this.selectedNavigatorId = entry.navigatorId;
         this.render();
         this.focusSelectedNavigator();
@@ -296,6 +353,10 @@ export class GreatHallView {
 
   private selectedEntry(): Readonly<GreatHallNavigatorEntry> | undefined {
     return this.chronicle?.navigators.find(({ navigatorId }) => navigatorId === this.selectedNavigatorId);
+  }
+
+  private canBrowseNavigators(): boolean {
+    return this.modeValue === "home" || this.modeValue === "completion";
   }
 
   private resolveSelection(preferredNavigatorId?: NavigatorId): NavigatorId {
@@ -362,16 +423,29 @@ function renderVoyage(voyage: Readonly<GreatHallVoyage>): HTMLLIElement {
   heading.append(label, outcome);
   const achievements = document.createElement("ul");
   achievements.className = "great-hall__achievements";
-  const labels = voyage.outcome === "lost-at-sea"
-    ? ["No findings from this journey were returned."]
-    : voyage.achievements.length > 0
-      ? voyage.achievements.map(({ label: achievement }) => achievement)
-      : ["No new findings returned."];
-  achievements.replaceChildren(...labels.map((achievement) => {
+  const placeholder = (text: string): HTMLLIElement => {
     const item = document.createElement("li");
-    item.textContent = achievement;
+    item.textContent = text;
     return item;
-  }));
+  };
+  if (voyage.outcome === "lost-at-sea") {
+    achievements.replaceChildren(placeholder("No findings from this journey were returned."));
+  } else if (voyage.achievements.length === 0) {
+    achievements.replaceChildren(placeholder("No new findings returned."));
+  } else {
+    let idolLocationCount = 0;
+    achievements.replaceChildren(...voyage.achievements.map((achievement) => {
+      const item = document.createElement("li");
+      item.dataset.achievementKind = achievement.kind;
+      item.textContent = achievement.label;
+      if (achievement.kind === "idol-location") {
+        idolLocationCount++;
+        item.dataset.idolLocationId = achievement.idolLocationId;
+      }
+      return item;
+    }));
+    if (idolLocationCount > 0) row.dataset.idolLocations = String(idolLocationCount);
+  }
   row.append(heading, achievements);
   return row;
 }

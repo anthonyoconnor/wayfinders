@@ -14,7 +14,9 @@ model that exists then rather than reviving the removed implementation.
 
 Wayfinders is a browser exploration prototype about leaving safe water,
 building knowledge through travel, deciding when to return, and passing a
-stronger chart to later voyages and generations.
+stronger chart to later voyages and generations. Its finite world goal is to
+rediscover the locations of idols lost when the world split into islands and
+return that knowledge home; the idols themselves are never recovered.
 
 The implementation follows these rules:
 
@@ -312,7 +314,7 @@ use the same failure path:
 2. Revert the active expedition's Personal tiles to Unknown.
 3. Remove that expedition's provisional island-dossier and fishing records without
    increasing the navigator's completed-voyage count.
-4. Record the navigator as lost and begin one persisted wreck succession.
+4. Record the navigator as lost and begin one in-session wreck succession.
 5. Freeze the empty ship at the loss site for four simulation seconds.
 6. Clear loss-site visibility at completion.
 7. Spawn a supplied ship and exactly one successor at the home dock, then
@@ -338,11 +340,12 @@ the tribe and permanent lineage do not receive the report until exact-home-dock
 return. Successful return commits the report once to the wreck and correct lost
 navigator. A fatal surveying expedition discards its provisional report while
 leaving the wreck discovered, unidentified and available to survey again.
-Repeated input, revisit, dock and reload cannot duplicate either the survey
-cost or returned report. This baseline report does not salvage cargo, restore
+Repeated input, revisit and dock cannot duplicate either the survey cost or
+returned report within a session. This baseline report does not salvage cargo, restore
 Personal chart knowledge, commit the lost expedition's provisional findings
 or apply an economy reward. Multiple surveys may be made in one journey while
-the shared supply remains; physical idol recovery remains GP-4.2 work.
+the shared supply remains. Runtime navigator wrecks are not eligible idol
+hosts, and there is no physical idol recovery or cargo system.
 
 ### Navigator tenure and transition time
 
@@ -355,16 +358,16 @@ by its navigator, ordinal and expedition and contains the Supported-route and
 enclosed-Unknown counts plus canonical island-lead, island-dossier,
 fishing-lead, fishing-survey and runtime-wreck IDs. Presentation resolves those
 stable IDs to island names/dossier findings, fishing qualities and
-lost-navigator identities from their authoritative records. Lineage contract V5
+lost-navigator identities from their authoritative records. Lineage contract V6
 validates sorted, unique island IDs, transition provenance and idempotent credit.
 There is no age, retirement choice or fifth-voyage state.
 
 GP-2.2 owns the four-journey tenure, death, succession and required handover
 gate. Authoritative tenure completion or wreck succession commits exactly once
 before its presentation can affect play. Every generation boundary then creates
-a persisted, unacknowledged handover. The simulation suppresses sailing until
-the handover is acknowledged; reload reopens the same outgoing-navigator entry
-rather than bypassing it. A completed tenure lists voyages one through four
+an in-session, unacknowledged handover. The simulation suppresses sailing until
+the handover is acknowledged; browser reload deliberately starts a fresh
+session. A completed tenure lists voyages one through four
 with the achievements committed at each exact-dock return. An early loss lists
 the preceding safe-return records and the next numbered voyage as **Lost at
 sea**, explicitly crediting nothing from that fatal expedition.
@@ -374,11 +377,13 @@ the permanent Great Hall chronicle. The same chronicle supplies optional home
 browsing and lineage totals rather than maintaining a separate succession
 summary.
 
-`GreatHallChronicle` V3 is a versioned ephemeral read model, not save authority.
+`GreatHallChronicle` V4 is a versioned ephemeral read model, not save authority.
 It derives structured achievement keys, active / completed / lost navigator
 entries, distinct island-lead/dossier and survey-site lead/report achievements
-and totals, lineage totals and returned wreck-fate links from the authoritative
-lineage and returned world records. The player-facing
+and totals, distinguished idol-location achievements, lineage totals and
+returned wreck-fate links from the authoritative lineage and returned world
+records. Its idol source contains the configured total and returned locations
+only; it never receives an undiscovered host. The player-facing
 record remains permanent because those source records persist; the derived view
 is rebuilt rather than saved independently. The optional home mode is available
 only through **Go ashore · Great Hall** at the exact home dock; there is no
@@ -390,6 +395,17 @@ navigator exposes no wreck identity until a later exact-dock-returned survey
 links the confirmation to the lost record and preserves credit on the reporting
 voyage. No archive copy, aggregate counter, update cue or viewed-state flag is
 serialized.
+
+The final returned idol location opens the same Great Hall in a dedicated
+completion mode after exact-dock voyage settlement and credit. **Continue
+exploring** preserves the completed world and lineage, permanently changes its
+completion state so the ending cannot retrigger, and returns to ordinary play;
+normal exact-home-dock Hall browsing remains available. **Start new game**
+regenerates the session with a distinct effective seed and resets world,
+lineage and idol progress. When the final return also completes voyage four,
+the completion mode is shown first and the already committed handover remains
+pending underneath it; continuing opens that handover, while starting a new
+game discards it with the old world.
 
 Narratively, that boundary represents elapsed world time: the tribe can act on
 returned findings, or determine that a lost navigator will not return, mourn
@@ -418,8 +434,8 @@ transaction atomically upgrades that sighting—or an earlier returned lead—to
 `surveyed`. Exact-dock return commits `sighted` as a returned `lead` and
 `surveyed` as a returned `dossier`; wreck rollback removes only records owned by
 the failed expedition and preserves earlier returned leads/dossiers. Records
-carry expedition and generation provenance, and repeat sight, survey, return or
-reload cannot duplicate state or achievement credit.
+carry expedition and generation provenance, and repeat sight, survey or return
+cannot duplicate state or achievement credit within a session.
 
 A provisional `surveyed` or returned `dossier` state supplies a sorted set of
 revealed island IDs to the knowledge overlay. The renderer omits fog only from
@@ -445,7 +461,48 @@ All initial types share one state branch: current sight creates provisional
 `sighted`; the configured two-bundle provision transaction upgrades it—or a
 returned lead—to `surveyed`; exact-dock return commits `lead` or `report`; wreck rollback removes
 only the active expedition's provisional records. Stable IDs and expedition /
-generation provenance make observation, survey, return and reload idempotent.
+generation provenance make observation, survey and return idempotent within a
+session.
+
+### Idol-location catalog and derived lifecycle
+
+`generateIdolLocationCatalog` creates immutable contract/content V1 definitions
+after island dossiers and GP-3.3 survey sites exist. The world configuration
+supplies a positive integer `idolCount`, defaulting to three. Generation rejects
+a count larger than the eligible host set rather than reducing it. Candidate
+hosts are canonicalized before seeded ranking, so the same world seed, count
+and content version produce the same selection regardless of source-array
+order, with at most one idol per host.
+
+The eligible set is every non-home island dossier plus the seed-derived
+historic-wreck, coastal-ruin and tidal-cave sites. Fishing shoals and runtime
+navigator wrecks are excluded. The catalog overlays stable host IDs and does
+not mutate terrain, island identity, survey placement or fixed-update work.
+Only development authority may inspect the full mapping.
+
+Idol progress owns no second mutable survey reducer. A successful ordinary host
+survey is provisional idol-location knowledge exactly when its host is in the
+catalog. A wreck rolls it back with that host's `surveyed` record. Exact-dock
+return commits it with the host's dossier or report, and returned leads do not
+count. Public progress derives provisional and returned locations from those
+authoritative host states. There is no idol-specific command, remote clue,
+physical object, cargo, recovery state, loss site, currency, power or upgrade.
+
+The lineage voyage record already identifies returned island dossiers and site
+reports. Great Hall V4 joins those stable host IDs to returned idol definitions
+to derive a unique `idol-location` achievement for the exact navigator and
+voyage without extending mutable lineage storage. The Hall exposes returned
+progress against the configured total while keeping undiscovered hosts hidden.
+
+The simulation completion state is `in-progress`, `awaiting-choice` or
+`continued`. Only the exact-dock return that raises returned idol locations to
+the configured total changes it to `awaiting-choice` and emits completion after
+normal return, credit, replenishment and any tenure transition have committed.
+While the choice is active, movement and lifecycle-mutating interactions are
+suppressed. Continuing changes the state once to `continued`; no later return
+can emit completion again. Starting a new game uses a deterministic uint32 seed
+advance that is guaranteed to differ in effective seed space, then performs the
+ordinary fresh-world reset.
 
 ## 12. Saving policy
 
@@ -484,14 +541,17 @@ The game uses WebGL through Phaser.
 - The cargo rack and lifecycle cues are screen-space presentation.
 
 Island sightings announce a named lead while keeping the dossier result hidden.
-Exact-dock return with any notable committed finding (island lead/dossier,
+Surveying an idol host adds an unmistakable provisional idol-location cue to
+the ordinary host finding without revealing any other host. Exact-dock return
+with any notable committed finding (island lead/dossier, idol location,
 survey-site lead/report, fishing report or wreck identity)
 combines achievements, Supported-route growth and replenishment into one
 five-second message. A return with route growth only uses a 3.5-second cue.
 Only one lifecycle cue may exist at a time.
 
 The fourth safe return replaces the ordinary cue after all voyage results
-commit. A wreck hold identifies the navigator as lost, states that their wreck
+commit, except that final-idol completion has first presentation priority. A
+wreck hold identifies the navigator as lost, states that their wreck
 remains and compresses the tribe's mourning and elapsed time. Either path then
 opens the required focused handover mode of the Great Hall. Each safe-voyage row
   mirrors the dock report with route-support counts, island leads/dossiers,
@@ -506,6 +566,12 @@ mode only at the exact home dock; it is never part of the sailing HUD. GR-3.4
 may polish this transition without changing the authoritative records. The
 ordinary shell status and return overlays expose **Voyage n of 4** so the
 bounded tenure is legible without a retirement decision control.
+
+The final Great Hall shows the completed lineage and credits before its two
+choices. Continuing closes completion, then opens any pending fourth-voyage
+handover before sailing resumes; later home visits can browse the same completed
+Hall normally. Starting a new game clears all pending old-world presentation
+before regenerating, so no stale return or handover can appear in the new world.
 
 A discovered but unreported runtime wreck uses an unidentified marker and a
 contextual **Survey wreck** action. Surveying exposes the navigator's
@@ -554,10 +620,15 @@ surveySiteSighted
 surveySiteSurveyed
 surveySitesReturned
 surveySitesLost
+idolLocationDiscovered
+idolLocationsReturned
+idolLocationsLost
 fishingShoalSighted
 fishingShoalSurveyed
 fishingShoalsReturned
 fishingShoalsLost
+gameCompleted
+completedWorldContinued
 worldRegenerated
 gameLoaded
 ```
@@ -566,6 +637,11 @@ gameLoaded
 remaining voyage allowance and whether the tenure completed.
 `navigatorTenureCompleted` identifies the outgoing and successor navigators.
 `generationAdvanced.reason` is either `tenure` or `wreck`.
+`idolLocationDiscovered` is provisional and names only the surveyed location;
+`idolLocationsReturned` and `idolLocationsLost` mirror the host survey's dock
+or wreck boundary. `gameCompleted` is emitted only for the first final-location
+return, after normal settlement, and `completedWorldContinued` records the
+one-way choice to keep exploring that completed world.
 
 Developer UI capabilities:
 
@@ -621,9 +697,11 @@ overlay invalidation, island navigation, expedition success/failure,
 four-journey tenure and succession, Great Hall chronicle derivation and
  exact-home-dock access, Unknown pocket cleanup, island dossiers and exact-island
  fog reveal, extensible survey-site generation/lifecycle, runtime-wreck survey
- commit/rollback and idempotence, frame telemetry and ship interpolation.
-At the current baseline, typecheck, 223 tests across 26 files and the production
-build pass. Browser verification also covers the three typed service-anchor
+ commit/rollback and idempotence, deterministic idol-location selection,
+ provisional/wreck/exact-dock idol integration, Great Hall V4 credit,
+ completion choices, frame telemetry and ship interpolation. The current test
+ count is recorded in `IMPLEMENTATION_STATUS.md`; typecheck, the automated suite
+ and the production build pass. Browser verification also covers the three typed service-anchor
 developer moves, the Survey-only site prompt, placeholder presentation and
 unsuppressed sailing input while developer tools remain open.
 
@@ -631,8 +709,9 @@ Browser verification targets WebGL startup, controls, island/fishing cues,
 combined return presentation, fourth-return automatic succession, fatal-wreck mourning
 and succession, focused Great Hall handover entries, exact-home-dock browsing,
 unidentified wreck survey and exact-dock reporting, pending handover and wreck
-flows, live sailing and speed tuning with the developer drawer open, and console
-health.
+flows, special idol discovery/return cues, final Great Hall ordering, continued
+completed-world play, later Hall browsing, distinct-seed new game, live sailing
+and speed tuning with the developer drawer open, and console health.
 
 Desktop keyboard/pointer play is the validated target. Responsive resize is
 implemented. Touch-first sailing is not implemented and requires a separately
@@ -651,8 +730,10 @@ provision-funded survey transaction. It now also includes GP-3.2's returned
 island leads/dossiers and exact-island fog reveal. GP-3.3 adds exactly one
 historic wreck, coastal ruin and tidal cave through a descriptor-extensible
 lifecycle, with lineage V6 voyage records V3 and Great Hall V3 credit. The
-forward roadmap may add idols, an explicitly authorized saving milestone,
-production assets and
+accepted GP-4.1 overlay adds the hidden finite idol-location catalog,
+survey-owned provisional/return/wreck behavior, Great Hall V4 credit and
+one-shot completion with continue/new-game choices. The forward roadmap may
+add an explicitly authorized saving milestone, production assets and
 environmental polish. It no longer places tribe economics, loadouts,
 generic cargo or automatic trade in GP-3. Those remaining roadmap items are
 proposed extensions, not implemented baseline behavior.
@@ -672,6 +753,14 @@ later site types do not require new interaction semantics. These sites are
 independently seed-derived and directly sighted; island dossiers do not spawn
 or unlock nested site leads.
 
+GP-4.1 selects idol hosts only from those island dossiers and three GP-3.3
+sites. It uses the hosts' existing stable IDs and states rather than changing
+their generators. Fishing shoals and runtime navigator wrecks remain excluded.
+The default catalog count is three, every configured count is positive and no
+world may request more idols than eligible hosts. Continuing completion retains
+all returned records and normal Hall access without another ending; starting a
+new game is the only completion choice that resets the world and lineage.
+
 Gameplay extensions must define deterministic identity and event ordering while
 keeping authoritative state separate from derived presentation. They have no
 save-shape, persistence-ownership or reload-compatibility obligation.
@@ -684,7 +773,9 @@ design decision:
 - outward/current-sight knowledge asymmetry;
 - exact-dock commitment;
 - provision and return-cost semantics;
-- four-second wreck lifecycle.
+- four-second wreck lifecycle;
+- hidden idol-host authority derived from eligible survey hosts only; and
+- one-shot per-world completion with exact-dock credit before presentation.
 
 Central integration files are serialized merge gates. New pure systems,
 renderers and tests may be developed in parallel against frozen contracts, but

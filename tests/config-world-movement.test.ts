@@ -122,6 +122,19 @@ describe("prototype configuration", () => {
     }
   });
 
+  it("uses three configurable idol locations by default and requires a positive integer", () => {
+    expect(DEFAULT_PROTOTYPE_CONFIG.world.idolCount).toBe(3);
+    patchPrototypeConfig({ world: { idolCount: 5 } });
+    expect(prototypeConfig.world.idolCount).toBe(5);
+
+    for (const value of [0, -1, 1.5]) {
+      expect(() => patchPrototypeConfig({ world: { idolCount: value } })).toThrow(
+        "world.idolCount must be a positive integer",
+      );
+      expect(prototypeConfig.world.idolCount).toBe(5);
+    }
+  });
+
   it("accepts forward cone half-angles from 1 through 180 degrees", () => {
     for (const value of [1, 60, 180]) {
       patchPrototypeConfig({ overlays: { forwardConeHalfAngleDegrees: value } });

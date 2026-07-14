@@ -4,6 +4,7 @@ import type {
   IslandDossierReturnedRecordV1,
   IslandDossierSurveyedResultV1,
 } from "../exploration/IslandDossierContracts";
+import type { IdolLocationDefinition } from "../exploration/IdolLocationContracts";
 import type {
   SurveySiteClue,
   SurveySiteId,
@@ -117,6 +118,23 @@ export interface GameEventMap {
     generation: number;
     records: readonly Readonly<IslandDossierProvisionalRecordV1>[];
   };
+  idolLocationDiscovered: {
+    expeditionId: number;
+    generation: number;
+    location: Readonly<IdolLocationDefinition>;
+    provisionsSpent: number;
+    presentationMs: number;
+  };
+  idolLocationsReturned: {
+    expeditionId: number;
+    generation: number;
+    locations: readonly Readonly<IdolLocationDefinition>[];
+  };
+  idolLocationsLost: {
+    expeditionId: number;
+    generation: number;
+    locations: readonly Readonly<IdolLocationDefinition>[];
+  };
   surveySiteSighted: {
     id: SurveySiteId;
     type: SurveySiteType;
@@ -165,6 +183,16 @@ export interface GameEventMap {
     forgottenTiles: number;
     nextGeneration: number;
     wreck: Readonly<ShipwreckState>;
+  };
+  gameCompleted: {
+    navigatorId: NavigatorId;
+    generation: number;
+    voyageNumber: number;
+    returnedIdolLocations: number;
+    totalIdolLocations: number;
+  };
+  completedWorldContinued: {
+    seed: number;
   };
   worldRegenerated: { seed: number };
   shipTeleported: GridPoint;

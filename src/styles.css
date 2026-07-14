@@ -300,6 +300,11 @@ a:focus-visible {
   width: min(44rem, calc(100vw - 2rem));
 }
 
+.great-hall[data-mode="completion"] .great-hall__panel {
+  border-color: rgba(238, 211, 139, 0.72);
+  box-shadow: 0 1.4rem 5rem rgba(0, 0, 0, 0.62), 0 0 3rem rgba(224, 199, 132, 0.12);
+}
+
 .great-hall [hidden] {
   display: none;
 }
@@ -317,6 +322,7 @@ a:focus-visible {
 .great-hall__entry-status,
 .great-hall__entry-fate,
 .great-hall__handover,
+.great-hall__completion,
 .great-hall h2,
 .great-hall h3 {
   margin: 0;
@@ -351,7 +357,8 @@ a:focus-visible {
 .great-hall__description,
 .great-hall__entry-status,
 .great-hall__entry-fate,
-.great-hall__handover {
+.great-hall__handover,
+.great-hall__completion {
   color: #d7e7df;
   font-size: 0.84rem;
   line-height: 1.5;
@@ -401,6 +408,15 @@ a:focus-visible {
   color: #fff2c8;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 1.2rem;
+}
+
+.great-hall__totals [data-total="idol-locations"] {
+  border-color: rgba(238, 211, 139, 0.58);
+  background: rgba(74, 65, 37, 0.46);
+}
+
+.great-hall__totals [data-total="idol-locations"][data-complete="true"] dd {
+  color: #fff0a8;
 }
 
 .great-hall__body {
@@ -524,6 +540,18 @@ a:focus-visible {
   line-height: 1.4;
 }
 
+.great-hall__achievements li[data-achievement-kind="idol-location"] {
+  color: #fff0a8;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.great-hall__achievements li[data-achievement-kind="idol-location"]::marker {
+  color: #e9c96f;
+  content: "✦  ";
+}
+
 .great-hall__voyages > li[data-outcome="lost-at-sea"] {
   border-color: rgba(255, 181, 167, 0.46);
 }
@@ -541,9 +569,19 @@ a:focus-visible {
   color: var(--shell-muted);
 }
 
+.great-hall__completion {
+  color: #eed9a4;
+}
+
 .great-hall__footer {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.great-hall[data-mode="completion"] .great-hall__footer {
+  justify-content: space-between;
 }
 
 .great-hall button {
@@ -559,6 +597,17 @@ a:focus-visible {
 .great-hall button:hover {
   border-color: #fff2c8;
   background: rgba(99, 83, 42, 0.86);
+}
+
+.great-hall .great-hall__new-game {
+  border-color: rgba(215, 231, 223, 0.36);
+  color: #d7e7df;
+  background: rgba(4, 21, 28, 0.62);
+}
+
+.great-hall .great-hall__new-game:hover {
+  border-color: rgba(215, 231, 223, 0.72);
+  background: rgba(12, 42, 51, 0.82);
 }
 
 .legend-swatch {

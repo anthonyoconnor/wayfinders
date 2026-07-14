@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { appendDeveloperLog } from "../../developerLog";
+import { appendDeveloperLog, clearDeveloperLog } from "../../developerLog";
 import {
   onPrototypeConfigChanged,
   patchPrototypeConfig,
@@ -36,6 +36,7 @@ import {
   type GreatHallChronicleSources,
   type GreatHallReturnedVoyage,
 } from "../lineage/GreatHallChronicle";
+import type { NavigatorId } from "../lineage/NavigatorLineageSystem";
 import { worldToGrid } from "../world/CoordinateSystem";
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
@@ -93,6 +94,8 @@ interface BrowserDebugApi {
   closeGreatHall: () => boolean;
   selectGreatHallGeneration: (generation: number) => boolean;
   greatHall: () => Readonly<GreatHallChronicle>;
+  continueCompletedWorld: () => boolean;
+  startNewGame: () => number | undefined;
 }
 
 declare global {
@@ -175,6 +178,7 @@ export class WayfindersScene extends Phaser.Scene {
   private pendingReturnedVoyage?: Readonly<GreatHallReturnedVoyage>;
   private pendingReturnVoyagesRemaining?: number;
   private pendingGenerationHandoverPresentation = false;
+  private pendingCompletionNavigatorId?: NavigatorId;
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
   constructor(simulation = new GameSimulation()) {
@@ -1029,6 +1033,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.greatHallView = new GreatHallView(host, signal, {
       closeHome: () => { this.closeGreatHallHome(); },
       continueHandover: () => { this.dismissGenerationHandover(); },
+      continueCompletedWorld: () => { this.continueCompletedWorld(); },
+      startNewGame: () => { this.startNewGameFromCompletion(); },
     });
   }
 
@@ -1042,6 +1048,10 @@ export class WayfindersScene extends Phaser.Scene {
       surveySites: this.simulation.surveySiteDefinitions,
       fishingShoals: this.simulation.fishingShoalDefinitions,
       wrecks: this.simulation.wrecks,
+      idols: {
+        total: this.simulation.idolLocationProgress.total,
+        returned: this.simulation.returnedIdolLocations,
+      },
     };
   }
 
@@ -1103,6 +1113,18 @@ export class WayfindersScene extends Phaser.Scene {
     return true;
   }
 
+  private showCompletedGreatHall(findingNavigatorId: NavigatorId): boolean {
+    const view = this.greatHallView;
+    if (!view) return false;
+    view.showCompletion(this.greatHallChronicle(), findingNavigatorId);
+    this.greatHallUpdated = false;
+    this.lastDiagnosticsRevision = -1;
+    this.syncHomeAction();
+    this.syncSurveyRibbon();
+    this.syncRiskLegend();
+    return true;
+  }
+
   private dismissGenerationHandover(): boolean {
     if (this.greatHallView?.mode !== "handover") return false;
     if (!this.simulation.acknowledgeGenerationHandover()) return false;
@@ -1116,6 +1138,32 @@ export class WayfindersScene extends Phaser.Scene {
       : this.gameHost;
     focusTarget?.focus({ preventScroll: true });
     return true;
+  }
+
+  private continueCompletedWorld(): boolean {
+    const view = this.greatHallView;
+    if (!view || view.mode !== "completion") return false;
+    if (!this.simulation.continueCompletedWorld()) return false;
+    view.hide();
+    this.lastDiagnosticsRevision = -1;
+    if (this.showPendingGenerationHandover()) return true;
+    this.syncHomeAction();
+    this.syncSurveyRibbon();
+    this.syncRiskLegend();
+    (this.homeActionButton ?? this.gameHost)?.focus({ preventScroll: true });
+    return true;
+  }
+
+  private startNewGameFromCompletion(): number | undefined {
+    if (this.greatHallView?.mode !== "completion") return undefined;
+    const previousSeed = this.simulation.generated.seed;
+    const nextSeed = this.simulation.startNewGame();
+    if (nextSeed === undefined) return undefined;
+    const developerLog = document.querySelector<HTMLDivElement>("#developer-log");
+    if (developerLog) clearDeveloperLog(developerLog);
+    this.afterWorldChanged();
+    this.log(`Started a new game in world ${nextSeed}; completed world ${previousSeed} was left behind.`);
+    return nextSeed;
   }
 
   private syncHomeAction(): void {
@@ -1139,6 +1187,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   private developerActionLockReason(): string | undefined {
     if (this.simulation.wreckPresentationActive) return "Controls are paused while the navigator's loss is presented.";
+    if (this.simulation.completionChoiceActive) return "Controls are paused until the completed world's future is chosen.";
     if (this.simulation.generationHandoverActive) return "Controls are paused until the next generation begins.";
     return undefined;
   }
@@ -1409,7 +1458,9 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private expeditionRecordsSummary(): string {
-    return `Island dossiers: ${this.simulation.provisionalIslandDossiers.length} provisional · `
+    const idolProgress = this.simulation.idolLocationProgress;
+    return `Idol locations: ${idolProgress.provisional} provisional · ${idolProgress.returned} returned · `
+      + `${idolProgress.total} total · Island dossiers: ${this.simulation.provisionalIslandDossiers.length} provisional · `
       + `${this.simulation.returnedIslandDossiers.length} returned · Survey sites: `
       + `${this.simulation.provisionalSurveySites.length} provisional · `
       + `${this.simulation.returnedSurveySites.length} returned · Fishing reports: `
@@ -1430,6 +1481,10 @@ export class WayfindersScene extends Phaser.Scene {
     this.fishingShoalInspectionIndex = 0;
     this.surveySiteInspectionIndices.clear();
     this.lastInspectedWreckId = 0;
+    const seedField = document.querySelector<HTMLInputElement>(
+      "#scene-tools-slot [data-field='seed']",
+    );
+    if (seedField) seedField.value = String(this.simulation.generated.seed);
     this.renderWorld();
     this.configureCamera();
     this.lastDebugRevision = -1;
@@ -1437,7 +1492,10 @@ export class WayfindersScene extends Phaser.Scene {
     this.lastDiagnosticsRevision = -1;
     this.lastDiagnosticsOverlayRevision = -1;
     this.lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
+    this.pendingReturnedVoyage = undefined;
+    this.pendingReturnVoyagesRemaining = undefined;
     this.pendingGenerationHandoverPresentation = false;
+    this.pendingCompletionNavigatorId = undefined;
     this.greatHallUpdated = false;
     this.greatHallView?.hide();
     this.resetShipPresentation(true);
@@ -1579,6 +1637,8 @@ export class WayfindersScene extends Phaser.Scene {
       closeGreatHall: () => this.closeGreatHallHome(),
       selectGreatHallGeneration: (generation) => this.selectGreatHallGeneration(generation),
       greatHall: () => this.greatHallChronicle(),
+      continueCompletedWorld: () => this.continueCompletedWorld(),
+      startNewGame: () => this.startNewGameFromCompletion(),
     };
     this.browserDebugApi = api;
     window.__WAYFINDERS__ = api;
@@ -1634,6 +1694,23 @@ export class WayfindersScene extends Phaser.Scene {
           + `generation ${nextGeneration} took the helm.`,
         );
       }),
+      this.simulation.events.on("gameCompleted", ({
+        navigatorId,
+        generation,
+        voyageNumber,
+        returnedIdolLocations,
+        totalIdolLocations,
+      }) => {
+        this.pendingCompletionNavigatorId = navigatorId;
+        this.scheduleReturnCue();
+        this.log(
+          `Generation ${generation} returned the final idol location on voyage ${voyageNumber}; `
+          + `all ${returnedIdolLocations} of ${totalIdolLocations} locations are preserved in the Great Hall.`,
+        );
+      }),
+      this.simulation.events.on("completedWorldContinued", ({ seed }) => {
+        this.log(`Continued exploring completed world ${seed}; its ending cannot trigger again.`);
+      }),
       this.simulation.events.on("shipWrecked", ({ generation }) => {
         const holdMs = Math.max(0, this.simulation.config.simulation.wreckPresentationSeconds * 1000 - 480);
         this.showLifecycleCue(
@@ -1682,6 +1759,35 @@ export class WayfindersScene extends Phaser.Scene {
           `Unreturned wreck identification lost at sea for ${reports.map(({ lostGeneration }) => `generation ${lostGeneration}`).join(", ")}; the wreck can be surveyed again.`,
         );
       this.updateRecordsOutputs();
+      }),
+      this.simulation.events.on("idolLocationDiscovered", ({
+        location,
+        presentationMs,
+        provisionsSpent,
+      }) => {
+        this.showLifecycleCue(
+          `LOST IDOL LOCATION FOUND\n${location.displayLabel.toUpperCase()}\nRETURN HOME OR THIS KNOWLEDGE WILL BE LOST AGAIN`,
+          "#ffe69b",
+          presentationMs,
+        );
+        this.log(
+          `${location.displayLabel}'s location was found for ${provisionsSpent} bundles; `
+          + "the knowledge remains provisional until it reaches home.",
+        );
+        this.updateRecordsOutputs();
+      }),
+      this.simulation.events.on("idolLocationsReturned", ({ locations }) => {
+        this.log(
+          `Idol-location knowledge secured in the Great Hall: ${locations.map(({ displayLabel }) => displayLabel).join(", ")}.`,
+        );
+        this.updateRecordsOutputs();
+      }),
+      this.simulation.events.on("idolLocationsLost", ({ locations }) => {
+        this.log(
+          `Unreturned idol-location knowledge lost at sea: ${locations.map(({ displayLabel }) => displayLabel).join(", ")}. `
+          + "Those locations can be found again by survey.",
+        );
+        this.updateRecordsOutputs();
       }),
       this.simulation.events.on("islandSighted", ({ name }) => {
         this.showLifecycleCue(
@@ -1834,7 +1940,17 @@ export class WayfindersScene extends Phaser.Scene {
       this.pendingReturnVoyagesRemaining = undefined;
       const generationHandover = this.pendingGenerationHandoverPresentation;
       this.pendingGenerationHandoverPresentation = false;
-      if (!voyage && !generationHandover) return;
+      const completionNavigatorId = this.pendingCompletionNavigatorId;
+      this.pendingCompletionNavigatorId = undefined;
+      if (!voyage && !generationHandover && !completionNavigatorId) return;
+
+      // The final Great Hall is the exact-dock ending. It supersedes both the
+      // ordinary return cue and a same-voyage tenure handover. The simulation's
+      // pending handover remains intact and is presented only after Continue.
+      if (completionNavigatorId) {
+        this.showCompletedGreatHall(completionNavigatorId);
+        return;
+      }
 
       if (generationHandover) {
         this.showPendingGenerationHandover();

@@ -23,13 +23,15 @@ versioned navigator succession, four-voyage
 navigator tenures with exact-dock-committed achievements in a permanent Great
 Hall chronicle, the shared required generation-handover view, returned
 identity/fate reports for runtime navigator wrecks, provision-funded surveying,
-exact-island fog reveal, extensible survey sites and the performance foundation.
+exact-island fog reveal, extensible survey sites, deterministic lost-idol
+locations, the final-Great-Hall completion choice and the performance
+foundation.
 
 Do not reimplement the baseline or restore the obsolete source namespace.
 Future work is organized into `GP-*` gameplay and `GR-*` graphics tracks in
-`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-3.3` work is
-complete and accepted. `GP-4.1` is the next proposed gameplay milestone; it is
-not authorized by this status document.
+`Wayfinders_Roadmap.md`. The authorized `GP-0.1` through `GP-4.1` work is
+complete and accepted. No later gameplay or graphics milestone is authorized
+by this status document.
 
 ## Run and verify
 
@@ -51,9 +53,11 @@ npm.cmd run check
 Current verification baseline:
 
 - TypeScript typecheck passes.
-- 223 automated tests pass across 26 files. The suite includes deterministic
+- 238 automated tests pass across 28 files. The suite includes deterministic
   island-dossier and survey-site catalog/lifecycle coverage, exact-island fog
-  reveal, simulation integration and lineage/Great Hall coverage.
+  reveal, deterministic idol-host selection, provisional/return/wreck idol
+  integration, completion choices, simulation integration and lineage/Great
+  Hall coverage.
 - The production Vite build passes.
 - Existing browser acceptance covers fishing return,
   returned-lead upgrade,
@@ -67,6 +71,9 @@ Current verification baseline:
   developer moves, the three matching service-anchor interactions, Survey-only
   site prompting, visible placeholder art, live unsuppressed input with the
   drawer open and a clean warning/error console.
+- GP-4.1 browser acceptance verifies the special provisional idol-location
+  finding, exact-dock credit, final Great Hall, continued-world return to play,
+  ordinary later Great Hall access and distinct-seed new-game reset.
 - The Phaser bundle-size warning remains informational.
 
 ## Current playable foundation
@@ -126,14 +133,14 @@ Current verification baseline:
   tenure, immediately creating one successor.
 - Exhausting provisions outside Supported water immediately reverts the failed
   expedition's Personal knowledge and creates a wreck that persists across
-  reloads and later voyages until explicit world regeneration.
+  later voyages in the current session until explicit world regeneration.
 - Each navigator has a stable versioned ID and an `active`, `completed` or
   `lost` lifecycle record. Fatal wreck and completed-tenure transitions share
   one deterministic succession contract while remaining distinct reasons.
 - Only a successful active-expedition return to the exact home dock completes
   one of the navigator's four numbered voyages. Idle time, travel time,
-  distance, reload, replenishment and docking without an active expedition do
-  not consume a voyage.
+  distance, replenishment and docking without an active expedition do not
+  consume a voyage. Browser reload starts a fresh session.
 - The fourth successful return commits its knowledge and returned findings
   before
   completing the tenure and creating exactly one successor. There is no
@@ -146,7 +153,7 @@ Current verification baseline:
 - The lost ship remains visible and uncontrollable for four seconds. The
   outgoing navigator is already recorded as lost during that hold; completion
   then respawns a supplied ship at the dock and creates exactly one successor.
-  Reloading during the hold resumes the same persisted succession key.
+  The succession key remains authoritative during that in-session hold.
 - Every fourth-return or fatal-wreck succession presents the required focused
   handover mode of the shared Great Hall, derived from the committed outgoing
   navigator. Each safely returned
@@ -203,7 +210,7 @@ Current verification baseline:
   there. Only exact-dock return permanently reports that association to the
   tribe and lineage. If the surveying navigator wrecks, the provisional report
   is discarded and the discovered wreck can be surveyed again. Revisit, repeat
-  input, dock, wreck and current-version reload are idempotent.
+  input, dock and wreck are idempotent within the current session.
 - Four sparse fishing shoals are derived deterministically from the world seed
   in a separate content namespace. Current-sight clues create provisional
   sightings without revealing hidden quality or mutating terrain, islands,
@@ -226,6 +233,38 @@ Current verification baseline:
   are allowed while supplies remain.
 - Explicit world regeneration remains a deliberate fresh-world reset.
 
+### Lost idol locations and completion
+
+- Idol-location contract/content V1 derives a finite hidden catalog from the
+  world seed and the already generated survey hosts. The configured count must
+  be a positive integer and cannot exceed the eligible host count; the default
+  world contains exactly three unique idol locations.
+- Eligible hosts are every non-home island dossier and the three seed-derived
+  GP-3.3 sites. Fishing shoals and dynamic navigator wrecks are never eligible.
+  Catalog selection is deterministic, independent of input ordering and does
+  not change terrain, island identity or survey-site placement.
+- An idol host has no advance marker, clue chain or separate interaction.
+  Completing its ordinary provision-funded **Survey** reveals the normal host
+  result plus a distinguished provisional idol-location finding. The idol is
+  never recovered or carried as a physical object.
+- The finding shares its host survey's expedition ownership. A wreck removes
+  the provisional finding and leaves the same host discoverable again;
+  exact-dock return commits the location once. Returned leads without a survey
+  do not count.
+- Great Hall read model V4 derives one distinguished idol-location achievement
+  from the returned island dossier or site report and credits the exact
+  navigator and voyage that brought it home. Its progress total exposes only
+  returned count versus configured count, never an undiscovered host.
+- Returning the final location commits the normal voyage and Hall credit before
+  opening the final Great Hall. **Continue exploring** preserves the completed
+  world and lineage, makes completion permanently non-retriggerable for that
+  world, and leaves ordinary exact-home-dock Hall browsing available. **Start
+  new game** replaces the in-session world and lineage with a distinct
+  effective seed and resets idol progress.
+- When the final return is also voyage four, the final Great Hall has priority.
+  Continuing then presents the already committed succession handover; starting
+  a new game discards that pending transition with the completed world.
+
 ### Presentation and tools
 
 - Current visuals are functional developer art.
@@ -247,13 +286,17 @@ Current verification baseline:
 - The permanent Great Hall is optionally opened only from the exact home dock
   through **Go ashore · Great Hall**. It browses active, completed and lost
   navigators, their exact-dock-committed journeys and derived lineage totals.
-  Great Hall read model V3 derives distinct island-lead/dossier and survey-site
-  lead/report achievement rows and totals from lineage V6 voyage records V3;
+  Great Hall read model V4 derives distinct island-lead/dossier, survey-site
+  lead/report and returned idol-location achievement rows and totals from
+  lineage V6 voyage records V3 and returned host records;
   it is rebuilt rather than saved.
   Returns one through three update it without forcing it open. The same
   navigator entry becomes the required, non-dismissible handover mode at
   succession. GR-3.4 may polish this presentation without changing the shared
   read model or authoritative voyage records.
+- The final-location return opens the Hall in a dedicated completion mode after
+  the credited voyage has committed. That mode offers **Continue exploring**
+  and **Start new game**; it is not a Gem Hall or separate Relics wing.
 - Discovered, unreported runtime wrecks use an unidentified marker and a
   contextual **Survey wreck** action. The aboard result names the lost
   navigator provisionally; exact-dock return makes the report permanent.
@@ -314,6 +357,12 @@ Current verification baseline:
     Generation may scale with world area because it is off the movement loop.
 11. Production renderers must preserve viewport culling, incremental chunk
     invalidation and pooled/batched entity presentation.
+12. The hidden idol catalog is immutable generated authority; mutable idol
+    progress is derived only from its eligible host survey records. Great Hall
+    sources receive returned locations and the total, never undiscovered hosts.
+13. Completion is one-shot per world. Continuing preserves that world's
+    completed state; only an explicit new-game choice creates a distinct seeded
+    world and resets the lineage.
 
 ## Known limits
 
@@ -330,7 +379,9 @@ Current verification baseline:
   provision-funded deterministic dossier with exact-island fog reveal. Accepted
   `GP-3.3` adds one independently generated historic-wreck, coastal-ruin and
   tidal-cave site through one extensible lifecycle. Runtime wreck identity/fate
-  surveying and reporting are implemented; idols remain proposed GP-4 work.
+  surveying and reporting are implemented. Accepted `GP-4.1` overlays a hidden
+  finite idol-location catalog on eligible island dossiers and GP-3.3 sites,
+  reusing their ordinary survey/return/wreck lifecycle and Great Hall credit.
 - `GP-3`: there are no fishing boats, trade vessels or
   Supported-route traffic.
 - `GR-*`: production art, the asset resolver, asset tooling,
@@ -341,8 +392,7 @@ Current verification baseline:
 
 ## Active planning point
 
-`GP-3.3` is accepted. `GP-4.1`, the deterministic idol catalog, is the next
-proposed gameplay milestone and awaits authorization.
+`GP-4.1` is accepted. No later gameplay milestone is currently authorized.
 
 The completed milestones are:
 
@@ -375,9 +425,17 @@ The completed milestones are:
     provision-funded surveying; exact-dock commit/wreck rollback; lineage V6
     voyage records V3; Great Hall V3 credit; save schema V12/content V1;
     developer placeholder art and per-type service-anchor debug controls.
+13. `GP-4.1` — accepted: a separately versioned hidden idol-location catalog;
+    configurable positive count bounded by eligible island-dossier and GP-3.3
+    site hosts; exactly three locations in the default world; ordinary
+    provision-funded survey, wreck rollback and exact-dock knowledge commit;
+    exact navigator/voyage credit in Great Hall V4; final Great Hall ordering;
+    non-retriggering continued play with later Hall access; and a distinct-seed
+    in-session new-game reset.
 
-The next proposed gameplay milestone is `GP-4.1`, the finite deterministic idol
-catalog and clue layer. No GP-4 implementation is authorized yet.
+No later gameplay milestone is authorized. GP-4.1 adds no physical idol,
+recovery action, cargo, clue chain, Gem Hall, Relics wing, saving or production
+art obligation.
 
 The `GR-1` graphics start gate is now open because GP-3.3 accepted stable island
 and generic survey-site identities/read models, but no graphics milestone is

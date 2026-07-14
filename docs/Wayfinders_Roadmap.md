@@ -1,9 +1,8 @@
 # Wayfinders development roadmap
 
 Status: active. The current implementation is the accepted baseline. The
-ordered `GP-0.1` through `GP-3.3` work is complete and accepted. `GP-4.1` is the
-next authorized gameplay milestone; no later gameplay or graphics minor is
-authorized by this roadmap status.
+ordered `GP-0.1` through `GP-4.1` work is complete and accepted. No later
+gameplay or graphics minor is authorized by this roadmap status.
 
 ### Saving policy
 
@@ -676,7 +675,7 @@ into islands. Idols are never recovered or transported as physical objects.
 
 #### GP-4.1 — Lost idol locations and game completion
 
-Status: authorized.
+Status: implemented and accepted.
 
 Depends on GP-3.3's accepted deterministic survey locations and GP-2.3's stable
 navigator, voyage and Great Hall credit.
@@ -732,6 +731,16 @@ Game** resets all world/lineage state with a different seed; catalog generation
 changes no terrain, island identity or existing survey placement and adds no
 full-world fixed-update work. Saving and production art remain out of scope.
 
+Implementation evidence: idol-location contract/content V1 selects immutable
+unique hosts from canonical eligible inputs and validates the configured count;
+the simulation derives provisional, returned and lost idol knowledge from host
+survey state; Great Hall read model V4 derives exact navigator/voyage credit and
+safe returned/total progress; completion has explicit `awaiting-choice` and
+non-retriggering `continued` states; scene presentation gives the final Hall
+priority over ordinary return and succession cues. Catalog, integration, Hall,
+completion-choice, seed-reset and final-voyage-order tests are part of the clean
+typecheck/test/build gate recorded in `IMPLEMENTATION_STATUS.md`.
+
 ### GP-5 — Player-facing save, load and game continuity
 
 Status: deferred placeholder; not authorized.
@@ -771,8 +780,8 @@ unrelated saved lineage or checkpoint.
 Status: proposed.
 
 - Test repeated current-version save/load across voyage tenure, succession,
-  provision-funded surveys, island dossiers, survey sites, idol loss/recovery
-  and optional completion.
+  provision-funded surveys, island dossiers, survey sites, returned
+  idol-location progress and the one-shot completion choice.
 - Delete malformed or version-mismatched records and provide legible fresh-start
   recovery behavior.
 
@@ -877,7 +886,7 @@ stay within texture limits and demonstrably remove repeated manual work.
 
 #### GR-3.1 — Ship and home waters
 
-Status: proposed. Replace the player vessel, eventual idol-cargo presentation,
+Status: proposed. Replace the player vessel, idol-location finding presentation,
 ocean, dock and home-island composition while preserving authoritative
 footprints and overlay readability.
 
@@ -1070,7 +1079,7 @@ Additional product decisions are recorded here for later milestones:
   fog reveal is dossier-derived and does not mutate knowledge or travel; and no
   idol, tribe economy/output, loadout, trade or generic wreck-recovery state is
   added.
-- GP-4.1 is authorized as one complete survey-to-ending slice: exactly three
+- GP-4.1 is accepted as one complete survey-to-ending slice: exactly three
   idol locations in the default world, deterministic unique placement across
   non-fishing seeded survey locations, normal provision-funded survey and
   wreck/exact-dock knowledge rules, distinguished Great Hall credit, a final

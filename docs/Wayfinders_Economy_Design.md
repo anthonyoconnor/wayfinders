@@ -27,14 +27,15 @@ recovery floors or economic settlement. Fishing and trade boats can later show
 that the world uses returned knowledge during the graphics track; they do not
 require an authoritative economy or traffic simulation in GP-3.
 
-A finite set of rare idols remains the long-term lineage goal owned by GP-4.
-GP-3 supplies stable survey sites and the shared sighting/survey lifecycle, but
-does not place idols, reveal idol-specific clues, carry relics or award
-collection credit.
+A finite set of lost idol locations is now the accepted lineage goal. GP-4.1
+selects hidden locations from stable island dossiers and GP-3.3 sites, then
+reuses their ordinary provision-funded survey, wreck rollback and exact-dock
+knowledge commitment. The lineage seeks where the idols were lost, not the
+physical objects, and no relic cargo or recovery system exists.
 
-This document describes the accepted GP-3 design and the forward GP-4
-direction. The active roadmap remains authoritative, and nothing
-here authorizes implementation by itself.
+This document describes the accepted GP-3 and GP-4.1 design. The active roadmap
+remains authoritative, and nothing here authorizes later implementation by
+itself.
 
 ## 1. Purpose
 
@@ -49,10 +50,10 @@ The intended Wayfinders loop is:
    simply defers the decision.
 5. Exact-dock return converts provisional sightings and surveys into inherited
    leads and records.
-6. A wreck loses only the failed journey's provisional knowledge and physical
-   finds. Earlier returned knowledge and Supported routes survive.
+6. A wreck loses only the failed journey's provisional knowledge. Earlier
+   returned knowledge and Supported routes survive.
 7. The Great Hall credits returned work to the appropriate navigator and
-   voyage, while the lineage eventually works toward recovering every idol.
+   voyage, while the lineage works toward finding every lost idol location.
 
 The intended feeling is that the player is making difficult decisions with a
 finite journey, not managing a trading company or waiting for a resource bar.
@@ -70,16 +71,15 @@ finite journey, not managing a trading company or waiting for a resource bar.
 - A returned unsurveyed sighting is useful because it becomes an inherited lead
   for a later journey or navigator.
 - Exact-dock return is the permanent commitment boundary. Wrecks discard the
-  current journey's provisional sightings, survey results and unreturned
-  physical objects.
-- Deterministic opportunities and results never silently reroll after a reload
-  or revisit.
+  current journey's provisional sightings and survey results.
+- Deterministic opportunities and results never silently reroll for the same
+  world seed or on revisit.
 - One generated island has one authoritative island dossier even when its
   survey reveals several characteristics.
 - Shared survey mechanics should be extended through data-driven site types,
   not copied into a reducer and prompt for every content family.
-- Idols are finite, lineage-wide historical goals, not money, compulsory
-  upgrades or arbitrary open-water collectibles.
+- Idol locations are finite, lineage-wide historical goals, not money,
+  compulsory upgrades, physical collectibles or arbitrary open-water targets.
 - Living communities are not loot sources. Their objects become relationship,
   entrusted-return or cultural-discovery stories where appropriate.
 - World traffic and community activity are later presentation. GP-3 does not
@@ -174,9 +174,9 @@ create safe waypoints or generate follow-on leads.
 
 The catalog and shared tests remain extensible to later shrines, reef chambers,
 abandoned anchorages, natural landmarks and other approved points of interest,
-but none ships in GP-3.3. GP-4 can attach an idol catalog entry to a stable
-generic-site ID without changing the site's terrain or letting GP-3 expose
-which sites contain idols.
+but none ships in GP-3.3. GP-4.1 attaches hidden idol-location entries to some
+stable generic-site IDs without changing their terrain or revealing which sites
+contain one before survey.
 
 ### 3.5 Other communities and future activity
 
@@ -210,6 +210,11 @@ provisional until it too reaches the exact dock. A wreck removes only records
 owned by the failed expedition; deterministic sites remain in the world and
 earlier returned leads or surveys survive.
 
+An idol-location entry does not add another branch. If an eligible island or
+site is an idol host, its ordinary successful survey also reveals that special
+location provisionally. The same wreck removes it and the same exact-dock
+return commits it; an unsurveyed returned lead never counts as an idol finding.
+
 Runtime navigator wrecks reuse the provision charge and the provisional-report
 return/rollback rules, but not the full latent/returned-lead branch. Once found,
 their physical wreck marker remains persistent until its identity is reported.
@@ -242,7 +247,7 @@ Before confirmation, the prompt shows:
 - that the result remains provisional until exact-dock return.
 
 The simulation deducts the provision cost atomically with the survey result.
-Repeated input, reload or revisit cannot charge twice. The player may survey
+Repeated input or revisit cannot charge twice within a session. The player may survey
 more than one opportunity on a journey when enough provisions remain; there is
 no one-survey-per-voyage restriction.
 
@@ -263,74 +268,63 @@ central GP-3 decision.
 
 ### 6.1 Purpose and boundary
 
-Idols are a finite collection of rare relics distributed through the seeded
-world. They motivate exploration across islands, historic wrecks, reefs,
-abandoned places and unusual landmarks. Their value is historical, visual and
-completion-driven:
+When the world split into islands, the idols and knowledge of their locations
+were lost to time. The lineage's finite objective is to rediscover every
+location and bring that knowledge home. The navigator does not remove, recover
+or transport an idol.
 
-- every returned idol becomes a named exhibit at home;
-- the navigator who returned it receives permanent voyage credit;
-- a restrained recovered count gives the lineage a finite objective;
-- exhibits can reveal lore and a final historical revelation; and
-- completing the collection can support a celebration or optional ending while
-  allowing continued play.
-
-GP-4 owns the idol registry, idol-specific clues, survey/recovery states,
-physical aboard state, recoverable loss, archive presentation and completion.
-GP-3 owns only the generic sites and survey mechanics on which some idols may
-later depend.
+Each exact-dock-returned location becomes a distinguished Great Hall finding
+credited to the navigator and voyage that reported it. A restrained returned
+count gives the lineage its objective without turning idols into inventory,
+currency, powers or compulsory upgrades.
 
 ### 6.2 Placement and clue rules
 
-Each world has a configured, deterministic idol set. The player may know the
-total count but never receives a list of exact remaining locations. Idols attach
-to meaningful stable anchors rather than arbitrary water cells, including:
+Each world configures a positive idol-location count. The default world uses
+three. The deterministic catalog selects that many unique eligible hosts
+without replacement and rejects a count greater than the available host set.
 
-- a GP-3 historic-wreck, coastal-ruin or tidal-cave site;
-- a later approved shrine, reef chamber or abandoned anchorage;
-- a distinctive natural landmark with an appropriate recoverable relic.
+Current eligible hosts are:
 
-Clues precede recovery and indicate promise without exposing the exact reward.
-An unusual silhouette, carving, map fragment or returned survey elsewhere may
-point toward a site. GP-3's ordinary site result must not accidentally reveal an
-idol unless GP-4's idol-specific clue contract says it should.
+- every non-home island dossier; and
+- the seed-derived GP-3.3 historic wreck, coastal ruin and tidal cave.
 
-Objects belonging to living communities are not treated as loot. They become
-relationship, entrusted-return or cultural-discovery stories instead.
+Fishing shoals are excluded. Runtime navigator wrecks are also excluded because
+they are dynamic fate-report locations rather than seed-derived survey hosts.
+Future survey families must explicitly opt into eligibility.
 
-### 6.3 Idol lifecycle and minimal cargo
+The mapping stays hidden until ordinary survey. There is no advance idol mark,
+remote clue chain, special survey command or list of undiscovered hosts. The
+Great Hall may show returned count against the configured total only.
+
+### 6.3 Knowledge lifecycle
 
 | State | What the player knows | Permanent credit |
 | --- | --- | --- |
-| Hidden | Nothing | None |
-| Sighted lead | A site may deserve investigation | None |
-| Surveyed | The site contains an idol or a strong idol lead | None; provisional expedition knowledge |
-| Recovered aboard | The physical idol is carried by the navigator | None; still provisional |
-| Returned | The idol reaches the exact home dock | Archive, navigator and lineage credit |
-| Lost in a wreck | The idol did not return | None; it remains recoverable at the wreck or source |
+| Hidden host | The ordinary survey location exists; its idol mapping is unknown | None |
+| Sighted / returned lead | The host is known but remains unsurveyed | None |
+| Surveyed / provisional | The ordinary result and special idol location are known aboard | None; current-expedition knowledge only |
+| Returned location | Knowledge reaches the exact home dock | Great Hall, navigator and voyage credit |
+| Lost with a wreck | The provisional knowledge did not return | None; the unchanged host can be surveyed again |
 
-Surveying an idol site consumes provisions through the GP-3 survey contract.
-GP-4.2 owns the minimal cargo and recovery rules needed to move a surveyed idol
-aboard, lose it in a wreck and make it recoverable again. GP-3 does not add a
-general loadout screen, salvage-case resource or cargo economy in anticipation
-of that feature.
+Surveying uses the host's existing GP-3 provision cost and result. When the host
+contains an idol location, the same transaction adds a special provisional
+finding. Wreck rollback and exact-dock commitment remain owned by that host's
+survey record, so there is no parallel mutable idol reducer. Repeat survey,
+dock and wreck paths cannot duplicate credit.
 
-Every idol must exist in exactly one authoritative place or state: source,
-aboard, recoverable loss or returned archive. A wreck can delay collection but
-can never make full completion impossible.
+No physical idol, aboard object, recovery action, cargo slot, salvage case,
+idol loss site or collection inventory exists. A wreck can delay knowledge but
+cannot make completion impossible because the deterministic host remains.
 
-### 6.4 Great Hall relic wing
+### 6.4 Great Hall credit
 
-The existing Great Hall is the recommended home for the idol archive rather
-than a second overlapping home-only history screen. A **Relics** wing can show
-named exhibits, silhouettes, lore, recovered count and returning navigator
-credit while preserving the Hall's exact-home-dock access and optional nature.
-
-The Great Hall's navigator entries continue to derive from authoritative
-lineage and returned-world records. Idols join those entries only after GP-4.2
-defines returned-idol and voyage-credit ownership. Collection totals are
-derived when the Hall is presented rather than saved as duplicate aggregates,
-and they never reveal remaining locations.
+Returned idol locations appear as distinguished achievements inside the
+existing Great Hall. There is no Gem Hall, separate archive or Relics wing. The
+read model joins returned host records to the navigator's committed voyage, so
+the exact finder and journey receive credit without storing a duplicate
+collection ledger. It receives returned definitions plus the total, never the
+full hidden host catalog.
 
 Each navigator still receives four numbered voyage positions. Only
 exact-dock-returned achievements appear in a safe-voyage row. A terminal lost
@@ -340,10 +334,19 @@ committing anything from the fatal voyage.
 
 ### 6.5 Completion
 
-Returning the final idol unlocks an unmistakable one-shot completion event. The
-player may end the lineage's story or continue exploring the same world. The
-ending is never forced, continued play does not invalidate the collection, and
-arbitrary legal wreck histories cannot make completion impossible.
+Returning knowledge of the final location commits the normal host result,
+voyage and Great Hall credit first, then opens the final Great Hall. It offers:
+
+- **Continue exploring** — preserve the completed world and lineage, return to
+  ordinary discovery play, keep normal exact-home-dock Great Hall access and
+  permanently prevent this world from triggering the ending again; or
+- **Start new game** — discard the current in-session world and lineage, use a
+  distinct effective seed, and begin again with reset progress.
+
+If the final return is also voyage four, completion presentation takes priority
+over the required succession handover. Continuing then shows that already
+committed handover before sailing resumes; starting a new game discards it with
+the old world.
 
 ## 7. Wrecks and inheritance
 
@@ -351,7 +354,7 @@ A wreck ends the current navigator's tenure and loses:
 
 - the failed journey's Personal water knowledge;
 - provisional sightings, surveys and runtime-wreck identity reports;
-- unreturned physical finds such as a future idol; and
+- provisional idol-location knowledge carried by an eligible host survey; and
 - the current vessel and remaining provisions.
 
 It preserves:
@@ -368,9 +371,9 @@ the navigator's death, the shortened four-journey record and the failed
 journey's lost provisional progress.
 
 Surveying a runtime wreck identifies the lost navigator; it does not salvage
-cargo, restore chart knowledge or recover economic value. Idol recovery from a
-wreck belongs to GP-4.2. Any broader salvage system would require its own later
-approval and concrete player-facing purpose.
+cargo, restore chart knowledge, recover economic value or find an idol. Any
+broader salvage system would require its own later approval and concrete
+player-facing purpose.
 
 This remains the central inheritance rule:
 
@@ -395,7 +398,8 @@ authoritative gameplay time.
 Normal sailing shows the ship, physical provision bundles, environmental clues
 and the existing navigation/risk guidance. It does not show survey cases, a
 general cargo rack, tribe reserves, market prices or a permanent economy task
-list. GP-4 may later add minimal presentation for an idol physically aboard.
+list. An idol host uses its ordinary marker until survey; the resulting special
+finding is knowledge, not an aboard object.
 
 ### 9.2 Contextual survey prompt
 
@@ -438,7 +442,8 @@ screen, manual route assignment or economy-settlement screen.
 | Survey decision | Non-modal proximity prompt with **Survey** only | Sailing away defers and auto-hides the prompt |
 | Survey consequence | Cost, remaining provisions and return-risk change | No separate survey capacity |
 | Returned result | Brief dock report plus Great Hall credit | Exact dock is the permanent boundary |
-| Idol collection | Great Hall Relics wing with a restrained total | GP-4 only; never expose remaining locations |
+| Idol locations | Distinguished existing Great Hall credit and returned/total progress | No Gem Hall, Relics wing or undiscovered-host list |
+| Final location | Final Great Hall with **Continue exploring** / **Start new game** | Credit commits first; continuing never retriggers completion |
 
 ## 10. Map language
 
@@ -451,8 +456,9 @@ screen, manual route assignment or economy-settlement screen.
 | Returned survey | Persistent named result and Great Hall voyage credit |
 | Surveyed island dossier | Exact island footprint revealed; surrounding water knowledge remains unchanged |
 | Connected returned fishing survey | May receive a derived home-linked label; no saved output state |
-| Returned idol | Named exhibit and navigator credit in the Great Hall Relics wing |
-| Lost idol | Recoverable wreck/source state, never a permanently failed collection slot |
+| Surveyed idol host | Special provisional location finding alongside the ordinary result |
+| Returned idol location | Distinguished navigator/voyage credit in the existing Great Hall |
+| Lost idol-location knowledge | Host remains unchanged and can be surveyed again |
 
 Later fishing or trade traffic is graphics-stage world language. It must remain
 sparse, non-blocking and unable to reveal hidden navigation knowledge.
@@ -469,10 +475,11 @@ generic cargo inventory. These systems are not required by the approved
 exploration loop. They may return only through a separately approved design
 that identifies a concrete player-facing benefit.
 
-Do not place GP-4 idols during GP-3, make ordinary historic objects count toward
-the finite idol set or imply that a living community's possessions are
-collectibles. GP-3 sites are stable anchors and ordinary discoveries; GP-4 owns
-the finite registry and all idol-specific behavior.
+GP-4.1 overlays a finite hidden location registry on eligible GP-3 hosts. It
+does not make the hosts' ordinary historic objects into idol collectibles or
+imply that a living community's possessions are loot. The host's survey result
+remains an ordinary discovery; the additional special finding is the lost
+idol's location.
 
 ## 12. Roadmap placement
 
@@ -507,24 +514,30 @@ All GP-3 records use stable IDs, deterministic results, exact-dock commitment,
 wreck rollback and Great Hall credit. GP-3 does not include the discarded tribe
 capacity, fishing activation/output, loadout, economic wreck-recovery or
 automatic-trade milestones.
-The accepted boundary uses survey-site content V1, save schema V12, lineage V6
-voyage records V3 and Great Hall read model V3.
+The accepted GP-3.3 boundary uses survey-site content V1, lineage V6 voyage
+records V3 and Great Hall read model V3. GP-4.1 advances the derived Hall read
+model to V4. Saving remains absent from the active runtime.
 
-### GP-4: idols, relic wing and optional completion
+### GP-4.1: lost idol locations and completion
 
-GP-4 adds the deterministic idol registry and clues, attaches idols to approved
-stable sites, and distinguishes surveying from physical recovery. GP-4.2 owns
-the minimal idol cargo and recoverable-wreck-loss contract. Later GP-4 work adds
-the Great Hall Relics wing, navigator credit and optional completion/continue
-choice.
+GP-4.1 is accepted as one complete slice. It adds a deterministic hidden
+idol-location catalog over non-home island dossiers and the three GP-3.3 sites,
+with a configurable positive count bounded by eligible hosts and a default of
+three. Ordinary surveying reveals a location provisionally; wreck and
+exact-dock behavior reuse the host record. Returned locations receive
+distinguished exact navigator/voyage credit in Great Hall V4. The final return
+opens the final Great Hall and offers continued play in the preserved,
+non-retriggering world or a reset on a distinct-seed new game.
 
-### GP-5 and exact-version persistence
+There is no multi-stage GP-4 recovery plan, physical idol, cargo, clue chain,
+Gem Hall or Relics wing.
 
-Every gameplay minor that changes authoritative persisted state bumps the
-affected schema/content/format version, invalidates earlier records and includes
-deterministic current-version round-trip tests. Cross-version migration remains
-out of scope during development. GP-5 later turns the existing foundation into
-the confirmed player-facing new/save/load experience.
+### GP-5 and future persistence
+
+GP-5 is a deferred placeholder, not an active schema plan. If saving is later
+authorized, it must begin from the authoritative gameplay shape that exists
+then, define a new version-one format and add its own round-trip acceptance.
+No current gameplay milestone inherits a save, reload or migration obligation.
 
 ### Graphics track
 
@@ -557,15 +570,23 @@ The forward design succeeds only if playtesting and automated checks show that:
 - a returned lead can be found and surveyed on a later journey;
 - provisional surveys commit only at the exact dock and roll back on wreck;
 - multiple surveys are possible when provisions permit;
-- deterministic results cannot reroll across revisit or current-version reload;
+- deterministic results cannot reroll across revisit or same-seed regeneration;
 - each island has one dossier and its exact-footprint reveal changes no water
   knowledge, path or provision cost;
 - historic wreck, coastal ruin and tidal cave sites feel distinct through
   clues, visuals and content while sharing one survey mechanic;
 - runtime navigator wrecks cannot be confused with historic-wreck sites;
 - the Great Hall credits only returned work to the correct navigator and voyage;
-- sighting, surveying, recovering and returning an idol remain distinct states;
-- every idol remains collectible after every legal wreck sequence; and
+- the default world has three deterministic unique idol locations and every
+  configured count is positive and bounded by eligible hosts;
+- no fishing shoal, runtime navigator wreck or undiscovered host enters idol
+  progress or Hall credit;
+- idol-location knowledge is provisional on survey, rolls back with its host on
+  wreck and commits exactly once at the exact dock;
+- final-location credit precedes the final Great Hall;
+- continuing preserves the completed world, keeps normal Hall access and never
+  retriggers completion, while new game resets on a distinct effective seed;
+- fourth-voyage completion shows the final Hall before the pending handover; and
 - normal play remains free of a permanent economy, inventory or score HUD.
 
 ## 14. Remaining design decisions
@@ -580,7 +601,6 @@ The forward design succeeds only if playtesting and automated checks show that:
   communicate rough promise without revealing deterministic outcomes?
 - Does the player need a dedicated returned-lead log later, or are world marks
   plus the Great Hall sufficient?
-- What idol count suits the default world, and how should later clues narrow the
-  search without revealing exact remaining locations?
-- What form should the final-idol celebration and **End the lineage** /
-  **Continue exploring** choice take?
+- Does the three-location default produce enough world coverage across seeds?
+- What production-art treatment should distinguish an idol-location finding
+  and final Great Hall without implying that the physical object was recovered?

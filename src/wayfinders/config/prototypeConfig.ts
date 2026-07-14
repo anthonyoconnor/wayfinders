@@ -18,6 +18,8 @@ export interface PrototypeConfig {
     hiddenObstacleDistance: number;
     /** Maximum eight-connected Unknown pocket filled after a successful return. */
     maxEnclosedUnknownTiles: number;
+    /** Lost idol locations hidden among the world's eligible survey locations. */
+    idolCount: number;
   };
   islands: {
     count: number;
@@ -107,6 +109,7 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
     hiddenObstacleRadius: 2,
     hiddenObstacleDistance: 24,
     maxEnclosedUnknownTiles: 2,
+    idolCount: 3,
   },
   islands: {
     count: 8,
@@ -298,6 +301,7 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   positiveInteger(config.world.hiddenObstacleRadius, "world.hiddenObstacleRadius");
   nonNegative(config.world.hiddenObstacleDistance, "world.hiddenObstacleDistance");
   nonNegativeInteger(config.world.maxEnclosedUnknownTiles, "world.maxEnclosedUnknownTiles");
+  positiveInteger(config.world.idolCount, "world.idolCount");
   positiveInteger(config.islands.count, "islands.count");
   positive(config.islands.minRadius, "islands.minRadius");
   positive(config.islands.maxRadius, "islands.maxRadius");

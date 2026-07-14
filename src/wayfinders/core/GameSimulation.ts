@@ -29,6 +29,11 @@ import {
 } from "../exploration/IslandDossierContracts";
 import { generateIslandDossierCatalog } from "../exploration/IslandDossierCatalog";
 import { IslandDossierSystem } from "../exploration/IslandDossierSystem";
+import { generateIdolLocationCatalog } from "../exploration/IdolLocationCatalog";
+import type {
+  IdolLocationDefinition,
+  IdolLocationHostRef,
+} from "../exploration/IdolLocationContracts";
 import { KnowledgeSystem } from "../exploration/KnowledgeSystem";
 import {
   ProvisionSystem,
@@ -95,6 +100,16 @@ export interface DebugVisibilityState {
   returnViability: boolean;
 }
 
+export type GameCompletionState = "in-progress" | "awaiting-choice" | "continued";
+
+export interface IdolLocationProgress {
+  readonly total: number;
+  readonly provisional: number;
+  readonly returned: number;
+  readonly complete: boolean;
+  readonly completionState: GameCompletionState;
+}
+
 export interface SimulationSnapshot {
   seed: number;
   ship: Readonly<ShipState>;
@@ -157,6 +172,7 @@ export interface SimulationSnapshot {
     interaction?: Readonly<FishingShoalInteractionReadModel>;
     records: readonly Readonly<FishingShoalReadModel>[];
   };
+  idolLocations: Readonly<IdolLocationProgress>;
   debug: Readonly<DebugVisibilityState>;
 }
 
@@ -167,6 +183,14 @@ const NO_MOVEMENT: MovementResult = {
   segments: [],
   tileChanged: false,
 };
+
+/** Advances within the effective uint32 seed space and never repeats the prior world. */
+export function createNextWorldSeed(previousSeed: number): number {
+  const current = Math.trunc(previousSeed) >>> 0;
+  let next = (Math.imul(current, 1_664_525) + 1_013_904_223) >>> 0;
+  if (next === current) next = (current + 1) >>> 0;
+  return next;
+}
 
 interface PendingRespawnState {
   expeditionId: number;
@@ -209,6 +233,7 @@ export class GameSimulation {
   private islandDossierSystem!: IslandDossierSystem;
   private surveySiteSystem!: SurveySiteSystem;
   private fishingShoalSystem!: FishingShoalSystem;
+  private idolLocationDefinitionsValue: readonly Readonly<IdolLocationDefinition>[] = Object.freeze([]);
   private readonly generator: WorldGenerator;
   private expeditionId = 1;
   private activeExpedition = false;
@@ -216,6 +241,7 @@ export class GameSimulation {
   private readonly shipwrecks: ShipwreckState[] = [];
   private pendingRespawn?: PendingRespawnState;
   private pendingGenerationHandoverValue?: Readonly<NavigatorGenerationHandoverV1>;
+  private completionStateValue: GameCompletionState = "in-progress";
   private interactionTransactionActive = false;
   private riskResultsInitialized = false;
 
@@ -338,6 +364,44 @@ export class GameSimulation {
     return this.surveySiteSystem.recordsRevision;
   }
 
+  /** Hidden deterministic authority; player-facing read models expose only discovered hosts. */
+  get idolLocationDefinitions(): readonly Readonly<IdolLocationDefinition>[] {
+    return this.idolLocationDefinitionsValue;
+  }
+
+  get provisionalIdolLocations(): readonly Readonly<IdolLocationDefinition>[] {
+    return Object.freeze(this.idolLocationDefinitionsValue.filter((definition) => (
+      this.idolLocationHostIsProvisional(definition.host)
+    )));
+  }
+
+  get returnedIdolLocations(): readonly Readonly<IdolLocationDefinition>[] {
+    return Object.freeze(this.idolLocationDefinitionsValue.filter((definition) => (
+      this.idolLocationHostIsReturned(definition.host)
+    )));
+  }
+
+  get idolLocationProgress(): Readonly<IdolLocationProgress> {
+    const provisional = this.provisionalIdolLocations.length;
+    const returned = this.returnedIdolLocations.length;
+    const total = this.idolLocationDefinitionsValue.length;
+    return Object.freeze({
+      total,
+      provisional,
+      returned,
+      complete: returned === total,
+      completionState: this.completionStateValue,
+    });
+  }
+
+  get completionState(): GameCompletionState {
+    return this.completionStateValue;
+  }
+
+  get completionChoiceActive(): boolean {
+    return this.completionStateValue === "awaiting-choice";
+  }
+
   get fishingShoalDefinitions(): readonly Readonly<FishingShoalDefinition>[] {
     return this.fishingShoalSystem.definitions;
   }
@@ -375,7 +439,7 @@ export class GameSimulation {
   }
 
   get fishingShoalInteraction(): Readonly<FishingShoalInteractionReadModel> | undefined {
-    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
+    if (this.pendingRespawn || this.pendingGenerationHandoverValue || this.completionChoiceActive) return undefined;
     return this.fishingShoalSystem.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
@@ -383,7 +447,7 @@ export class GameSimulation {
   }
 
   get islandDossierInteraction(): Readonly<IslandDossierInteractionReadModelV1> | undefined {
-    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
+    if (this.pendingRespawn || this.pendingGenerationHandoverValue || this.completionChoiceActive) return undefined;
     return this.islandDossierSystem.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
@@ -391,7 +455,7 @@ export class GameSimulation {
   }
 
   get surveySiteInteraction(): Readonly<SurveySiteInteractionReadModel> | undefined {
-    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
+    if (this.pendingRespawn || this.pendingGenerationHandoverValue || this.completionChoiceActive) return undefined;
     return this.surveySiteSystem.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
@@ -399,7 +463,7 @@ export class GameSimulation {
   }
 
   get wreckSurveyInteraction(): Readonly<WreckSurveyInteractionReadModelV1> | undefined {
-    if (this.pendingRespawn || this.pendingGenerationHandoverValue) return undefined;
+    if (this.pendingRespawn || this.pendingGenerationHandoverValue || this.completionChoiceActive) return undefined;
     let closest: { wreck: ShipwreckState; distance: number } | undefined;
     for (const wreck of this.shipwrecks) {
       if (
@@ -454,7 +518,7 @@ export class GameSimulation {
   update(input: MovementInput, deltaSeconds: number): MovementResult {
     if (this.interactionTransactionActive) return NO_MOVEMENT;
     if (this.pendingRespawn) return this.advanceWreckPresentation(deltaSeconds);
-    if (this.pendingGenerationHandoverValue) {
+    if (this.pendingGenerationHandoverValue || this.completionChoiceActive) {
       this.ship.speed = 0;
       this.lastMovement = NO_MOVEMENT;
       return NO_MOVEMENT;
@@ -582,6 +646,13 @@ export class GameSimulation {
         this.generated.landmarks.homeReturnTile,
       ),
     );
+    this.idolLocationDefinitionsValue = generateIdolLocationCatalog(
+      this.generated.seed,
+      this.config.world.idolCount,
+      this.islandDossierSystem.definitions,
+      this.surveySiteSystem.definitions,
+    );
+    this.completionStateValue = "in-progress";
     this.fishingShoalSystem = new FishingShoalSystem(
       this.world,
       generateFishingShoalCatalog(
@@ -600,7 +671,12 @@ export class GameSimulation {
   }
 
   teleport(tile: GridPoint): boolean {
-    if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return false;
+    if (
+      this.interactionTransactionActive
+      || this.pendingRespawn
+      || this.pendingGenerationHandoverValue
+      || this.completionChoiceActive
+    ) return false;
     if (!this.world.inBounds(tile.x, tile.y) || this.world.isMovementBlocked(tile.x, tile.y)) return false;
     const targetKnowledge = this.world.getKnowledge(tile.x, tile.y);
     if (!this.activeExpedition && targetKnowledge !== KnowledgeState.Supported) this.startExpedition();
@@ -625,7 +701,12 @@ export class GameSimulation {
   }
 
   refreshVisibility(): void {
-    if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return;
+    if (
+      this.interactionTransactionActive
+      || this.pendingRespawn
+      || this.pendingGenerationHandoverValue
+      || this.completionChoiceActive
+    ) return;
     const tile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
     const visibility = this.visibility.updateAt(tile);
@@ -640,7 +721,12 @@ export class GameSimulation {
   }
 
   setProvisions(value: number): void {
-    if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return;
+    if (
+      this.interactionTransactionActive
+      || this.pendingRespawn
+      || this.pendingGenerationHandoverValue
+      || this.completionChoiceActive
+    ) return;
     const previous = this.ship.provisions;
     const current = Math.max(0, Math.floor(Number.isFinite(value) ? value : previous));
     const accumulatorWillReset = current === 0 && this.ship.provisionAccumulator !== 0;
@@ -685,6 +771,9 @@ export class GameSimulation {
     if (this.interactionTransactionActive) {
       return this.rejectIslandDossierSurvey(command.islandId, "interaction-busy");
     }
+    if (this.completionChoiceActive) {
+      return this.rejectIslandDossierSurvey(command.islandId, "interaction-busy");
+    }
     if (this.pendingGenerationHandoverValue) {
       return this.rejectIslandDossierSurvey(command.islandId, "generation-handover");
     }
@@ -716,6 +805,19 @@ export class GameSimulation {
         ...result,
         canonicalApproach: definition.canonicalApproach,
       });
+      const idolLocation = this.idolLocationForHost({
+        kind: "island-dossier",
+        islandId: result.islandId,
+      });
+      if (idolLocation) {
+        this.events.emit("idolLocationDiscovered", {
+          expeditionId: this.expeditionId,
+          generation: this.generation,
+          location: idolLocation,
+          provisionsSpent: result.provisionsSpent,
+          presentationMs: result.presentationMs,
+        });
+      }
       this.resolveSurveyExhaustion();
       return result;
     } finally {
@@ -727,6 +829,9 @@ export class GameSimulation {
     command: Readonly<SurveySiteInteractionCommand>,
   ): SurveySiteInteractionResult {
     if (this.interactionTransactionActive) {
+      return this.rejectSurveySiteSurvey(command.id, "interaction-busy");
+    }
+    if (this.completionChoiceActive) {
       return this.rejectSurveySiteSurvey(command.id, "interaction-busy");
     }
     if (this.pendingGenerationHandoverValue) {
@@ -761,6 +866,19 @@ export class GameSimulation {
         tile: definition.tile,
         serviceAnchor: definition.serviceAnchor,
       });
+      const idolLocation = this.idolLocationForHost({
+        kind: "survey-site",
+        surveySiteId: result.id,
+      });
+      if (idolLocation) {
+        this.events.emit("idolLocationDiscovered", {
+          expeditionId: this.expeditionId,
+          generation: this.generation,
+          location: idolLocation,
+          provisionsSpent: result.provisionsSpent,
+          presentationMs: result.presentationMs,
+        });
+      }
       this.resolveSurveyExhaustion();
       return result;
     } finally {
@@ -772,6 +890,13 @@ export class GameSimulation {
     command: Readonly<FishingShoalInteractionCommandV1>,
   ): FishingShoalInteractionResultV1 {
     if (this.interactionTransactionActive) {
+      return {
+        contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
+        status: "rejected",
+        reason: "interaction-busy",
+      };
+    }
+    if (this.completionChoiceActive) {
       return {
         contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
         status: "rejected",
@@ -837,6 +962,9 @@ export class GameSimulation {
     if (this.interactionTransactionActive) {
       return this.rejectWreckSurvey(wreckId, "interaction-busy");
     }
+    if (this.completionChoiceActive) {
+      return this.rejectWreckSurvey(wreckId, "interaction-busy");
+    }
     if (this.pendingGenerationHandoverValue) {
       return this.rejectWreckSurvey(wreckId, "generation-handover");
     }
@@ -900,7 +1028,12 @@ export class GameSimulation {
 
   /** Deterministic sandbox hook; normal play reaches this outcome through travel consumption. */
   forceWreck(): boolean {
-    if (this.interactionTransactionActive || this.pendingRespawn || this.pendingGenerationHandoverValue) return false;
+    if (
+      this.interactionTransactionActive
+      || this.pendingRespawn
+      || this.pendingGenerationHandoverValue
+      || this.completionChoiceActive
+    ) return false;
     if (this.isInSupportedWater()) return false;
     if (!this.activeExpedition) this.startExpedition();
     const knowledgeChanged = this.failExpedition();
@@ -911,13 +1044,35 @@ export class GameSimulation {
   }
 
   acknowledgeGenerationHandover(): boolean {
-    if (this.interactionTransactionActive || !this.pendingGenerationHandoverValue) return false;
+    if (
+      this.interactionTransactionActive
+      || this.completionChoiceActive
+      || !this.pendingGenerationHandoverValue
+    ) return false;
     this.pendingGenerationHandoverValue = undefined;
     this.ship.speed = 0;
     this.lastMovement = NO_MOVEMENT;
     this.lifecycleResolutionRevision++;
     this.revision++;
     return true;
+  }
+
+  continueCompletedWorld(): boolean {
+    if (this.interactionTransactionActive || !this.completionChoiceActive) return false;
+    this.completionStateValue = "continued";
+    this.ship.speed = 0;
+    this.lastMovement = NO_MOVEMENT;
+    this.lifecycleResolutionRevision++;
+    this.revision++;
+    this.events.emit("completedWorldContinued", { seed: this.generated.seed });
+    return true;
+  }
+
+  startNewGame(): number | undefined {
+    if (this.interactionTransactionActive || !this.completionChoiceActive) return undefined;
+    const nextSeed = createNextWorldSeed(this.generated.seed);
+    this.regenerate(nextSeed);
+    return nextSeed;
   }
 
   refreshRiskOverlays(): void {
@@ -1021,12 +1176,18 @@ export class GameSimulation {
           clue: { ...model.clue },
         })),
       },
+      idolLocations: this.idolLocationProgress,
       debug: { ...this.debug },
     };
   }
 
   private startExpedition(): void {
-    if (this.activeExpedition || this.pendingRespawn || this.pendingGenerationHandoverValue) return;
+    if (
+      this.activeExpedition
+      || this.pendingRespawn
+      || this.pendingGenerationHandoverValue
+      || this.completionChoiceActive
+    ) return;
     this.activeExpedition = true;
     this.events.emit("expeditionStarted", {
       expeditionId: this.expeditionId,
@@ -1055,6 +1216,12 @@ export class GameSimulation {
     const returnedSurveySites = this.surveySiteSystem.commitExpedition(expeditionId);
     const returnedFishingShoals = this.fishingShoalSystem.commitExpedition(expeditionId);
     const returnedWreckSurveys = this.commitWreckSurveys(expeditionId);
+    const returnedIdolLocations = this.idolLocationDefinitionsValue.filter(({ host }) => {
+      if (host.kind === "island-dossier") {
+        return returnedIslandDossiers.dossiers.some(({ islandId }) => islandId === host.islandId);
+      }
+      return returnedSurveySites.reports.some(({ id }) => id === host.surveySiteId);
+    });
     const achievements: NavigatorVoyageAchievementInputV3 = {
       expeditionId,
       supportedTileCount: committed.changedCount - (committed.closedUnknownCount ?? 0),
@@ -1085,6 +1252,10 @@ export class GameSimulation {
         reason: "tenure",
       });
     }
+    const completedGame = this.completionStateValue === "in-progress"
+      && returnedIdolLocations.length > 0
+      && this.returnedIdolLocations.length === this.idolLocationDefinitionsValue.length;
+    if (completedGame) this.completionStateValue = "awaiting-choice";
     this.events.emit("expeditionReturned", {
       expeditionId,
       generation,
@@ -1127,6 +1298,13 @@ export class GameSimulation {
         reports: returnedWreckSurveys,
       });
     }
+    if (returnedIdolLocations.length > 0) {
+      this.events.emit("idolLocationsReturned", {
+        expeditionId,
+        generation,
+        locations: Object.freeze([...returnedIdolLocations]),
+      });
+    }
     this.emitReplenishment(
       previousProvisions,
       previousAccumulator,
@@ -1151,6 +1329,15 @@ export class GameSimulation {
       });
     }
     this.lifecycleResolutionRevision++;
+    if (completedGame) {
+      this.events.emit("gameCompleted", {
+        navigatorId,
+        generation,
+        voyageNumber: voyage.completedVoyages,
+        returnedIdolLocations: this.returnedIdolLocations.length,
+        totalIdolLocations: this.idolLocationDefinitionsValue.length,
+      });
+    }
     return committed.changedCount;
   }
 
@@ -1179,6 +1366,16 @@ export class GameSimulation {
     const lostSurveySites = this.surveySiteSystem.revertExpedition(expeditionId);
     const lostFishingShoals = this.fishingShoalSystem.revertExpedition(expeditionId);
     const lostWreckSurveys = this.revertWreckSurveys(expeditionId);
+    const lostIdolLocations = this.idolLocationDefinitionsValue.filter(({ host }) => {
+      if (host.kind === "island-dossier") {
+        return lostIslandDossiers.some((record) => (
+          record.state === "surveyed" && record.islandId === host.islandId
+        ));
+      }
+      return lostSurveySites.some((record) => (
+        record.state === "surveyed" && record.id === host.surveySiteId
+      ));
+    });
     const previousProvisions = lostShip.provisions;
     lostShip.provisions = 0;
     lostShip.provisionAccumulator = 0;
@@ -1234,7 +1431,50 @@ export class GameSimulation {
         reports: lostWreckSurveys,
       });
     }
+    if (lostIdolLocations.length > 0) {
+      this.events.emit("idolLocationsLost", {
+        expeditionId,
+        generation,
+        locations: Object.freeze([...lostIdolLocations]),
+      });
+    }
     return reverted.changedCount;
+  }
+
+  private idolLocationForHost(
+    host: Readonly<IdolLocationHostRef>,
+  ): Readonly<IdolLocationDefinition> | undefined {
+    return this.idolLocationDefinitionsValue.find(({ host: candidate }) => {
+      if (host.kind !== candidate.kind) return false;
+      if (host.kind === "island-dossier" && candidate.kind === "island-dossier") {
+        return host.islandId === candidate.islandId;
+      }
+      return host.kind === "survey-site"
+        && candidate.kind === "survey-site"
+        && host.surveySiteId === candidate.surveySiteId;
+    });
+  }
+
+  private idolLocationHostIsProvisional(host: Readonly<IdolLocationHostRef>): boolean {
+    if (host.kind === "island-dossier") {
+      return this.provisionalIslandDossiers.some((record) => (
+        record.state === "surveyed" && record.islandId === host.islandId
+      ));
+    }
+    return this.provisionalSurveySites.some((record) => (
+      record.state === "surveyed" && record.id === host.surveySiteId
+    ));
+  }
+
+  private idolLocationHostIsReturned(host: Readonly<IdolLocationHostRef>): boolean {
+    if (host.kind === "island-dossier") {
+      return this.returnedIslandDossiers.some((record) => (
+        record.state === "dossier" && record.islandId === host.islandId
+      ));
+    }
+    return this.returnedSurveySites.some((record) => (
+      record.state === "report" && record.id === host.surveySiteId
+    ));
   }
 
   private commitWreckSurveys(expeditionId: number): readonly Readonly<WreckSurveyReportV1>[] {

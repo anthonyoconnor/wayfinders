@@ -1,4 +1,12 @@
 import type { ShipwreckState } from "../core/types";
+import {
+  createIdolLocationHostKey,
+  isCurrentIdolLocationId,
+  parseIdolLocationId,
+  type IdolLocationDefinition,
+  type IdolLocationHostRef,
+  type IdolLocationId,
+} from "../exploration/IdolLocationContracts";
 import type { IslandDossierDefinitionV1 } from "../exploration/IslandDossierContracts";
 import type {
   FishingShoalDefinition,
@@ -18,13 +26,25 @@ import {
   type NavigatorVoyageAchievementRecordV3,
 } from "./NavigatorLineageSystem";
 
-export const GREAT_HALL_CHRONICLE_READ_MODEL_VERSION = 3 as const;
+export const GREAT_HALL_CHRONICLE_READ_MODEL_VERSION = 4 as const;
 
 const greatHallVoyageKeyBrand: unique symbol = Symbol("GreatHallVoyageKey");
 const greatHallAchievementKeyBrand: unique symbol = Symbol("GreatHallAchievementKey");
 
 export type GreatHallVoyageKey = string & { readonly [greatHallVoyageKeyBrand]: true };
 export type GreatHallAchievementKey = string & { readonly [greatHallAchievementKeyBrand]: true };
+
+export type GreatHallReturnedIdolLocationSource = Readonly<Pick<
+  IdolLocationDefinition,
+  "id" | "ordinal" | "displayLabel" | "host"
+>>;
+
+export interface GreatHallIdolSources {
+  /** Safe count-only world goal; it exposes no undiscovered host. */
+  readonly total: number;
+  /** Only locations whose host survey has already returned to the exact home dock. */
+  readonly returned: readonly GreatHallReturnedIdolLocationSource[];
+}
 
 export interface GreatHallChronicleSources {
   /** Deterministic names and results for stable island IDs credited by lineage voyages. */
@@ -41,6 +61,8 @@ export interface GreatHallChronicleSources {
   readonly fishingShoals: readonly Readonly<Pick<FishingShoalDefinition, "id" | "quality">>[];
   /** Runtime wreck authority, including whether an identity report has returned home. */
   readonly wrecks: readonly Readonly<Pick<ShipwreckState, "id" | "generation" | "survey">>[];
+  /** Safe idol input: total count plus returned locations only, never the hidden catalog. */
+  readonly idols: Readonly<GreatHallIdolSources>;
 }
 
 interface GreatHallAchievementBase {
@@ -106,6 +128,16 @@ export interface GreatHallWreckReportAchievement extends GreatHallAchievementBas
   readonly lostGeneration: number;
 }
 
+export interface GreatHallIdolLocationAchievement extends GreatHallAchievementBase {
+  readonly kind: "idol-location";
+  readonly idolLocationId: IdolLocationId;
+  readonly ordinal: number;
+  readonly displayLabel: string;
+  readonly host: Readonly<IdolLocationHostRef>;
+  /** Safe returned location copy used only for presentation. */
+  readonly locationLabel: string;
+}
+
 export type GreatHallAchievement =
   | GreatHallSupportedRouteAchievement
   | GreatHallMappedWaterAchievement
@@ -115,7 +147,8 @@ export type GreatHallAchievement =
   | GreatHallSurveySiteReportAchievement
   | GreatHallFishingLeadAchievement
   | GreatHallFishingSurveyAchievement
-  | GreatHallWreckReportAchievement;
+  | GreatHallWreckReportAchievement
+  | GreatHallIdolLocationAchievement;
 
 interface GreatHallVoyageBase {
   readonly key: GreatHallVoyageKey;
@@ -149,6 +182,7 @@ export interface GreatHallVoyageTotals {
   readonly fishingLeads: number;
   readonly fishingSurveys: number;
   readonly wreckReports: number;
+  readonly idolLocations: number;
 }
 
 export interface GreatHallUnlocatedWreckFate {
@@ -190,6 +224,12 @@ export interface GreatHallLineageTotals extends GreatHallVoyageTotals {
   readonly unlocatedWreckFates: number;
 }
 
+export interface GreatHallIdolProgress {
+  readonly found: number;
+  readonly total: number;
+  readonly complete: boolean;
+}
+
 type MutableGreatHallVoyageTotals = {
   -readonly [Key in keyof GreatHallVoyageTotals]: GreatHallVoyageTotals[Key];
 };
@@ -203,6 +243,8 @@ export interface GreatHallChronicle {
   readonly navigators: readonly Readonly<GreatHallNavigatorEntry>[];
   /** Counts only player-known, committed history; it contains no world-content totals. */
   readonly totals: Readonly<GreatHallLineageTotals>;
+  /** Count-only goal progress; undiscovered idol identities and hosts are structurally absent. */
+  readonly idolProgress: Readonly<GreatHallIdolProgress>;
 }
 
 interface WreckReportCredit {
@@ -225,6 +267,7 @@ interface SourceIndexes {
   readonly fishingQualityById: ReadonlyMap<FishingShoalId, FishingShoalQuality>;
   readonly wreckById: ReadonlyMap<number, Readonly<Pick<ShipwreckState, "id" | "generation" | "survey">>>;
   readonly navigatorByGeneration: ReadonlyMap<number, Readonly<NavigatorRecordV6>>;
+  readonly returnedIdolByHostKey: ReadonlyMap<string, GreatHallReturnedIdolLocationSource>;
 }
 
 /** Builds the complete home/succession chronicle without creating duplicate authority. */
@@ -238,6 +281,7 @@ export function buildGreatHallChronicle(
   const usedVoyageKeys = new Set<string>();
   const usedAchievementKeys = new Set<string>();
   const wreckReportCredits = new Map<number, Readonly<WreckReportCredit>>();
+  const creditedIdolLocationIds = new Set<IdolLocationId>();
 
   const entriesWithoutFates = navigators.map((navigator): Readonly<GreatHallNavigatorEntry> => {
     validateNavigatorVoyages(navigator);
@@ -251,6 +295,7 @@ export function buildGreatHallChronicle(
         indexes,
         usedAchievementKeys,
         wreckReportCredits,
+        creditedIdolLocationIds,
       );
       return Object.freeze({
         key,
@@ -296,10 +341,22 @@ export function buildGreatHallChronicle(
     });
   }));
 
+  validateReturnedIdolCredits(sources.idols.returned, creditedIdolLocationIds);
+  const totals = totalLineage(entries);
+  if (totals.idolLocations !== creditedIdolLocationIds.size) {
+    throw new RangeError("Great Hall idol-location totals do not reconcile with returned credit");
+  }
+  const idolProgress = Object.freeze({
+    found: creditedIdolLocationIds.size,
+    total: sources.idols.total,
+    complete: creditedIdolLocationIds.size === sources.idols.total,
+  });
+
   return Object.freeze({
     readModelVersion: GREAT_HALL_CHRONICLE_READ_MODEL_VERSION,
     navigators: entries,
-    totals: totalLineage(entries),
+    totals,
+    idolProgress,
   });
 }
 
@@ -320,11 +377,33 @@ function buildReturnedAchievements(
   indexes: Readonly<SourceIndexes>,
   usedAchievementKeys: Set<string>,
   wreckReportCredits: Map<number, Readonly<WreckReportCredit>>,
+  creditedIdolLocationIds: Set<IdolLocationId>,
 ): readonly Readonly<GreatHallAchievement>[] {
   const achievements: Readonly<GreatHallAchievement>[] = [];
   const add = <T extends GreatHallAchievement>(achievement: T): void => {
     registerUniqueKey(usedAchievementKeys, achievement.key, "achievement");
     achievements.push(Object.freeze(achievement));
+  };
+  const addReturnedIdol = (
+    host: Readonly<IdolLocationHostRef>,
+    locationLabel: string,
+  ): void => {
+    const idol = indexes.returnedIdolByHostKey.get(createIdolLocationHostKey(host));
+    if (!idol) return;
+    if (creditedIdolLocationIds.has(idol.id)) {
+      throw new RangeError(`Returned idol location ${idol.id} is credited more than once in the lineage`);
+    }
+    add({
+      key: createAchievementKey(voyageKey, "idol-location", idol.id),
+      kind: "idol-location",
+      idolLocationId: idol.id,
+      ordinal: idol.ordinal,
+      displayLabel: idol.displayLabel,
+      host: freezeIdolLocationHost(idol.host),
+      locationLabel,
+      label: `${idol.displayLabel} located — ${locationLabel}`,
+    });
+    creditedIdolLocationIds.add(idol.id);
   };
 
   if (voyage.supportedTileCount > 0) {
@@ -371,6 +450,7 @@ function buildReturnedAchievements(
       findingLabel: definition.dossier.findingLabel,
       label: `Surveyed ${definition.name} — ${definition.dossier.findingLabel}`,
     });
+    addReturnedIdol({ kind: "island-dossier", islandId }, definition.name);
   }
 
   for (const surveySiteId of voyage.surveySiteLeadIds) {
@@ -403,6 +483,10 @@ function buildReturnedAchievements(
       resultLabel: definition.result.label,
       label: `Surveyed ${definition.typeLabel.toLowerCase()} — ${definition.result.label}`,
     });
+    addReturnedIdol(
+      { kind: "survey-site", surveySiteId },
+      `${definition.typeLabel} — ${definition.result.label}`,
+    );
   }
 
   for (const fishingShoalId of voyage.fishingLeadIds) {
@@ -502,19 +586,47 @@ function createSourceIndexes(
   navigators: readonly Readonly<NavigatorRecordV6>[],
   sources: Readonly<GreatHallChronicleSources>,
 ): SourceIndexes {
+  if (!Number.isSafeInteger(sources.idols.total) || sources.idols.total < 1) {
+    throw new RangeError("Great Hall idol total must be a positive safe integer");
+  }
+  if (sources.idols.returned.length > sources.idols.total) {
+    throw new RangeError("Great Hall returned idol locations cannot exceed the world total");
+  }
+  const islandDossierById = uniqueMap(
+    sources.islandDossiers,
+    ({ islandId }) => islandId,
+    (definition) => definition,
+    "island dossier",
+  );
+  const surveySiteById = uniqueMap(
+    sources.surveySites,
+    ({ id }) => id,
+    (definition) => definition,
+    "survey site",
+  );
+  const returnedIdolById = uniqueMap(
+    sources.idols.returned,
+    ({ id }) => id,
+    (idol) => idol,
+    "returned idol location",
+  );
+  const returnedIdolByHostKey = uniqueMap(
+    sources.idols.returned,
+    ({ host }) => createIdolLocationHostKey(host),
+    (idol) => idol,
+    "returned idol host",
+  );
+  for (const idol of returnedIdolById.values()) {
+    validateReturnedIdolSource(idol, islandDossierById, surveySiteById);
+    if (idol.ordinal > sources.idols.total) {
+      throw new RangeError(
+        `Great Hall returned idol location ${idol.id} exceeds world total ${sources.idols.total}`,
+      );
+    }
+  }
   return {
-    islandDossierById: uniqueMap(
-      sources.islandDossiers,
-      ({ islandId }) => islandId,
-      (definition) => definition,
-      "island dossier",
-    ),
-    surveySiteById: uniqueMap(
-      sources.surveySites,
-      ({ id }) => id,
-      (definition) => definition,
-      "survey site",
-    ),
+    islandDossierById,
+    surveySiteById,
     fishingQualityById: uniqueMap(
       sources.fishingShoals,
       ({ id }) => id,
@@ -528,7 +640,62 @@ function createSourceIndexes(
       (navigator) => navigator,
       "navigator generation",
     ),
+    returnedIdolByHostKey,
   };
+}
+
+function validateReturnedIdolSource(
+  idol: GreatHallReturnedIdolLocationSource,
+  islandDossierById: ReadonlyMap<number, unknown>,
+  surveySiteById: ReadonlyMap<SurveySiteId, unknown>,
+): void {
+  if (!isCurrentIdolLocationId(idol.id)) {
+    throw new RangeError(`Great Hall returned idol location has invalid ID ${String(idol.id)}`);
+  }
+  if (!Number.isSafeInteger(idol.ordinal) || idol.ordinal < 1) {
+    throw new RangeError(`Great Hall returned idol location ${idol.id} has an invalid ordinal`);
+  }
+  if (parseIdolLocationId(idol.id)?.ordinal !== idol.ordinal) {
+    throw new RangeError(`Great Hall returned idol location ${idol.id} does not match ordinal ${idol.ordinal}`);
+  }
+  if (idol.displayLabel.trim().length === 0) {
+    throw new RangeError(`Great Hall returned idol location ${idol.id} has an empty display label`);
+  }
+  if (idol.host.kind === "island-dossier") {
+    if (!islandDossierById.has(idol.host.islandId)) {
+      throw new RangeError(
+        `Great Hall returned idol location ${idol.id} references unknown island dossier ${idol.host.islandId}`,
+      );
+    }
+    return;
+  }
+  if (!surveySiteById.has(idol.host.surveySiteId)) {
+    throw new RangeError(
+      `Great Hall returned idol location ${idol.id} references unknown survey site ${idol.host.surveySiteId}`,
+    );
+  }
+}
+
+function validateReturnedIdolCredits(
+  returned: readonly GreatHallReturnedIdolLocationSource[],
+  creditedIds: ReadonlySet<IdolLocationId>,
+): void {
+  if (creditedIds.size !== returned.length) {
+    const uncredited = returned.find(({ id }) => !creditedIds.has(id));
+    throw new RangeError(
+      uncredited
+        ? `Returned idol location ${uncredited.id} is not credited by an exact-dock voyage`
+        : "Great Hall returned idol credit count does not match its safe sources",
+    );
+  }
+}
+
+function freezeIdolLocationHost(
+  host: Readonly<IdolLocationHostRef>,
+): Readonly<IdolLocationHostRef> {
+  return Object.freeze(host.kind === "island-dossier"
+    ? { kind: host.kind, islandId: host.islandId }
+    : { kind: host.kind, surveySiteId: host.surveySiteId });
 }
 
 function uniqueMap<T, K, V>(
@@ -621,6 +788,9 @@ function totalVoyages(voyages: readonly Readonly<GreatHallVoyage>[]): Readonly<G
         case "wreck-report":
           totals.wreckReports++;
           break;
+        case "idol-location":
+          totals.idolLocations++;
+          break;
       }
     }
   }
@@ -670,6 +840,7 @@ function mutableVoyageTotals(): MutableGreatHallVoyageTotals {
     fishingLeads: 0,
     fishingSurveys: 0,
     wreckReports: 0,
+    idolLocations: 0,
   };
 }
 
@@ -688,6 +859,7 @@ function addVoyageTotals(
   target.fishingLeads += source.fishingLeads;
   target.fishingSurveys += source.fishingSurveys;
   target.wreckReports += source.wreckReports;
+  target.idolLocations += source.idolLocations;
 }
 
 const EMPTY_ACHIEVEMENTS = Object.freeze([]) as readonly [];

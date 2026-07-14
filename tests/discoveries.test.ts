@@ -94,6 +94,10 @@ function chronicleFor(simulation: GameSimulation) {
     surveySites: simulation.surveySiteDefinitions,
     fishingShoals: simulation.fishingShoalDefinitions,
     wrecks: simulation.wrecks,
+    idols: {
+      total: simulation.idolLocationDefinitions.length,
+      returned: simulation.returnedIdolLocations,
+    },
   });
 }
 

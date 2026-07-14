@@ -4,7 +4,7 @@ Wayfinders is a playable Phaser and TypeScript exploration prototype. The
 current implementation is the accepted gameplay and performance baseline: it
 provides a stable base for sailing, charting water, managing provisions,
 returning discoveries, inheriting Supported knowledge across generations and
-supporting rapid session-based gameplay development.
+finding the lost locations of the world's idols across generations.
 
 The current build includes:
 
@@ -13,7 +13,10 @@ The current build includes:
 - outward and return provision costs with route-focused risk guidance;
 - Unknown, Personal and Supported water knowledge states;
 - four-second wreck presentation, persistent wreck sites and generational respawning;
-- deterministic discoveries with carried, returned and lost states; and
+- provision-funded island/site surveys with provisional, returned and lost
+  knowledge states;
+- three deterministic hidden idol locations in the default world, distinguished
+  Great Hall credit and continue-or-new-game completion; and
 - a fresh game session on every launch or browser refresh.
 
 The runtime also includes interpolated ship presentation, viewport-culled
@@ -23,9 +26,9 @@ extend the foundation without replacing it.
 
 Developer graphics remain intentional throughout the gameplay roadmap.
 Production asset infrastructure, tooling and art replacement are a separate
-graphics track. Its proposed start gate is acceptance of `GP-3.2`, after the
-survey-to-returned-shoal loop produces a visible tribe benefit with developer
-graphics.
+graphics track. Its start gate is accepted `GP-3.3`, which freezes the stable
+island and generic survey-site identities/read models. The gate is open, but no
+graphics milestone is authorized.
 
 ## Run locally
 
