@@ -87,6 +87,10 @@ import { WorldGenerator } from "../world/WorldGenerator";
 import type { WorldGrid } from "../world/WorldGrid";
 import { KnowledgeState } from "../world/TileData";
 import { GameEvents, type ReplenishmentReason } from "./GameEvents";
+import {
+  measureSimulationPhase,
+  type SimulationTraceSink,
+} from "./SimulationTrace";
 import type {
   GridPoint,
   MovementInput,
@@ -250,8 +254,10 @@ export class GameSimulation {
   private completionStateValue: GameCompletionState = "in-progress";
   private interactionTransactionActive = false;
   private riskResultsInitialized = false;
+  private readonly trace: SimulationTraceSink | undefined;
 
-  constructor(config: PrototypeConfig = prototypeConfig) {
+  constructor(config: PrototypeConfig = prototypeConfig, trace?: SimulationTraceSink) {
+    this.trace = trace;
     this.usesPrototypeConfig = config === prototypeConfig;
     this.config = {
       ...config,
@@ -539,7 +545,11 @@ export class GameSimulation {
     const previousKnowledge = this.world.getKnowledge(previousTile.x, previousTile.y);
     const previousBundles = this.ship.provisions;
     const movementInput = this.stranded ? { turn: input.turn, throttle: 0 } : input;
-    const movement = this.movement.update(this.ship, movementInput, deltaSeconds);
+    const movement = measureSimulationPhase(
+      this.trace,
+      "movement",
+      () => this.movement.update(this.ship, movementInput, deltaSeconds),
+    );
     const headingChanged = this.ship.heading !== previousHeading;
     this.lastMovement = movement;
     const preparedCharge = this.provisions.prepareMovement(movement.segments);
@@ -575,19 +585,21 @@ export class GameSimulation {
         lifecycleChanged = true;
       }
 
-      const visibility = this.visibility.updateForMovement(previousTile, currentTile);
-      const knowledge = this.knowledge.applyTrailingVisibility(visibility, this.expeditionId);
-      knowledgeChanged += knowledge.changedCount;
-      this.observeIslandDossiers();
-      if (this.observeSurveySites() > 0) lifecycleChanged = true;
-      if (this.observeFishingShoals() > 0) lifecycleChanged = true;
-      this.discoverVisibleWrecks();
-      this.events.emit("shipEnteredTile", currentTile);
+      measureSimulationPhase(this.trace, "observation", () => {
+        const visibility = this.visibility.updateForMovement(previousTile, currentTile);
+        const knowledge = this.knowledge.applyTrailingVisibility(visibility, this.expeditionId);
+        knowledgeChanged += knowledge.changedCount;
+        this.observeIslandDossiers();
+        if (this.observeSurveySites() > 0) lifecycleChanged = true;
+        if (this.observeFishingShoals() > 0) lifecycleChanged = true;
+        this.discoverVisibleWrecks();
+        this.events.emit("shipEnteredTile", currentTile);
 
-      if (this.atDock) {
-        knowledgeChanged += this.resolveDockArrival();
-        lifecycleChanged = true;
-      }
+        if (this.atDock) {
+          knowledgeChanged += this.resolveDockArrival();
+          lifecycleChanged = true;
+        }
+      });
     }
 
     if (exhaustedNaturally && !this.pendingRespawn && !this.isInSupportedWater()) {
@@ -619,7 +631,11 @@ export class GameSimulation {
     } else {
       this.config.world.seed = normalizedSeed;
     }
-    this.generated = this.generator.generate(normalizedSeed);
+    this.generated = measureSimulationPhase(
+      this.trace,
+      "world-generation",
+      () => this.generator.generate(normalizedSeed),
+    );
     this.expeditionId = 1;
     this.activeExpedition = false;
     this.lineage = new NavigatorLineageSystem();
@@ -640,49 +656,51 @@ export class GameSimulation {
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
     this.riskResultsInitialized = false;
-    this.islandDossierSystem = new IslandDossierSystem(
-      this.world,
-      generateIslandDossierCatalog(
+    measureSimulationPhase(this.trace, "feature-catalogs", () => {
+      this.islandDossierSystem = new IslandDossierSystem(
         this.world,
-        this.generated.seed,
-        this.generated.islands,
-        this.generated.landmarks.homeReturnTile,
-        undefined,
+        generateIslandDossierCatalog(
+          this.world,
+          this.generated.seed,
+          this.generated.islands,
+          this.generated.landmarks.homeReturnTile,
+          undefined,
+          this.config,
+        ),
         this.config,
-      ),
-      this.config,
-    );
-    this.surveySiteSystem = new SurveySiteSystem(
-      this.world,
-      generateSurveySiteCatalog(
+      );
+      this.surveySiteSystem = new SurveySiteSystem(
         this.world,
-        this.generated.seed,
-        this.generated.islands,
-        this.generated.landmarks.homeReturnTile,
-        undefined,
+        generateSurveySiteCatalog(
+          this.world,
+          this.generated.seed,
+          this.generated.islands,
+          this.generated.landmarks.homeReturnTile,
+          undefined,
+          this.config,
+        ),
         this.config,
-      ),
-      this.config,
-    );
-    this.idolLocationDefinitionsValue = generateIdolLocationCatalog(
-      this.generated.seed,
-      this.config.world.idolCount,
-      this.islandDossierSystem.definitions,
-      this.surveySiteSystem.definitions,
-    );
-    this.completionStateValue = "in-progress";
-    this.fishingShoalSystem = new FishingShoalSystem(
-      this.world,
-      generateFishingShoalCatalog(
+      );
+      this.idolLocationDefinitionsValue = generateIdolLocationCatalog(
+        this.generated.seed,
+        this.config.world.idolCount,
+        this.islandDossierSystem.definitions,
+        this.surveySiteSystem.definitions,
+      );
+      this.completionStateValue = "in-progress";
+      this.fishingShoalSystem = new FishingShoalSystem(
         this.world,
-        this.generated.seed,
+        generateFishingShoalCatalog(
+          this.world,
+          this.generated.seed,
+          this.generated.landmarks.homeReturnTile,
+          undefined,
+          this.config,
+        ),
         this.generated.landmarks.homeReturnTile,
-        undefined,
         this.config,
-      ),
-      this.generated.landmarks.homeReturnTile,
-      this.config,
-    );
+      );
+    });
     this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
     this.lastMovement = NO_MOVEMENT;
@@ -1762,11 +1780,27 @@ export class GameSimulation {
 
   private recalculateRiskOverlays(): void {
     if (this.riskResultsInitialized) {
-      this.forwardRange = this.forwardRanges.recalculate(this.forwardRange, this.ship);
-      this.returnPaths = this.returnPathing.recalculate(this.returnPaths, this.ship);
+      this.forwardRange = measureSimulationPhase(
+        this.trace,
+        "forward-guidance",
+        () => this.forwardRanges.recalculate(this.forwardRange, this.ship),
+      );
+      this.returnPaths = measureSimulationPhase(
+        this.trace,
+        "return-query",
+        () => this.returnPathing.recalculate(this.returnPaths, this.ship),
+      );
     } else {
-      this.forwardRange = this.forwardRanges.calculate(this.ship);
-      this.returnPaths = this.returnPathing.calculate(this.ship);
+      this.forwardRange = measureSimulationPhase(
+        this.trace,
+        "forward-guidance",
+        () => this.forwardRanges.calculate(this.ship),
+      );
+      this.returnPaths = measureSimulationPhase(
+        this.trace,
+        "return-query",
+        () => this.returnPathing.calculate(this.ship),
+      );
       this.riskResultsInitialized = true;
     }
     this.overlaysRevision++;

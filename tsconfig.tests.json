@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node", "vitest/globals"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true
+  },
+  "include": [
+    "tests/**/*.ts",
+    "scripts/architecture-benchmark.ts",
+    "scripts/**/*.mjs",
+    "vitest.config.ts"
+  ]
+}

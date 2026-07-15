@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev-server.mjs",
     "build": "tsc -b && vite build",
+    "build:bundle": "vite build",
     "assets:build": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs build",
     "assets:check": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs check && node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-pipeline.mjs check && node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-promotion.mjs check",
     "assets:intake": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs intake",
@@ -15,16 +16,26 @@
     "assets:promote": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-promotion.mjs promote",
     "assets:promote:check": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-promotion.mjs check",
     "preview": "vite preview --host 127.0.0.1",
+    "benchmark:architecture": "vite-node scripts/architecture-benchmark.ts",
     "typecheck": "tsc -b",
-    "test": "vitest run",
-    "check": "npm run assets:check && npm run typecheck && npm test && npm run build"
+    "typecheck:test": "tsc -p tsconfig.tests.json",
+    "test": "vitest --configLoader runner run --project quick --project integration --project io",
+    "test:quick": "vitest --configLoader runner run --project quick",
+    "test:integration": "vitest --configLoader runner run --project integration",
+    "test:io": "vitest --configLoader runner run --project io",
+    "test:perf": "vitest --configLoader runner run --project performance",
+    "test:watch": "vitest --configLoader runner --project quick",
+    "check:quick": "npm run typecheck && npm run typecheck:test && npm run test:quick",
+    "check": "npm run assets:check && npm run check:quick && npm run test:integration && npm run test:io && npm run build:bundle"
   },
   "dependencies": {
     "phaser": "3.90.0"
   },
   "devDependencies": {
+    "@types/node": "^24.13.3",
     "typescript": "5.8.3",
     "vite": "6.4.3",
+    "vite-node": "3.2.4",
     "vitest": "3.2.7"
   }
 }

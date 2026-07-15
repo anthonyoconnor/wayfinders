@@ -32,7 +32,7 @@ function gridTarget(
     objectKind: "home-island",
     editable,
     grid,
-    baseMasks: createCollisionEditorBaseMasks(grid, profile),
+    baseMasks: [...createCollisionEditorBaseMasks(grid, profile)],
     profile,
   };
 }

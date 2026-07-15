@@ -13,6 +13,7 @@ import {
   validateAuthoredAssetMetadata,
   type AuthoredAssetMetadata,
   type AuthoredCollisionProfile,
+  type AuthoredHomeIslandMetadata,
 } from "../src/wayfinders/assets/AuthoredAssetContracts.ts";
 
 const REPLACEMENT_HOME_COLLISION = {
@@ -21,8 +22,10 @@ const REPLACEMENT_HOME_COLLISION = {
   mixedCells: [{ x: 1, y: 1, solidRows: ["1000", "0000", "0000", "0000"] }],
 } as const;
 
-function acceptedHome(): Readonly<AuthoredAssetMetadata> {
-  return validateAuthoredAssetMetadata(homeIslandPackage);
+function acceptedHome(): Readonly<AuthoredHomeIslandMetadata> {
+  const metadata = validateAuthoredAssetMetadata(homeIslandPackage);
+  if (metadata.kind !== "home-island") throw new Error("Expected authored home metadata");
+  return metadata;
 }
 
 function candidate(
@@ -83,6 +86,7 @@ describe("GR-2.5 collision-only package candidates", () => {
   it("resets to the package's coarse fallback without retaining a collision field", () => {
     const current = acceptedHome();
     const result = applyCollisionCandidate(current, candidate(current, "reset-to-coarse"));
+    if (result.kind !== "home-island") throw new Error("Expected authored home metadata");
 
     expect(result.runtimeRevision).toBe(current.runtimeRevision + 1);
     expect(Object.hasOwn(result, "collision")).toBe(false);

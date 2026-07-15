@@ -41,7 +41,7 @@ function makeRendererHarness(key = "overlay-test") {
     textures: {
       createCanvas(textureKey: string, width: number, height: number) {
         const calls: FillCall[] = [];
-        const context = {
+        const drawingContext: Pick<CanvasRenderingContext2D, "fillStyle" | "clearRect" | "fillRect"> = {
           fillStyle: "",
           clearRect: () => { calls.length = 0; },
           fillRect(x: number, y: number, fillWidth: number, fillHeight: number) {
@@ -53,7 +53,8 @@ function makeRendererHarness(key = "overlay-test") {
               style: String(this.fillStyle),
             });
           },
-        } as unknown as CanvasRenderingContext2D;
+        };
+        const context = drawingContext as CanvasRenderingContext2D;
         const texture: FakeTexture = {
           width,
           height,

@@ -12,7 +12,7 @@ import {
 } from "../src/wayfinders/assets/PilotAssetCatalog";
 import { PilotAssetRuntime } from "../src/wayfinders/assets/PilotAssetRuntime";
 
-const metadataByKey = new Map([
+const metadataByKey = new Map<string, unknown>([
   [PILOT_ASSET_CATALOG[0].metadataKey, homeIsland],
   [PILOT_ASSET_CATALOG[1].metadataKey, playerBoat],
   [PILOT_ASSET_CATALOG[2].metadataKey, fishingShoal],

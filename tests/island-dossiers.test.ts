@@ -4,8 +4,6 @@ import {
   ISLAND_DOSSIER_CONTRACT_VERSION,
   ISLAND_DOSSIER_INTERACTION_RANGE_TILES,
   type IslandDossierInteractionCommandV1,
-  type IslandDossierProvisionalRecordV1,
-  type IslandDossierReturnedRecordV1,
 } from "../src/wayfinders/exploration/IslandDossierContracts.ts";
 import { generateIslandDossierCatalog } from "../src/wayfinders/exploration/IslandDossierCatalog.ts";
 import { IslandDossierSystem } from "../src/wayfinders/exploration/IslandDossierSystem.ts";

@@ -3,7 +3,7 @@ import { GameSimulation } from "../src/wayfinders/core/GameSimulation.ts";
 import type { GridPoint } from "../src/wayfinders/core/types.ts";
 import {
   NAVIGATOR_VOYAGE_LIMIT,
-  type NavigatorVoyageAchievementRecordV1,
+  type NavigatorVoyageAchievementRecordV3,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
 
@@ -33,7 +33,7 @@ describe("four-journey navigator tenure", () => {
       voyagesRemaining: number;
       tenureCompleted: boolean;
       generation: number;
-      achievements: Readonly<NavigatorVoyageAchievementRecordV1>;
+      achievements: Readonly<NavigatorVoyageAchievementRecordV3>;
     }> = [];
     const generations: Array<{ previousGeneration: number; generation: number; reason: string }> = [];
     const tenures: Array<{ generation: number; completedVoyages: number; nextGeneration: number }> = [];

@@ -18,11 +18,12 @@ function surveyIdolLocation(
   simulation: GameSimulation,
   location: Readonly<IdolLocationDefinition>,
 ) {
-  if (location.host.kind === "island-dossier") {
+  const host = location.host;
+  if (host.kind === "island-dossier") {
     const definition = simulation.islandDossierDefinitions.find(({ islandId }) => (
-      islandId === location.host.islandId
+      islandId === host.islandId
     ));
-    if (!definition) throw new Error(`Missing idol island host ${location.host.islandId}`);
+    if (!definition) throw new Error(`Missing idol island host ${host.islandId}`);
     expect(simulation.teleport(definition.canonicalApproach)).toBe(true);
     return simulation.interactWithIslandDossier({
       contractVersion: ISLAND_DOSSIER_CONTRACT_VERSION,
@@ -32,9 +33,9 @@ function surveyIdolLocation(
   }
 
   const definition = simulation.surveySiteDefinitions.find(({ id }) => (
-    id === location.host.surveySiteId
+    id === host.surveySiteId
   ));
-  if (!definition) throw new Error(`Missing idol survey-site host ${location.host.surveySiteId}`);
+  if (!definition) throw new Error(`Missing idol survey-site host ${host.surveySiteId}`);
   expect(simulation.teleport(definition.serviceAnchor)).toBe(true);
   return simulation.interactWithSurveySite({
     contractVersion: SURVEY_SITE_CONTRACT_VERSION,

@@ -194,8 +194,7 @@ describe("GameSimulation island-dossier integration", () => {
     const voyage = chronicleFor(simulation).navigators[0].voyages[0];
     expect(voyage.outcome).toBe("returned");
     expect(voyage.achievements
-      .filter(({ kind }) => kind === "island-dossier")
-      .map(({ islandId }) => islandId)
+      .flatMap((achievement) => achievement.kind === "island-dossier" ? [achievement.islandId] : [])
       .sort((left, right) => left - right)).toEqual(expectedIds);
   });
 
@@ -226,8 +225,8 @@ describe("GameSimulation island-dossier integration", () => {
     const voyage = chronicleFor(simulation).navigators[0].voyages[0];
     expect(voyage.outcome).toBe("returned");
     expect(voyage.achievements
-      .filter(({ kind }) => kind === "island-lead")
-      .map(({ islandId }) => islandId)).toEqual([target.islandId]);
+      .flatMap((achievement) => achievement.kind === "island-lead" ? [achievement.islandId] : []))
+      .toEqual([target.islandId]);
   });
 
   it("rolls a wrecked survey back while preserving the previously returned lead", () => {

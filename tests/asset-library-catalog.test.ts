@@ -11,6 +11,7 @@ import {
   conceptShoalReferenceEntry,
   islandReferenceEntry,
   waterReferenceEntry,
+  type ReferenceImageLibraryEntry,
 } from "../src/wayfinders/assets/AssetLibraryCatalog";
 
 const ESTABLISHED_IDS = [
@@ -49,8 +50,11 @@ describe("asset library catalog", () => {
       expect(ASSET_LIBRARY_CATALOG.filter((entry) => entry.id === id), id).toHaveLength(1);
     }
 
-    const examples = ASSET_LIBRARY_CATALOG.filter((entry) =>
-      entry.entryType === "reference-image" && entry.reference.collectionId === "gr1-island-examples");
+    const referenceEntries = ASSET_LIBRARY_CATALOG.filter(
+      (entry): entry is Readonly<ReferenceImageLibraryEntry> => entry.entryType === "reference-image",
+    );
+    const examples = referenceEntries.filter((entry) =>
+      entry.reference.collectionId === "gr1-island-examples");
     expect(examples).toHaveLength(20);
     expect(examples.map((entry) => entry.reference.sequence)).toEqual(
       Array.from({ length: 20 }, (_, index) => index + 1),
@@ -62,8 +66,8 @@ describe("asset library catalog", () => {
     expect(new Set(candidates.map((entry) => entry.id)).size).toBe(5);
     expect(candidates.every((entry) => entry.recipe.lifecycle === "source")).toBe(true);
 
-    const conceptReferences = ASSET_LIBRARY_CATALOG.filter((entry) =>
-      entry.entryType === "reference-image" && entry.reference.collectionId.startsWith("concept-example-"));
+    const conceptReferences = referenceEntries.filter((entry) =>
+      entry.reference.collectionId.startsWith("concept-example-"));
     expect(conceptReferences).toHaveLength(16);
     expect(conceptReferences.filter((entry) => entry.reference.kind === "island")).toHaveLength(12);
     expect(conceptReferences.filter((entry) => entry.reference.kind === "shoal")).toHaveLength(4);
@@ -103,6 +107,9 @@ describe("asset library catalog", () => {
       pixelSize: { width: 480, height: 480 },
     })]);
     expect(candidate.layers).toEqual(candidate.candidateLayers);
+    if (candidate.collisionDraft.kind !== "hybrid-grid-draft") {
+      throw new Error("Expected hybrid-grid collision draft");
+    }
     expect(candidate.collisionDraft.solidSubcells).toEqual([]);
     expect(candidate.fingerprint).toBe(
       productionIndex.entries.find((entry) => entry.id === candidate.id)?.jobKey,
