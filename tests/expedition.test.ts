@@ -3,6 +3,7 @@ import { patchPrototypeConfig, resetPrototypeConfig } from "../src/wayfinders/co
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import type { GridPoint } from "../src/wayfinders/core/types";
 import { KnowledgeSystem } from "../src/wayfinders/exploration/KnowledgeSystem";
+import { GridGraph } from "../src/wayfinders/navigation/GridGraph";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 
@@ -23,10 +24,11 @@ function findUnknownWater(simulation: GameSimulation, farFrom: readonly GridPoin
 
 function findRemoteSupportedWater(simulation: GameSimulation): GridPoint {
   const dock = simulation.generated.landmarks.homeReturnTile;
+  const navigation = new GridGraph(simulation.world, simulation.config);
   let result: GridPoint | undefined;
   let bestDistance = Number.POSITIVE_INFINITY;
   simulation.world.forEachTile((x, y) => {
-    if (simulation.world.isMovementBlocked(x, y)) return;
+    if (!navigation.isNavigationNodePassable(simulation.world.index(x, y))) return;
     if (simulation.world.getKnowledge(x, y) !== KnowledgeState.Supported) return;
     if (x === dock.x && y === dock.y) return;
     const distance = (x - dock.x) ** 2 + (y - dock.y) ** 2;
