@@ -1,11 +1,9 @@
 # Wayfinders authored-asset direction
 
-Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted.
-`GR-2.1` through `GR-2.5` are implemented. Library navigation, whole-cell
-editing and direct collision save have been exercised; the complete interactive
-browser and performance matrix remains outstanding. Collision accuracy/runtime
-acceptance in `GR-2.6`, plus the production workflow in `GR-3.1` through
-`GR-3.4`, remains planned but not authorized.
+Status: active. `GR-1.1` through `GR-2.5` are implemented and accepted. The user
+verified the saved home-island collision in gameplay, so `GR-2.6` is skipped for
+now. `GR-3.1` through `GR-3.4` are authorized as a lightweight production
+prototype focused on rapid preparation, preview, review and game testing.
 
 Gameplay-session saving is not part of the active baseline. Development-only
 reviewed asset-package writes are repository authoring, not voyage persistence;
@@ -165,13 +163,14 @@ non-interlaced 8-bit RGB or RGBA and no larger than `4096 x 4096`.
 
 ## Hybrid collision foundation and authoring
 
-Implemented `GR-2.4` retains the `32`-pixel navigation grid and adds optional
+Accepted `GR-2.4` retains the `32`-pixel navigation grid and adds optional
 `8`-pixel collision subcells as sparse overrides. One navigation cell therefore
 contains a `4 x 4` collision patch when refinement is needed. Mixed patches and
 intentional fully-open or fully-solid overrides are accepted; an omitted patch
-keeps the compact coarse terrain result. Implemented `GR-2.5` adds
-package-profile editing on top of that contract. Accepted home-mask refinement
-and live runtime validation remain planned in `GR-2.6`.
+keeps the compact coarse terrain result. Accepted `GR-2.5` adds package-profile
+editing on top of that contract. The saved home mask has been verified in live
+gameplay; the larger `GR-2.6` diagnostic/performance exercise is deferred unless
+future collision work makes it useful.
 
 The V1 JSON property remains named `mixedCells` for compatibility with accepted
 packages. Its implemented meaning is now "sparse coarse-cell overrides," so a
@@ -227,32 +226,29 @@ source and runtime PNGs remain separate, unchanged artifacts. Interactive
 WebGL usability and performance acceptance for the editor remain outstanding;
 the implemented automated gates do not claim that browser result.
 
-## Planned production workflow
+## Authorized prototype production workflow
 
-`GR-3.1` through `GR-3.4` extend the proven pilot tooling in four gates:
+`GR-3.1` through `GR-3.4` extend the proven pilot tooling in four intentionally
+small gates:
 
-1. A versioned recipe manifest extends the current library record with semantic
-   identity, lifecycle state, provenance, source hashes, target geometry,
-   ordered visual layers, visibility/blend defaults, animation descriptors,
-   style constraints, collision/interaction layers, transforms, thumbnails and
-   output bindings. The 20 island examples stay reference-only by default.
-2. Provider-neutral source jobs feed deterministic local preparation for matte
-   and transparency cleanup, trim/pad, scale, slicing, layer outputs,
-   directional frames, animation sheets and bounded thumbnails. Incremental
-   caching and resumable batches must not weaken validation.
-3. The existing browser/selected inspector gains layer controls, animation
-   playback, variant and mask diffs, review decisions and explicit promotion.
-   Collision retains constrained direct save; full visual promotion remains
-   review-gated server intake with portable bundles as a transfer fallback.
-4. Batch orchestration uses the 20 island references as its minimum preparation
-   benchmark, regenerates catalogs/reports/review queues, rejects stale or
-   unreviewed outputs and proves operator, throughput, payload, decoded-memory,
-   GPU-memory and runtime budgets before broader rollout.
+1. A versioned recipe manifest records only the source decisions needed by the
+   current island, shoal and world-feature candidates. Generated hashes and
+   output facts stay in generated reports.
+2. A dependency-free local runner performs border-connected matte cleanup,
+   trim/pad, contain scaling, existing-sheet validation and thumbnails. Islands
+   receive blank editable collision drafts unless an explicit semantic mask is
+   supplied; shoals receive empty/passable drafts.
+3. The existing browser previews recipe sources/candidates and their layers,
+   collision drafts and review state. Explicit local review/promotion reuses the
+   constrained server boundary; it does not become an arbitrary file editor.
+4. A simple isolated batch regenerates candidates, catalog/report data and the
+   review queue, detects stale output and records enough throughput/payload
+   evidence to decide what production work is actually worth adding next.
 
-Source generation may be nondeterministic, but its inputs and resulting source
-hash are recorded. All derived outputs after source acceptance must be
-reproducible. Runtime generation, silent mask replacement and automatic catalog
-promotion remain prohibited.
+Source creation may be nondeterministic, but the selected file hash is recorded
+and every derived output is reproducible. General provider integrations,
+directional-frame synthesis, atlas building, runtime generation, silent mask
+replacement and automatic catalog promotion remain out of scope.
 
 ## Runtime separation
 

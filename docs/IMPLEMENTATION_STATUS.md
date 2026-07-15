@@ -10,25 +10,16 @@ architecture rules or completed milestone evidence.
 ## Current state
 
 - The accepted gameplay baseline runs through `GP-4.1`.
-- The accepted graphics baseline runs through `GR-1.4`.
+- The accepted graphics/tooling baseline runs through `GR-2.5`.
 - No later gameplay milestone is authorized.
-- `GR-2.1` through `GR-2.3` are implemented as an ordered graphics-tooling
-  batch. Their automated gates pass; interactive browser acceptance is still
-  required before the accepted graphics baseline advances beyond `GR-1.4`.
-- `GR-2.4` hybrid collision contracts and runtime behavior are implemented.
-  Its automated gates pass; the live interactive collision/performance pass is
-  still required before graphics acceptance advances.
-- `GR-2.5` collision authoring is implemented. The workbench now includes a
+- `GR-2.1` through `GR-2.5` are accepted. The workbench includes a
   browsable 23-entry asset library, retained per-asset drafts, `8`/`32`-pixel
-  brushes and validated direct package saves. Live whole-cell/detail editing
-  and direct save have been exercised. Its automated gates pass; the complete
-  in-app WebGL matrix and performance pass are still required before graphics
-  acceptance advances.
-- The next proposed implementation milestone is `GR-2.6`: finish and validate
-  the currently saved home shoreline mask in gameplay, then prove one shared
-  diagnostic shape source for every runtime collision category. It remains
-  unauthorized.
-- No `GR-3` scope is authorized.
+  brushes and validated direct package saves. The user verified the saved home
+  collision in gameplay. `GR-2.6` is skipped for now rather than blocking asset
+  production on an unnecessary broader acceptance exercise.
+- `GR-3.1` through `GR-3.4` are authorized as an ordered prototype batch. The
+  focus is rapid source preparation, library preview, reviewed collision drafts
+  and selected in-game testing—not a general art, animation or generation tool.
 - Gameplay-session saving is intentionally absent. Every launch or browser
   refresh starts a fresh voyage. Development-only asset package saves are a
   separate authoring operation and do not persist gameplay state.
@@ -80,19 +71,15 @@ Latest committed verification baseline:
 - An interactive pass over the Great Hall's focused handover and optional
   browsing modes remains outstanding; their shared read model and exact-dock
   access policy have automated coverage.
-- Live library browsing, `8`/`32`-pixel editing and direct collision save have
-  been exercised, including a subsequent saved home-mask revision. The formal
-  WebGL matrix still needs all three package kinds, all 20 references,
-  contrast/overlay states, visual-candidate intake, responsive layouts,
-  save-to-fresh-game reload and collision-diagnostic performance. Automated
-  contracts, deterministic collision budgets and the production build pass.
+- The broad formal WebGL/performance matrix once proposed for `GR-2.6` is
+  deferred. Existing automated collision budgets remain in the normal gate.
 - Representative mid-range mobile rendering/performance validation remains
   outstanding.
 - Touch-first sailing is not implemented.
 - Fishing boats, trade vessels, numerical fishing output and an authoritative
   tribe economy are not implemented.
-- Broader production asset replacement remains deferred to `GR-3` replanning
-  after GR-2 acceptance.
+- Broad automatic runtime asset replacement remains deferred while the
+  authorized GR-3 prototype proves a practical review and testing loop.
 
 ## Document ownership
 

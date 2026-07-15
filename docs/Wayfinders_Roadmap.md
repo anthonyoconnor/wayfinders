@@ -1,17 +1,15 @@
 # Wayfinders current roadmap
 
-Status: planning. The accepted gameplay work through `GP-4.1` and graphics
-work through `GR-1.4` form the current baseline. `GR-2.1` through `GR-2.5` are
-implemented and their automated gates pass. The concept-inspired 23-entry asset
-library, `8`/`32`-pixel collision brushes and direct collision save have been
-exercised in the live workbench; the complete browser matrix and numeric
-performance acceptance remain open. `GR-2.6` and `GR-3.1` through `GR-3.4`
-remain proposed collision-acceptance and asset-production work; planning does
-not authorize their implementation.
+Status: active implementation plan. The accepted gameplay baseline runs through
+`GP-4.1`, and the accepted graphics/tooling baseline runs through `GR-2.5`.
+The user verified the saved home-island collision in gameplay, so the separate
+`GR-2.6` acceptance pass is skipped for now. `GR-3.1` through `GR-3.4` are an
+authorized ordered batch for a deliberately lightweight production-asset
+prototype.
 
-This document contains only upcoming or explicitly deferred work. Completed
-milestone scope and acceptance evidence live in
-`Wayfinders_Roadmap_Archive.md`.
+This document records active, upcoming and explicitly deferred work. Concise
+completion state is retained here for dependency clarity; detailed acceptance
+evidence lives in `Wayfinders_Roadmap_Archive.md`.
 
 ## Standing planning rules
 
@@ -53,30 +51,29 @@ remote settlements. Code contracts must not use the terms interchangeably.
 
 ## Current planning point
 
-The completed `GR-1` pilot proved the authored-asset contract, package loading,
-one authored home island, the player boat, one fishing-shoal cue and directional
-boat/wake presentation. Its acceptance evidence is in the archive.
+The completed `GR-1` and `GR-2.1` through `GR-2.5` work proved authored runtime
+packages, the shared asset library, hybrid collision authoring and direct
+repository save. Their acceptance evidence is in the archive.
 
-No next gameplay milestone is currently defined. The immediate graphics
-planning sequence is to close the remaining `GR-2.1` through `GR-2.5` browser
-matrix, then authorize `GR-2.6` to validate and finish the saved pilot collision
-mask in gameplay. The `GR-3` production workflow follows only after that gate;
-it extends the current library rather than replacing it.
+No next gameplay milestone is currently defined. The immediate graphics work
+is the authorized `GR-3.1` through `GR-3.4` prototype: prepare new asset
+variations, browse them without sailing to them, review collision candidates and
+move selected visuals toward in-game testing without building a general-purpose
+art, animation or generation suite.
 
-## Upcoming graphics track
+## Graphics track
 
 ### GR-2 — Asset viewing, creation and collision authoring
 
-Status: `GR-2.1` through `GR-2.5` are implemented and await interactive browser
-acceptance; `GR-2.6` is planned and not authorized. The accepted `GR-1` pilot
-supplies the manual asset-preparation evidence for this work.
+Status: `GR-2.1` through `GR-2.5` are implemented and accepted. The user
+verified the saved home collision in gameplay, so `GR-2.6` is skipped for now.
 
 Goal: make authored assets cheap to inspect, validate and prepare without
 creating a second renderer or parallel gameplay authority.
 
 #### GR-2.1 — Runtime asset viewer
 
-Status: implemented; interactive viewer acceptance pending.
+Status: implemented and accepted.
 
 Build a browser using the same Phaser renderer, factories, camera and texture
 path as the game. Preview IDs, headings, animations, origins, footprints, fog,
@@ -97,7 +94,7 @@ all three pilot package kinds at normal and fog/overlay contrast.
 
 #### GR-2.2 — Candidate intake and creation workbench
 
-Status: implemented; interactive workbench acceptance pending.
+Status: implemented and accepted.
 
 Create or import candidate records from templates; edit semantic metadata;
 validate frames, dimensions and variants; export tracked source/runtime files
@@ -120,7 +117,7 @@ authorized content rollout.
 
 #### GR-2.3 — Conditional build automation
 
-Status: implemented; automated acceptance passes, pending ordered-batch closure.
+Status: implemented and accepted.
 
 Automate the repeated catalog-key wiring, PNG dimension/frame inspection,
 thumbnail creation and whole-catalog validation exposed by the four GR-1
@@ -134,8 +131,7 @@ catalog and thumbnail work.
 
 #### GR-2.4 — Hybrid navigation and collision-mask contract
 
-Status: implemented; automated acceptance passes; interactive collision and
-performance acceptance pending.
+Status: implemented and accepted.
 
 Keep `32 x 32`-pixel navigation cells as the terrain, knowledge and route node
 grid, while allowing an optional `8 x 8`-pixel solid override inside shoreline
@@ -175,9 +171,7 @@ that browser measurement remains pending.
 
 #### GR-2.5 — Asset-viewer collision-mask editor
 
-Status: implemented; automated acceptance passes; live library navigation,
-whole-cell editing and direct save have been exercised; the full browser and
-performance acceptance matrix remains pending. Depends on `GR-2.4`.
+Status: implemented and accepted. Depends on `GR-2.4`.
 
 The asset viewer now combines the three runtime packages and 20 island source
 references in a searchable concept-inspired library, while still enumerating
@@ -225,7 +219,7 @@ performance result is claimed yet.
 
 #### GR-2.6 — Pilot collision accuracy and runtime acceptance
 
-Status: planned; depends on `GR-2.5`; not authorized.
+Status: skipped for now; collision is verified as working as expected.
 
 Start from the home shoreline mask already saved through the asset library.
 Refine it with `32`-pixel whole-cell edits and `8`-pixel shoreline detail rather
@@ -257,20 +251,19 @@ route or interaction behavior regresses.
 
 ### GR-3 — Asset production pipeline
 
-Status: planned; not authorized. Begin only after `GR-2.6` is accepted. These
-minors build the production workflow; they do not themselves authorize broad
-runtime catalog expansion.
+Status: `GR-3.1` through `GR-3.4` are authorized as an ordered prototype batch.
+They improve the source-to-preview-to-game-testing loop without authorizing a
+general renderer rewrite or broad automatic runtime catalog expansion.
 
 #### GR-3.1 — Production asset specification and recipe manifest
 
-Extend the existing `AssetLibraryEntry` model into versioned package-family
-recipes for islands, vessels, shoals, sites, activity cues and UI/presentation
-art. Each record declares semantic ID, revision, provenance, source hashes,
-target dimensions, origins, ordered image layers, default visibility, opacity,
-blend metadata, frames/slices, animation descriptors, thumbnails,
-collision/interaction layers, preparation steps and output bindings. Distinguish
-reference, source, candidate, accepted and runtime-derived states; the 20 island
-examples remain `reference-only` until an explicit promotion decision.
+Add a small versioned recipe manifest beside the closed pilot runtime contracts.
+Recipes cover islands, vessels, shoals and other world finds with stable source
+identity, lifecycle, provenance, ordered layers, minimal animation metadata,
+preparation settings and an explicit collision-draft policy. Generated hashes,
+dimensions, thumbnails and output paths belong in the preparation report rather
+than duplicated hand-authored metadata. Reference images remain reference-only
+until an explicit decision.
 
 Acceptance gate: schemas reject incomplete or incompatible recipes; source and
 runtime files cannot be confused; all 23 current library records migrate without
@@ -280,19 +273,16 @@ semantics.
 
 #### GR-3.2 — Generation and deterministic preparation runners
 
-Build provider-neutral source intake/generation jobs followed by deterministic
-local preparation steps for matte/transparency cleanup, trim/pad, scale,
-pixel-grid alignment, slicing, ordered layer outputs, directional frames,
-animation sheets and bounded thumbnails. Use representative inhabited and
-uninhabited island examples to prove the path without granting them runtime
-authority. A job may suggest collision from offline alpha/segmentation, but
-suggested masks remain unaccepted candidates until reviewed in the existing
-collision editor.
+Build a dependency-free deterministic preparation command for border-connected
+matte cleanup, trim/pad, contain scaling, ordered layer outputs, existing-sheet
+validation and bounded thumbnails. It creates review candidates, not runtime
+packages. Islands start with blank editable `32`/`8`-pixel collision drafts (or
+an explicit semantic mask); alpha is never assumed to mean solid shoreline.
+Shoals default to an explicit empty/passable draft.
 
-Record source hashes and generation parameters even when source generation is
-nondeterministic; every derived transform after an accepted source must be
-reproducible. Support incremental rebuilds, content-addressed caching, resumable
-batches and isolated failure reports without adding runtime generation.
+Record recipe/source hashes and deterministic outputs. A per-job key, atomic
+output and safe skip are sufficient prototype caching/resume behavior; worker
+pools, provider integrations and a general generation service are out of scope.
 
 Acceptance gate: clean preparation from an accepted source reproduces identical
 layer, animation, thumbnail and report outputs; unchanged work is skipped
@@ -302,14 +292,11 @@ collision validators.
 
 #### GR-3.3 — Review, comparison and promotion workbench
 
-Extend the current left browser and unified selected-asset inspector with layer
-visibility/opacity controls, animation and heading playback, variant contact
-sheets, side-by-side visual and mask diffs, in-game overlay previews, reviewer
-notes and explicit candidate/accepted/rejected states. Do not create a parallel
-workbench. Collision keeps its constrained direct-save route; full visual
-promotion becomes an explicit review-gated server intake action with portable
-bundles retained for transfer and recovery. The browser never gains arbitrary
-repository writes.
+Extend the existing browser and selected-asset inspector so all recipe assets
+can be previewed without playing the game. Add only the controls used by current
+recipes: layer visibility/opacity, existing animation-sheet playback, collision
+draft overlay, candidate/accepted/rejected state and explicit local review
+actions. Do not create a parallel workbench or general raster/animation editor.
 
 Acceptance gate: reviewers can identify the exact source, recipe, layer stack,
 animation, visual diff and mask diff for a candidate; accepting a visual
@@ -319,10 +306,10 @@ the same library record and loads through the same viewer and game factories.
 
 #### GR-3.4 — Batch production and readiness gate
 
-Scale the `GR-2.3` automation to ordered multi-family batches: dependency-aware
-jobs, bounded parallel preparation, catalog/report regeneration, stale-output
-detection, package thumbnails, review queues and an auditable promotion summary.
-Atlas packing remains evidence-driven rather than automatic.
+Scale the preparation command to a simple multi-family batch with isolated job
+failures, generated catalog/report data, stale-output detection, thumbnails, a
+review queue and an auditable promotion summary. Sequential or modest bounded
+work is sufficient; dependency schedulers and atlas packing are not required.
 
 Prove the workflow on an explicitly authorized representative batch before any
 broad content rollout. Use the 20-example island collection as the minimum
@@ -347,8 +334,8 @@ flowchart LR
     GR22 --> GR23["GR-2.3 deterministic validation and catalog automation"]
     GR23 --> GR24["GR-2.4 hybrid collision contract"]
     GR24 --> GR25["GR-2.5 collision-mask editor"]
-    GR25 --> GR26["GR-2.6 collision accuracy and runtime acceptance"]
-    GR26 --> GR31["GR-3.1 production recipe manifest"]
+    GR25 --> GR31["GR-3.1 production recipe manifest"]
+    GR25 -. "GR-2.6 skipped for now" .-> GR26["Optional collision acceptance expansion"]
     GR31 --> GR32["GR-3.2 generation and preparation runners"]
     GR32 --> GR33["GR-3.3 review and promotion workbench"]
     GR33 --> GR34["GR-3.4 batch readiness gate"]
@@ -360,7 +347,7 @@ serialized gate; isolated tooling must not fork rendering or gameplay rules.
 
 ## Explicitly deferred
 
-- Broad production-asset expansion until `GR-3.4` proves the pipeline and a
+- Broad automatic runtime-asset expansion until `GR-3.4` proves the pipeline and a
   separate content batch is explicitly authorized.
 - Authoritative tribe economy/output, selectable voyage loadouts, generic
   wreck salvage/recovery and automatic trade gameplay.
@@ -384,7 +371,7 @@ serialized gate; isolated tooling must not fork rendering or gameplay rules.
 
 ## Active authorization boundary
 
-This roadmap update authorizes planning only. Implementation is paused after
-the completed `GR-2.5`; the remaining in-scope action is the formal interactive
-viewer/workbench acceptance pass. Starting `GR-2.6`, any `GR-3` minor, a new
-gameplay minor or semantic asset-ID expansion requires explicit authorization.
+The user authorized `GR-3.1` through `GR-3.4` as one ordered implementation
+batch. `GR-2.6` is skipped for now. A new gameplay minor, automatic broad
+runtime rollout, new world-placement authority or scope beyond this prototype
+still requires explicit authorization.

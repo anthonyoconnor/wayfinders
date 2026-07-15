@@ -908,8 +908,60 @@ the boat is hidden for wreck presentation. Teleport and dock/reset poses clear
 speed, so the wake stops immediately. The clean typecheck, 264-test and
 production-build gate passes.
 
+### GR-2 — Asset viewing, collision and local authoring
+
+The ordered `GR-2.1` through `GR-2.5` batch is implemented and accepted. The
+user verified the final saved home-island mask in gameplay; the separately
+planned `GR-2.6` expansion was therefore skipped for now.
+
+#### GR-2.1 — Runtime asset viewer
+
+Status: implemented and accepted.
+
+Implementation evidence: a separate `?mode=assets` route uses Phaser and the
+same package metadata/presentation path as the game. Its concept-inspired left
+browser and unified inspector cover the three runtime packages plus 20 lazy
+source references without requiring a voyage.
+
+#### GR-2.2 — Candidate intake and creation workbench
+
+Status: implemented and accepted.
+
+Implementation evidence: versioned visual and collision candidate contracts,
+portable export/import and authoritative repository intake reject unknown IDs,
+bad images, incompatible metadata, stale revisions and unsafe replacement. The
+closed pilot runtime IDs retain their existing gameplay authority.
+
+#### GR-2.3 — Conditional build automation
+
+Status: implemented and accepted.
+
+Implementation evidence: deterministic catalog generation, image inspection,
+bounded thumbnails, reports and stale-output checks run before compilation in
+the normal asset gate. No atlas or general asset service was introduced.
+
+#### GR-2.4 — Hybrid navigation and collision-mask contract
+
+Status: implemented and accepted.
+
+Implementation evidence: sparse `8`-pixel overrides refine `32`-pixel
+navigation cells; exact swept-hull collision and clearance-derived navigation
+edges share semantic package metadata. Passable shoals use an explicit empty
+shape, while all current runtime collision categories have inspectable shared
+profiles.
+
+#### GR-2.5 — Asset-viewer collision-mask editor
+
+Status: implemented and accepted.
+
+Implementation evidence: the selected-asset inspector supports `8`-pixel detail
+and `32`-pixel whole-cell brushes, paint/erase/fill, selection, undo/redo,
+zoom/pan and per-asset drafts. **Save to library** performs a revision- and
+fingerprint-protected loopback transaction that updates package collision
+metadata without replacing art. The accepted home-island mask was subsequently
+loaded and verified in gameplay.
+
 ## Archive boundary
 
-This archive ends with the accepted `GR-1.4` milestone. Proposed and deferred
-work is maintained only in `Wayfinders_Roadmap.md` so future planning can be
-read without scanning completed milestone history.
+This archive ends with the accepted `GR-2.5` milestone. Authorized, proposed
+and deferred work is maintained in `Wayfinders_Roadmap.md`.
