@@ -1,10 +1,10 @@
 # Wayfinders authored-asset direction
 
 Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted.
-`GR-2.1` through `GR-2.4` are implemented; their interactive browser acceptance
-remains outstanding. Collision-mask editing/refinement in `GR-2.5` and
-`GR-2.6`, plus the production workflow in `GR-3.1` through `GR-3.4`, remain
-planned but not authorized.
+`GR-2.1` through `GR-2.5` are implemented; their interactive browser acceptance
+remains outstanding. Pilot collision reauthoring in `GR-2.6`, plus the
+production workflow in `GR-3.1` through `GR-3.4`, remains planned but not
+authorized.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
@@ -158,14 +158,14 @@ repository directly, and the command never replaces an accepted semantic ID
 without the explicit `--replace` flag. Each runtime PNG must be non-interlaced
 8-bit RGB or RGBA and no larger than `4096 x 4096`.
 
-## Hybrid collision foundation and planned authoring
+## Hybrid collision foundation and authoring
 
 Implemented `GR-2.4` retains the `32`-pixel navigation grid and adds optional
 `8`-pixel collision subcells only to mixed shoreline or object cells. One
 navigation cell therefore contains a `4 x 4` collision patch when refinement is
 needed. Fully open and fully blocked cells keep the existing compact coarse
-form. `GR-2.5` and `GR-2.6` add editing and accepted home-mask refinement on top
-of that contract.
+form. Implemented `GR-2.5` adds package-profile editing on top of that contract;
+accepted home-mask refinement remains planned in `GR-2.6`.
 
 The fine mask is reviewed metadata, never a texture sampled by the game. Offline
 preparation may suggest a mask from alpha or segmentation, but suggestions are
@@ -173,23 +173,40 @@ candidate data until explicitly accepted. Passable objects use an explicit
 empty solid mask. Navigation edges are clearance-tested against the fine mask so
 coarse routes cannot promise a passage rejected by continuous ship collision.
 
-The asset viewer gains a focused collision editor for every registered asset or
-object profile, including developer-rendered object categories that do not yet
-have production packages:
+The asset viewer now lists all nine registered runtime categories: home island,
+generated island, player ship, wreck, fishing shoal, survey site, survey
+service, island approach and home dock. Only the three finite package-backed
+profiles are authorable in `GR-2.5`: the home hybrid grid, centred player box
+and explicit-empty fishing shoal. Generated-island policy and the five
+developer/dynamic profiles remain inspectable and read-only until `GR-2.6` or a
+later runtime-authority milestone gives their geometry an authoritative
+consumer.
 
-1. Overlay the `32`-pixel navigation cells, `8`-pixel collision subcells, art,
-   origins, bounds and anchors.
-2. Paint or erase solids, mark an explicit empty mask, inspect effective ship
-   clearance and undo/redo edits.
-3. Validate dimensions, anchors, harbour/service connectivity and derived
-   navigation edges continuously.
-4. Export a replacement candidate bundle and use the existing intake command
-   to materialize reviewed metadata.
-5. Reopen the accepted package in the same viewer and fixed game views for
-   collision acceptance.
+The implemented workflow is:
 
-This is not a general raster editor. It edits semantic masks and anchors while
-the source and runtime PNGs remain separate artifacts.
+1. Overlay `32`-pixel navigation cells, optional `8`-pixel collision subcells,
+   art or developer previews, origins, bounds, anchors, raw solids and the
+   effective ship-clearance probe.
+2. Paint, erase, flood-fill or rectangularly select home subcells; edit the
+   constrained centred player box; explicitly confirm the passable shoal; and
+   use deterministic undo/redo and zoom/pan.
+3. Run the shared exact validator before export and intake. Required anchors,
+   dock-to-edge connectivity and derived cardinal navigation edges use the
+   runtime swept-hull geometry rather than a second approximation.
+4. Export or import a collision-only candidate containing no PNG data. Its base
+   runtime revision and deterministic collision fingerprint reject stale edits;
+   replace and reset-to-coarse are explicit operations.
+5. Run `npm.cmd run assets:intake -- <collision-candidate.json> --replace` to
+   update collision metadata and increment the package revision once without
+   replacing runtime images or catalog image bindings.
+6. For a full visual candidate, omit `collisionIntent` or use `preserve` to keep
+   accepted collision metadata. Only explicit `replace` or `reset-to-coarse`
+   changes it.
+
+This is not a general raster editor. It edits semantic collision metadata while
+source and runtime PNGs remain separate, unchanged artifacts. Interactive
+WebGL usability and performance acceptance for the editor remain outstanding;
+the implemented automated gates do not claim that browser result.
 
 ## Planned production workflow
 

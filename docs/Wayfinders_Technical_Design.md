@@ -634,6 +634,21 @@ explicit empty profile. One exhaustive registry also assigns coarse or empty
 profiles to developer-rendered islands, wrecks, sites, service anchors and the
 home dock. Fine masks are semantic metadata; runtime PNG alpha is never sampled.
 
+Implemented GR-2.5 keeps collision editing in a renderer-agnostic model with
+normalized drafts and deterministic transaction history, while an exhaustive
+authoring-target layer describes all nine registry categories. Only the finite
+package-backed home hybrid grid, player box and empty fishing-shoal profile are
+editable; the generated-island policy and five dynamic/developer categories are
+inspectable but read-only until they gain runtime collision authority. The
+viewer batches art, grids, solids, anchors, bounds and clearance probes into a
+Phaser overlay, but export validation calls the shared swept-hull geometry for
+exact anchor and derived-edge clearance. Collision-only candidates carry a base
+revision and deterministic collision fingerprint for stale-edit protection;
+visual candidates merge with explicit preserve, replace or reset-to-coarse
+intent, and collision intake changes metadata and one runtime revision without
+rewriting PNGs or catalog image bindings. Automated coverage passes, while the
+interactive WebGL usability and performance acceptance remains outstanding.
+
 The generated catalog, bounded nearest-neighbour thumbnails and asset report
 are deterministic build artifacts. The normal verification gate rejects stale
 artifacts before TypeScript compilation. The report records exact dimensions,

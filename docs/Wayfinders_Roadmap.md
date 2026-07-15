@@ -1,12 +1,12 @@
 # Wayfinders current roadmap
 
 Status: planning. The accepted gameplay work through `GP-4.1` and graphics
-work through `GR-1.4` form the current baseline. `GR-2.1` through `GR-2.3` are
-implemented as one dependency-ordered tooling batch and await their interactive
-browser acceptance pass. `GR-2.4` is implemented with automated acceptance and
-awaits its interactive collision/performance pass. `GR-2.5`, `GR-2.6` and
-`GR-3.1` through `GR-3.4` remain proposed collision-authoring and
-asset-production work; planning does not authorize their implementation.
+work through `GR-1.4` form the current baseline. `GR-2.1` through `GR-2.5` are
+implemented and their automated gates pass. Interactive browser acceptance
+remains open for the viewer/workbench, live collision performance and the
+collision editor. `GR-2.6` and `GR-3.1` through `GR-3.4` remain proposed
+collision-acceptance and asset-production work; planning does not authorize
+their implementation.
 
 This document contains only upcoming or explicitly deferred work. Completed
 milestone scope and acceptance evidence live in
@@ -55,19 +55,17 @@ one authored home island, the player boat, one fishing-shoal cue and directional
 boat/wake presentation. Its acceptance evidence is in the archive.
 
 No next gameplay milestone is currently defined. The immediate graphics
-planning sequence is to close the `GR-2.1` through `GR-2.4` browser acceptance
-pass, add collision-mask editing without replacing the `32`-pixel navigation
-grid, then prove a production-asset workflow before expanding the runtime
-catalog.
+planning sequence is to close the `GR-2.1` through `GR-2.5` browser acceptance
+pass, then authorize and complete pilot collision reauthoring before proving a
+production-asset workflow or expanding the runtime catalog.
 
 ## Upcoming graphics track
 
 ### GR-2 — Asset viewing, creation and collision authoring
 
-Status: `GR-2.1` through `GR-2.4` are implemented and await interactive browser
-acceptance; `GR-2.5` and `GR-2.6` are planned and not authorized. The
-accepted `GR-1` pilot supplies the manual asset-preparation evidence for this
-work.
+Status: `GR-2.1` through `GR-2.5` are implemented and await interactive browser
+acceptance; `GR-2.6` is planned and not authorized. The accepted `GR-1` pilot
+supplies the manual asset-preparation evidence for this work.
 
 Goal: make authored assets cheap to inspect, validate and prepare without
 creating a second renderer or parallel gameplay authority.
@@ -171,28 +169,41 @@ that browser measurement remains pending.
 
 #### GR-2.5 — Asset-viewer collision-mask editor
 
-Status: planned; depends on `GR-2.4`; not authorized.
+Status: implemented; automated acceptance passes; interactive browser editing
+and performance acceptance pending. Depends on `GR-2.4`.
 
-Extend the existing asset viewer/workbench with one collision-authoring mode for
-every registered asset or object profile, including islands, player/wreck ships,
-shoals, sites and future package kinds. Show the `32`-pixel navigation grid, the
-optional `8`-pixel subgrid, rendered art or developer visual, origins, anchors,
-object bounds and the effective ship-clearance preview together. Provide paint,
-erase, fill, selection, undo/redo, zoom/pan and explicit empty/passable-mask
-controls.
+The asset viewer now enumerates all nine registered runtime collision
+categories. The finite package-backed profiles are editable with truthful,
+profile-specific controls: sparse `8`-pixel hybrid-grid painting for the home
+island, a centred square box for the player ship and an explicit empty/passable
+profile for the fishing shoal. Generated-island policy plus the wreck, survey
+site, survey service, island approach and home-dock developer profiles remain
+inspectable and explicitly read-only. Giving those dynamic categories blocking
+geometry requires runtime authority and remains deferred to `GR-2.6` or a later
+named runtime-collision milestone.
 
-The editor modifies metadata, not the source PNG. Browser security remains
-unchanged: edits import from and export to a portable candidate bundle, and the
-repository intake command performs validated replacement. The editor must
-preserve hand-authored masks when visual candidates are regenerated unless the
-operator explicitly chooses to replace the mask.
+The workbench shows the `32`-pixel navigation grid, optional `8`-pixel subgrid,
+rendered art or developer preview, origins, anchors, bounds, raw solids and the
+effective ship-clearance probe together. Hybrid editing provides paint, erase,
+flood fill, rectangular selection, undo/redo and zoom/pan. Box and empty
+profiles use their constrained semantic controls rather than pretending every
+object is a paintable raster.
 
-Acceptance gate: every current runtime object category can display and edit its
-effective profile; a catalog package or standalone object profile can be opened,
-modified, exported, re-imported and rendered identically; invalid dimensions,
-disconnected required anchors, out-of-bounds cells and navigation-edge
-contradictions are rejected before export; and keyboard/mouse editing has
-deterministic undo/redo behavior.
+Collision edits never modify or rebundle the source PNG. A discriminated,
+versioned collision-only candidate records the target, base runtime revision,
+deterministic base-collision fingerprint and an explicit replace or
+reset-to-coarse intent. Browser import/export and repository intake share exact
+metadata validation; intake increments the package revision once while
+preserving runtime art and catalog image bindings. Full visual candidates
+default to preserving accepted collision metadata and require an explicit
+`replace` or `reset-to-coarse` intent to change it.
+
+Automated acceptance covers exhaustive registry descriptors, deterministic
+editor operations and undo/redo, stable sparse-mask serialization, stale
+candidate rejection and exact required-anchor and derived navigation-edge
+clearance validation. Interactive acceptance must still verify pointer hit
+testing, overlays, import/export and responsiveness in a WebGL browser; no
+browser performance result is claimed yet.
 
 #### GR-2.6 — Pilot collision reauthoring and runtime acceptance
 
