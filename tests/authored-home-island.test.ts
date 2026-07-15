@@ -63,6 +63,31 @@ describe("GR-1.3 authored home-island placement", () => {
     }
   });
 
+  it("blocks the illustrated shoreline while preserving the east harbour lane", () => {
+    const grid = new WorldGrid(31, 31, 16);
+    grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const placement = stampAuthoredHomeIsland(grid, { x: 15, y: 15 });
+
+    for (const point of [
+      { x: 7, y: 1 },
+      { x: 4, y: 2 },
+      { x: 10, y: 2 },
+      { x: 3, y: 3 },
+      { x: 11, y: 3 },
+      { x: 4, y: 12 },
+      { x: 10, y: 12 },
+    ]) {
+      expect(grid.isMovementBlocked(
+        placement.topLeft.x + point.x,
+        placement.topLeft.y + point.y,
+      )).toBe(true);
+    }
+
+    for (let x = 10; x <= 12; x++) {
+      expect(grid.isMovementBlocked(placement.topLeft.x + x, placement.topLeft.y + 7)).toBe(false);
+    }
+  });
+
   it("rejects a procedural anchor that cannot contain the authored footprint", () => {
     const grid = new WorldGrid(15, 15, 8);
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);

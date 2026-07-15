@@ -131,6 +131,7 @@ function comfortableReturn(world: WorldGrid, index: number): ReturnPathResult {
 
 const debugVisibility = {
   navigationGrid: false,
+  collisionBoxes: false,
   currentSight: false,
   forwardRange: true,
   returnViability: true,

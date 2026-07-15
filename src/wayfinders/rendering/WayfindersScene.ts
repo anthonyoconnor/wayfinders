@@ -108,6 +108,7 @@ declare global {
 
 const PALETTE = {
   grid: 0xa5d5d2,
+  collision: 0xff5a4f,
   sight: 0x78fff0,
 } as const;
 
@@ -361,6 +362,16 @@ export class WayfindersScene extends Phaser.Scene {
       for (let y = 0; y <= world.height; y++) this.gridGraphics.lineBetween(0, y * size, world.width * size, y * size);
     }
 
+    if (this.simulation.debug.collisionBoxes) {
+      this.debugGraphics.fillStyle(PALETTE.collision, 0.2);
+      this.debugGraphics.lineStyle(1.5, PALETTE.collision, 0.9);
+      world.forEachTile((x, y) => {
+        if (!world.isMovementBlocked(x, y)) return;
+        this.debugGraphics.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+        this.debugGraphics.strokeRect(x * size + 0.5, y * size + 0.5, size - 1, size - 1);
+      });
+    }
+
     if (this.simulation.debug.currentSight) {
       this.debugGraphics.fillStyle(PALETTE.sight, 0.12);
       this.debugGraphics.lineStyle(1, PALETTE.sight, 0.38);
@@ -548,7 +559,9 @@ export class WayfindersScene extends Phaser.Scene {
     const debugChanged = force
       || this.lastDebugRevision !== this.simulation.revision
       || this.lastDebugOverlayRevision !== this.simulation.overlaysRevision;
-    const debugVisible = this.simulation.debug.navigationGrid || this.simulation.debug.currentSight;
+    const debugVisible = this.simulation.debug.navigationGrid
+      || this.simulation.debug.collisionBoxes
+      || this.simulation.debug.currentSight;
     if (debugChanged && (debugVisible || this.lastDebugVisible)) {
       this.renderDebug();
     }
@@ -690,6 +703,7 @@ export class WayfindersScene extends Phaser.Scene {
           <summary>Overlay visibility</summary>
           <div class="tool-disclosure__body">
             ${this.toggleMarkup("navigationGrid", "Navigation grid")}
+            ${this.toggleMarkup("collisionBoxes", "Collision boxes")}
             ${this.toggleMarkup("currentSight", "Current line of sight")}
             ${this.toggleMarkup("forwardRange", "Forward reach limit")}
             ${this.toggleMarkup("returnViability", "Return route viability")}

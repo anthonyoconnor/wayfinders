@@ -95,6 +95,7 @@ import type {
 
 export interface DebugVisibilityState {
   navigationGrid: boolean;
+  collisionBoxes: boolean;
   currentSight: boolean;
   forwardRange: boolean;
   returnViability: boolean;
@@ -208,6 +209,7 @@ export class GameSimulation {
   readonly events = new GameEvents();
   readonly debug: DebugVisibilityState = {
     navigationGrid: false,
+    collisionBoxes: false,
     currentSight: false,
     forwardRange: true,
     returnViability: true,
