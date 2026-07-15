@@ -15,8 +15,8 @@ import {
   FULL_COLLISION_MASK,
   collisionMaskToSolidRows,
   collisionSubcellBit,
+  isCollisionSubcellMask,
   isCollisionSubcellSolid,
-  isMixedCollisionMask,
   solidRowsToCollisionMask,
   type CollisionSubcellMask,
 } from "../world/CollisionMask";
@@ -46,6 +46,9 @@ export interface CollisionEditorSubcellPoint {
   readonly x: number;
   readonly y: number;
 }
+
+/** One 8 px detail subcell or one aligned 32 px navigation cell. */
+export type CollisionEditorBrushSize = 1 | typeof COLLISION_SUBCELLS_PER_TILE;
 
 /** Rectangle in the dense, asset-local 8-pixel subcell grid. */
 export interface CollisionEditorSelection extends CollisionEditorSubcellPoint {
@@ -126,6 +129,42 @@ interface EditorState {
 function positiveInteger(value: number, label: string): number {
   if (!Number.isInteger(value) || value <= 0) throw new RangeError(`${label} must be a positive integer`);
   return value;
+}
+
+/** Expands a pointer hit into the aligned subcells covered by the active brush. */
+export function collisionBrushFootprint(
+  point: Readonly<CollisionEditorSubcellPoint>,
+  brushSize: CollisionEditorBrushSize,
+  width: number,
+  height: number,
+): readonly Readonly<CollisionEditorSubcellPoint>[] {
+  const boundedWidth = positiveInteger(width, "brush grid width");
+  const boundedHeight = positiveInteger(height, "brush grid height");
+  if (
+    !Number.isInteger(point.x)
+    || !Number.isInteger(point.y)
+    || point.x < 0
+    || point.y < 0
+    || point.x >= boundedWidth
+    || point.y >= boundedHeight
+  ) throw new RangeError(`Brush point (${point.x}, ${point.y}) is outside the collision grid`);
+  if (brushSize !== 1 && brushSize !== COLLISION_SUBCELLS_PER_TILE) {
+    throw new RangeError("Collision brush size must be one 8 px subcell or one 32 px navigation cell");
+  }
+
+  const startX = brushSize === 1
+    ? point.x
+    : Math.floor(point.x / COLLISION_SUBCELLS_PER_TILE) * COLLISION_SUBCELLS_PER_TILE;
+  const startY = brushSize === 1
+    ? point.y
+    : Math.floor(point.y / COLLISION_SUBCELLS_PER_TILE) * COLLISION_SUBCELLS_PER_TILE;
+  const points: CollisionEditorSubcellPoint[] = [];
+  for (let y = startY; y < Math.min(startY + brushSize, boundedHeight); y++) {
+    for (let x = startX; x < Math.min(startX + brushSize, boundedWidth); x++) {
+      points.push(Object.freeze({ x, y }));
+    }
+  }
+  return Object.freeze(points);
 }
 
 function finite(value: number, label: string): number {
@@ -245,8 +284,8 @@ export function createCollisionEditorBaseMasks(
     if (occupied.has(index)) throw new RangeError(`hybrid profile contains duplicate cell ${cell.x},${cell.y}`);
     occupied.add(index);
     const mask = solidRowsToCollisionMask(cell.solidRows);
-    if (!isMixedCollisionMask(mask)) {
-      throw new RangeError(`hybrid cell (${cell.x}, ${cell.y}) must be genuinely mixed`);
+    if (!isCollisionSubcellMask(mask)) {
+      throw new RangeError(`hybrid cell (${cell.x}, ${cell.y}) must be a valid 16-bit collision patch`);
     }
     masks[index] = mask;
   }
@@ -264,13 +303,6 @@ function serializeHybridProfile(
       const mask = masks[index];
       const coarseMask = grid.coarseMasks[index];
       if (mask === coarseMask) continue;
-      if (!isMixedCollisionMask(mask)) {
-        const state = mask === FULL_COLLISION_MASK ? "solid" : "open";
-        const coarseState = coarseMask === FULL_COLLISION_MASK ? "solid" : "open";
-        throw new RangeError(
-          `Collision cell (${x}, ${y}) is uniformly ${state}, opposite its ${coarseState} coarse terrain`,
-        );
-      }
       mixedCells.push(Object.freeze({ x, y, solidRows: collisionRows(mask) }));
     }
   }

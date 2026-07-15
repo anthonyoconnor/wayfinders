@@ -170,7 +170,7 @@ describe("GR-1.1 authored asset contracts", () => {
     expect(() => validateAuthoredAssetMetadata(misaligned)).toThrow(/32-pixel navigation cells and 8-pixel/);
   });
 
-  it("rejects malformed or redundant fine collision rows", () => {
+  it("rejects malformed rows and accepts explicit uniform cell overrides", () => {
     const wrongRowCount = homeFixture();
     const wrongCountCell = (wrongRowCount.collision as { mixedCells: { solidRows: string[] }[] }).mixedCells[0];
     wrongCountCell.solidRows.pop();
@@ -182,10 +182,12 @@ describe("GR-1.1 authored asset contracts", () => {
     expect(() => validateAuthoredAssetMetadata(invalidValue)).toThrow(/zero-or-one/);
 
     for (const value of ["0000", "1111"]) {
-      const redundant = homeFixture();
-      const redundantCell = (redundant.collision as { mixedCells: { solidRows: string[] }[] }).mixedCells[0];
-      redundantCell.solidRows = Array.from({ length: 4 }, () => value);
-      expect(() => validateAuthoredAssetMetadata(redundant)).toThrow(/must be mixed/);
+      const uniform = homeFixture();
+      const uniformCell = (uniform.collision as { mixedCells: { solidRows: string[] }[] }).mixedCells[0];
+      uniformCell.solidRows = Array.from({ length: 4 }, () => value);
+      expect(validateAuthoredAssetMetadata(uniform).collision).toMatchObject({
+        mixedCells: [{ solidRows: [value, value, value, value] }],
+      });
     }
   });
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   CollisionEditorModel,
+  collisionBrushFootprint,
   createCollisionEditorBaseMasks,
   type CollisionEditorGrid,
   type CollisionEditorTarget,
@@ -37,6 +38,16 @@ function gridTarget(
 }
 
 describe("GR-2.5 collision editor model", () => {
+  it("expands 8 px and aligned 32 px brushes into deterministic subcell footprints", () => {
+    expect(collisionBrushFootprint({ x: 5, y: 6 }, 1, 8, 8)).toEqual([{ x: 5, y: 6 }]);
+    const coarse = collisionBrushFootprint({ x: 5, y: 6 }, 4, 8, 8);
+    expect(coarse).toHaveLength(16);
+    expect(coarse[0]).toEqual({ x: 4, y: 4 });
+    expect(coarse.at(-1)).toEqual({ x: 7, y: 7 });
+    expect(new Set(coarse.map(({ x, y }) => `${x},${y}`)).size).toBe(16);
+    expect(() => collisionBrushFootprint({ x: 8, y: 0 }, 1, 8, 8)).toThrow(/outside/);
+  });
+
   it("opens dense effective masks and serializes sparse hybrid cells in canonical y/x order", () => {
     const grid = editorGrid(2, 2);
     const profile = {
@@ -121,19 +132,23 @@ describe("GR-2.5 collision editor model", () => {
     expect(() => model.fillSelection({ x: 3, y: 3, width: 2, height: 1 })).toThrow(/exceeds/);
   });
 
-  it("omits masks matching coarse terrain and rejects uniform opposite overrides until reverted", () => {
+  it("omits masks matching coarse terrain and serializes uniform opposite overrides", () => {
     const grid = editorGrid(2, 1, [EMPTY_COLLISION_MASK, FULL_COLLISION_MASK]);
     const model = new CollisionEditorModel(gridTarget(grid));
 
     expect(model.serializeProfile()).toEqual({ kind: "hybrid-grid", subcellSize: 8, mixedCells: [] });
     expect(model.fillSelection({ x: 0, y: 0, width: 4, height: 4 })).toBe(true);
-    expect(model.snapshot()).toMatchObject({ exportable: false, serializationError: expect.stringMatching(/uniformly solid/) });
-    expect(() => model.serializeProfile()).toThrow(/opposite its open coarse terrain/);
+    expect(model.snapshot()).toMatchObject({ exportable: true });
+    expect(model.serializeProfile()).toMatchObject({
+      mixedCells: [{ x: 0, y: 0, solidRows: ["1111", "1111", "1111", "1111"] }],
+    });
     expect(model.revertCoarseCell(0, 0)).toBe(true);
     expect(model.dirty).toBe(false);
 
     expect(model.eraseSelection({ x: 4, y: 0, width: 4, height: 4 })).toBe(true);
-    expect(() => model.serializeProfile()).toThrow(/opposite its solid coarse terrain/);
+    expect(model.serializeProfile()).toMatchObject({
+      mixedCells: [{ x: 1, y: 0, solidRows: ["0000", "0000", "0000", "0000"] }],
+    });
     expect(model.revertCoarseCell(1, 0)).toBe(true);
     expect(model.serializeProfile()).toEqual({ kind: "hybrid-grid", subcellSize: 8, mixedCells: [] });
   });

@@ -35,7 +35,7 @@ describe("GR-2.4 sparse hybrid collision", () => {
     }
   });
 
-  it("stores only mixed cells, replaces them in place, and restores coarse fallback on clear", () => {
+  it("stores sparse mixed or uniform overrides and restores coarse fallback on clear", () => {
     const world = openWorld(6, 5, KnowledgeState.Supported);
     world.setTerrain(2, 2, TerrainType.Land);
     const firstMask = solidRowsToCollisionMask(DIAGONAL_ROWS);
@@ -60,17 +60,19 @@ describe("GR-2.4 sparse hybrid collision", () => {
     expect(world.collisionVersion).toBe(baselineCollisionVersion + 2);
     expect(world.supportedTopologyVersion).toBe(baselineTopologyVersion + 2);
 
-    expect(() => world.setFineCollisionMask(1, 1, EMPTY_COLLISION_MASK)).toThrow(/genuinely mixed/);
-    expect(() => world.setFineCollisionMask(1, 1, FULL_COLLISION_MASK)).toThrow(/genuinely mixed/);
-    expect(world.fineCollisionCellCount).toBe(1);
+    expect(world.setFineCollisionMask(1, 1, EMPTY_COLLISION_MASK)).toBe(true);
+    expect(world.setFineCollisionMask(3, 1, FULL_COLLISION_MASK)).toBe(true);
+    expect(world.getFineCollisionMask(1, 1)).toBe(EMPTY_COLLISION_MASK);
+    expect(world.getFineCollisionMask(3, 1)).toBe(FULL_COLLISION_MASK);
+    expect(world.fineCollisionCellCount).toBe(3);
 
     expect(world.clearFineCollisionMask(2, 2)).toBe(true);
     expect(world.clearFineCollisionMask(2, 2)).toBe(false);
-    expect(world.fineCollisionCellCount).toBe(0);
+    expect(world.fineCollisionCellCount).toBe(2);
     expect(world.getFineCollisionMask(2, 2)).toBeUndefined();
     expect(world.isMovementBlocked(2, 2)).toBe(true);
-    expect(world.collisionVersion).toBe(baselineCollisionVersion + 3);
-    expect(world.supportedTopologyVersion).toBe(baselineTopologyVersion + 3);
+    expect(world.collisionVersion).toBe(baselineCollisionVersion + 5);
+    expect(world.supportedTopologyVersion).toBe(baselineTopologyVersion + 5);
   });
 
   it("uses fine rows as a replacement for coarse collision in their exact world-space quadrant", () => {
@@ -94,9 +96,18 @@ describe("GR-2.4 sparse hybrid collision", () => {
     expect(query(0, 3)).toBeUndefined();
     expect(query(3, 3)).toBe(0);
 
+    world.setFineCollisionMask(2, 2, EMPTY_COLLISION_MASK);
+    expect(query(0, 0)).toBeUndefined();
+    expect(query(3, 3)).toBeUndefined();
+
     world.clearFineCollisionMask(2, 2);
     expect(query(3, 0)).toBe(0);
     expect(query(0, 3)).toBe(0);
+
+    world.setTerrain(2, 2, TerrainType.DeepOcean);
+    world.setFineCollisionMask(2, 2, FULL_COLLISION_MASK);
+    expect(query(0, 0)).toBe(0);
+    expect(query(3, 3)).toBe(0);
   });
 
   it("prevents high-speed tunnelling through one 8 px solid and bounds work to the swept coarse area", () => {

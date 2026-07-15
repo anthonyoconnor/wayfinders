@@ -296,10 +296,6 @@ function optionalHybridGridCollision(
       }
       return row;
     }) as unknown as AuthoredCollisionSolidRows;
-    const values = solidRows.join("");
-    if (!values.includes("0") || !values.includes("1")) {
-      throw new RangeError(`${label} must be mixed; fully open or solid cells use coarse terrain collision`);
-    }
     return { ...cellPoint, solidRows };
   });
 

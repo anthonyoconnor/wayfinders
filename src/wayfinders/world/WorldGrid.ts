@@ -7,7 +7,7 @@ import {
   terrainBlocksSight,
   type TileSnapshot,
 } from "./TileData";
-import { isMixedCollisionMask, type CollisionSubcellMask } from "./CollisionMask";
+import { isCollisionSubcellMask, type CollisionSubcellMask } from "./CollisionMask";
 import { WorldChunk } from "./WorldChunk";
 
 export class WorldGrid {
@@ -334,7 +334,7 @@ export class WorldGrid {
     return true;
   }
 
-  /** Returns the mixed 4x4 override for a cell, or undefined for coarse fallback. */
+  /** Returns the explicit 4x4 override for a cell, or undefined for coarse fallback. */
   getFineCollisionMask(x: number, y: number): CollisionSubcellMask | undefined {
     if (!this.inBounds(x, y)) return undefined;
     return this.fineCollisionMasks.get(y * this.width + x);
@@ -346,14 +346,14 @@ export class WorldGrid {
   }
 
   /**
-   * Installs one sparse mixed-cell override. Fully open/solid cells deliberately
-   * remain represented by the existing coarse movement bit.
+   * Installs one sparse collision override. Uniform overrides are retained when
+   * they intentionally differ from coarse terrain collision.
    */
   setFineCollisionMask(x: number, y: number, mask: CollisionSubcellMask | undefined): boolean {
     if (mask === undefined) return this.clearFineCollisionMask(x, y);
     const worldIndex = this.index(x, y);
-    if (!isMixedCollisionMask(mask)) {
-      throw new RangeError("Fine collision masks must be genuinely mixed 4x4 patches");
+    if (!isCollisionSubcellMask(mask)) {
+      throw new RangeError("Collision overrides must be valid 16-bit 4x4 patches");
     }
     if (this.fineCollisionMasks.get(worldIndex) === mask) return false;
     this.fineCollisionMasks.set(worldIndex, mask);

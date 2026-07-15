@@ -61,8 +61,9 @@ export function segmentBoundsEntryTime(
 
 /**
  * Sweeps the configured square ship against static world collision. The 32 px
- * grid is the broad phase; a present mixed mask replaces that cell with only
- * its set 8 px subcells for the narrow phase.
+ * grid is the broad phase; a present sparse override replaces that cell with
+ * its set 8 px subcells for the narrow phase. Overrides may be mixed, fully
+ * clear or fully solid.
  */
 export function firstShipCollisionTime(
   world: WorldGrid,

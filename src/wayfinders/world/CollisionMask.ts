@@ -7,12 +7,17 @@ export const FULL_COLLISION_MASK = (1 << COLLISION_SUBCELL_COUNT) - 1;
 
 /**
  * A row-major 16-bit mask. Bit zero is the north-west subcell, +x is east and
- * +y is south. Only genuinely mixed masks are stored by WorldGrid.
+ * +y is south. Sparse authored overrides may be mixed, fully clear or fully
+ * solid; cells without an override continue to use coarse terrain collision.
  */
 export type CollisionSubcellMask = number;
 
 export function isMixedCollisionMask(mask: number): boolean {
   return Number.isInteger(mask) && mask > EMPTY_COLLISION_MASK && mask < FULL_COLLISION_MASK;
+}
+
+export function isCollisionSubcellMask(mask: number): boolean {
+  return Number.isInteger(mask) && mask >= EMPTY_COLLISION_MASK && mask <= FULL_COLLISION_MASK;
 }
 
 export function collisionSubcellBit(x: number, y: number): number {

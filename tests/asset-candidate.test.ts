@@ -130,9 +130,9 @@ describe("GR-2.2 asset candidate validation", () => {
     collision.mixedCells = [{
       x: 1,
       y: 1,
-      solidRows: ["1111", "1111", "1111", "1111"],
+      solidRows: ["1111", "1112", "1111", "1111"],
     }];
-    expect(() => bundle(malformed)).toThrow(/must be mixed/);
+    expect(() => bundle(malformed)).toThrow(/zero-or-one/);
   });
 
   it("derives exact directional and wake sheet layouts", () => {
