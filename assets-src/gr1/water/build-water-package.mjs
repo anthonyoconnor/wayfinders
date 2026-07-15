@@ -331,6 +331,95 @@ function normalizeTileEdges(tile, template) {
   return normalized;
 }
 
+function edgeSignature(tile) {
+  const values = [];
+  for (let index = 0; index < TILE_SIZE; index++) {
+    values.push(...readPixel(tile, TILE_SIZE, 0, index));
+    values.push(...readPixel(tile, TILE_SIZE, TILE_SIZE - 1, index));
+    values.push(...readPixel(tile, TILE_SIZE, index, 0));
+    values.push(...readPixel(tile, TILE_SIZE, index, TILE_SIZE - 1));
+  }
+  return Buffer.from(values);
+}
+
+function validateBaseEdges(sheet, width) {
+  let checkedFrames = 0;
+  for (let profileIndex = 0; profileIndex < profiles.length; profileIndex++) {
+    const reference = extractTile(sheet, width, 0, profileIndex * VARIANT_COUNT * TILE_SIZE);
+    const referenceSignature = edgeSignature(reference);
+    for (let variant = 0; variant < VARIANT_COUNT; variant++) {
+      for (let frame = 0; frame < FRAME_COUNT; frame++) {
+        const tile = extractTile(
+          sheet,
+          width,
+          frame * TILE_SIZE,
+          (profileIndex * VARIANT_COUNT + variant) * TILE_SIZE,
+        );
+        if (!edgeSignature(tile).equals(referenceSignature)) {
+          throw new Error(`Incompatible edge pixels for ${profiles[profileIndex].id} variant ${variant} frame ${frame}`);
+        }
+        for (let index = 0; index < TILE_SIZE; index++) {
+          if (!Buffer.from(readPixel(tile, TILE_SIZE, 0, index)).equals(Buffer.from(readPixel(tile, TILE_SIZE, TILE_SIZE - 1, index)))) {
+            throw new Error(`Horizontal seam mismatch for ${profiles[profileIndex].id} variant ${variant} frame ${frame}`);
+          }
+          if (!Buffer.from(readPixel(tile, TILE_SIZE, index, 0)).equals(Buffer.from(readPixel(tile, TILE_SIZE, index, TILE_SIZE - 1)))) {
+            throw new Error(`Vertical seam mismatch for ${profiles[profileIndex].id} variant ${variant} frame ${frame}`);
+          }
+        }
+        checkedFrames++;
+      }
+    }
+  }
+  return checkedFrames;
+}
+
+function meanLumaDelta(left, right) {
+  let total = 0;
+  for (let index = 0; index < left.length; index += 4) {
+    const leftLuma = left[index] * 0.2126 + left[index + 1] * 0.7152 + left[index + 2] * 0.0722;
+    const rightLuma = right[index] * 0.2126 + right[index + 1] * 0.7152 + right[index + 2] * 0.0722;
+    total += Math.abs(leftLuma - rightLuma);
+  }
+  return total / (left.length / 4);
+}
+
+function validateBaseLoops(sheet, width) {
+  let maximumWrapDelta = 0;
+  let maximumStepDelta = 0;
+  for (let profileIndex = 0; profileIndex < profiles.length; profileIndex++) {
+    const frames = Array.from({ length: FRAME_COUNT }, (_, frame) => extractTile(
+      sheet,
+      width,
+      frame * TILE_SIZE,
+      profileIndex * VARIANT_COUNT * TILE_SIZE,
+    ));
+    for (let frame = 0; frame < FRAME_COUNT - 1; frame++) {
+      maximumStepDelta = Math.max(maximumStepDelta, meanLumaDelta(frames[frame], frames[frame + 1]));
+    }
+    maximumWrapDelta = Math.max(maximumWrapDelta, meanLumaDelta(frames[FRAME_COUNT - 1], frames[0]));
+  }
+  if (maximumWrapDelta > maximumStepDelta * 1.5 + 1) {
+    throw new Error(`Animation wrap delta ${maximumWrapDelta.toFixed(3)} exceeds normal step delta ${maximumStepDelta.toFixed(3)}`);
+  }
+  return {
+    maximumStepLumaDelta: Number(maximumStepDelta.toFixed(3)),
+    maximumWrapLumaDelta: Number(maximumWrapDelta.toFixed(3)),
+  };
+}
+
+function validateTransparentRgb(pixels, label) {
+  let transparentPixels = 0;
+  for (let index = 0; index < pixels.length; index += 4) {
+    if (pixels[index + 3] !== 0) continue;
+    transparentPixels++;
+    if (pixels[index] !== 0 || pixels[index + 1] !== 0 || pixels[index + 2] !== 0) {
+      throw new Error(`${label} contains nonzero RGB in a fully transparent pixel`);
+    }
+  }
+  if (transparentPixels === 0) throw new Error(`${label} is expected to contain transparent pixels`);
+  return transparentPixels;
+}
+
 function copyTile(tile, target, targetWidth, targetX, targetY) {
   for (let y = 0; y < TILE_SIZE; y++) {
     tile.copy(
@@ -353,6 +442,36 @@ function extractTile(sheet, sheetWidth, x, y) {
     );
   }
   return tile;
+}
+
+function extrudeSheet(source, sourceWidth, columns, rows, frameWidth, frameHeight, gutter = 2) {
+  const cellWidth = frameWidth + gutter * 2;
+  const cellHeight = frameHeight + gutter * 2;
+  const width = columns * cellWidth;
+  const height = rows * cellHeight;
+  const pixels = Buffer.alloc(width * height * 4);
+  for (let row = 0; row < rows; row++) {
+    for (let column = 0; column < columns; column++) {
+      const sourceLeft = column * frameWidth;
+      const sourceTop = row * frameHeight;
+      const targetLeft = column * cellWidth + gutter;
+      const targetTop = row * cellHeight + gutter;
+      for (let y = -gutter; y < frameHeight + gutter; y++) {
+        for (let x = -gutter; x < frameWidth + gutter; x++) {
+          const sourceX = sourceLeft + clamp(x, 0, frameWidth - 1);
+          const sourceY = sourceTop + clamp(y, 0, frameHeight - 1);
+          setPixel(
+            pixels,
+            width,
+            targetLeft + x,
+            targetTop + y,
+            readPixel(source, sourceWidth, sourceX, sourceY),
+          );
+        }
+      }
+    }
+  }
+  return { width, height, pixels, margin: gutter, spacing: gutter * 2 };
 }
 
 function transitionWeight(mask, x, y) {
@@ -401,7 +520,8 @@ function buildOverlayTile(baseTile, kind, frame) {
       const luma = r * 0.2126 + g * 0.7152 + b * 0.0722;
       const stagger = (x + y * 2 + frame) % settings.stride === 0 ? 1 : 0.55;
       const alpha = clamp((luma - settings.threshold) * settings.strength * stagger, 0, kind === "whitecap" ? 190 : 130);
-      setPixel(tile, TILE_SIZE, x, y, [...settings.color, alpha]);
+      const roundedAlpha = Math.round(alpha);
+      setPixel(tile, TILE_SIZE, x, y, roundedAlpha === 0 ? [0, 0, 0, 0] : [...settings.color, roundedAlpha]);
     }
   }
   return tile;
@@ -434,7 +554,8 @@ function buildHomeShoreOverlay(home) {
           : sparse < 3 ? Math.max(0, ripple * crossRipple - 0.46) * (48 + luma * 0.18) : 0;
         alpha *= sourceAlpha / 255;
         const color = nearOuterEdge ? [169, 214, 173] : [139, 208, 207];
-        setPixel(sheet, width, frame * home.width + x, y, [...color, clamp(alpha, 0, 104)]);
+        alpha = Math.round(clamp(alpha, 0, 104));
+        setPixel(sheet, width, frame * home.width + x, y, alpha === 0 ? [0, 0, 0, 0] : [...color, alpha]);
       }
     }
   }
@@ -477,7 +598,10 @@ async function main() {
       }
     }
   }
-  await writePng("water-tiles.png", sheetWidth, sheetHeight, tileSheet);
+  const checkedBaseFrames = validateBaseEdges(tileSheet, sheetWidth);
+  const loopValidation = validateBaseLoops(tileSheet, sheetWidth);
+  const runtimeTiles = extrudeSheet(tileSheet, sheetWidth, FRAME_COUNT, profiles.length * VARIANT_COUNT, TILE_SIZE, TILE_SIZE);
+  await writePng("water-tiles.png", runtimeTiles.width, runtimeTiles.height, runtimeTiles.pixels);
 
   const staticWidth = TILE_SIZE * VARIANT_COUNT;
   const staticHeight = TILE_SIZE * profiles.length;
@@ -489,7 +613,8 @@ async function main() {
       copyTile(tile, staticSheet, staticWidth, variant * TILE_SIZE, profileIndex * TILE_SIZE);
     }
   }
-  await writePng("water-static.png", staticWidth, staticHeight, staticSheet);
+  const runtimeStatic = extrudeSheet(staticSheet, staticWidth, VARIANT_COUNT, profiles.length, TILE_SIZE, TILE_SIZE);
+  await writePng("water-static.png", runtimeStatic.width, runtimeStatic.height, runtimeStatic.pixels);
 
   const transitionWidth = TILE_SIZE * transitionMasks.length;
   const transitionHeight = TILE_SIZE * TRANSITION_FRAME_COUNT;
@@ -510,7 +635,15 @@ async function main() {
       );
     }
   }
-  await writePng("water-depth-transitions.png", transitionWidth, transitionHeight, transitionSheet);
+  const runtimeTransitions = extrudeSheet(
+    transitionSheet,
+    transitionWidth,
+    transitionMasks.length,
+    TRANSITION_FRAME_COUNT,
+    TILE_SIZE,
+    TILE_SIZE,
+  );
+  await writePng("water-depth-transitions.png", runtimeTransitions.width, runtimeTransitions.height, runtimeTransitions.pixels);
 
   const overlayKinds = ["glint", "caustic", "current", "whitecap"];
   const overlayHeight = TILE_SIZE * overlayKinds.length;
@@ -524,7 +657,9 @@ async function main() {
       copyTile(overlay, overlaySheet, sheetWidth, frame * TILE_SIZE, kindIndex * TILE_SIZE);
     }
   }
-  await writePng("water-overlays.png", sheetWidth, overlayHeight, overlaySheet);
+  const transparentOverlayPixels = validateTransparentRgb(overlaySheet, "water-overlays");
+  const runtimeOverlays = extrudeSheet(overlaySheet, sheetWidth, FRAME_COUNT, overlayKinds.length, TILE_SIZE, TILE_SIZE);
+  await writePng("water-overlays.png", runtimeOverlays.width, runtimeOverlays.height, runtimeOverlays.pixels);
 
   const contactWidth = TILE_SIZE * 16;
   const contactHeight = TILE_SIZE * 8;
@@ -547,7 +682,14 @@ async function main() {
   const homePath = path.join(repositoryRoot, "dist", "assets", "gr1", "images", "home-island.png");
   const home = decodePng(await readFile(homePath), homePath);
   const homeOverlay = buildHomeShoreOverlay(home);
-  await writePng("water-home-shore-overlay.png", homeOverlay.width, homeOverlay.height, homeOverlay.pixels);
+  const transparentHomeOverlayPixels = validateTransparentRgb(homeOverlay.pixels, "water-home-shore-overlay");
+  const runtimeHomeOverlay = extrudeSheet(homeOverlay.pixels, homeOverlay.width, FRAME_COUNT, 1, home.width, home.height);
+  await writePng(
+    "water-home-shore-overlay.png",
+    runtimeHomeOverlay.width,
+    runtimeHomeOverlay.height,
+    runtimeHomeOverlay.pixels,
+  );
 
   const previewSize = 640;
   const preview = Buffer.alloc(previewSize * previewSize * 4);
@@ -615,11 +757,11 @@ async function main() {
   await writePng("water-home-island-preview.png", previewSize, previewSize, preview);
 
   const outputs = [
-    ["water-tiles.png", sheetWidth, sheetHeight],
-    ["water-static.png", staticWidth, staticHeight],
-    ["water-depth-transitions.png", transitionWidth, transitionHeight],
-    ["water-overlays.png", sheetWidth, overlayHeight],
-    ["water-home-shore-overlay.png", homeOverlay.width, homeOverlay.height],
+    ["water-tiles.png", runtimeTiles.width, runtimeTiles.height],
+    ["water-static.png", runtimeStatic.width, runtimeStatic.height],
+    ["water-depth-transitions.png", runtimeTransitions.width, runtimeTransitions.height],
+    ["water-overlays.png", runtimeOverlays.width, runtimeOverlays.height],
+    ["water-home-shore-overlay.png", runtimeHomeOverlay.width, runtimeHomeOverlay.height],
     ["water-contact-sheet.png", contactWidth, contactHeight],
     ["water-home-island-preview.png", previewSize, previewSize],
   ];
@@ -630,6 +772,12 @@ async function main() {
     frameCount: FRAME_COUNT,
     variantCount: VARIANT_COUNT,
     transitionMasks,
+    validation: {
+      checkedBaseFrames,
+      ...loopValidation,
+      transparentOverlayPixels,
+      transparentHomeOverlayPixels,
+    },
     profiles: profiles.map(({ id, source, terrain, framesPerSecond }) => ({ id, source, terrain, framesPerSecond })),
     outputs: await Promise.all(outputs.map(async ([filename, width, height]) => ({
       filename,

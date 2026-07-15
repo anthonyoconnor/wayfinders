@@ -24,11 +24,11 @@ shore collision lattice is not used as an art grid.
 
 | File | Size | Purpose |
 | --- | ---: | --- |
-| `water-tiles.png` | 256 x 1024 | Eight frames across, four variants per water profile down |
-| `water-static.png` | 128 x 256 | One reduced-motion/static frame for four variants of every profile |
-| `water-depth-transitions.png` | 1504 x 128 | 47 gated eight-neighbor masks across and four phases down |
-| `water-overlays.png` | 256 x 128 | Alpha clips for glints, caustics, currents, and whitecaps |
-| `water-home-shore-overlay.png` | 3840 x 480 | Eight 480 px frames aligned exactly to `home.island.primary` |
+| `water-tiles.png` | 288 x 1152 | Eight frames across, four variants per water profile down |
+| `water-static.png` | 144 x 288 | One reduced-motion/static frame for four variants of every profile |
+| `water-depth-transitions.png` | 1692 x 144 | 47 gated eight-neighbor masks across and four phases down |
+| `water-overlays.png` | 288 x 144 | Alpha clips for glints, caustics, currents, and whitecaps |
+| `water-home-shore-overlay.png` | 3872 x 484 | Eight 480 px frames aligned exactly to `home.island.primary` |
 | `build-report.json` | n/a | Deterministic dimensions and SHA-256 output hashes |
 
 The base sheet contains animated frames so it can support visual tests and rare
@@ -41,20 +41,25 @@ shore clip. That keeps motion restrained and avoids updating every ocean tile.
 For `water-tiles.png`:
 
 ```text
-sourceX = frame * 32
-sourceY = (profileIndex * 4 + variant) * 32
+sourceX = 2 + frame * 36
+sourceY = 2 + (profileIndex * 4 + variant) * 36
 ```
 
 For `water-depth-transitions.png`, canonicalize the eight-neighbor bit mask with
 the corner rule in `water-package.json`, find it in `maskLookup`, then use:
 
 ```text
-sourceX = maskIndex * 32
-sourceY = phase * 32
+sourceX = 2 + maskIndex * 36
+sourceY = 2 + phase * 36
 ```
 
 Variant choice, orientation, and phase must come from a stable presentation
 hash. They must never consume the terrain-generation random stream.
+
+Every sheet uses a 2 px outer margin and 4 px spacing. Those pixels duplicate
+the nearest frame edge, preventing adjacent-frame bleed under the game's
+fractional zoom and antialiasing. The loader must pass `margin: 2` and
+`spacing: 4` in addition to the frame dimensions.
 
 ## Rebuild
 
@@ -62,9 +67,10 @@ From the repository root:
 
 ```powershell
 node assets-src/gr1/water/build-water-package.mjs
+node assets-src/gr1/water/validate-water-package.mjs
 ```
 
-The builder uses only Node built-ins. The four checked-in source masters are
+The builder and validator use only Node built-ins. The four checked-in source masters are
 normalized, non-interlaced 8-bit RGBA PNGs; this avoids filter incompatibilities
 when the repository's minimal PNG tooling reads generated source art. Rebuilding
 does not touch `public`, `dist`, source code, or any existing milestone file.
