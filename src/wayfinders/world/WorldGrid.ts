@@ -7,6 +7,7 @@ import {
   terrainBlocksSight,
   type TileSnapshot,
 } from "./TileData";
+import { isMixedCollisionMask, type CollisionSubcellMask } from "./CollisionMask";
 import { WorldChunk } from "./WorldChunk";
 
 export class WorldGrid {
@@ -21,9 +22,13 @@ export class WorldGrid {
   private readonly supportedPersonalBoundaryIndices = new Set<number>();
   private readonly visibleIndices = new Set<number>();
   private readonly visibilityDirtyChunks = new Set<WorldChunk>();
+  /** Sparse row-major 4x4 masks. Presence replaces coarse collision for that cell. */
+  private readonly fineCollisionMasks = new Map<number, CollisionSubcellMask>();
 
   knowledgeVersion = 0;
   terrainVersion = 0;
+  /** Advances whenever static collision geometry changes, including fine masks. */
+  collisionVersion = 0;
   visibilityVersion = 0;
   /** Advances only when passable Supported-water connectivity can change. */
   supportedTopologyVersion = 0;
@@ -49,6 +54,10 @@ export class WorldGrid {
 
   get currentVisibleCount(): number {
     return this.visibleIndices.size;
+  }
+
+  get fineCollisionCellCount(): number {
+    return this.fineCollisionMasks.size;
   }
 
   getKnowledgeCount(knowledge: KnowledgeState): number {
@@ -142,14 +151,16 @@ export class WorldGrid {
       && chunk.sightBlocked[index] === sightBlocked
     ) return false;
 
+    const movementChanged = chunk.movementBlocked[index] !== movementBlocked;
     const supportedPassabilityChanged = chunk.knowledge[index] === KnowledgeState.Supported
-      && chunk.movementBlocked[index] !== movementBlocked;
+      && movementChanged;
     chunk.terrain[index] = terrain;
     chunk.movementBlocked[index] = movementBlocked;
     chunk.sightBlocked[index] = sightBlocked;
     this.refreshSupportedPersonalBoundaryNear(this.index(x, y));
     chunk.markDirty();
     this.terrainVersion++;
+    if (movementChanged) this.collisionVersion++;
     if (supportedPassabilityChanged) this.supportedTopologyVersion++;
     return true;
   }
@@ -190,7 +201,7 @@ export class WorldGrid {
       this.addKnowledgeIndex(worldIndex, knowledge);
       this.refreshSupportedPersonalBoundaryNear(worldIndex);
       if (
-        chunk.movementBlocked[index] === 0
+        (chunk.movementBlocked[index] === 0 || this.fineCollisionMasks.has(worldIndex))
         && (previousKnowledge === KnowledgeState.Supported || knowledge === KnowledgeState.Supported)
       ) {
         this.supportedTopologyVersion++;
@@ -239,7 +250,7 @@ export class WorldGrid {
       if (chunk.knowledge[localIndex] !== state || chunk.expeditionStamp[localIndex] !== stamp) {
         const previousState = chunk.knowledge[localIndex] as KnowledgeState;
         if (
-          chunk.movementBlocked[localIndex] === 0
+          (chunk.movementBlocked[localIndex] === 0 || this.fineCollisionMasks.has(index))
           && previousState !== state
           && (previousState === KnowledgeState.Supported || state === KnowledgeState.Supported)
         ) supportedTopologyChanged = true;
@@ -318,8 +329,56 @@ export class WorldGrid {
     this.refreshSupportedPersonalBoundaryNear(this.index(x, y));
     chunk.markDirty();
     this.terrainVersion++;
+    this.collisionVersion++;
     if (chunk.knowledge[index] === KnowledgeState.Supported) this.supportedTopologyVersion++;
     return true;
+  }
+
+  /** Returns the mixed 4x4 override for a cell, or undefined for coarse fallback. */
+  getFineCollisionMask(x: number, y: number): CollisionSubcellMask | undefined {
+    if (!this.inBounds(x, y)) return undefined;
+    return this.fineCollisionMasks.get(y * this.width + x);
+  }
+
+  getFineCollisionMaskAtIndex(worldIndex: number): CollisionSubcellMask | undefined {
+    this.assertWorldIndex(worldIndex);
+    return this.fineCollisionMasks.get(worldIndex);
+  }
+
+  /**
+   * Installs one sparse mixed-cell override. Fully open/solid cells deliberately
+   * remain represented by the existing coarse movement bit.
+   */
+  setFineCollisionMask(x: number, y: number, mask: CollisionSubcellMask | undefined): boolean {
+    if (mask === undefined) return this.clearFineCollisionMask(x, y);
+    const worldIndex = this.index(x, y);
+    if (!isMixedCollisionMask(mask)) {
+      throw new RangeError("Fine collision masks must be genuinely mixed 4x4 patches");
+    }
+    if (this.fineCollisionMasks.get(worldIndex) === mask) return false;
+    this.fineCollisionMasks.set(worldIndex, mask);
+    this.collisionVersion++;
+    this.terrainVersion++;
+    if (this.collisionCanAffectSupportedTopology(x, y)) this.supportedTopologyVersion++;
+    return true;
+  }
+
+  /** Removes a fine override so the cell resumes its legacy coarse behavior. */
+  clearFineCollisionMask(x: number, y: number): boolean {
+    const worldIndex = this.index(x, y);
+    if (!this.fineCollisionMasks.delete(worldIndex)) return false;
+    this.collisionVersion++;
+    this.terrainVersion++;
+    if (this.collisionCanAffectSupportedTopology(x, y)) this.supportedTopologyVersion++;
+    return true;
+  }
+
+  forEachFineCollisionMask(
+    visitor: (x: number, y: number, mask: CollisionSubcellMask, index: number) => void,
+  ): void {
+    for (const [index, mask] of this.fineCollisionMasks) {
+      visitor(index % this.width, Math.floor(index / this.width), mask, index);
+    }
   }
 
   isSightBlocked(x: number, y: number): boolean {
@@ -425,6 +484,7 @@ export class WorldGrid {
     const sightBlocked = terrainBlocksSight(terrain) ? 1 : 0;
     this.visibleIndices.clear();
     this.visibilityDirtyChunks.clear();
+    this.fineCollisionMasks.clear();
     for (let chunkY = 0; chunkY < this.chunkRows; chunkY++) {
       for (let chunkX = 0; chunkX < this.chunkColumns; chunkX++) {
         const chunk = this.getOrCreateChunk(chunkX, chunkY);
@@ -451,6 +511,7 @@ export class WorldGrid {
       for (let index = 0; index < this.tileCount; index++) indices.add(index);
     }
     this.terrainVersion++;
+    this.collisionVersion++;
     this.knowledgeVersion++;
     this.visibilityVersion++;
     this.supportedTopologyVersion++;
@@ -555,5 +616,14 @@ export class WorldGrid {
   private isPassablePersonalIndex(index: number): boolean {
     return this.getKnowledgeAtIndex(index) === KnowledgeState.Personal
       && !this.isMovementBlockedAtIndex(index);
+  }
+
+  private collisionCanAffectSupportedTopology(x: number, y: number): boolean {
+    for (let neighborY = Math.max(0, y - 1); neighborY <= Math.min(this.height - 1, y + 1); neighborY++) {
+      for (let neighborX = Math.max(0, x - 1); neighborX <= Math.min(this.width - 1, x + 1); neighborX++) {
+        if (this.getKnowledge(neighborX, neighborY) === KnowledgeState.Supported) return true;
+      }
+    }
+    return false;
   }
 }

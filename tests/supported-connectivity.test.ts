@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { SupportedConnectivitySystem } from "../src/wayfinders/exploration/SupportedConnectivitySystem.ts";
+import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { makeConfig } from "./helpers.ts";
 
 function supportedWorld(width: number, height: number): WorldGrid {
   const world = new WorldGrid(width, height, Math.max(width, height));
@@ -94,5 +96,62 @@ describe("SupportedConnectivitySystem", () => {
 
     expect(system.isConnected(anchor, 9)).toBe(false);
     expect(system.buildCount).toBe(3);
+  });
+
+  it("invalidates and restores Supported connectivity across a fine collision barrier", () => {
+    const world = supportedWorld(3, 1);
+    const anchor = { x: 2, y: 0 };
+    const system = new SupportedConnectivitySystem(world, { x: 0, y: 0 });
+    const initialRevision = world.supportedTopologyVersion;
+
+    expect(system.pathTo(anchor, initialRevision)).toEqual([
+      world.index(0, 0),
+      world.index(1, 0),
+      world.index(2, 0),
+    ]);
+
+    world.setFineCollisionMask(1, 0, solidRowsToCollisionMask([
+      "1000",
+      "0000",
+      "0000",
+      "0000",
+    ]));
+    expect(world.supportedTopologyVersion).toBe(initialRevision + 1);
+    expect(system.pathTo(anchor, world.supportedTopologyVersion)).toEqual([]);
+    expect(system.isConnected(anchor, world.supportedTopologyVersion)).toBe(false);
+
+    world.clearFineCollisionMask(1, 0);
+    expect(world.supportedTopologyVersion).toBe(initialRevision + 2);
+    expect(system.pathTo(anchor, world.supportedTopologyVersion)).toEqual([
+      world.index(0, 0),
+      world.index(1, 0),
+      world.index(2, 0),
+    ]);
+    expect(system.buildCount).toBe(3);
+  });
+
+  it("invalidates Supported connectivity when knowledge changes on a fine-overridden coarse-solid cell", () => {
+    const world = supportedWorld(3, 1);
+    world.setTerrain(1, 0, TerrainType.Land);
+    world.setFineCollisionMask(1, 0, solidRowsToCollisionMask([
+      "1000",
+      "0000",
+      "0000",
+      "0000",
+    ]));
+    const config = makeConfig({ movement: { shipCollisionHalfExtent: 1 } });
+    const system = new SupportedConnectivitySystem(world, { x: 0, y: 0 }, config);
+    const anchor = { x: 2, y: 0 };
+    const initialRevision = world.supportedTopologyVersion;
+
+    expect(system.isConnected(anchor, initialRevision)).toBe(true);
+
+    world.setKnowledge(1, 0, KnowledgeState.Personal, 4);
+    expect(world.supportedTopologyVersion).toBe(initialRevision + 1);
+    expect(system.isConnected(anchor, world.supportedTopologyVersion)).toBe(false);
+
+    world.setKnowledge(1, 0, KnowledgeState.Supported);
+    expect(world.supportedTopologyVersion).toBe(initialRevision + 2);
+    expect(system.isConnected(anchor, world.supportedTopologyVersion)).toBe(true);
   });
 });

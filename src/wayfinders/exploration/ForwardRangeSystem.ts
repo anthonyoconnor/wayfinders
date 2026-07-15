@@ -52,12 +52,8 @@ export class ForwardRangeSystem {
   private relaxNeighbor: (neighbor: number, traversalCost: number) => void = () => undefined;
   private readonly visitGraphNeighbor = (neighbor: number): void => {
     const knowledge = this.world.getKnowledgeAtIndex(neighbor);
-    // Hidden obstacles must not leak through the range overlay. Unknown cells
-    // remain traversable at the configured estimate until they are observed.
-    if (
-      (knowledge !== KnowledgeState.Unknown || this.world.isVisibleNowAtIndex(neighbor))
-      && this.world.isMovementBlockedAtIndex(neighbor)
-    ) return;
+    // The known-edge sweep already rejects discovered collision while filtering
+    // geometry in unseen Unknown cells so this overlay cannot leak obstacles.
     this.relaxNeighbor(neighbor, knowledgeTravelCost(knowledge, this.config));
   };
   private readonly forEachSearchNeighbor = (
@@ -65,19 +61,19 @@ export class ForwardRangeSystem {
     visit: (neighbor: number, traversalCost: number) => void,
   ): void => {
     this.relaxNeighbor = visit;
-    this.graph.forEachCardinalNeighbor(node, this.visitGraphNeighbor);
+    this.graph.forEachKnownTraversableCardinalNeighbor(node, this.visitGraphNeighbor);
   };
 
   constructor(
     private world: WorldGrid,
     private readonly config: PrototypeConfig = prototypeConfig,
   ) {
-    this.graph = new GridGraph(world);
+    this.graph = new GridGraph(world, config);
   }
 
   setWorld(world: WorldGrid): void {
     this.world = world;
-    this.graph = new GridGraph(world);
+    this.graph = new GridGraph(world, this.config);
     this.budgetCaches = new WeakMap();
   }
 

@@ -1,4 +1,6 @@
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 import type { SurveyBudgetReadModel } from "./SurveyContracts";
@@ -44,11 +46,14 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
   private returnedCache: ReadonlyArray<Readonly<SurveySiteReturnedRecord>> = Object.freeze([]);
   private recordsDirty = false;
   private recordsRevisionValue = 0;
+  private readonly graph: GridGraph;
 
   constructor(
     private readonly world: WorldGrid,
     definitions: readonly Readonly<SurveySiteDefinition<TType>>[],
+    config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
   ) {
+    this.graph = new GridGraph(world, config);
     this.definitions = Object.freeze([...definitions].sort((left, right) => compareSurveySiteIds(left.id, right.id)));
     for (const definition of this.definitions) this.registerDefinition(definition);
   }
@@ -318,7 +323,9 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
     }
     if (
       !this.world.inBounds(definition.serviceAnchor.x, definition.serviceAnchor.y)
-      || this.world.isMovementBlocked(definition.serviceAnchor.x, definition.serviceAnchor.y)
+      || !this.graph.isNavigationNodePassable(
+        this.world.index(definition.serviceAnchor.x, definition.serviceAnchor.y),
+      )
     ) throw new RangeError(`Survey site ${definition.id} has an invalid service anchor`);
     if (
       Math.hypot(

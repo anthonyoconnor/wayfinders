@@ -1,6 +1,7 @@
 import { KnowledgeState } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
 import type { GridPoint } from "../core/types";
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
   FISHING_SHOAL_INTERACTION_RANGE_TILES,
@@ -44,8 +45,9 @@ export class FishingShoalSystem {
     private readonly world: WorldGrid,
     readonly definitions: readonly Readonly<FishingShoalDefinition>[],
     homeReturnTile: Readonly<GridPoint>,
+    config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
   ) {
-    this.supportedConnectivity = new SupportedConnectivitySystem(world, homeReturnTile);
+    this.supportedConnectivity = new SupportedConnectivitySystem(world, homeReturnTile, config);
     for (const definition of definitions) {
       if (this.definitionById.has(definition.id)) throw new RangeError(`Duplicate fishing shoal ${definition.id}`);
       this.definitionById.set(definition.id, definition);

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ForwardRangeSystem } from "../src/wayfinders/exploration/ForwardRangeSystem.ts";
 import { ReturnPathSystem, ReturnRiskLevel } from "../src/wayfinders/exploration/ReturnPathSystem.ts";
+import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 import { makeConfig, makeShip } from "./helpers.ts";
@@ -334,6 +335,60 @@ it("allows zero-cost Unknown travel and omits the nonexistent finite frontier", 
   const result = system.calculate(shipAt(0, 0, 5));
   expect(result.reachableCount).toBe(4);
   expect(result.frontierCount).toBe(0);
+});
+});
+
+describe("fine collision route knowledge boundary", () => {
+it("blocks an exact return edge without leaking hidden collision into forward range", () => {
+  const config = makeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } });
+  const world = new WorldGrid(5, 1, 3);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  world.setKnowledge(1, 0, KnowledgeState.Personal, 1);
+  world.setKnowledge(2, 0, KnowledgeState.Personal, 1);
+  world.setFineCollisionMask(1, 0, solidRowsToCollisionMask([
+    "1000",
+    "0000",
+    "0000",
+    "0000",
+  ]));
+
+  const returnPath = new ReturnPathSystem(world, config).calculate(shipAt(2, 0, 3));
+  expect(returnPath.pathIndices).toEqual([]);
+  expect(returnPath.returnCost).toBe(Number.POSITIVE_INFINITY);
+  expect(returnPath.supportedBoundaryIndices).toEqual([]);
+
+  world.setKnowledge(1, 0, KnowledgeState.Unknown);
+  const hidden = new ForwardRangeSystem(world, config).calculate(shipAt(0, 0, 3));
+  expect(hidden.costs[world.index(1, 0)]).toBe(1);
+  expect(hidden.costs[world.index(2, 0)]).toBe(1.5);
+  expect(hidden.mask[world.index(3, 0)]).toBe(1);
+
+  world.setKnowledge(1, 0, KnowledgeState.Personal, 2);
+  const revealed = new ForwardRangeSystem(world, config).calculate(shipAt(0, 0, 3));
+  expect(revealed.costs[world.index(1, 0)]).toBe(Number.POSITIVE_INFINITY);
+  expect(revealed.mask[world.index(3, 0)]).toBe(0);
+});
+
+it("finds a Supported root beside a passable fine-overridden coarse-solid Personal cell", () => {
+  const config = makeConfig({ movement: { shipCollisionHalfExtent: 1 } });
+  const world = new WorldGrid(3, 1, 3);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  world.setTerrain(1, 0, TerrainType.Land);
+  world.setFineCollisionMask(1, 0, solidRowsToCollisionMask([
+    "1000",
+    "0000",
+    "0000",
+    "0000",
+  ]));
+  world.setKnowledge(1, 0, KnowledgeState.Personal, 3);
+
+  const result = new ReturnPathSystem(world, config).calculate(shipAt(1, 0, 3));
+
+  expect(result.supportedBoundaryIndices).toEqual([world.index(0, 0)]);
+  expect(result.pathIndices).toEqual([world.index(1, 0), world.index(0, 0)]);
+  expect(result.returnCost).toBe(config.provisions.personalCost);
 });
 });
 

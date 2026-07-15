@@ -9,6 +9,7 @@ import {
 import { FishingShoalSystem } from "../src/wayfinders/exploration/FishingShoalSystem";
 import { generateIslandDossierCatalog } from "../src/wayfinders/exploration/IslandDossierCatalog";
 import { createSurveyBudget } from "../src/wayfinders/exploration/SurveyContracts";
+import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
@@ -100,6 +101,31 @@ describe("deterministic fishing-shoal catalog", () => {
       .not.toEqual(secondCatalog.map(({ tile, quality, clue }) => ({ tile, quality, clue })));
     expect(() => generateFishingShoalCatalog(first.grid, first.seed, first.landmarks.homeReturnTile, 2))
       .toThrow(/Unsupported fishing-shoal content version/);
+  });
+
+  it("excludes otherwise-open candidates whose fine collision is unsafe for the ship hull", () => {
+    const generated = new WorldGenerator().generate(7_003);
+    const baseline = generateFishingShoalCatalog(
+      generated.grid,
+      generated.seed,
+      generated.landmarks.homeReturnTile,
+    );
+    const excluded = baseline[0].tile;
+    generated.grid.setFineCollisionMask(excluded.x, excluded.y, solidRowsToCollisionMask([
+      "1000",
+      "0000",
+      "0000",
+      "0000",
+    ]));
+
+    const refined = generateFishingShoalCatalog(
+      generated.grid,
+      generated.seed,
+      generated.landmarks.homeReturnTile,
+    );
+
+    expect(refined).toHaveLength(4);
+    expect(refined.some(({ tile }) => tile.x === excluded.x && tile.y === excluded.y)).toBe(false);
   });
 });
 

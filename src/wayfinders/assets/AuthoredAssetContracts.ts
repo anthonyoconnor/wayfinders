@@ -322,6 +322,9 @@ function optionalBoxCollision(value: unknown, tileSize: number): AuthoredBoxColl
   if (halfSize.width >= tileSize / 2 || halfSize.height >= tileSize / 2) {
     throw new RangeError("player-boat collision halfSize must be smaller than half tileSize");
   }
+  if (halfSize.width !== halfSize.height) {
+    throw new RangeError("player-boat collision halfSize must define a square runtime hull");
+  }
   return { kind: "box", offset, halfSize };
 }
 

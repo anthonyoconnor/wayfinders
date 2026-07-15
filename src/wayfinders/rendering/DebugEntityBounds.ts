@@ -1,16 +1,13 @@
 import type { GridPoint } from "../core/types";
 import { gridToWorld } from "../world/CoordinateSystem";
+import type { RuntimeCollisionObjectKind } from "../assets/CollisionProfileRegistry";
 
 export type DebugEntityBoundsRole = "ship-collider" | "item" | "service";
 
-export type DebugEntityBoundsKind =
-  | "player-ship"
-  | "wreck"
-  | "fishing-shoal"
-  | "survey-site"
-  | "survey-service"
-  | "island-approach"
-  | "home-dock";
+export type DebugEntityBoundsKind = Exclude<
+  RuntimeCollisionObjectKind,
+  "home-island" | "generated-island"
+>;
 
 export interface DebugEntityBounds {
   readonly kind: DebugEntityBoundsKind;

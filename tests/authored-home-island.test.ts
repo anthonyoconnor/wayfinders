@@ -8,6 +8,7 @@ import {
   authoredCellBlocksSight,
   authoredTerrainToTerrainType,
 } from "../src/wayfinders/assets/AuthoredAssetContracts.ts";
+import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
@@ -86,6 +87,49 @@ describe("GR-1.3 authored home-island placement", () => {
     for (let x = 10; x <= 12; x++) {
       expect(grid.isMovementBlocked(placement.topLeft.x + x, placement.topLeft.y + 7)).toBe(false);
     }
+  });
+
+  it("translates authored fine collision cells from package-local to world coordinates", () => {
+    const grid = new WorldGrid(31, 31, 16);
+    grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const solidRows = ["1000", "0000", "0000", "0000"] as const;
+    const metadata = {
+      ...PILOT_HOME_ISLAND_METADATA,
+      collision: {
+        kind: "hybrid-grid" as const,
+        subcellSize: 8 as const,
+        mixedCells: [{ x: 1, y: 1, solidRows }],
+      },
+    };
+
+    const placement = stampAuthoredHomeIsland(grid, { x: 15, y: 15 }, metadata);
+    const worldX = placement.topLeft.x + 1;
+    const worldY = placement.topLeft.y + 1;
+
+    expect(grid.getFineCollisionMask(worldX, worldY)).toBe(solidRowsToCollisionMask(solidRows));
+    expect(grid.getFineCollisionMask(1, 1)).toBeUndefined();
+    expect(grid.isMovementBlocked(worldX, worldY)).toBe(false);
+  });
+
+  it("rejects an authored fine mask that removes required dock clearance", () => {
+    const grid = new WorldGrid(31, 31, 16);
+    grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const dock = PILOT_HOME_ISLAND_METADATA.anchors.dock;
+    const metadata = {
+      ...PILOT_HOME_ISLAND_METADATA,
+      collision: {
+        kind: "hybrid-grid" as const,
+        subcellSize: 8 as const,
+        mixedCells: [{
+          x: dock.x,
+          y: dock.y,
+          solidRows: ["1000", "0000", "0000", "0000"] as const,
+        }],
+      },
+    };
+
+    expect(() => stampAuthoredHomeIsland(grid, { x: 15, y: 15 }, metadata))
+      .toThrow(/anchors\.dock lacks ship clearance/);
   });
 
   it("rejects a procedural anchor that cannot contain the authored footprint", () => {

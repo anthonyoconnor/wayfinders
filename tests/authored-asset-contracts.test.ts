@@ -204,6 +204,11 @@ describe("GR-1.1 authored asset contracts", () => {
     oversizedCollision.halfSize.width = 16;
     expect(() => validateAuthoredAssetMetadata(oversizedBoat)).toThrow(/smaller than half tileSize/);
 
+    const rectangularBoat = boatFixture();
+    const rectangularCollision = rectangularBoat.collision as { halfSize: { width: number; height: number } };
+    rectangularCollision.halfSize.width = 12;
+    expect(() => validateAuthoredAssetMetadata(rectangularBoat)).toThrow(/square runtime hull/);
+
     const blockedShoal = shoalFixture();
     blockedShoal.collision = {
       kind: "box",

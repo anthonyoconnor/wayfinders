@@ -46,7 +46,10 @@ export class KnowledgeSystem {
     for (const index of update.observedIndices) {
       // Remember visible physical landmarks even when they are ahead; they are
       // never traversable and therefore cannot discount outward water travel.
-      if (this.world.isMovementBlockedAtIndex(index)) {
+      if (
+        this.world.isMovementBlockedAtIndex(index)
+        && this.world.getFineCollisionMaskAtIndex(index) === undefined
+      ) {
         trailingIndices.push(index);
         continue;
       }

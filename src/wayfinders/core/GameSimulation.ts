@@ -3,6 +3,7 @@ import {
   prototypeConfig,
   type PrototypeConfig,
 } from "../config/prototypeConfig";
+import { PILOT_COLLISION_PROFILE_REGISTRY } from "../assets/CollisionProfileRegistry";
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
@@ -71,6 +72,7 @@ import {
   type WreckSurveyRejectionReasonV1,
 } from "../exploration/WreckSurveyContracts";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
+import { GridGraph } from "../navigation/GridGraph";
 import {
   NAVIGATOR_GENERATION_HANDOVER_VERSION,
   NAVIGATOR_VOYAGE_LIMIT,
@@ -207,6 +209,7 @@ interface PendingRespawnState {
  */
 export class GameSimulation {
   readonly events = new GameEvents();
+  readonly config: PrototypeConfig;
   readonly debug: DebugVisibilityState = {
     navigationGrid: false,
     collisionBoxes: false,
@@ -237,6 +240,7 @@ export class GameSimulation {
   private fishingShoalSystem!: FishingShoalSystem;
   private idolLocationDefinitionsValue: readonly Readonly<IdolLocationDefinition>[] = Object.freeze([]);
   private readonly generator: WorldGenerator;
+  private readonly usesPrototypeConfig: boolean;
   private expeditionId = 1;
   private activeExpedition = false;
   private lineage = new NavigatorLineageSystem();
@@ -247,9 +251,14 @@ export class GameSimulation {
   private interactionTransactionActive = false;
   private riskResultsInitialized = false;
 
-  constructor(readonly config: PrototypeConfig = prototypeConfig) {
-    this.generator = new WorldGenerator(config);
-    this.regenerate(config.world.seed);
+  constructor(config: PrototypeConfig = prototypeConfig) {
+    this.usesPrototypeConfig = config === prototypeConfig;
+    this.config = {
+      ...config,
+      movement: PILOT_COLLISION_PROFILE_REGISTRY.createAuthoritativeMovementView(config.movement),
+    };
+    this.generator = new WorldGenerator(this.config);
+    this.regenerate(this.config.world.seed);
   }
 
   get world(): WorldGrid {
@@ -603,8 +612,9 @@ export class GameSimulation {
 
   regenerate(seed = this.config.world.seed): void {
     if (this.interactionTransactionActive) return;
+    PILOT_COLLISION_PROFILE_REGISTRY.assertMovementConfigCompatible(this.config);
     const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
-    if (this.config === prototypeConfig) {
+    if (this.usesPrototypeConfig) {
       patchPrototypeConfig({ world: { seed: normalizedSeed } });
     } else {
       this.config.world.seed = normalizedSeed;
@@ -637,7 +647,10 @@ export class GameSimulation {
         this.generated.seed,
         this.generated.islands,
         this.generated.landmarks.homeReturnTile,
+        undefined,
+        this.config,
       ),
+      this.config,
     );
     this.surveySiteSystem = new SurveySiteSystem(
       this.world,
@@ -646,7 +659,10 @@ export class GameSimulation {
         this.generated.seed,
         this.generated.islands,
         this.generated.landmarks.homeReturnTile,
+        undefined,
+        this.config,
       ),
+      this.config,
     );
     this.idolLocationDefinitionsValue = generateIdolLocationCatalog(
       this.generated.seed,
@@ -661,8 +677,11 @@ export class GameSimulation {
         this.world,
         this.generated.seed,
         this.generated.landmarks.homeReturnTile,
+        undefined,
+        this.config,
       ),
       this.generated.landmarks.homeReturnTile,
+      this.config,
     );
     this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
@@ -679,7 +698,10 @@ export class GameSimulation {
       || this.pendingGenerationHandoverValue
       || this.completionChoiceActive
     ) return false;
-    if (!this.world.inBounds(tile.x, tile.y) || this.world.isMovementBlocked(tile.x, tile.y)) return false;
+    if (!this.world.inBounds(tile.x, tile.y)) return false;
+    if (!new GridGraph(this.world, this.config).isNavigationNodePassable(this.world.index(tile.x, tile.y))) {
+      return false;
+    }
     const targetKnowledge = this.world.getKnowledge(tile.x, tile.y);
     if (!this.activeExpedition && targetKnowledge !== KnowledgeState.Supported) this.startExpedition();
 

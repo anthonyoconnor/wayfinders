@@ -1,5 +1,6 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState, TerrainType } from "./TileData";
 import { seededValue } from "./SeededRandom";
 import type { WorldGrid } from "./WorldGrid";
@@ -403,7 +404,9 @@ export class IslandGenerator {
     dock: GridPoint,
     islands: readonly GeneratedIsland[],
   ): void {
-    if (grid.isMovementBlocked(dock.x, dock.y)) throw new RangeError("Island generation blocked the home dock");
+    const graph = new GridGraph(grid, this.config);
+    const start = grid.index(dock.x, dock.y);
+    if (!graph.isNavigationNodePassable(start)) throw new RangeError("Island generation blocked the home dock");
     const visited = new Uint8Array(grid.tileCount);
     const queue = new Int32Array(grid.tileCount);
     const unreachedAtollCenters = new Set<number>();
@@ -414,7 +417,6 @@ export class IslandGenerator {
     }
     let head = 0;
     let tail = 0;
-    const start = grid.index(dock.x, dock.y);
     visited[start] = 1;
     queue[tail++] = start;
     let reachedEdges = 0;
@@ -431,34 +433,11 @@ export class IslandGenerator {
       unreachedAtollCenters.delete(index);
       if (reachedEdges === allEdges && unreachedAtollCenters.size === 0) return;
 
-      if (x > 0) {
-        const neighbor = index - 1;
-        if (!visited[neighbor] && !grid.isMovementBlockedAtIndex(neighbor)) {
-          visited[neighbor] = 1;
-          queue[tail++] = neighbor;
-        }
-      }
-      if (x + 1 < grid.width) {
-        const neighbor = index + 1;
-        if (!visited[neighbor] && !grid.isMovementBlockedAtIndex(neighbor)) {
-          visited[neighbor] = 1;
-          queue[tail++] = neighbor;
-        }
-      }
-      if (y > 0) {
-        const neighbor = index - grid.width;
-        if (!visited[neighbor] && !grid.isMovementBlockedAtIndex(neighbor)) {
-          visited[neighbor] = 1;
-          queue[tail++] = neighbor;
-        }
-      }
-      if (y + 1 < grid.height) {
-        const neighbor = index + grid.width;
-        if (!visited[neighbor] && !grid.isMovementBlockedAtIndex(neighbor)) {
-          visited[neighbor] = 1;
-          queue[tail++] = neighbor;
-        }
-      }
+      graph.forEachTraversableCardinalNeighbor(index, (neighbor) => {
+        if (visited[neighbor]) return;
+        visited[neighbor] = 1;
+        queue[tail++] = neighbor;
+      });
     }
 
     if (reachedEdges !== allEdges) {

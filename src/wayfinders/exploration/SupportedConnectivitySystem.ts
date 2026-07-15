@@ -1,4 +1,6 @@
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState } from "../world/TileData";
 import { WorldGrid } from "../world/WorldGrid";
 
@@ -26,18 +28,21 @@ export class SupportedConnectivitySystem {
   private readonly parents: Int32Array;
   private readonly queue: Int32Array;
   private readonly resultsByAnchor = new Map<number, SupportedConnectivityResult>();
+  private readonly graph: GridGraph;
   private cachedTopologyRevision: number | undefined;
   private buildCountValue = 0;
 
   constructor(
     private readonly world: WorldGrid,
     homeReturnTile: GridPoint,
+    config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
   ) {
     this.homeReturnIndex = world.index(homeReturnTile.x, homeReturnTile.y);
     this.homeReturnTile = Object.freeze({ x: homeReturnTile.x, y: homeReturnTile.y });
     this.parents = new Int32Array(world.tileCount);
     this.queue = new Int32Array(world.tileCount);
     this.parents.fill(UNREACHED);
+    this.graph = new GridGraph(world, config);
   }
 
   /** Number of BFS trees built, exposed for cache-boundary instrumentation. */
@@ -105,7 +110,11 @@ export class SupportedConnectivitySystem {
   }
 
   private tryEnqueue(index: number, parent: number, tail: number): number {
-    if (this.parents[index] !== UNREACHED || !this.isPassableSupported(index)) return tail;
+    if (
+      this.parents[index] !== UNREACHED
+      || !this.isPassableSupported(index)
+      || !this.graph.canTraverseCardinalEdge(parent, index)
+    ) return tail;
     this.parents[index] = parent;
     this.queue[tail] = index;
     return tail + 1;
@@ -113,7 +122,7 @@ export class SupportedConnectivitySystem {
 
   private isPassableSupported(index: number): boolean {
     return this.world.getKnowledgeAtIndex(index) === KnowledgeState.Supported
-      && !this.world.isMovementBlockedAtIndex(index);
+      && this.graph.isNavigationNodePassable(index);
   }
 
   private pathIndicesTo(serviceAnchorIndex: number): readonly number[] {

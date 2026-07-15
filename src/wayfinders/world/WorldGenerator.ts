@@ -1,6 +1,7 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
 import { stampAuthoredHomeIsland } from "../assets/AuthoredHomeIsland";
+import { GridGraph } from "../navigation/GridGraph";
 import { IslandGenerator, type GeneratedIsland } from "./IslandGenerator";
 import { seededValue } from "./SeededRandom";
 import { KnowledgeState, TerrainType } from "./TileData";
@@ -61,7 +62,7 @@ export class WorldGenerator {
     };
 
     this.paintSupportedWater(grid, seed, homePlacement);
-    const home = stampAuthoredHomeIsland(grid, homePlacement);
+    const home = stampAuthoredHomeIsland(grid, homePlacement, undefined, this.config);
     const { homeCenter, harbour, dock, homeReturnTile } = home.landmarks;
 
     const islands = new IslandGenerator(this.config).generate(grid, seed, homeCenter, dock);
@@ -111,12 +112,16 @@ export class WorldGenerator {
   }
 
   private chooseHiddenResource(grid: WorldGrid, seed: number, home: GridPoint, obstacle: GridPoint): GridPoint {
+    const graph = new GridGraph(grid, this.config);
     const offsetSign = seededValue(seed + 307, 0, 0) < 0.5 ? -1 : 1;
     const candidate = {
       x: obstacle.x + offsetSign * (this.config.world.hiddenObstacleRadius + 3),
       y: obstacle.y + offsetSign * 2,
     };
-    if (grid.inBounds(candidate.x, candidate.y) && !grid.isMovementBlocked(candidate.x, candidate.y)) return candidate;
+    if (
+      grid.inBounds(candidate.x, candidate.y)
+      && graph.isNavigationNodePassable(grid.index(candidate.x, candidate.y))
+    ) return candidate;
 
     return {
       x: Math.max(0, Math.min(grid.width - 1, home.x - this.config.world.hiddenObstacleDistance)),

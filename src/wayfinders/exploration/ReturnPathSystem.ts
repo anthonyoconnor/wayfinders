@@ -55,7 +55,6 @@ export class ReturnPathSystem {
   private readonly boundaryWorkspace = new Set<number>();
   private relaxNeighbor: (neighbor: number, traversalCost: number) => void = () => undefined;
   private readonly visitGraphNeighbor = (neighbor: number): void => {
-    if (this.world.isMovementBlockedAtIndex(neighbor)) return;
     const knowledge = this.world.getKnowledgeAtIndex(neighbor);
     // Supported boundary cells are the search roots. There is no reason to
     // flood the interior zero-cost Supported component after leaving a root.
@@ -70,12 +69,12 @@ export class ReturnPathSystem {
     visit: (neighbor: number, traversalCost: number) => void,
   ): void => {
     this.relaxNeighbor = visit;
-    this.graph.forEachCardinalNeighbor(node, this.visitGraphNeighbor);
+    this.graph.forEachTraversableCardinalNeighbor(node, this.visitGraphNeighbor);
   };
   private readonly collectSupportedNeighbor = (neighbor: number): void => {
     if (
       this.world.getKnowledgeAtIndex(neighbor) === KnowledgeState.Supported
-      && !this.world.isMovementBlockedAtIndex(neighbor)
+      && this.graph.isNavigationNodePassable(neighbor)
     ) this.boundaryWorkspace.add(neighbor);
   };
 
@@ -83,12 +82,12 @@ export class ReturnPathSystem {
     private world: WorldGrid,
     private readonly config: PrototypeConfig = prototypeConfig,
   ) {
-    this.graph = new GridGraph(world);
+    this.graph = new GridGraph(world, config);
   }
 
   setWorld(world: WorldGrid): void {
     this.world = world;
-    this.graph = new GridGraph(world);
+    this.graph = new GridGraph(world, this.config);
     this.budgetCaches = new WeakMap();
   }
 
@@ -125,7 +124,9 @@ export class ReturnPathSystem {
     if (!this.world.inBounds(ship.currentTileX, ship.currentTileY)) {
       throw new RangeError("Ship tile is outside the world");
     }
-    if (this.world.isMovementBlocked(ship.currentTileX, ship.currentTileY)) {
+    const coarseBlocked = this.world.isMovementBlocked(ship.currentTileX, ship.currentTileY);
+    const hasMixedOverride = this.world.getFineCollisionMask(ship.currentTileX, ship.currentTileY) !== undefined;
+    if (coarseBlocked && !hasMixedOverride) {
       throw new RangeError("Ship tile is blocked");
     }
 
@@ -235,7 +236,7 @@ export class ReturnPathSystem {
     const queue: number[] = [];
     const depths: number[] = [];
     const tryAdd = (index: number, depth: number): void => {
-      if (corridor.has(index) || this.world.isMovementBlockedAtIndex(index)) return;
+      if (corridor.has(index) || !this.graph.isNavigationNodePassable(index)) return;
       const knowledge = this.world.getKnowledgeAtIndex(index);
       const renderable = knowledge === KnowledgeState.Personal
         || (knowledge === KnowledgeState.Unknown && this.world.isVisibleNowAtIndex(index));
@@ -249,7 +250,7 @@ export class ReturnPathSystem {
     for (let head = 0; head < queue.length; head++) {
       const depth = depths[head];
       if (depth >= padding) continue;
-      this.graph.forEachCardinalNeighbor(queue[head], (neighbor) => tryAdd(neighbor, depth + 1));
+      this.graph.forEachTraversableCardinalNeighbor(queue[head], (neighbor) => tryAdd(neighbor, depth + 1));
     }
     return [...corridor].sort((left, right) => left - right);
   }
@@ -257,16 +258,37 @@ export class ReturnPathSystem {
   private findSupportedBoundaryIndices(): number[] {
     this.boundaryWorkspace.clear();
     for (const supportedIndex of this.world.getSupportedPersonalBoundaryIndices()) {
-      this.boundaryWorkspace.add(supportedIndex);
+      if (this.hasTraversablePersonalNeighbor(supportedIndex)) {
+        this.boundaryWorkspace.add(supportedIndex);
+      }
     }
+    // A mixed patch may carve a clearance-safe node out of a coarse solid cell,
+    // which the legacy coarse boundary cache intentionally cannot represent.
+    this.world.forEachFineCollisionMask((_x, _y, _mask, index) => {
+      if (!this.graph.isNavigationNodePassable(index)) return;
+      const knowledge = this.world.getKnowledgeAtIndex(index);
+      if (knowledge === KnowledgeState.Supported && this.hasTraversablePersonalNeighbor(index)) {
+        this.boundaryWorkspace.add(index);
+      } else if (knowledge === KnowledgeState.Personal) {
+        this.graph.forEachTraversableCardinalNeighbor(index, this.collectSupportedNeighbor);
+      }
+    });
     for (const visibleIndex of this.world.getVisibleIndices()) {
       if (
         this.world.getKnowledgeAtIndex(visibleIndex) !== KnowledgeState.Unknown
-        || this.world.isMovementBlockedAtIndex(visibleIndex)
+        || !this.graph.isNavigationNodePassable(visibleIndex)
       ) continue;
-      this.graph.forEachCardinalNeighbor(visibleIndex, this.collectSupportedNeighbor);
+      this.graph.forEachTraversableCardinalNeighbor(visibleIndex, this.collectSupportedNeighbor);
     }
     return [...this.boundaryWorkspace].sort((left, right) => left - right);
+  }
+
+  private hasTraversablePersonalNeighbor(supportedIndex: number): boolean {
+    let found = false;
+    this.graph.forEachTraversableCardinalNeighbor(supportedIndex, (neighbor) => {
+      if (this.world.getKnowledgeAtIndex(neighbor) === KnowledgeState.Personal) found = true;
+    });
+    return found;
   }
 
   private classifyMargin(margin: number): ReturnRiskLevel {

@@ -1,4 +1,6 @@
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { GridGraph } from "../navigation/GridGraph";
 import type { WorldGrid } from "../world/WorldGrid";
 import {
   ISLAND_DOSSIER_CONTENT_VERSION,
@@ -38,11 +40,14 @@ export class IslandDossierSystem {
   private recordsDirty = false;
   private recordsRevisionValue = 0;
   private fogRevealRevisionValue = 0;
+  private readonly graph: GridGraph;
 
   constructor(
     private readonly world: WorldGrid,
     definitions: readonly Readonly<IslandDossierDefinitionV1>[],
+    config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
   ) {
+    this.graph = new GridGraph(world, config);
     this.definitions = Object.freeze([...definitions].sort((left, right) => left.islandId - right.islandId));
     for (const definition of this.definitions) this.registerDefinition(definition);
   }
@@ -320,7 +325,7 @@ export class IslandDossierSystem {
       if (!Number.isInteger(index) || index < 0 || index >= this.world.tileCount) {
         throw new RangeError(`Island dossier ${definition.islandId} has an invalid approach index`);
       }
-      if (this.world.isMovementBlockedAtIndex(index)) {
+      if (!this.graph.isNavigationNodePassable(index)) {
         throw new RangeError(`Island dossier ${definition.islandId} has a blocked approach`);
       }
       if (approaches.has(index)) throw new RangeError(`Island dossier ${definition.islandId} repeats an approach index`);

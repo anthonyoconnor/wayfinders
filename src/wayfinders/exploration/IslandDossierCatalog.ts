@@ -1,4 +1,6 @@
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { GridGraph } from "../navigation/GridGraph";
 import { IslandKind, type GeneratedIsland } from "../world/IslandGenerator";
 import { seededValue } from "../world/SeededRandom";
 import type { WorldGrid } from "../world/WorldGrid";
@@ -87,12 +89,17 @@ function dossierForIsland(
   });
 }
 
-function dockReachableMask(world: WorldGrid, homeReturnTile: Readonly<GridPoint>): Uint8Array {
+function dockReachableMask(
+  world: WorldGrid,
+  homeReturnTile: Readonly<GridPoint>,
+  config: Pick<PrototypeConfig, "navigation" | "movement">,
+): Uint8Array {
   if (!world.inBounds(homeReturnTile.x, homeReturnTile.y)) {
     throw new RangeError("Island-dossier home return tile is outside the world");
   }
   const start = world.index(homeReturnTile.x, homeReturnTile.y);
-  if (world.isMovementBlockedAtIndex(start)) {
+  const graph = new GridGraph(world, config);
+  if (!graph.isNavigationNodePassable(start)) {
     throw new RangeError("Island-dossier home return tile is blocked");
   }
 
@@ -105,17 +112,12 @@ function dockReachableMask(world: WorldGrid, homeReturnTile: Readonly<GridPoint>
 
   while (head < tail) {
     const index = queue[head++];
-    const x = index % world.width;
-    const y = Math.floor(index / world.width);
     const visit = (candidate: number): void => {
-      if (reachable[candidate] || world.isMovementBlockedAtIndex(candidate)) return;
+      if (reachable[candidate]) return;
       reachable[candidate] = 1;
       queue[tail++] = candidate;
     };
-    if (x > 0) visit(index - 1);
-    if (x + 1 < world.width) visit(index + 1);
-    if (y > 0) visit(index - world.width);
-    if (y + 1 < world.height) visit(index + world.width);
+    graph.forEachTraversableCardinalNeighbor(index, visit);
   }
 
   return reachable;
@@ -138,7 +140,7 @@ function deriveApproachIndices(
         const y = footprintY + dy;
         if (!world.inBounds(x, y)) continue;
         const candidate = world.index(x, y);
-        if (!reachable[candidate] || world.isMovementBlockedAtIndex(candidate)) continue;
+        if (!reachable[candidate]) continue;
         approaches.add(candidate);
       }
     }
@@ -174,6 +176,7 @@ export function generateIslandDossierCatalog(
   islands: readonly Readonly<GeneratedIsland>[],
   homeReturnTile: Readonly<GridPoint>,
   contentVersion: number = ISLAND_DOSSIER_CONTENT_VERSION,
+  config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
 ): readonly Readonly<IslandDossierDefinitionV1>[] {
   if (contentVersion !== ISLAND_DOSSIER_CONTENT_VERSION) {
     throw new RangeError(`Unsupported island-dossier content version ${contentVersion}`);
@@ -194,7 +197,7 @@ export function generateIslandDossierCatalog(
     if (footprint) footprint.push(index);
   });
 
-  const reachable = dockReachableMask(world, homeReturnTile);
+  const reachable = dockReachableMask(world, homeReturnTile, config);
   const usedNames = new Set<string>();
   const definitions: IslandDossierDefinitionV1[] = [];
   for (const island of [...islandsById.values()].sort((left, right) => left.id - right.id)) {

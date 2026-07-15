@@ -40,6 +40,11 @@ import {
 } from "../lineage/GreatHallChronicle";
 import type { NavigatorId } from "../lineage/NavigatorLineageSystem";
 import { worldToGrid } from "../world/CoordinateSystem";
+import {
+  COLLISION_SUBCELL_SIZE,
+  COLLISION_SUBCELLS_PER_TILE,
+  isCollisionSubcellSolid,
+} from "../world/CollisionMask";
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
 import { collectDebugEntityBounds, type DebugEntityBoundsRole } from "./DebugEntityBounds";
@@ -372,9 +377,23 @@ export class WayfindersScene extends Phaser.Scene {
       this.debugGraphics.fillStyle(PALETTE.collision, 0.2);
       this.debugGraphics.lineStyle(1.5, PALETTE.collision, 0.9);
       world.forEachTile((x, y) => {
-        if (!world.isMovementBlocked(x, y)) return;
-        this.debugGraphics.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-        this.debugGraphics.strokeRect(x * size + 0.5, y * size + 0.5, size - 1, size - 1);
+        const fineMask = world.getFineCollisionMask(x, y);
+        if (fineMask !== undefined) {
+          for (let subY = 0; subY < COLLISION_SUBCELLS_PER_TILE; subY++) {
+            for (let subX = 0; subX < COLLISION_SUBCELLS_PER_TILE; subX++) {
+              if (!isCollisionSubcellSolid(fineMask, subX, subY)) continue;
+              const left = x * size + subX * COLLISION_SUBCELL_SIZE;
+              const top = y * size + subY * COLLISION_SUBCELL_SIZE;
+              this.debugGraphics.fillRect(left + 0.5, top + 0.5, COLLISION_SUBCELL_SIZE - 1, COLLISION_SUBCELL_SIZE - 1);
+              this.debugGraphics.strokeRect(left + 0.5, top + 0.5, COLLISION_SUBCELL_SIZE - 1, COLLISION_SUBCELL_SIZE - 1);
+            }
+          }
+          return;
+        }
+        if (world.isMovementBlocked(x, y)) {
+          this.debugGraphics.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+          this.debugGraphics.strokeRect(x * size + 0.5, y * size + 0.5, size - 1, size - 1);
+        }
       });
     }
 

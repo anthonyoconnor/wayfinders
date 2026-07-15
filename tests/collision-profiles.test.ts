@@ -69,6 +69,28 @@ describe("GR-2.4 runtime collision profile registry", () => {
     expect(PILOT_COLLISION_PROFILE_REGISTRY.get("fishing-shoal").source).toBe("authored-package");
   });
 
+  it("rejects a runtime ship hull that diverges from the authored package", () => {
+    expect(() => PILOT_COLLISION_PROFILE_REGISTRY.assertMovementConfigCompatible(makeConfig())).not.toThrow();
+    expect(() => PILOT_COLLISION_PROFILE_REGISTRY.assertMovementConfigCompatible(
+      makeConfig({ movement: { shipCollisionHalfExtent: 3 } }),
+    )).toThrow(/Player-ship collision profile/);
+  });
+
+  it("keeps the authored hull fixed while forwarding other live movement tuning", () => {
+    const config = makeConfig();
+    const movement = PILOT_COLLISION_PROFILE_REGISTRY.createAuthoritativeMovementView(config.movement);
+
+    config.movement.shipCollisionHalfExtent = 3;
+    config.movement.shipSpeed = 91;
+    expect(movement.shipCollisionHalfExtent).toBe(14);
+    expect(movement.shipSpeed).toBe(91);
+
+    movement.shipSpeed = 73;
+    expect(config.movement.shipSpeed).toBe(73);
+    expect(() => { movement.shipCollisionHalfExtent = 3; }).toThrow();
+    expect(movement.shipCollisionHalfExtent).toBe(14);
+  });
+
   it("preserves unambiguous legacy fallbacks when optional collision metadata is absent", () => {
     const config = makeConfig({ movement: { shipCollisionHalfExtent: 3 } });
     const registry = new RuntimeCollisionProfileRegistry(legacyPackages(), config);
@@ -92,5 +114,6 @@ describe("GR-2.4 runtime collision profile registry", () => {
       source: "legacy-fallback",
       profile: { kind: "empty" },
     });
+    expect(() => registry.assertMovementConfigCompatible(config)).not.toThrow();
   });
 });

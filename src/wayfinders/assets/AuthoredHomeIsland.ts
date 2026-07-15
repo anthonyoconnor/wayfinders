@@ -1,4 +1,7 @@
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { GridGraph } from "../navigation/GridGraph";
+import { solidRowsToCollisionMask } from "../world/CollisionMask";
 import type { WorldLandmarks } from "../world/WorldGenerator";
 import type { WorldGrid } from "../world/WorldGrid";
 import {
@@ -31,6 +34,7 @@ export function stampAuthoredHomeIsland(
   grid: WorldGrid,
   placementAnchor: Readonly<GridPoint>,
   metadata: Readonly<AuthoredHomeIslandMetadata> = PILOT_HOME_ISLAND_METADATA,
+  config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
 ): Readonly<AuthoredHomeIslandPlacement> {
   const topLeft = {
     x: placementAnchor.x - metadata.grid.placementOrigin.x,
@@ -53,6 +57,17 @@ export function stampAuthoredHomeIsland(
     grid.setTerrain(x, y, authoredTerrainToTerrainType(cell.terrain));
     grid.setIslandId(x, y, cell.belongsToHomeIsland ? 0 : -1);
   }
+  if (metadata.collision) {
+    for (const cell of metadata.collision.mixedCells) {
+      grid.setFineCollisionMask(
+        topLeft.x + cell.x,
+        topLeft.y + cell.y,
+        solidRowsToCollisionMask(cell.solidRows),
+      );
+    }
+  }
+
+  assertRequiredWaterConnectivity(grid, topLeft, metadata, config);
 
   return Object.freeze({
     topLeft: Object.freeze(topLeft),
@@ -64,4 +79,47 @@ export function stampAuthoredHomeIsland(
     }),
     service: Object.freeze(translate(metadata.anchors.service, topLeft)),
   });
+}
+
+function assertRequiredWaterConnectivity(
+  grid: WorldGrid,
+  topLeft: Readonly<GridPoint>,
+  metadata: Readonly<AuthoredHomeIslandMetadata>,
+  config: Pick<PrototypeConfig, "navigation" | "movement">,
+): void {
+  const graph = new GridGraph(grid, config);
+  for (const name of ["harbour", "dock", "homeReturn", "service"] as const) {
+    const anchor = translate(metadata.anchors[name], topLeft);
+    if (!graph.isNavigationNodePassable(grid.index(anchor.x, anchor.y))) {
+      throw new RangeError(`Authored home anchors.${name} lacks ship clearance`);
+    }
+  }
+
+  const dock = translate(metadata.anchors.dock, topLeft);
+  const queue = [grid.index(dock.x, dock.y)];
+  const visited = new Set<number>(queue);
+  for (let cursor = 0; cursor < queue.length; cursor++) {
+    const index = queue[cursor];
+    const point = grid.pointFromIndex(index);
+    const localX = point.x - topLeft.x;
+    const localY = point.y - topLeft.y;
+    if (
+      localX === 0
+      || localY === 0
+      || localX === metadata.grid.width - 1
+      || localY === metadata.grid.height - 1
+    ) return;
+    graph.forEachTraversableCardinalNeighbor(index, (neighbor, x, y) => {
+      if (
+        visited.has(neighbor)
+        || x < topLeft.x
+        || y < topLeft.y
+        || x >= topLeft.x + metadata.grid.width
+        || y >= topLeft.y + metadata.grid.height
+      ) return;
+      visited.add(neighbor);
+      queue.push(neighbor);
+    });
+  }
+  throw new RangeError("Authored home dock has no ship-clearance-safe path to the asset-grid edge");
 }

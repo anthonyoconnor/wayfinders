@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { KnowledgeSystem } from "../src/wayfinders/exploration/KnowledgeSystem.ts";
 import { ReturnPathSystem } from "../src/wayfinders/exploration/ReturnPathSystem.ts";
 import { traceGridCenters, VisibilitySystem } from "../src/wayfinders/exploration/VisibilitySystem.ts";
+import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
 import { makeConfig, makeShip } from "./helpers.ts";
@@ -170,6 +171,27 @@ it("remembers a visible blocking landmark ahead without discounting the water ar
 
   expect(world.getKnowledge(7, 4)).toBe(KnowledgeState.Personal);
   expect(world.getKnowledge(6, 4)).toBe(KnowledgeState.Unknown);
+});
+
+it("does not pre-chart a mixed fine-collision cell merely because its coarse terrain is solid", () => {
+  const world = new WorldGrid(4, 1, 4);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setTerrain(2, 0, TerrainType.Land);
+  world.setFineCollisionMask(2, 0, solidRowsToCollisionMask([
+    "1000",
+    "0000",
+    "0000",
+    "0000",
+  ]));
+  world.setTerrain(3, 0, TerrainType.Land);
+
+  new KnowledgeSystem(world).applyTrailingVisibility({
+    observedIndices: [world.index(2, 0), world.index(3, 0)],
+    crossedCenters: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+  }, 8);
+
+  expect(world.getKnowledge(2, 0)).toBe(KnowledgeState.Unknown);
+  expect(world.getKnowledge(3, 0)).toBe(KnowledgeState.Personal);
 });
 
 it("keeps diagonal Personal strips cardinally connected to Supported water", () => {

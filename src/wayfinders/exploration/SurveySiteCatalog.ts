@@ -1,4 +1,6 @@
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { GridGraph } from "../navigation/GridGraph";
 import {
   IslandKind,
   type GeneratedIsland,
@@ -172,6 +174,7 @@ export function generateSurveySiteCatalog(
   islands: readonly GeneratedIsland[],
   homeReturnTile: Readonly<GridPoint>,
   contentVersion: number = SURVEY_SITE_CONTENT_VERSION,
+  config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
 ): readonly Readonly<SurveySiteDefinition>[] {
   return generateSurveySiteCatalogFromDescriptors(
     world,
@@ -180,6 +183,7 @@ export function generateSurveySiteCatalog(
     homeReturnTile,
     INITIAL_SURVEY_SITE_DESCRIPTORS,
     contentVersion,
+    config,
   );
 }
 
@@ -194,18 +198,23 @@ export function generateSurveySiteCatalogFromDescriptors<TType extends string>(
   homeReturnTile: Readonly<GridPoint>,
   descriptors: readonly Readonly<SurveySiteTypeDescriptor<TType>>[],
   contentVersion: number = SURVEY_SITE_CONTENT_VERSION,
+  config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
 ): readonly Readonly<SurveySiteDefinition<TType>>[] {
   if (contentVersion !== SURVEY_SITE_CONTENT_VERSION) {
     throw new RangeError(`Unsupported survey-site content version ${contentVersion}`);
   }
   if (!Number.isSafeInteger(seed)) throw new RangeError("Survey-site seed must be a safe integer");
-  if (!world.inBounds(homeReturnTile.x, homeReturnTile.y) || world.isMovementBlocked(homeReturnTile.x, homeReturnTile.y)) {
+  const graph = new GridGraph(world, config);
+  if (
+    !world.inBounds(homeReturnTile.x, homeReturnTile.y)
+    || !graph.isNavigationNodePassable(world.index(homeReturnTile.x, homeReturnTile.y))
+  ) {
     throw new RangeError("Survey-site home return tile must be an in-bounds passable tile");
   }
 
   validateDescriptors(descriptors);
   const islandById = new Map(islands.map((island) => [island.id, island] as const));
-  const reachable = dockReachableMask(world, homeReturnTile);
+  const reachable = dockReachableMask(world, homeReturnTile, graph);
   const usedVisualIndices = new Set<number>();
   const usedAnchorIndices = new Set<number>();
   const usedIslandIds = new Set<number>();
@@ -291,7 +300,7 @@ function findServiceAnchor(
   for (let dy = -1; dy <= 1; dy++) {
     for (let dx = -1; dx <= 1; dx++) {
       const candidate = { x: tile.x + dx, y: tile.y + dy };
-      if (!world.inBounds(candidate.x, candidate.y) || world.isMovementBlocked(candidate.x, candidate.y)) continue;
+      if (!world.inBounds(candidate.x, candidate.y)) continue;
       const index = world.index(candidate.x, candidate.y);
       if (reachable[index] === 0) continue;
       const distance = Math.hypot(dx, dy);
@@ -303,7 +312,11 @@ function findServiceAnchor(
   return candidates[0]?.tile;
 }
 
-function dockReachableMask(world: WorldGrid, home: Readonly<GridPoint>): Uint8Array {
+function dockReachableMask(
+  world: WorldGrid,
+  home: Readonly<GridPoint>,
+  graph: GridGraph,
+): Uint8Array {
   const visited = new Uint8Array(world.tileCount);
   const queue = new Int32Array(world.tileCount);
   let head = 0;
@@ -314,20 +327,11 @@ function dockReachableMask(world: WorldGrid, home: Readonly<GridPoint>): Uint8Ar
 
   while (head < tail) {
     const index = queue[head++];
-    const tile = world.pointFromIndex(index);
-    const neighbors = [
-      { x: tile.x - 1, y: tile.y },
-      { x: tile.x + 1, y: tile.y },
-      { x: tile.x, y: tile.y - 1 },
-      { x: tile.x, y: tile.y + 1 },
-    ];
-    for (const neighbor of neighbors) {
-      if (!world.inBounds(neighbor.x, neighbor.y) || world.isMovementBlocked(neighbor.x, neighbor.y)) continue;
-      const neighborIndex = world.index(neighbor.x, neighbor.y);
-      if (visited[neighborIndex]) continue;
+    graph.forEachTraversableCardinalNeighbor(index, (neighborIndex) => {
+      if (visited[neighborIndex]) return;
       visited[neighborIndex] = 1;
       queue[tail++] = neighborIndex;
-    }
+    });
   }
   return visited;
 }

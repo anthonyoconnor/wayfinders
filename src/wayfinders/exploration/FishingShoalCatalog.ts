@@ -1,4 +1,6 @@
+import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
+import { GridGraph } from "../navigation/GridGraph";
 import { seededValue } from "../world/SeededRandom";
 import { TerrainType } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
@@ -30,8 +32,13 @@ const CLUE_LABELS: Readonly<Record<(typeof FISHING_SHOAL_CLUE_KINDS)[number], re
   "water-colour": ["A faint change in the water", "A distinct green-blue seam", "A broad living stain in the water"],
 };
 
-function candidateIsEligible(world: WorldGrid, index: number, home: GridPoint): GridPoint | undefined {
-  if (world.isMovementBlockedAtIndex(index)) return undefined;
+function candidateIsEligible(
+  world: WorldGrid,
+  graph: GridGraph,
+  index: number,
+  home: GridPoint,
+): GridPoint | undefined {
+  if (!graph.isNavigationNodePassable(index)) return undefined;
   if (world.getIslandIdAtIndex(index) >= 0 || world.getResourceIdAtIndex(index) >= 0) return undefined;
   const tile = world.pointFromIndex(index);
   if (
@@ -68,14 +75,16 @@ export function generateFishingShoalCatalog(
   seed: number,
   home: GridPoint,
   contentVersion: number = FISHING_SHOAL_CONTENT_VERSION,
+  config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
 ): readonly Readonly<FishingShoalDefinition>[] {
   if (contentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
     throw new RangeError(`Unsupported fishing-shoal content version ${contentVersion}`);
   }
 
+  const graph = new GridGraph(world, config);
   const candidates: RankedCandidate[] = [];
   for (let index = 0; index < world.tileCount; index++) {
-    const tile = candidateIsEligible(world, index, home);
+    const tile = candidateIsEligible(world, graph, index, home);
     if (!tile) continue;
     candidates.push({
       index,
