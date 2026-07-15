@@ -60,7 +60,7 @@ Latest accepted verification baseline:
 - Asset catalog, PNG/frame, texture-limit, generated-code, thumbnail and report
   consistency checks pass before compilation.
 - TypeScript typecheck passes.
-- 346 automated tests pass across 43 files.
+- 347 automated tests pass across 43 files.
 - The production Vite build passes.
 - Browser acceptance covers the accepted fishing, return, wreck, succession,
   survey-site, idol completion, continued-world and new-game flows with a clean

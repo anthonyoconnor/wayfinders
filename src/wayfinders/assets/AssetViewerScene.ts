@@ -776,7 +776,7 @@ export class AssetViewerScene extends Phaser.Scene {
           <span><i data-swatch="fine"></i>8 px subgrid</span>
           <span><i data-swatch="clearance"></i>14 px hull probe</span>
         </div>
-        <div data-collision-panel="hybrid" class="collision-panel" hidden>
+        <div data-collision-panel="hybrid-grid" class="collision-panel" hidden>
           <div class="collision-tool-grid" role="group" aria-label="Collision grid tools">
             <button data-collision-tool="paint" type="button">Paint</button>
             <button data-collision-tool="erase" type="button">Erase</button>
