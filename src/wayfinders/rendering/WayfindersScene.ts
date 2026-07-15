@@ -42,6 +42,7 @@ import type { NavigatorId } from "../lineage/NavigatorLineageSystem";
 import { worldToGrid } from "../world/CoordinateSystem";
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
+import { collectDebugEntityBounds, type DebugEntityBoundsRole } from "./DebugEntityBounds";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { IslandDossierRenderer } from "./IslandDossierRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
@@ -109,6 +110,9 @@ declare global {
 const PALETTE = {
   grid: 0xa5d5d2,
   collision: 0xff5a4f,
+  shipCollision: 0xffc857,
+  entityBounds: 0x55e7ff,
+  serviceBounds: 0x8cf57c,
   sight: 0x78fff0,
 } as const;
 
@@ -129,6 +133,7 @@ export class WayfindersScene extends Phaser.Scene {
   private wreckRenderer!: WreckRenderer;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private debugGraphics!: Phaser.GameObjects.Graphics;
+  private entityDebugGraphics!: Phaser.GameObjects.Graphics;
   private domAbort?: AbortController;
   private developerToolsAbort?: AbortController;
   private readonly eventUnsubscribers: Array<() => void> = [];
@@ -208,6 +213,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.resetShipPresentation(true);
     this.gridGraphics = this.add.graphics().setDepth(70);
     this.debugGraphics = this.add.graphics().setDepth(71);
+    this.entityDebugGraphics = this.add.graphics().setDepth(72);
     this.gameHost = document.querySelector<HTMLElement>("#game-host") ?? undefined;
     this.gameStatus = document.querySelector<HTMLElement>("#game-status") ?? undefined;
     for (const diagnostic of this.pilotAssets.diagnostics) {
@@ -351,7 +357,7 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private renderDebug(): void {
-    const size = prototypeConfig.navigation.tileSize;
+    const size = this.simulation.config.navigation.tileSize;
     const world = this.simulation.world;
     this.gridGraphics.clear();
     this.debugGraphics.clear();
@@ -383,6 +389,47 @@ export class WayfindersScene extends Phaser.Scene {
       }
     }
 
+  }
+
+  private renderEntityDebug(): void {
+    const graphics = this.entityDebugGraphics;
+    graphics.clear();
+    if (!this.simulation.debug.collisionBoxes) return;
+
+    const size = this.simulation.config.navigation.tileSize;
+    const bounds = collectDebugEntityBounds({
+      ship: {
+        worldX: this.shipRenderer.container.x,
+        worldY: this.shipRenderer.container.y,
+      },
+      wrecks: this.simulation.wrecks,
+      fishingShoals: this.simulation.fishingShoalDefinitions,
+      surveySites: this.simulation.surveySiteDefinitions,
+      islandDossiers: this.simulation.islandDossierDefinitions,
+      homeDock: this.simulation.generated.landmarks.dock,
+    }, size, this.simulation.config.movement.shipCollisionHalfExtent);
+
+    for (const bound of bounds) {
+      const color = this.debugEntityColor(bound.role);
+      const x = bound.centerX - bound.halfWidth;
+      const y = bound.centerY - bound.halfHeight;
+      const width = bound.halfWidth * 2;
+      const height = bound.halfHeight * 2;
+      graphics.fillStyle(color, bound.role === "ship-collider" ? 0.18 : 0.08);
+      graphics.lineStyle(bound.role === "ship-collider" ? 2 : 1.5, color, 0.95);
+      graphics.fillRect(x, y, width, height);
+      graphics.strokeRect(x, y, width, height);
+      graphics.lineBetween(bound.centerX - 3, bound.centerY, bound.centerX + 3, bound.centerY);
+      graphics.lineBetween(bound.centerX, bound.centerY - 3, bound.centerX, bound.centerY + 3);
+    }
+  }
+
+  private debugEntityColor(role: DebugEntityBoundsRole): number {
+    switch (role) {
+      case "ship-collider": return PALETTE.shipCollision;
+      case "item": return PALETTE.entityBounds;
+      case "service": return PALETTE.serviceBounds;
+    }
   }
 
   private syncPresentation(force = false): void {
@@ -433,6 +480,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.islandDossierRenderer.updateViewport(this.cameras.main);
     this.surveySiteRenderer.updateViewport(this.cameras.main);
     this.fishingShoalRenderer.updateViewport(this.cameras.main);
+    this.renderEntityDebug();
     this.knowledgeOverlay.sync(
       this.simulation.world,
       this.simulation.generated.seed,
@@ -704,6 +752,7 @@ export class WayfindersScene extends Phaser.Scene {
           <div class="tool-disclosure__body">
             ${this.toggleMarkup("navigationGrid", "Navigation grid")}
             ${this.toggleMarkup("collisionBoxes", "Collision boxes")}
+            <p class="tool-live-note">Red: blocking terrain &middot; amber: live ship hull &middot; cyan: world items &middot; green: service/approach tiles</p>
             ${this.toggleMarkup("currentSight", "Current line of sight")}
             ${this.toggleMarkup("forwardRange", "Forward reach limit")}
             ${this.toggleMarkup("returnViability", "Return route viability")}

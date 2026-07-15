@@ -7,6 +7,13 @@ interface GridTraversalEntry extends GridPoint {
   tEnter: number;
 }
 
+interface AxisAlignedBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
 }
@@ -92,6 +99,40 @@ export function createShipStateAtGrid(
   };
 }
 
+/** Returns the first time a moving point enters the open interior of an axis-aligned box. */
+function segmentBoundsEntryTime(
+  fromX: number,
+  fromY: number,
+  toX: number,
+  toY: number,
+  bounds: Readonly<AxisAlignedBounds>,
+): number | undefined {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  let entry = 0;
+  let exit = 1;
+
+  for (const [origin, delta, minimum, maximum] of [
+    [fromX, dx, bounds.left, bounds.right],
+    [fromY, dy, bounds.top, bounds.bottom],
+  ] as const) {
+    if (delta === 0) {
+      if (origin <= minimum || origin >= maximum) return undefined;
+      continue;
+    }
+
+    let near = (minimum - origin) / delta;
+    let far = (maximum - origin) / delta;
+    if (near > far) [near, far] = [far, near];
+    entry = Math.max(entry, near);
+    exit = Math.min(exit, far);
+    if (entry > exit) return undefined;
+  }
+
+  if (exit < 0 || entry > 1) return undefined;
+  return Math.max(0, entry);
+}
+
 export class MovementSystem {
   constructor(
     private world: WorldGrid,
@@ -129,14 +170,11 @@ export class MovementSystem {
     let actualT = 1;
     let collided = false;
 
-    for (let index = 1; index < traversal.length; index++) {
-      const entry = traversal[index];
-      if (this.world.isMovementBlocked(entry.x, entry.y)) {
-        const epsilonT = this.config.movement.collisionEpsilon / absoluteDistance;
-        actualT = Math.max(0, entry.tEnter - epsilonT);
-        collided = true;
-        break;
-      }
+    const collisionT = this.firstCollisionTime(fromX, fromY, proposedX, proposedY);
+    if (collisionT !== undefined) {
+      const epsilonT = this.config.movement.collisionEpsilon / absoluteDistance;
+      actualT = Math.max(0, collisionT - epsilonT);
+      collided = true;
     }
 
     const actualX = fromX + (proposedX - fromX) * actualT;
@@ -172,6 +210,32 @@ export class MovementSystem {
     ship.currentTileX = tile.x;
     ship.currentTileY = tile.y;
     ship.speed = 0;
+  }
+
+  /** Sweeps the ship's square footprint against terrain without tunnelling through a tile. */
+  private firstCollisionTime(fromX: number, fromY: number, toX: number, toY: number): number | undefined {
+    const tileSize = this.config.navigation.tileSize;
+    const halfExtent = this.config.movement.shipCollisionHalfExtent;
+    const minimumTileX = Math.floor((Math.min(fromX, toX) - halfExtent) / tileSize);
+    const maximumTileX = Math.floor((Math.max(fromX, toX) + halfExtent) / tileSize);
+    const minimumTileY = Math.floor((Math.min(fromY, toY) - halfExtent) / tileSize);
+    const maximumTileY = Math.floor((Math.max(fromY, toY) + halfExtent) / tileSize);
+    let first: number | undefined;
+
+    for (let y = minimumTileY; y <= maximumTileY; y++) {
+      for (let x = minimumTileX; x <= maximumTileX; x++) {
+        if (!this.world.isMovementBlocked(x, y)) continue;
+        const entry = segmentBoundsEntryTime(fromX, fromY, toX, toY, {
+          left: x * tileSize - halfExtent,
+          right: (x + 1) * tileSize + halfExtent,
+          top: y * tileSize - halfExtent,
+          bottom: (y + 1) * tileSize + halfExtent,
+        });
+        if (entry !== undefined && (first === undefined || entry < first)) first = entry;
+      }
+    }
+
+    return first;
   }
 
   private buildSegments(

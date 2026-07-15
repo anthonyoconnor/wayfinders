@@ -100,6 +100,14 @@ describe("prototype configuration", () => {
     expect(prototypeConfig.simulation.wreckPresentationSeconds).toBe(4);
   });
 
+  it("keeps the ship collision footprint smaller than a passable navigation tile", () => {
+    expect(DEFAULT_PROTOTYPE_CONFIG.movement.shipCollisionHalfExtent).toBe(14);
+    expect(() => patchPrototypeConfig({ movement: { shipCollisionHalfExtent: 16 } })).toThrow(
+      "movement.shipCollisionHalfExtent must be smaller than half navigation.tileSize",
+    );
+    expect(prototypeConfig.movement.shipCollisionHalfExtent).toBe(14);
+  });
+
   it("allows zero Unknown travel cost for consumption-free testing", () => {
     patchPrototypeConfig({ provisions: { unknownCost: 0 } });
     expect(prototypeConfig.provisions.unknownCost).toBe(0);
@@ -348,7 +356,12 @@ describe("navigation foundations", () => {
     expect(result.collided).toBe(true);
     expect(ship.currentTileX).toBe(1);
     expect(ship.currentTileY).toBe(1);
-    expect(ship.worldX).toBeCloseTo(64 - prototypeConfig.movement.collisionEpsilon, 6);
+    expect(ship.worldX).toBeCloseTo(
+      64
+      - prototypeConfig.movement.shipCollisionHalfExtent
+      - prototypeConfig.movement.collisionEpsilon,
+      6,
+    );
     expect(ship.speed).toBe(0);
     expect(result.enteredTiles).toEqual([]);
   });

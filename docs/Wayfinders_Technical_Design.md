@@ -152,9 +152,11 @@ island-dossier state is stored separately and references the stable island ID.
 The ship has continuous world position, heading and speed plus its current
 navigation tile.
 
-WASD and arrow keys provide turning and forward/reverse thrust. Movement traces
-every navigation tile crossed by the continuous line segment, stops before the
-first blocked tile and emits entered-tile information in order.
+WASD and arrow keys provide turning and forward/reverse thrust. Movement sweeps
+the ship's configured square gameplay footprint along the continuous line
+segment, stops before the first blocked tile and emits centre-entered tile
+information in order. The sweep prevents both visible hull overlap and
+high-speed tunnelling without sampling rendered pixels.
 
 Terrain is authoritative:
 

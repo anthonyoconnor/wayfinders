@@ -62,6 +62,8 @@ export interface PrototypeConfig {
   movement: {
     shipSpeed: number;
     turnRate: number;
+    /** Axis-aligned half-size of the ship's square gameplay collision footprint, in world pixels. */
+    shipCollisionHalfExtent: number;
     collisionEpsilon: number;
   };
   simulation: {
@@ -152,6 +154,7 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
   movement: {
     shipSpeed: 2.5,
     turnRate: 180,
+    shipCollisionHalfExtent: 14,
     collisionEpsilon: 0.001,
   },
   simulation: {
@@ -354,6 +357,7 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
 
   nonNegative(config.movement.shipSpeed, "movement.shipSpeed");
   nonNegative(config.movement.turnRate, "movement.turnRate");
+  positive(config.movement.shipCollisionHalfExtent, "movement.shipCollisionHalfExtent");
   positive(config.movement.collisionEpsilon, "movement.collisionEpsilon");
 
   positive(config.simulation.fixedStepMs, "simulation.fixedStepMs");
@@ -390,6 +394,9 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   }
   if (config.movement.collisionEpsilon >= config.navigation.tileSize) {
     throw new RangeError("movement.collisionEpsilon must be smaller than navigation.tileSize");
+  }
+  if (config.movement.shipCollisionHalfExtent >= config.navigation.tileSize / 2) {
+    throw new RangeError("movement.shipCollisionHalfExtent must be smaller than half navigation.tileSize");
   }
   if (config.simulation.maxFrameDeltaMs < config.simulation.fixedStepMs) {
     throw new RangeError("simulation.maxFrameDeltaMs must be at least simulation.fixedStepMs");
