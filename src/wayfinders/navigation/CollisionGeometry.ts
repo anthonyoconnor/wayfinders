@@ -23,6 +23,8 @@ export type CollisionTileFilter = (x: number, y: number, worldIndex: number) => 
 export interface ShipCollisionQueryOptions {
   readonly includeTile?: CollisionTileFilter;
   readonly stats?: CollisionQueryStats;
+  /** Called for every tile whose collision intersects the swept hull; undefined identifies world bounds. */
+  readonly onCollisionTile?: (worldIndex: number | undefined) => void;
 }
 
 /** Returns the first time a moving point enters the open interior of an AABB. */
@@ -85,7 +87,10 @@ export function firstShipCollisionTime(
   const maximumTileY = Math.floor((Math.max(fromY, toY) + halfExtent) / tileSize);
   let first: number | undefined;
 
-  const testPrimitive = (bounds: Readonly<AxisAlignedBounds>): void => {
+  const testPrimitive = (
+    bounds: Readonly<AxisAlignedBounds>,
+    worldIndex: number | undefined,
+  ): void => {
     if (options.stats) options.stats.narrowPhasePrimitives++;
     const entry = segmentBoundsEntryTime(fromX, fromY, toX, toY, {
       left: bounds.left - halfExtent,
@@ -93,7 +98,9 @@ export function firstShipCollisionTime(
       top: bounds.top - halfExtent,
       bottom: bounds.bottom + halfExtent,
     });
-    if (entry !== undefined && (first === undefined || entry < first)) first = entry;
+    if (entry === undefined) return;
+    options.onCollisionTile?.(worldIndex);
+    if (first === undefined || entry < first) first = entry;
   };
 
   for (let y = minimumTileY; y <= maximumTileY; y++) {
@@ -105,7 +112,7 @@ export function firstShipCollisionTime(
           right: (x + 1) * tileSize,
           top: y * tileSize,
           bottom: (y + 1) * tileSize,
-        });
+        }, undefined);
         continue;
       }
 
@@ -123,7 +130,7 @@ export function firstShipCollisionTime(
               right: left + COLLISION_SUBCELL_SIZE,
               top,
               bottom: top + COLLISION_SUBCELL_SIZE,
-            });
+            }, worldIndex);
           }
         }
       } else if (world.isMovementBlockedAtIndex(worldIndex)) {
@@ -132,7 +139,7 @@ export function firstShipCollisionTime(
           right: (x + 1) * tileSize,
           top: y * tileSize,
           bottom: (y + 1) * tileSize,
-        });
+        }, worldIndex);
       }
     }
   }

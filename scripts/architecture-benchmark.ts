@@ -18,6 +18,7 @@ import {
 const RESULT_VERSION = 1;
 const DEFAULT_UPDATE_SAMPLES = 25;
 const DEFAULT_CONSTRUCTION_SAMPLES = 3;
+const DEFAULT_WARMUP_CROSSINGS = 5;
 
 interface Distribution {
   readonly samples: number;
@@ -130,13 +131,16 @@ function gitValue(args: string[]): string {
   }
 }
 
-function findEastboundRun(simulation: GameSimulation): { x: number; y: number } {
+function findEastboundRun(
+  simulation: GameSimulation,
+  requiredEdges: number,
+): { x: number; y: number } {
   const world = simulation.world;
   const graph = new GridGraph(world);
   for (let y = 1; y + 1 < world.height; y++) {
-    for (let x = 1; x + 4 < world.width; x++) {
+    for (let x = 1; x + requiredEdges < world.width; x++) {
       let valid = true;
-      for (let offset = 0; offset < 4; offset++) {
+      for (let offset = 0; offset < requiredEdges; offset++) {
         const from = world.index(x + offset, y);
         const to = world.index(x + offset + 1, y);
         if (!graph.canTraverseCardinalEdge(from, to)) {
@@ -147,7 +151,7 @@ function findEastboundRun(simulation: GameSimulation): { x: number; y: number } 
       if (valid) return { x, y };
     }
   }
-  throw new Error("Unable to locate a five-tile eastbound navigation fixture");
+  throw new Error("Unable to locate the requested eastbound navigation fixture");
 }
 
 function resourceEstimate(simulation: GameSimulation): ProfileResult["resources"] {
@@ -169,6 +173,7 @@ function benchmarkProfile(
   profileName: WorldProfileName,
   updateSamples: number,
   constructionSamples: number,
+  warmupCrossings: number,
 ): ProfileResult {
   const profile = WORLD_PROFILES[profileName];
   const configSummary = {
@@ -204,16 +209,20 @@ function benchmarkProfile(
 
     const tileEntryDurations: number[] = [];
     const tileTrace = new TraceCollector();
-    const start = findEastboundRun(simulation);
+    const start = findEastboundRun(simulation, warmupCrossings + updateSamples + 1);
+    if (!simulation.teleport(start)) throw new Error("Tile-entry fixture teleport was rejected");
+    for (let warmup = 0; warmup < warmupCrossings; warmup++) {
+      const movement = simulation.update({ turn: 0, throttle: 1 }, 0.4);
+      if (!movement.tileChanged) throw new Error("Tile-entry warmup did not cross a tile");
+    }
     trace.clear();
     for (let sample = 0; sample < updateSamples; sample++) {
-      if (!simulation.teleport(start)) throw new Error("Tile-entry fixture teleport was rejected");
-      trace.clear();
       const startedAt = performance.now();
-      const movement = simulation.update({ turn: 0, throttle: 1 }, 0.5);
+      const movement = simulation.update({ turn: 0, throttle: 1 }, 0.4);
       tileEntryDurations.push(performance.now() - startedAt);
       if (!movement.tileChanged) throw new Error("Tile-entry fixture did not cross a tile");
       tileTrace.appendFrom(trace);
+      trace.clear();
     }
     const tilePhases = tileTrace.snapshot();
     const phases = { ...constructionPhases, ...ordinaryPhases, ...tilePhases };
@@ -251,10 +260,11 @@ const constructionSamples = positiveIntegerArgument(
   "construction-samples",
   DEFAULT_CONSTRUCTION_SAMPLES,
 );
+const warmupCrossings = positiveIntegerArgument("warmup-crossings", DEFAULT_WARMUP_CROSSINGS);
 const commit = gitValue(["rev-parse", "HEAD"]);
 const dirty = gitValue(["status", "--porcelain"]) !== "";
 const results = requestedProfiles().map((profile) => (
-  benchmarkProfile(profile, updateSamples, constructionSamples)
+  benchmarkProfile(profile, updateSamples, constructionSamples, warmupCrossings)
 ));
 const report = {
   version: RESULT_VERSION,
@@ -270,6 +280,7 @@ const report = {
   },
   updateSamples,
   constructionSamples,
+  warmupCrossings,
   results,
 };
 const output = resolve(

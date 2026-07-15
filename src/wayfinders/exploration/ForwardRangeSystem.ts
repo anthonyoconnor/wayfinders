@@ -1,5 +1,9 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { ShipState } from "../core/types";
+import {
+  BucketedCostSearchWorkspace,
+  type BucketedCostSearchResult,
+} from "../navigation/BucketedCostSearch";
 import { dijkstra, DijkstraWorkspace } from "../navigation/Dijkstra";
 import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState } from "../world/TileData";
@@ -27,13 +31,10 @@ export interface ForwardRangeResult {
   logicalRevision: number;
 }
 
-interface ForwardBudgetGroup {
-  cost: number;
-  indices: readonly number[];
-}
-
 interface ForwardBudgetCache {
-  groups: readonly ForwardBudgetGroup[];
+  groupCosts: number[];
+  /** Exclusive candidateIndices end position for each corresponding cost group. */
+  groupEnds: number[];
   activeGroupCount: number;
   maximumComputedBudget: number;
   originX: number;
@@ -42,12 +43,19 @@ interface ForwardBudgetCache {
   headingCosine: number;
   headingSine: number;
   coneCosine: number;
+  spareCandidateIndices: number[];
+  sparePresentationIndices: number[];
 }
 
 export class ForwardRangeSystem {
   private graph: GridGraph;
   private budgetCaches = new WeakMap<ForwardRangeResult, ForwardBudgetCache>();
   private readonly searchWorkspace = new DijkstraWorkspace();
+  private readonly bucketedSearchWorkspace = new BucketedCostSearchWorkspace();
+  private readonly integerCostScale: number | undefined;
+  private readonly integerTravelCosts = new Int32Array(3);
+  private candidateStamps = new Uint32Array(0);
+  private candidateStamp = 0;
   private readonly startNodes = [0];
   private relaxNeighbor: (neighbor: number, traversalCost: number) => void = () => undefined;
   private readonly visitGraphNeighbor = (neighbor: number): void => {
@@ -63,18 +71,44 @@ export class ForwardRangeSystem {
     this.relaxNeighbor = visit;
     this.graph.forEachKnownTraversableCardinalNeighbor(node, this.visitGraphNeighbor);
   };
+  private relaxIntegerNeighbor: (neighbor: number, traversalCostUnits: number) => void = () => undefined;
+  private readonly visitIntegerGraphNeighbor = (neighbor: number): void => {
+    const knowledge = this.world.getKnowledgeAtIndex(neighbor);
+    this.relaxIntegerNeighbor(neighbor, this.integerTravelCosts[knowledge]);
+  };
+  private readonly forEachIntegerSearchNeighbor = (
+    node: number,
+    visit: (neighbor: number, traversalCostUnits: number) => void,
+  ): void => {
+    this.relaxIntegerNeighbor = visit;
+    this.graph.forEachKnownTraversableCardinalNeighbor(node, this.visitIntegerGraphNeighbor);
+  };
 
   constructor(
     private world: WorldGrid,
     private readonly config: PrototypeConfig = prototypeConfig,
   ) {
     this.graph = new GridGraph(world, config);
+    this.integerCostScale = this.resolveIntegerCostScale();
+    if (this.integerCostScale !== undefined) {
+      this.integerTravelCosts[KnowledgeState.Unknown] = Math.round(
+        knowledgeTravelCost(KnowledgeState.Unknown, config) * this.integerCostScale,
+      );
+      this.integerTravelCosts[KnowledgeState.Personal] = Math.round(
+        knowledgeTravelCost(KnowledgeState.Personal, config) * this.integerCostScale,
+      );
+      this.integerTravelCosts[KnowledgeState.Supported] = Math.round(
+        knowledgeTravelCost(KnowledgeState.Supported, config) * this.integerCostScale,
+      );
+    }
   }
 
   setWorld(world: WorldGrid): void {
     this.world = world;
     this.graph = new GridGraph(world, this.config);
     this.budgetCaches = new WeakMap();
+    this.candidateStamps = new Uint32Array(0);
+    this.candidateStamp = 0;
   }
 
   calculate(ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">): ForwardRangeResult {
@@ -110,13 +144,7 @@ export class ForwardRangeSystem {
 
     const budget = availableProvisionUnits(ship);
     this.startNodes[0] = this.world.index(ship.currentTileX, ship.currentTileY);
-    const result = dijkstra({
-      nodeCount: this.world.tileCount,
-      starts: this.startNodes,
-      maxCost: budget,
-      workspace: this.searchWorkspace,
-      forEachNeighbor: this.forEachSearchNeighbor,
-    });
+    const result = this.search(budget);
 
     const mask = reusable?.mask.length === this.world.tileCount
       ? reusable.mask
@@ -124,32 +152,46 @@ export class ForwardRangeSystem {
     const presentationMask = reusable?.presentationMask.length === this.world.tileCount
       ? reusable.presentationMask
       : new Uint8Array(this.world.tileCount);
-    if (reusable && mask === reusable.mask) {
-      for (const index of reusable.candidateIndices) mask[index] = 0;
-    }
     if (reusable && presentationMask === reusable.presentationMask) {
       for (const index of reusable.presentationCandidateIndices) presentationMask[index] = 0;
     }
-    const indicesByCost = new Map<number, number[]>();
-    const candidateIndices: number[] = [];
+    const existingCache = reusable ? this.budgetCaches.get(reusable) : undefined;
+    const previousCandidateIndices = reusable?.candidateIndices;
+    const candidateIndices = existingCache?.spareCandidateIndices ?? [];
+    candidateIndices.length = 0;
+    const groupCosts = existingCache?.groupCosts ?? [];
+    const groupEnds = existingCache?.groupEnds ?? [];
+    groupCosts.length = 0;
+    groupEnds.length = 0;
+    const stamp = this.nextCandidateStamp();
     let reachableCount = 0;
+    let previousCost: number | undefined;
+    let logicalChanged = reusable === undefined;
     for (let settled = 0; settled < result.settledCount; settled++) {
       const index = result.settledIndices[settled];
       if (this.world.getKnowledgeAtIndex(index) !== KnowledgeState.Unknown) continue;
+      const cost = result.costs[index];
+      if (previousCost !== undefined && cost !== previousCost) {
+        groupEnds.push(candidateIndices.length);
+      }
+      if (previousCost === undefined || cost !== previousCost) {
+        groupCosts.push(cost);
+        previousCost = cost;
+      }
+      if (mask[index] === 0) logicalChanged = true;
       mask[index] = 1;
+      this.candidateStamps[index] = stamp;
       candidateIndices.push(index);
       reachableCount++;
-      const cost = result.costs[index];
-      let group = indicesByCost.get(cost);
-      if (!group) {
-        group = [];
-        indicesByCost.set(cost, group);
-      }
-      group.push(index);
     }
-    const groups = [...indicesByCost]
-      .sort(([leftCost], [rightCost]) => leftCost - rightCost)
-      .map(([cost, indices]) => ({ cost, indices }));
+    if (previousCost !== undefined) groupEnds.push(candidateIndices.length);
+    if (reusable && mask === reusable.mask) {
+      for (const index of reusable.candidateIndices) {
+        if (this.candidateStamps[index] === stamp) continue;
+        mask[index] = 0;
+        logicalChanged = true;
+      }
+    }
     const nextValues: ForwardRangeResult = {
       mask,
       presentationMask,
@@ -161,14 +203,17 @@ export class ForwardRangeSystem {
       coneHalfAngleDegrees: this.config.overlays.forwardConeHalfAngleDegrees,
       candidateIndices,
       presentationCandidateIndices: [],
-      logicalRevision: reusable ? reusable.logicalRevision + 1 : 1,
+      logicalRevision: reusable
+        ? reusable.logicalRevision + (logicalChanged ? 1 : 0)
+        : 1,
     };
     const forwardResult = reusable ?? nextValues;
     if (reusable) Object.assign(reusable, nextValues);
     const radians = presentationHeading * Math.PI / 180;
     this.budgetCaches.set(forwardResult, {
-      groups,
-      activeGroupCount: groups.length,
+      groupCosts,
+      groupEnds,
+      activeGroupCount: groupCosts.length,
       maximumComputedBudget: budget,
       originX: ship.currentTileX,
       originY: ship.currentTileY,
@@ -176,6 +221,10 @@ export class ForwardRangeSystem {
       headingCosine: Math.cos(radians),
       headingSine: Math.sin(radians),
       coneCosine: Math.cos(this.config.overlays.forwardConeHalfAngleDegrees * Math.PI / 180),
+      spareCandidateIndices: previousCandidateIndices
+        ? previousCandidateIndices as number[]
+        : [],
+      sparePresentationIndices: existingCache?.sparePresentationIndices ?? [],
     });
     this.refreshPresentationFrontier(forwardResult, this.budgetCaches.get(forwardResult)!);
     return forwardResult;
@@ -198,9 +247,15 @@ export class ForwardRangeSystem {
     result.presentationHeading = cache.presentationHeading;
     let changed = false;
 
-    while (cache.activeGroupCount > 0 && cache.groups[cache.activeGroupCount - 1].cost > budget) {
-      const group = cache.groups[--cache.activeGroupCount];
-      for (const index of group.indices) {
+    while (
+      cache.activeGroupCount > 0
+      && cache.groupCosts[cache.activeGroupCount - 1] > budget
+    ) {
+      const groupIndex = --cache.activeGroupCount;
+      const start = groupIndex === 0 ? 0 : cache.groupEnds[groupIndex - 1];
+      const end = cache.groupEnds[groupIndex];
+      for (let position = start; position < end; position++) {
+        const index = result.candidateIndices[position];
         if (result.mask[index] === 0) continue;
         result.mask[index] = 0;
         result.reachableCount--;
@@ -208,11 +263,14 @@ export class ForwardRangeSystem {
       }
     }
     while (
-      cache.activeGroupCount < cache.groups.length
-      && cache.groups[cache.activeGroupCount].cost <= budget
+      cache.activeGroupCount < cache.groupCosts.length
+      && cache.groupCosts[cache.activeGroupCount] <= budget
     ) {
-      const group = cache.groups[cache.activeGroupCount++];
-      for (const index of group.indices) {
+      const groupIndex = cache.activeGroupCount++;
+      const start = groupIndex === 0 ? 0 : cache.groupEnds[groupIndex - 1];
+      const end = cache.groupEnds[groupIndex];
+      for (let position = start; position < end; position++) {
+        const index = result.candidateIndices[position];
         if (result.mask[index] === 1) continue;
         result.mask[index] = 1;
         result.reachableCount++;
@@ -279,10 +337,14 @@ export class ForwardRangeSystem {
     result.frontierCount = refreshed.frontierCount;
     result.presentationHeading = refreshed.presentationHeading;
     result.coneHalfAngleDegrees = refreshed.coneHalfAngleDegrees;
+    const previousCandidates = result.candidateIndices as number[];
+    const previousPresentation = result.presentationCandidateIndices as number[];
     result.candidateIndices = refreshed.candidateIndices;
     result.presentationCandidateIndices = refreshed.presentationCandidateIndices;
     if (changed) result.logicalRevision++;
     const refreshedCache = this.budgetCaches.get(refreshed)!;
+    refreshedCache.spareCandidateIndices = previousCandidates;
+    refreshedCache.sparePresentationIndices = previousPresentation;
     this.budgetCaches.set(result, refreshedCache);
     this.budgetCaches.delete(refreshed);
     return changed;
@@ -299,7 +361,8 @@ export class ForwardRangeSystem {
     cache: ForwardBudgetCache,
   ): boolean {
     const previous = result.presentationCandidateIndices;
-    const next: number[] = [];
+    const next = cache.sparePresentationIndices;
+    next.length = 0;
     const bandWidth = this.config.provisions.unknownCost;
     const minimumCost = result.budget - bandWidth;
 
@@ -307,13 +370,15 @@ export class ForwardRangeSystem {
     let upper = cache.activeGroupCount;
     while (lower < upper) {
       const middle = (lower + upper) >>> 1;
-      if (cache.groups[middle].cost <= minimumCost) lower = middle + 1;
+      if (cache.groupCosts[middle] <= minimumCost) lower = middle + 1;
       else upper = middle;
     }
 
     for (let groupIndex = lower; groupIndex < cache.activeGroupCount; groupIndex++) {
-      const group = cache.groups[groupIndex];
-      for (const index of group.indices) {
+      const start = groupIndex === 0 ? 0 : cache.groupEnds[groupIndex - 1];
+      const end = cache.groupEnds[groupIndex];
+      for (let position = start; position < end; position++) {
+        const index = result.candidateIndices[position];
         if (this.isInsidePresentationCone(index, cache)) next.push(index);
       }
     }
@@ -330,6 +395,7 @@ export class ForwardRangeSystem {
     for (const index of previous) result.presentationMask[index] = 0;
     for (const index of next) result.presentationMask[index] = 1;
     result.presentationCandidateIndices = next;
+    cache.sparePresentationIndices = previous as number[];
     result.frontierCount = next.length;
     return changed;
   }
@@ -366,5 +432,59 @@ export class ForwardRangeSystem {
   private normalizeHeading(heading: number): number {
     if (!Number.isFinite(heading)) throw new RangeError("Ship heading must be finite");
     return ((heading % 360) + 360) % 360;
+  }
+
+  private nextCandidateStamp(): number {
+    if (this.candidateStamps.length !== this.world.tileCount) {
+      this.candidateStamps = new Uint32Array(this.world.tileCount);
+      this.candidateStamp = 0;
+    }
+    this.candidateStamp++;
+    if (this.candidateStamp === 0xffff_ffff) {
+      this.candidateStamps.fill(0);
+      this.candidateStamp = 1;
+    }
+    return this.candidateStamp;
+  }
+
+  private search(budget: number): Pick<
+    BucketedCostSearchResult,
+    "costs" | "settledIndices" | "settledCount"
+  > {
+    if (this.integerCostScale !== undefined) {
+      const maxCostUnits = Math.floor(budget * this.integerCostScale + 1e-9);
+      // Protect developer tuning from constructing an unexpectedly giant
+      // bucket array. The generic heap remains exact for larger horizons.
+      if (maxCostUnits <= 1_000_000) {
+        return this.bucketedSearchWorkspace.search({
+          nodeCount: this.world.tileCount,
+          start: this.startNodes[0],
+          maxCostUnits,
+          unitScale: this.integerCostScale,
+          forEachNeighbor: this.forEachIntegerSearchNeighbor,
+        });
+      }
+    }
+    return dijkstra({
+      nodeCount: this.world.tileCount,
+      starts: this.startNodes,
+      maxCost: budget,
+      workspace: this.searchWorkspace,
+      forEachNeighbor: this.forEachSearchNeighbor,
+    });
+  }
+
+  private resolveIntegerCostScale(): number | undefined {
+    const costs = [
+      knowledgeTravelCost(KnowledgeState.Unknown, this.config),
+      knowledgeTravelCost(KnowledgeState.Personal, this.config),
+      knowledgeTravelCost(KnowledgeState.Supported, this.config),
+    ];
+    for (const scale of [1, 10, 100, 1_000, 10_000]) {
+      if (costs.every((cost) => Math.abs(cost * scale - Math.round(cost * scale)) <= 1e-9)) {
+        return scale;
+      }
+    }
+    return undefined;
   }
 }
