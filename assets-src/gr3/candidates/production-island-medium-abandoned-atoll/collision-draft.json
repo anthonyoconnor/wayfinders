@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "recipeId": "production.island.medium-abandoned-atoll",
+  "candidateFingerprint": "5e86bf2302d55cf65c9ed86ce5abf53805ca414a787721c13bc6048751e400d4",
+  "kind": "hybrid-grid-draft",
+  "tileSize": 32,
+  "subcellSize": 8,
+  "grid": {
+    "width": 15,
+    "height": 15,
+    "subcellColumns": 60,
+    "subcellRows": 60
+  },
+  "solidSubcells": []
+}

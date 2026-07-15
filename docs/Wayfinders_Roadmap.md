@@ -277,6 +277,11 @@ semantics.
 
 #### GR-3.2 — Generation and deterministic preparation runners
 
+Status: implemented and accepted. The local runner deterministically prepares
+the five selected island sources, emits transparent candidates, bounded
+thumbnails, blank collision drafts and fingerprinted reports, and safely skips
+unchanged jobs.
+
 Build a dependency-free deterministic preparation command for border-connected
 matte cleanup, trim/pad, contain scaling, ordered layer outputs, existing-sheet
 validation and bounded thumbnails. It creates review candidates, not runtime

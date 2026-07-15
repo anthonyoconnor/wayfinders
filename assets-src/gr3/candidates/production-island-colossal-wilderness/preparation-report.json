@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 1,
+  "recipeId": "production.island.colossal-wilderness",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "0ed8428e716fb7b28ac2aebdcf3078f22cc4f6b36ab8f4c7a1dae594cfd2ca2b",
+  "jobKey": "06ebee7538411e591fc8e6803b6ba62bc237bc7493ca340e3fad9f7cdd60bfba",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr1/island-colossal-wilderness-source.png",
+      "sha256": "440a60eb326083d023149db4d69af012cc6d9f279fdeaf55a5b8157d35dd705d"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-colossal-wilderness/base.png",
+        "width": 480,
+        "height": 480,
+        "sha256": "a7a3a18269e97cb8968261e80f53ea0635f4d62f02a69ba0bcb3afb06ee410ad",
+        "sourceBounds": {
+          "x": -8,
+          "y": 42,
+          "width": 1316,
+          "height": 1143
+        },
+        "placement": {
+          "x": 0,
+          "y": 31,
+          "width": 480,
+          "height": 417
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-colossal-wilderness/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "e2105d28882c9a5f78b25c4ac7a0650d23346d6583369666a1ee4a825e262687"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-colossal-wilderness/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "102b932c895fda8fee7e3671956a50faf3b467cbcfe3ff5f2e3a8182f6729b88"
+    }
+  }
+}

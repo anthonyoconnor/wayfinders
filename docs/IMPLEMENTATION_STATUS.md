@@ -24,6 +24,12 @@ architecture rules or completed milestone evidence.
   current runtime package families plus five selected island variations. Runtime
   bindings preserve accepted collision, while new islands begin as blank
   editable `32`/`8`-pixel collision drafts.
+- `GR-3.2` is implemented: `assets:prepare` performs deterministic
+  border-connected matte cleanup, trim/pad and contain scaling for the five
+  selected islands. It writes transparent `480 x 480` candidates, `192`-pixel
+  thumbnails, blank hybrid collision drafts and fingerprinted reports. A second
+  unchanged run is a complete timestamp-preserving cache hit, and `assets:check`
+  rejects stale output.
 - Gameplay-session saving is intentionally absent. Every launch or browser
   refresh starts a fresh voyage. Development-only asset package saves are a
   separate authoring operation and do not persist gameplay state.

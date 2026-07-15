@@ -1,0 +1,107 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 1,
+  "manifestSha256": "8785e3fcca7d91f022d3eaca880935dd9a577ad186609d8d7498df2efecf6e83",
+  "entries": [
+    {
+      "id": "production.island.colossal-wilderness",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "06ebee7538411e591fc8e6803b6ba62bc237bc7493ca340e3fad9f7cdd60bfba",
+      "sourceFiles": [
+        "assets-src/gr1/island-colossal-wilderness-source.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-colossal-wilderness/base.png",
+          "width": 480,
+          "height": 480,
+          "sha256": "a7a3a18269e97cb8968261e80f53ea0635f4d62f02a69ba0bcb3afb06ee410ad"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-colossal-wilderness/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-colossal-wilderness/collision-draft.json"
+    },
+    {
+      "id": "production.island.large-fortified-port",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "e8d9820db17b5aaf3692c3ff1b9791b7aa2ac38db3e408327cbe639c9cb7396b",
+      "sourceFiles": [
+        "assets-src/gr1/island-large-fortified-port-source.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-large-fortified-port/base.png",
+          "width": 480,
+          "height": 480,
+          "sha256": "b64320db76dc6928672d397ef37f7b67b18a2cbb9adbebce3c2bb225ea0127cb"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-large-fortified-port/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-large-fortified-port/collision-draft.json"
+    },
+    {
+      "id": "production.island.medium-abandoned-atoll",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "5e86bf2302d55cf65c9ed86ce5abf53805ca414a787721c13bc6048751e400d4",
+      "sourceFiles": [
+        "assets-src/gr1/island-medium-abandoned-atoll-source.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-medium-abandoned-atoll/base.png",
+          "width": 480,
+          "height": 480,
+          "sha256": "279d9ae777f271efe90892ddc52fb5a7a2263fb2dca85600f2b5f46fbcc9368f"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-medium-abandoned-atoll/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-medium-abandoned-atoll/collision-draft.json"
+    },
+    {
+      "id": "production.island.small-fishing-cay",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "38868d7c8a04595a6f61cd676441f73d5d1a8b2cdce7671db373623711e5ca3c",
+      "sourceFiles": [
+        "assets-src/gr1/island-small-fishing-cay-source.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-small-fishing-cay/base.png",
+          "width": 480,
+          "height": 480,
+          "sha256": "5d02ace44a1957129baefe40dc206b437db11b59f5a9979a448782393c971840"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-small-fishing-cay/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-small-fishing-cay/collision-draft.json"
+    },
+    {
+      "id": "production.island.tiny-volcanic-stack",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "4db4e9a9aadd50ffdeb1d121adc103927b5822c1ad111876ea3f9cfa05fc247e",
+      "sourceFiles": [
+        "assets-src/gr1/island-tiny-volcanic-stack-source.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/base.png",
+          "width": 480,
+          "height": 480,
+          "sha256": "c2d8a46452f7167df116205ef9456c75ef9f7f0f3a4ae2a24c878d106a241e6c"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/collision-draft.json"
+    }
+  ]
+}

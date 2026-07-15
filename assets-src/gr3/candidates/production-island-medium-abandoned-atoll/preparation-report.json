@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 1,
+  "recipeId": "production.island.medium-abandoned-atoll",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "30809d2e792cec248dcdb27423c536e7da0ab3e365d6aa4de497becde84a8c0f",
+  "jobKey": "5e86bf2302d55cf65c9ed86ce5abf53805ca414a787721c13bc6048751e400d4",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr1/island-medium-abandoned-atoll-source.png",
+      "sha256": "7854ea197dc49b7535c0202d53dfb5620f5bc793a97b0381625b10f118babb0a"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-medium-abandoned-atoll/base.png",
+        "width": 480,
+        "height": 480,
+        "sha256": "279d9ae777f271efe90892ddc52fb5a7a2263fb2dca85600f2b5f46fbcc9368f",
+        "sourceBounds": {
+          "x": -8,
+          "y": 137,
+          "width": 1200,
+          "height": 1125
+        },
+        "placement": {
+          "x": 0,
+          "y": 15,
+          "width": 480,
+          "height": 450
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-medium-abandoned-atoll/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "f4d5cb681b5e37d9bab83b8ddea322c5af8dac095a2787de1d57c1dc9f8a51bb"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-medium-abandoned-atoll/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "c7f5d5111fd625a6be4c0f4b1837c9a3fde0b3097253e3d16a748a7d981c5427"
+    }
+  }
+}

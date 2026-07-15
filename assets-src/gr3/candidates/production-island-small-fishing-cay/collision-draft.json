@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "recipeId": "production.island.small-fishing-cay",
+  "candidateFingerprint": "38868d7c8a04595a6f61cd676441f73d5d1a8b2cdce7671db373623711e5ca3c",
+  "kind": "hybrid-grid-draft",
+  "tileSize": 32,
+  "subcellSize": 8,
+  "grid": {
+    "width": 15,
+    "height": 15,
+    "subcellColumns": 60,
+    "subcellRows": 60
+  },
+  "solidSubcells": []
+}

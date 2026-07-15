@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 1,
+  "recipeId": "production.island.large-fortified-port",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "4550c6397bb39031f6139e9d003c753749d68585f9b035020a8d2a3b3e915a31",
+  "jobKey": "e8d9820db17b5aaf3692c3ff1b9791b7aa2ac38db3e408327cbe639c9cb7396b",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr1/island-large-fortified-port-source.png",
+      "sha256": "1e29748b13f2ac39a6025c40a44f55a25221322a4e10c1868e371ecda9c8dcee"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-large-fortified-port/base.png",
+        "width": 480,
+        "height": 480,
+        "sha256": "b64320db76dc6928672d397ef37f7b67b18a2cbb9adbebce3c2bb225ea0127cb",
+        "sourceBounds": {
+          "x": -8,
+          "y": 54,
+          "width": 1231,
+          "height": 1208
+        },
+        "placement": {
+          "x": 0,
+          "y": 4,
+          "width": 480,
+          "height": 471
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-large-fortified-port/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "b1d9770cf683157347e75737af9e12c6741727b7f99e241778e649ae26ba1db0"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-large-fortified-port/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "e71539e230996ceb63027627a2dd7d41c03cde6a2b546c151b871813f2bf1e0a"
+    }
+  }
+}

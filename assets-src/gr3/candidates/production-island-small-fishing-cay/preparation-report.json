@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 1,
+  "recipeId": "production.island.small-fishing-cay",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "ebd0151596ff936f910596b3a6ac4d9cb12d7b8ae5ba3cfb7acca551ea50563c",
+  "jobKey": "38868d7c8a04595a6f61cd676441f73d5d1a8b2cdce7671db373623711e5ca3c",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr1/island-small-fishing-cay-source.png",
+      "sha256": "1d5a9f32ec512973c02d26baee90c155c7472dd1ef352b1eaca51bc445cc2615"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-small-fishing-cay/base.png",
+        "width": 480,
+        "height": 480,
+        "sha256": "5d02ace44a1957129baefe40dc206b437db11b59f5a9979a448782393c971840",
+        "sourceBounds": {
+          "x": -8,
+          "y": 222,
+          "width": 1128,
+          "height": 1040
+        },
+        "placement": {
+          "x": 0,
+          "y": 18,
+          "width": 480,
+          "height": 443
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-small-fishing-cay/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "d9d1e9329969522166a9a9a448e2755e485c739a7a971c987ad56b9f3ebecd2c"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-small-fishing-cay/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "9b4e031a607a9fcd314557d8a9c9c317b0003781d37d05b1fbb063e7fd2ac6cb"
+    }
+  }
+}

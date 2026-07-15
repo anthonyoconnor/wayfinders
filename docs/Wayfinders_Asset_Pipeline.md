@@ -250,6 +250,13 @@ and every derived output is reproducible. General provider integrations,
 directional-frame synthesis, atlas building, runtime generation, silent mask
 replacement and automatic catalog promotion remain out of scope.
 
+Implemented `GR-3.2` exposes `npm.cmd run assets:prepare` with optional `--id`,
+`--family` and `--force` selection. Each selected island produces one transparent
+candidate layer, a bounded thumbnail, an explicitly blank collision draft and a
+stable preparation report under `assets-src/gr3/candidates`. Source and recipe
+hashes form the job key; matching jobs are skipped without rewriting files.
+`assets:prepare:check` is part of the normal asset gate.
+
 ## Runtime separation
 
 Keep changing or stateful content separate from static base art:

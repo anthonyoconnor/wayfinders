@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 1,
+  "recipeId": "production.island.tiny-volcanic-stack",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "1e8c6a59a78d5b82098699eab35ab5833fbdfa32308b82828862c0ed90122822",
+  "jobKey": "4db4e9a9aadd50ffdeb1d121adc103927b5822c1ad111876ea3f9cfa05fc247e",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr1/island-tiny-volcanic-stack-source.png",
+      "sha256": "2c70f53b72b76a554944510367ee26d1b5cafb48b8f7b7f0b1b5a0c0478ef407"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/base.png",
+        "width": 480,
+        "height": 480,
+        "sha256": "c2d8a46452f7167df116205ef9456c75ef9f7f0f3a4ae2a24c878d106a241e6c",
+        "sourceBounds": {
+          "x": 382,
+          "y": 320,
+          "width": 496,
+          "height": 523
+        },
+        "placement": {
+          "x": 12,
+          "y": 0,
+          "width": 455,
+          "height": 480
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "722b19d79df48be4e045092aa5635d94c9c6301a5625dbc8772d73e26982a243"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "0431c21f2dfc66ea2b466dc9aa0c895446567b822ea143f67dc5800789e85909"
+    }
+  }
+}

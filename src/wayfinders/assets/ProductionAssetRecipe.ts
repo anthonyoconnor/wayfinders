@@ -1,7 +1,7 @@
 import {
   AUTHORED_ASSET_IDS,
   type AuthoredAssetId,
-} from "./AuthoredAssetContracts";
+} from "./AuthoredAssetContracts.ts";
 
 export const PRODUCTION_ASSET_RECIPE_FORMAT_VERSION = 1 as const;
 

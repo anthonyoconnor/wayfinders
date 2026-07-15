@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "recipeId": "production.island.large-fortified-port",
+  "candidateFingerprint": "e8d9820db17b5aaf3692c3ff1b9791b7aa2ac38db3e408327cbe639c9cb7396b",
+  "kind": "hybrid-grid-draft",
+  "tileSize": 32,
+  "subcellSize": 8,
+  "grid": {
+    "width": 15,
+    "height": 15,
+    "subcellColumns": 60,
+    "subcellRows": 60
+  },
+  "solidSubcells": []
+}
