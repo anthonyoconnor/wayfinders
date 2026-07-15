@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  collisionPackageForPersistence,
   createThumbnail,
   decodePng,
   encodePng,
@@ -49,6 +50,37 @@ describe("GR-2.3 deterministic PNG automation", () => {
     expect(first.height).toBe(192);
     expect(second.buffer).toEqual(first.buffer);
     expect(decodePng(first.buffer).pixels).toHaveLength(192 * 192 * 4);
+  });
+
+  it("persists collision fields without expanding compact package source data", () => {
+    const current = {
+      assetId: "home.island.primary",
+      runtimeRevision: 2,
+      collision: { kind: "hybrid-grid", subcellSize: 8, mixedCells: [] },
+      grid: { width: 2, height: 1, cellRows: ["DL"] },
+      render: { slices: [{ id: "complete" }] },
+    };
+    const next = {
+      ...current,
+      runtimeRevision: 3,
+      collision: {
+        kind: "hybrid-grid",
+        subcellSize: 8,
+        mixedCells: [{ x: 0, y: 0, solidRows: ["1111", "1111", "1111", "1111"] }],
+      },
+      grid: { width: 2, height: 1, cells: [{ x: 0, y: 0 }, { x: 1, y: 0 }] },
+    };
+
+    const persisted = collisionPackageForPersistence(current, next);
+
+    expect(persisted).toMatchObject({
+      runtimeRevision: 3,
+      collision: next.collision,
+      grid: current.grid,
+      render: current.render,
+    });
+    expect(persisted.grid).not.toHaveProperty("cells");
+    expect(current.runtimeRevision).toBe(2);
   });
 
   it("dry-runs collision-only intake without materializing art", async () => {

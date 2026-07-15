@@ -18,6 +18,10 @@ import {
   validateExactAuthoredAssetMetadata,
   validateExactCollisionPackageSet,
 } from "../src/wayfinders/assets/ExactCollisionValidation.ts";
+import {
+  commitAtomicFileTransaction,
+  withCollisionIntakeLock,
+} from "./repository-collision-transaction.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(root, "assets-src", "gr2", "asset-catalog.json");
@@ -362,6 +366,18 @@ async function createExactMetadataValidator() {
   return (value) => validateExactAuthoredAssetMetadata(value, { shipHalfExtent });
 }
 
+/** Applies only collision-owned fields while retaining the package's source representation. */
+export function collisionPackageForPersistence(currentInput, nextMetadata) {
+  if (typeof currentInput !== "object" || currentInput === null || Array.isArray(currentInput)) {
+    throw new TypeError("Current package input must be an object");
+  }
+  const persisted = structuredClone(currentInput);
+  persisted.runtimeRevision = nextMetadata.runtimeRevision;
+  if (nextMetadata.collision === undefined) delete persisted.collision;
+  else persisted.collision = structuredClone(nextMetadata.collision);
+  return persisted;
+}
+
 async function intakeCollisionCandidate(candidateInput, replace, dryRun) {
   const candidate = validateCollisionCandidateBundle(candidateInput);
   if (!replace) {
@@ -370,9 +386,12 @@ async function intakeCollisionCandidate(candidateInput, replace, dryRun) {
   const metadataFile = knownPackageFiles.get(candidate.assetId);
   if (!metadataFile) throw new RangeError(`No GR-2 collision intake target exists for ${candidate.assetId}`);
   const validateMetadata = await createExactMetadataValidator();
-  const current = validateMetadata(JSON.parse(await readFile(path.join(packageRoot, metadataFile), "utf8")));
+  const currentInput = JSON.parse(await readFile(path.join(packageRoot, metadataFile), "utf8"));
+  const current = validateMetadata(currentInput);
   const next = applyCollisionCandidate(current, candidate, validateMetadata);
-  await validateAcceptedCollisionPackageSet(next);
+  const persistedNext = collisionPackageForPersistence(currentInput, next);
+  validateMetadata(persistedNext);
+  await validateAcceptedCollisionPackageSet(persistedNext);
   if (dryRun) {
     console.log(
       `Validated ${candidate.assetId} collision candidate; intake would update ${metadataFile} to runtime revision ${next.runtimeRevision} without replacing art.`,
@@ -386,17 +405,22 @@ async function intakeCollisionCandidate(candidateInput, replace, dryRun) {
   const slug = candidate.assetId.replaceAll(".", "-");
   const candidateDirectory = path.join(root, "assets-src", "gr2", "candidates");
   await mkdir(candidateDirectory, { recursive: true });
-  await writeFile(
-    path.join(candidateDirectory, `${slug}.collision-candidate.json`),
-    `${JSON.stringify(candidate, null, 2)}\n`,
-    "utf8",
-  );
-  // Commit the accepted package last so an archive write failure cannot leave
-  // runtime metadata changed without its reviewed candidate record.
-  await writeFile(path.join(packageRoot, metadataFile), `${JSON.stringify(next, null, 2)}\n`, "utf8");
-  // Collision metadata cannot change catalog bindings, reports or thumbnails.
-  // Verify those artifacts remain current without rewriting any visual output.
-  await buildCatalog(true);
+  const archivePath = path.join(candidateDirectory, `${slug}.collision-candidate.json`);
+  const acceptedPackagePath = path.join(packageRoot, metadataFile);
+  await commitAtomicFileTransaction([
+    {
+      targetPath: archivePath,
+      bytes: Buffer.from(`${JSON.stringify(candidate, null, 2)}\n`, "utf8"),
+    },
+    {
+      targetPath: acceptedPackagePath,
+      bytes: Buffer.from(`${JSON.stringify(persistedNext, null, 2)}\n`, "utf8"),
+    },
+  ], async () => {
+    // Collision metadata cannot change catalog bindings, reports or thumbnails.
+    // Verify those artifacts remain current before discarding rollback backups.
+    await buildCatalog(true);
+  });
   console.log(
     `Accepted ${candidate.assetId} collision revision ${next.runtimeRevision}: metadata updated; runtime art and catalog image bindings preserved.`,
   );
@@ -406,81 +430,83 @@ export async function intakeCandidate(bundleFile, replace, dryRun) {
   if (!bundleFile) {
     throw new Error("Usage: npm.cmd run assets:intake -- <candidate.json|collision-candidate.json> [--replace] [--dry-run]");
   }
-  const sourcePath = path.resolve(root, bundleFile);
-  const candidateInput = JSON.parse(await readFile(sourcePath, "utf8"));
-  if (candidateInput?.bundleKind === COLLISION_CANDIDATE_BUNDLE_KIND) {
-    await intakeCollisionCandidate(candidateInput, replace, dryRun);
-    return;
-  }
-  let bundle = validateAssetCandidateBundle(candidateInput);
-  for (const image of bundle.images) {
-    const buffer = Buffer.from(image.dataUrl.slice("data:image/png;base64,".length), "base64");
-    const actual = pngSize(buffer, image.filename);
-    if (actual.width !== image.width || actual.height !== image.height) {
-      throw new RangeError(`${image.filename} PNG header disagrees with its candidate dimensions`);
+  return withCollisionIntakeLock(root, async () => {
+    const sourcePath = path.resolve(root, bundleFile);
+    const candidateInput = JSON.parse(await readFile(sourcePath, "utf8"));
+    if (candidateInput?.bundleKind === COLLISION_CANDIDATE_BUNDLE_KIND) {
+      await intakeCollisionCandidate(candidateInput, replace, dryRun);
+      return;
     }
-    decodePng(buffer, image.filename);
-  }
-  const manifest = await readManifest();
-  const existingIndex = manifest.entries.findIndex((entry) => entry.assetId === bundle.metadata.assetId);
-  if (existingIndex >= 0 && !replace) {
-    throw new Error(`${bundle.metadata.assetId} already exists; review the candidate and rerun with --replace`);
-  }
-  const metadataFile = knownPackageFiles.get(bundle.metadata.assetId);
-  if (!metadataFile) throw new RangeError(`No GR-2 intake target exists for ${bundle.metadata.assetId}`);
-  const validateMetadata = await createExactMetadataValidator();
-  const metadata = existingIndex >= 0
-    ? mergeAssetCandidateMetadata(
-      JSON.parse(await readFile(path.join(packageRoot, metadataFile), "utf8")),
-      bundle.metadata,
-      bundle.collisionIntent,
-      validateMetadata,
-    )
-    : validateMetadata(bundle.metadata);
-  await validateAcceptedCollisionPackageSet(metadata);
-  bundle = Object.freeze({ ...bundle, metadata });
-  const slug = bundle.metadata.assetId.replaceAll(".", "-");
-  if (dryRun) {
-    console.log(`Validated ${bundle.metadata.assetId}: ${bundle.images.length} PNG(s); intake would ${existingIndex >= 0 ? "replace" : "add"} ${metadataFile}.`);
-    return;
-  }
-  const runtimeDirectory = path.join(root, "public", "assets", "gr2", "images");
-  const candidateDirectory = path.join(root, "assets-src", "gr2", "candidates");
-  await mkdir(runtimeDirectory, { recursive: true });
-  await mkdir(candidateDirectory, { recursive: true });
-  await writeFile(path.join(packageRoot, metadataFile), `${JSON.stringify(bundle.metadata, null, 2)}\n`, "utf8");
-  await writeFile(path.join(candidateDirectory, `${slug}.candidate.json`), `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
-  const requirements = new Map(candidateImageRequirements(bundle.metadata).map((requirement) => [requirement.imageId, requirement]));
-  const images = [];
-  for (const [index, image] of bundle.images.entries()) {
-    const outputName = `${slug}-${index + 1}-${image.filename}`;
-    const outputPath = path.join(runtimeDirectory, outputName);
-    await writeFile(outputPath, Buffer.from(image.dataUrl.slice("data:image/png;base64,".length), "base64"));
-    const requirement = requirements.get(image.imageId);
-    images.push({
-      imageId: image.imageId,
-      textureKey: `wayfinders:image:${slug}:${index + 1}`,
-      runtimeFile: path.relative(root, outputPath).replaceAll("\\", "/"),
-      url: `./assets/gr2/images/${outputName}`,
-      loader: requirement.role,
-      ...(requirement.frameSize ? { frameConfig: {
-        frameWidth: requirement.frameSize.width,
-        frameHeight: requirement.frameSize.height,
-      } } : {}),
-    });
-  }
-  const nextEntry = {
-    assetId: bundle.metadata.assetId,
-    metadataFile,
-    metadataKey: `wayfinders:metadata:${slug}`,
-    images,
-  };
-  if (existingIndex >= 0) manifest.entries[existingIndex] = nextEntry;
-  else manifest.entries.push(nextEntry);
-  manifest.entries.sort((left, right) => left.assetId.localeCompare(right.assetId));
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
-  await buildCatalog(false);
-  console.log(`Accepted ${bundle.metadata.assetId}: metadata, ${images.length} PNG(s), source bundle and catalog regenerated.`);
+    let bundle = validateAssetCandidateBundle(candidateInput);
+    for (const image of bundle.images) {
+      const buffer = Buffer.from(image.dataUrl.slice("data:image/png;base64,".length), "base64");
+      const actual = pngSize(buffer, image.filename);
+      if (actual.width !== image.width || actual.height !== image.height) {
+        throw new RangeError(`${image.filename} PNG header disagrees with its candidate dimensions`);
+      }
+      decodePng(buffer, image.filename);
+    }
+    const manifest = await readManifest();
+    const existingIndex = manifest.entries.findIndex((entry) => entry.assetId === bundle.metadata.assetId);
+    if (existingIndex >= 0 && !replace) {
+      throw new Error(`${bundle.metadata.assetId} already exists; review the candidate and rerun with --replace`);
+    }
+    const metadataFile = knownPackageFiles.get(bundle.metadata.assetId);
+    if (!metadataFile) throw new RangeError(`No GR-2 intake target exists for ${bundle.metadata.assetId}`);
+    const validateMetadata = await createExactMetadataValidator();
+    const metadata = existingIndex >= 0
+      ? mergeAssetCandidateMetadata(
+        JSON.parse(await readFile(path.join(packageRoot, metadataFile), "utf8")),
+        bundle.metadata,
+        bundle.collisionIntent,
+        validateMetadata,
+      )
+      : validateMetadata(bundle.metadata);
+    await validateAcceptedCollisionPackageSet(metadata);
+    bundle = Object.freeze({ ...bundle, metadata });
+    const slug = bundle.metadata.assetId.replaceAll(".", "-");
+    if (dryRun) {
+      console.log(`Validated ${bundle.metadata.assetId}: ${bundle.images.length} PNG(s); intake would ${existingIndex >= 0 ? "replace" : "add"} ${metadataFile}.`);
+      return;
+    }
+    const runtimeDirectory = path.join(root, "public", "assets", "gr2", "images");
+    const candidateDirectory = path.join(root, "assets-src", "gr2", "candidates");
+    await mkdir(runtimeDirectory, { recursive: true });
+    await mkdir(candidateDirectory, { recursive: true });
+    await writeFile(path.join(packageRoot, metadataFile), `${JSON.stringify(bundle.metadata, null, 2)}\n`, "utf8");
+    await writeFile(path.join(candidateDirectory, `${slug}.candidate.json`), `${JSON.stringify(bundle, null, 2)}\n`, "utf8");
+    const requirements = new Map(candidateImageRequirements(bundle.metadata).map((requirement) => [requirement.imageId, requirement]));
+    const images = [];
+    for (const [index, image] of bundle.images.entries()) {
+      const outputName = `${slug}-${index + 1}-${image.filename}`;
+      const outputPath = path.join(runtimeDirectory, outputName);
+      await writeFile(outputPath, Buffer.from(image.dataUrl.slice("data:image/png;base64,".length), "base64"));
+      const requirement = requirements.get(image.imageId);
+      images.push({
+        imageId: image.imageId,
+        textureKey: `wayfinders:image:${slug}:${index + 1}`,
+        runtimeFile: path.relative(root, outputPath).replaceAll("\\", "/"),
+        url: `./assets/gr2/images/${outputName}`,
+        loader: requirement.role,
+        ...(requirement.frameSize ? { frameConfig: {
+          frameWidth: requirement.frameSize.width,
+          frameHeight: requirement.frameSize.height,
+        } } : {}),
+      });
+    }
+    const nextEntry = {
+      assetId: bundle.metadata.assetId,
+      metadataFile,
+      metadataKey: `wayfinders:metadata:${slug}`,
+      images,
+    };
+    if (existingIndex >= 0) manifest.entries[existingIndex] = nextEntry;
+    else manifest.entries.push(nextEntry);
+    manifest.entries.sort((left, right) => left.assetId.localeCompare(right.assetId));
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    await buildCatalog(false);
+    console.log(`Accepted ${bundle.metadata.assetId}: metadata, ${images.length} PNG(s), source bundle and catalog regenerated.`);
+  });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

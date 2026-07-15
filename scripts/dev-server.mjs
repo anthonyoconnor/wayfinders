@@ -1,6 +1,14 @@
 import { createServer } from "vite";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  collisionSaveOrigin,
+  createCollisionSaveMiddleware,
+  createCollisionSaver,
+} from "./collision-save-api.mjs";
 
 const DEFAULT_PORT = 5173;
+const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function parsePort(args) {
   if (args.length === 0) {
@@ -37,7 +45,18 @@ function parsePort(args) {
 
 try {
   const port = parsePort(process.argv.slice(2));
+  const saveCollision = createCollisionSaver({ repositoryRoot });
+  const collisionSaveMiddleware = createCollisionSaveMiddleware({
+    expectedOrigin: collisionSaveOrigin(port),
+    saveCollision,
+  });
   const server = await createServer({
+    plugins: [{
+      name: "wayfinders-local-collision-save",
+      configureServer(viteServer) {
+        viteServer.middlewares.use(collisionSaveMiddleware);
+      },
+    }],
     server: {
       host: "127.0.0.1",
       port,
