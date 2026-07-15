@@ -301,6 +301,13 @@ collision validators.
 
 #### GR-3.3 — Review, comparison and promotion workbench
 
+Status: implemented. The existing asset library now contains 45 runtime,
+candidate and reference records. Prepared candidates expose source/prepared
+comparison, layer visibility/opacity, their exact collision draft and
+fingerprinted approve/reject actions. An approved candidate can be launched as
+a visual-only game substitution while the bound runtime package retains its
+accepted collision, anchors and gameplay metadata.
+
 Extend the existing browser and selected-asset inspector so all recipe assets
 can be previewed without playing the game. Add only the controls used by current
 recipes: layer visibility/opacity, existing animation-sheet playback, collision
@@ -314,6 +321,16 @@ candidates leave the runtime catalog unchanged; and promoted output appears in
 the same library record and loads through the same viewer and game factories.
 
 #### GR-3.4 — Batch production and readiness gate
+
+Status: tooling implemented; candidate content acceptance remains pending. The
+prototype batch now continues past isolated recipe failures, publishes only
+exact current approvals, retains accepted runtime collision bindings and emits
+a deterministic public manifest, review queue, lineage summary and bounded
+payload/memory evidence. The library contains the 20 reference-island benchmark,
+but the current five prepared candidates remain pending and the public manifest
+is intentionally empty until a human reviews the art. Startup/frame timing and
+operator-time evidence remain later acceptance work if this prototype pipeline
+is retained.
 
 Scale the preparation command to a simple multi-family batch with isolated job
 failures, generated catalog/report data, stale-output detection, thumbnails, a

@@ -21,6 +21,7 @@ import {
   ASSET_LIBRARY_GROUPS,
   assetLibraryEntryById,
   type AssetLibraryEntry,
+  type AssetLibraryImageLayer,
   type IslandReferenceLibraryEntry,
   type ProductionCandidateLibraryEntry,
 } from "./AssetLibraryCatalog";
@@ -170,6 +171,7 @@ export class AssetViewerScene extends Phaser.Scene {
   private shoalVisual?: AuthoredFishingShoalVisual;
   private referenceVisual?: Phaser.GameObjects.Image;
   private comparisonVisual?: Phaser.GameObjects.Image;
+  private additionalStandaloneVisuals: Phaser.GameObjects.Image[] = [];
   private assetLibraryBrowser?: HTMLElement;
   private selectedLibraryAssetId: string = AUTHORED_ASSET_IDS.homeIsland;
   private readonly acceptedMetadataByAssetId = new Map<AuthoredAssetId, Readonly<AuthoredAssetMetadata>>();
@@ -341,13 +343,13 @@ export class AssetViewerScene extends Phaser.Scene {
     url: string;
   }>[] {
     if (entry.entryType === "production-candidate") {
-      const source = entry.sourceLayers[0];
-      const prepared = entry.candidateLayers[0];
-      if (!source || !prepared) throw new RangeError(`${entry.id} needs source and prepared preview layers`);
-      return [
-        { key: this.libraryTextureKey(entry.id, "source"), url: source.url },
-        { key: this.libraryTextureKey(entry.id, "prepared"), url: prepared.url },
-      ];
+      if (entry.sourceLayers.length === 0 || entry.candidateLayers.length === 0) {
+        throw new RangeError(`${entry.id} needs source and prepared preview layers`);
+      }
+      return [...entry.sourceLayers, ...entry.candidateLayers].map((layer) => ({
+        key: this.libraryTextureKey(entry.id, layer.id),
+        url: layer.url,
+      }));
     }
     const layer = entry.layers[0];
     if (!layer) throw new RangeError(`${entry.id} has no preview layer`);
@@ -380,8 +382,10 @@ export class AssetViewerScene extends Phaser.Scene {
       if (revision !== this.referenceLoadRevision || this.selectedLibraryAssetId !== entry.id) return;
       this.referenceVisual?.destroy();
       this.comparisonVisual?.destroy();
+      for (const visual of this.additionalStandaloneVisuals) visual.destroy();
       this.referenceVisual = undefined;
       this.comparisonVisual = undefined;
+      this.additionalStandaloneVisuals = [];
       this.releaseReferenceTexture(keys);
       for (const { key, image } of loaded) {
         if (!this.textures.exists(key)) this.textures.addImage(key, image);
@@ -423,12 +427,52 @@ export class AssetViewerScene extends Phaser.Scene {
     return this.add.image(x, STAGE.centerY + 22, textureKey).setDepth(5).setScale(scale).setAlpha(alpha);
   }
 
+  private phaserBlendMode(blendMode: Readonly<AssetLibraryImageLayer>["blendMode"]): number {
+    switch (blendMode) {
+      case "multiply": return Phaser.BlendModes.MULTIPLY;
+      case "screen": return Phaser.BlendModes.SCREEN;
+      case "add": return Phaser.BlendModes.ADD;
+      case "normal": return Phaser.BlendModes.NORMAL;
+    }
+  }
+
+  private createStandaloneLayerStack(
+    entryId: string,
+    layers: readonly Readonly<AssetLibraryImageLayer>[],
+    x: number,
+    maximumWidth: number,
+    maximumHeight: number,
+    editable: boolean,
+    alphaMultiplier = 1,
+  ): Phaser.GameObjects.Image[] {
+    const ordered = [...layers].sort((left, right) => left.order - right.order);
+    const dimensions = ordered.map((layer) => {
+      const texture = this.textures.get(this.libraryTextureKey(entryId, layer.id));
+      const source = texture.getSourceImage() as { width?: number; height?: number } | undefined;
+      return { width: source?.width ?? 1, height: source?.height ?? 1 };
+    });
+    const contentWidth = Math.max(...dimensions.map(({ width }) => width), 1);
+    const contentHeight = Math.max(...dimensions.map(({ height }) => height), 1);
+    const scale = Math.min(maximumWidth / contentWidth, maximumHeight / contentHeight, 1);
+    return ordered.map((layer, index) => this.add.image(
+      x,
+      STAGE.centerY + 22,
+      this.libraryTextureKey(entryId, layer.id),
+    )
+      .setDepth(5 + index * 0.01)
+      .setScale(scale)
+      .setBlendMode(this.phaserBlendMode(layer.blendMode))
+      .setVisible(editable ? this.layerIsVisible(entryId, layer) : layer.defaultVisible)
+      .setAlpha((editable ? this.layerAlpha(entryId, layer) : layer.opacity) * alphaMultiplier));
+  }
+
   private drawProductionCollisionOverlay(
     entry: Readonly<ProductionCandidateLibraryEntry>,
     visual?: Phaser.GameObjects.Image,
   ): void {
     const graphics = this.collisionGraphics.clear();
     if (!this.state.showFootprint || !visual?.visible) return;
+    if (entry.collisionDraft.kind !== "hybrid-grid-draft") return;
     const bounds = visual.getBounds();
     const { grid } = entry.collisionDraft;
     const subcellWidth = bounds.width / grid.subcellColumns;
@@ -490,35 +534,55 @@ export class AssetViewerScene extends Phaser.Scene {
         `Source reference \u00b7 ${source?.width ?? 1}\u00d7${source?.height ?? 1} px${settlement} \u00b7 ${entry.reference.kind}`,
       );
     } else {
-      const [source, prepared] = sources;
-      const layer = entry.candidateLayers[0];
       const mode = this.productionPreviewModes.get(entry.id) ?? "prepared";
-      const preparedAlpha = this.layerAlpha(entry.id, layer);
-      const preparedVisible = this.layerIsVisible(entry.id, layer);
       let preparedVisual: Phaser.GameObjects.Image | undefined;
       if (mode === "compare") {
-        this.referenceVisual = this.createStandaloneVisual(source.key, 350, 430, STAGE.height - 150);
-        preparedVisual = this.createStandaloneVisual(
-          prepared.key,
+        const sourceStack = this.createStandaloneLayerStack(
+          entry.id,
+          entry.sourceLayers,
+          350,
+          430,
+          STAGE.height - 150,
+          false,
+        );
+        const preparedStack = this.createStandaloneLayerStack(
+          entry.id,
+          entry.candidateLayers,
           850,
           430,
           STAGE.height - 150,
-          preparedAlpha * (this.productionCompareOpacity.get(entry.id) ?? 1),
-        ).setVisible(preparedVisible);
+          true,
+          this.productionCompareOpacity.get(entry.id) ?? 1,
+        );
+        this.referenceVisual = sourceStack[0];
+        preparedVisual = preparedStack[0];
         this.comparisonVisual = preparedVisual;
+        this.additionalStandaloneVisuals.push(...sourceStack.slice(1), ...preparedStack.slice(1));
         this.placement.setText("Source on left \u00b7 prepared candidate on right \u00b7 collision draft overlays prepared art");
       } else if (mode === "source") {
-        this.referenceVisual = this.createStandaloneVisual(source.key, STAGE.centerX, STAGE.width - 220, STAGE.height - 140);
-        this.placement.setText("Original selected source \u00b7 no runtime files changed");
-      } else {
-        preparedVisual = this.createStandaloneVisual(
-          prepared.key,
+        const sourceStack = this.createStandaloneLayerStack(
+          entry.id,
+          entry.sourceLayers,
           STAGE.centerX,
           STAGE.width - 220,
           STAGE.height - 140,
-          preparedAlpha,
-        ).setVisible(preparedVisible);
+          false,
+        );
+        this.referenceVisual = sourceStack[0];
+        this.additionalStandaloneVisuals.push(...sourceStack.slice(1));
+        this.placement.setText("Original selected source \u00b7 no runtime files changed");
+      } else {
+        const preparedStack = this.createStandaloneLayerStack(
+          entry.id,
+          entry.candidateLayers,
+          STAGE.centerX,
+          STAGE.width - 220,
+          STAGE.height - 140,
+          true,
+        );
+        preparedVisual = preparedStack[0];
         this.referenceVisual = preparedVisual;
+        this.additionalStandaloneVisuals.push(...preparedStack.slice(1));
         this.placement.setText("Deterministically prepared candidate \u00b7 visual test keeps accepted runtime collision");
       }
       this.drawProductionCollisionOverlay(entry, preparedVisual);
@@ -533,11 +597,13 @@ export class AssetViewerScene extends Phaser.Scene {
     this.shoalVisual?.image.destroy();
     this.referenceVisual?.destroy();
     this.comparisonVisual?.destroy();
+    for (const visual of this.additionalStandaloneVisuals) visual.destroy();
     this.homeVisual = undefined;
     this.shipRenderer = undefined;
     this.shoalVisual = undefined;
     this.referenceVisual = undefined;
     this.comparisonVisual = undefined;
+    this.additionalStandaloneVisuals = [];
     this.developerVisualGraphics.clear();
 
     const standalone = this.selectedStandaloneEntry();
@@ -1185,7 +1251,7 @@ export class AssetViewerScene extends Phaser.Scene {
           </label>
           <label class="production-collision-toggle">
             <input data-production="collision" type="checkbox" checked>
-            Show 32/8 px collision draft
+            <span data-production="collision-label">Show collision draft</span>
           </label>
           <p data-production="notice" class="production-review-notice"></p>
           <div class="production-review-actions">
@@ -1745,7 +1811,16 @@ export class AssetViewerScene extends Phaser.Scene {
       }
       if (opacityOutput) opacityOutput.value = `${Math.round(opacity * 100)}%`;
       const collision = document.querySelector<HTMLInputElement>("[data-production=collision]");
-      if (collision) collision.checked = this.state.showFootprint;
+      if (collision) {
+        collision.checked = this.state.showFootprint;
+        collision.disabled = entry.collisionDraft.kind !== "hybrid-grid-draft";
+      }
+      const collisionLabel = document.querySelector<HTMLElement>("[data-production=collision-label]");
+      if (collisionLabel) collisionLabel.textContent = entry.collisionDraft.kind === "hybrid-grid-draft"
+        ? `Show ${entry.collisionDraft.tileSize}/${entry.collisionDraft.subcellSize} px collision draft`
+        : entry.collisionDraft.kind === "empty"
+          ? "Explicitly passable (no collision grid)"
+          : `Uses accepted collision from ${entry.collisionDraft.runtimeAssetId}`;
       const notice = document.querySelector<HTMLElement>("[data-production=notice]");
       if (notice) notice.textContent = entry.recipe.runtimeBinding
         ? `${reviewState}. Visual game testing uses ${entry.recipe.runtimeBinding.assetId} and preserves its accepted collision mask.`
@@ -2586,6 +2661,8 @@ export class AssetViewerScene extends Phaser.Scene {
     this.shoalVisual?.image.destroy();
     this.referenceVisual?.destroy();
     this.comparisonVisual?.destroy();
+    for (const visual of this.additionalStandaloneVisuals) visual.destroy();
+    this.additionalStandaloneVisuals = [];
     this.releaseReferenceTexture();
     this.assetLibraryBrowser?.remove();
     this.assetLibraryBrowser = undefined;

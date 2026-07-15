@@ -10,7 +10,7 @@ architecture rules or completed milestone evidence.
 ## Current state
 
 - The accepted gameplay baseline runs through `GP-4.1`.
-- The accepted graphics/tooling baseline runs through `GR-2.5`.
+- The graphics/tooling baseline runs through the implemented `GR-3.4` prototype.
 - No later gameplay milestone is authorized.
 - `GR-2.1` through `GR-2.5` are accepted. The workbench includes a
   browsable 23-entry asset library, retained per-asset drafts, `8`/`32`-pixel
@@ -30,6 +30,15 @@ architecture rules or completed milestone evidence.
   thumbnails, blank hybrid collision drafts and fingerprinted reports. A second
   unchanged run is a complete timestamp-preserving cache hit, and `assets:check`
   rejects stale output.
+- `GR-3.3` is implemented: one 45-entry browser covers runtime packages,
+  prepared candidates and all current reference collections. Candidate source,
+  prepared art, layers and collision drafts can be compared, then approved or
+  rejected against the exact candidate fingerprint. Approved visuals can be
+  tested in the game without replacing accepted collision or gameplay metadata.
+- `GR-3.4` is implemented: isolated batch preparation, exact-review promotion,
+  deterministic public lineage, review/readiness summaries and stale-output
+  checks form the lightweight handoff gate. The current five candidates remain
+  pending rather than being treated as artistically approved by tooling.
 - Gameplay-session saving is intentionally absent. Every launch or browser
   refresh starts a fresh voyage. Development-only asset package saves are a
   separate authoring operation and do not persist gameplay state.
@@ -39,12 +48,14 @@ inherited water knowledge, provision-aware voyages, exact-dock settlement,
 navigator succession and Great Hall history, provision-funded island/site
 surveys, three hidden idol locations in the default world, final completion
 choices, authored home/boat/pilot-shoal presentation and developer diagnostics,
-plus a separate shared-runtime asset viewer, candidate intake workbench and
-deterministic catalog/preparation pipeline. The runtime also supports sparse
+plus a separate shared-runtime 45-entry asset library, candidate comparison and
+review workbench, visual game-test override and deterministic preparation/
+promotion pipeline. The runtime also supports sparse
 8-pixel collision masks within the 32-pixel navigation grid, swept fine
 collision, clearance-tested route edges and registered authored/developer
 collision profiles. The viewer enumerates all nine profiles, edits the three
-finite package-backed collision shapes, browses 20 reference islands, validates
+finite package-backed collision shapes, browses all current reference and
+candidate art, validates
 exact cross-package ship clearance and directly saves revision/fingerprint-
 protected collision-only candidates through authoritative repository intake.
 
@@ -69,7 +80,7 @@ Latest committed verification baseline:
 - Asset catalog, PNG/frame, texture-limit, generated-code, thumbnail and report
   consistency checks pass before compilation.
 - TypeScript typecheck passes.
-- 367 automated tests pass across 46 files.
+- 406 automated tests pass across 53 files.
 - The production Vite build passes.
 - Browser acceptance covers the accepted fishing, return, wreck, succession,
   survey-site, idol completion, continued-world and new-game flows with a clean

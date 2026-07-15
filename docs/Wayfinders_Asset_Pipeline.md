@@ -257,6 +257,26 @@ stable preparation report under `assets-src/gr3/candidates`. Source and recipe
 hashes form the job key; matching jobs are skipped without rewriting files.
 `assets:prepare:check` is part of the normal asset gate.
 
+Implemented `GR-3.3` keeps review in the existing `?mode=assets` library. The
+45-entry browser includes runtime packages, the 20 island references, prepared
+production candidates and the concept island/shoal references. A candidate can
+be viewed as source, prepared output or a comparison; its prepared layer and
+`32`/`8`-pixel collision draft can be inspected before recording an exact
+fingerprinted approval or rejection. **Test visually in game** substitutes only
+the approved texture in its declared pilot slot. It does not replace accepted
+collision, anchors or gameplay metadata.
+
+Implemented `GR-3.4` adds `assets:promote` and `assets:promote:check`. Promotion
+copies only current, explicitly approved visuals and thumbnails to
+`public/assets/gr3/production`, writes their complete source-to-runtime lineage
+to `production-assets.json` and records the full pending/rejected/approved queue
+plus bounded payload evidence in `assets-src/gr3/generated/promotion-summary.json`.
+Collision is always an explicit preserved runtime binding; a candidate draft is
+recorded for audit and is never promoted implicitly. The normal asset check
+rejects stale reviews, modified artifacts, stale manifests and orphaned public
+production files. See [Asset production quickstart](ASSET_PRODUCTION_QUICKSTART.md)
+for the operator workflow and island/shoal examples.
+
 ## Runtime separation
 
 Keep changing or stateful content separate from static base art:

@@ -1,0 +1,75 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 1,
+  "manifestSha256": "ebfda7d7268c6b34e3b827a8f8d2fd86a9fb7a0f487bfedc9d854492eba24627",
+  "counts": {
+    "candidates": 5,
+    "approved": 0,
+    "rejected": 0,
+    "pending": 5,
+    "published": 0
+  },
+  "queue": [
+    {
+      "id": "production.island.colossal-wilderness",
+      "family": "island",
+      "candidateFingerprint": "487501c658b47caed5c71d3902389cb91da57e27f757a2388415d21a84105d68",
+      "reviewState": "pending",
+      "promotionState": "waiting-for-review"
+    },
+    {
+      "id": "production.island.large-fortified-port",
+      "family": "island",
+      "candidateFingerprint": "ddc4bfbef67357a64cef49736c81f7a7fc346dcc6a880c755f638d57b2985093",
+      "reviewState": "pending",
+      "promotionState": "waiting-for-review"
+    },
+    {
+      "id": "production.island.medium-abandoned-atoll",
+      "family": "island",
+      "candidateFingerprint": "62254a5d4aaff673a856dacb3ccce7c5776a02b8ef766caa1816b554d7d13555",
+      "reviewState": "pending",
+      "promotionState": "waiting-for-review"
+    },
+    {
+      "id": "production.island.small-fishing-cay",
+      "family": "island",
+      "candidateFingerprint": "f1f7957ffde2136694a166fd88c784c66e255116f92123c58234ff52743872f6",
+      "reviewState": "pending",
+      "promotionState": "waiting-for-review"
+    },
+    {
+      "id": "production.island.tiny-volcanic-stack",
+      "family": "island",
+      "candidateFingerprint": "e98c544cd06360ae3b10e79f0b21f79bf8abcff55b659b701455f4d6b4af1ec2",
+      "reviewState": "pending",
+      "promotionState": "waiting-for-review"
+    }
+  ],
+  "evidence": {
+    "referenceIslandSourceCount": 20,
+    "referenceIslandSourceBytes": 40864133,
+    "preparedCandidateCount": 5,
+    "candidateThumbnailBytes": 412657,
+    "maxSelectedCandidateDecodedBytes": 921600,
+    "promotedPayloadBytes": 0
+  },
+  "budgets": {
+    "referenceIslandCount": {
+      "value": 20,
+      "minimum": 20,
+      "passed": true
+    },
+    "candidateThumbnailPayloadBytes": {
+      "value": 412657,
+      "maximum": 2097152,
+      "passed": true
+    },
+    "maxSelectedCandidateDecodedBytes": {
+      "value": 921600,
+      "maximum": 16777216,
+      "passed": true
+    },
+    "passed": true
+  }
+}

@@ -136,6 +136,116 @@ describe("asset library catalog", () => {
     expect(stale.find((entry) => entry.id === prepared.id)).toMatchObject({ reviewState: "pending" });
   });
 
+  it("previews a passable multi-layer shoal candidate from a non-island source path", () => {
+    const fingerprint = "a".repeat(64);
+    const basePreparation = {
+      mode: "connected-border",
+      targetWidth: 96,
+      targetHeight: 64,
+      thumbnailMaximum: 96,
+      matteColor: [255, 0, 255],
+      innerTolerance: 48,
+      outerTolerance: 104,
+      trimAlphaThreshold: 8,
+      padding: 4,
+    } as const;
+    const sourceFiles = [
+      "assets-src/gr1/shoals/silver-current-source.png",
+      "assets-src/gr1/shoals/silver-current-glint-source.png",
+    ];
+    const recipe = {
+      id: "production.shoal.silver-current",
+      name: "Silver Current",
+      family: "shoal",
+      lifecycle: "source",
+      collection: "Shoal production sources",
+      sortOrder: 1,
+      tags: ["shoal", "source"],
+      provenance: { kind: "selected-source", sourceFile: sourceFiles[0] },
+      layers: [
+        {
+          id: "base",
+          name: "Shoal",
+          role: "base",
+          sourceFile: sourceFiles[0],
+          defaultVisible: true,
+          opacity: 1,
+          blendMode: "normal",
+          preparation: basePreparation,
+        },
+        {
+          id: "glint",
+          name: "Glint",
+          role: "effect",
+          sourceFile: sourceFiles[1],
+          defaultVisible: true,
+          opacity: 0.7,
+          blendMode: "screen",
+          preparation: basePreparation,
+        },
+      ],
+      animations: [],
+      collision: { mode: "empty", reason: "Fishing shoals are passable" },
+      runtimeBinding: { assetId: "shoal.fishing.primary", collisionIntent: "preserve" },
+    };
+    const layerFiles = ["base", "glint"].map((id) =>
+      `assets-src/gr3/candidates/production-shoal-silver-current/${id}.png`);
+    const thumbnailFile = "assets-src/gr3/candidates/production-shoal-silver-current/thumbnail.png";
+    const collisionDraftFile = "assets-src/gr3/candidates/production-shoal-silver-current/collision-draft.json";
+    const catalog = buildAssetLibraryCatalog({}, {
+      productionRecipeManifest: { formatVersion: 1, recipes: [recipe] },
+      productionIndex: {
+        formatVersion: 1,
+        pipelineVersion: 1,
+        manifestSha256: "b".repeat(64),
+        entries: [{
+          id: recipe.id,
+          family: "shoal",
+          lifecycle: "candidate",
+          jobKey: fingerprint,
+          sourceFiles,
+          layers: layerFiles.map((file, index) => ({
+            id: index === 0 ? "base" : "glint",
+            file,
+            width: 96,
+            height: 64,
+            sha256: "c".repeat(64),
+          })),
+          thumbnailFile,
+          collisionDraftFile,
+        }],
+      },
+      productionReviews: { formatVersion: 1, decisions: [] },
+      productionSourceImages: Object.fromEntries(sourceFiles.map((file) => [file, `/${file}`])),
+      productionCandidateImages: {
+        [layerFiles[0]]: "/candidate/base.png",
+        [layerFiles[1]]: "/candidate/glint.png",
+        [thumbnailFile]: "/candidate/thumbnail.png",
+      },
+      productionCollisionDrafts: {
+        [collisionDraftFile]: {
+          formatVersion: 1,
+          recipeId: recipe.id,
+          candidateFingerprint: fingerprint,
+          kind: "empty",
+          passable: true,
+          reason: "Fishing shoals are passable",
+        },
+      },
+      conceptIslandImages: {},
+      conceptShoalImages: {},
+      waterReferenceImages: {},
+    });
+    const candidate = catalog.find((entry) => entry.id === recipe.id);
+    expect(candidate).toMatchObject({
+      entryType: "production-candidate",
+      categoryId: "world-features",
+      collisionDraft: { kind: "empty", passable: true },
+    });
+    expect(candidate?.layers).toHaveLength(2);
+    expect(candidate?.layers.map((layer) => layer.blendMode)).toEqual(["normal", "screen"]);
+  });
+
   it("derives stable identities and optional reference metadata from filenames", () => {
     const established = islandReferenceEntry(
       "../../../assets-src/gr1/island-examples/island-08-horseshoe-port-inhabited.png",

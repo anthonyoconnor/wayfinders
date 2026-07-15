@@ -287,8 +287,17 @@ async function currentReports(replacement) {
     if (recipe.lifecycle === "runtime" || recipe.lifecycle === "reference") continue;
     if (replacement?.recipeId === recipe.id) reports.push(replacement);
     else {
-      const report = await readOptionalJson(outputPath(recipe.id, "preparation-report.json"));
-      if (report) reports.push(report);
+      // A manifest change must never re-stamp an old report into the new index.
+      // Invalid/missing sources are isolated to their recipe; the final batch
+      // error still reports them while successful jobs retain current outputs.
+      try {
+        const sources = await sourceInputs(recipe);
+        const job = recipeJob(recipe, sources);
+        const report = await cachedReport(recipe, job.jobKey);
+        if (report) reports.push(report);
+      } catch {
+        // The recipe's own preparation result carries the actionable failure.
+      }
     }
   }
   return reports.sort((left, right) => left.recipeId.localeCompare(right.recipeId, "en"));
@@ -406,6 +415,31 @@ export function selectProductionRecipes(manifest, args) {
   return recipes;
 }
 
+export class ProductionPreparationBatchError extends AggregateError {
+  constructor(failures, results) {
+    super(
+      failures.map(({ error }) => error),
+      `Production preparation failed for ${failures.map(({ recipeId }) => recipeId).join(", ")}`,
+    );
+    this.name = "ProductionPreparationBatchError";
+    this.failures = failures;
+    this.results = results;
+  }
+}
+
+export async function runIsolatedProductionJobs(recipes, execute) {
+  const results = [];
+  const failures = [];
+  for (const recipe of recipes) {
+    try {
+      results.push(await execute(recipe));
+    } catch (error) {
+      failures.push({ recipeId: recipe.id, error });
+    }
+  }
+  return { results, failures };
+}
+
 export async function runProductionPreparation(command, args = []) {
   const manifest = await readManifest();
   for (const recipe of manifest.recipes) {
@@ -414,8 +448,10 @@ export async function runProductionPreparation(command, args = []) {
   const recipes = selectProductionRecipes(manifest, args);
   const checkOnly = command === "check";
   const force = args.includes("--force");
-  const results = [];
-  for (const recipe of recipes) results.push(await prepareProductionRecipe(recipe, { checkOnly, force }));
+  const { results, failures } = await runIsolatedProductionJobs(
+    recipes,
+    (recipe) => prepareProductionRecipe(recipe, { checkOnly, force }),
+  );
   if (checkOnly) {
     const expectedIndex = await indexBytes();
     const currentIndex = await readOptionalBytes(generatedIndexPath);
@@ -429,6 +465,7 @@ export async function runProductionPreparation(command, args = []) {
       await commitAtomicFileTransaction([{ targetPath: generatedIndexPath, bytes: expectedIndex }]);
     }
   }
+  if (failures.length > 0) throw new ProductionPreparationBatchError(failures, results);
   return results;
 }
 

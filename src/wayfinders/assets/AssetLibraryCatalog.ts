@@ -123,7 +123,7 @@ export interface ProductionCandidateLibraryEntry extends AssetLibraryEntryBase {
   readonly reviewState: "pending" | "approved" | "rejected";
 }
 
-export interface ProductionCandidateCollisionDraft {
+export interface ProductionCandidateHybridCollisionDraft {
   readonly kind: "hybrid-grid-draft";
   readonly tileSize: number;
   readonly subcellSize: number;
@@ -135,6 +135,22 @@ export interface ProductionCandidateCollisionDraft {
   }>;
   readonly solidSubcells: readonly Readonly<{ x: number; y: number }>[];
 }
+
+export interface ProductionCandidateEmptyCollisionDraft {
+  readonly kind: "empty";
+  readonly passable: true;
+  readonly reason: string;
+}
+
+export interface ProductionCandidatePreservedCollisionDraft {
+  readonly kind: "preserve-runtime-collision";
+  readonly runtimeAssetId: string;
+}
+
+export type ProductionCandidateCollisionDraft =
+  | ProductionCandidateHybridCollisionDraft
+  | ProductionCandidateEmptyCollisionDraft
+  | ProductionCandidatePreservedCollisionDraft;
 
 export type AssetLibraryReferenceKind = "island" | "shoal" | "environment";
 
@@ -178,7 +194,7 @@ const ISLAND_EXAMPLE_IMAGE_URLS = import.meta.glob<string>(
 );
 
 const PRODUCTION_SOURCE_IMAGE_URLS = import.meta.glob<string>(
-  "../../../assets-src/gr1/island-*-source.png",
+  "../../../assets-src/**/*-source.png",
   { eager: true, query: "?url", import: "default" },
 );
 
@@ -692,12 +708,27 @@ function validateCandidateCollisionDraft(
   fingerprint: string,
 ): Readonly<ProductionCandidateCollisionDraft> {
   const parsed = unknownRecord(input, `Collision draft for ${recipeId}`);
+  if (parsed.formatVersion !== 1) throw new RangeError(`Collision draft for ${recipeId} must use formatVersion 1`);
   if (parsed.recipeId !== recipeId) throw new RangeError(`Collision draft recipe ID does not match ${recipeId}`);
   if (parsed.candidateFingerprint !== fingerprint) {
     throw new RangeError(`Collision draft fingerprint does not match ${recipeId}`);
   }
+  if (parsed.kind === "empty") {
+    if (parsed.passable !== true) throw new RangeError(`Empty collision draft for ${recipeId} must be passable`);
+    return Object.freeze({
+      kind: "empty",
+      passable: true,
+      reason: nonEmptyString(parsed.reason, `Collision draft ${recipeId}.reason`),
+    });
+  }
+  if (parsed.kind === "preserve-runtime-collision") {
+    return Object.freeze({
+      kind: "preserve-runtime-collision",
+      runtimeAssetId: nonEmptyString(parsed.runtimeAssetId, `Collision draft ${recipeId}.runtimeAssetId`),
+    });
+  }
   if (parsed.kind !== "hybrid-grid-draft") {
-    throw new RangeError(`Collision draft for ${recipeId} must be a hybrid-grid-draft`);
+    throw new RangeError(`Collision draft for ${recipeId} has an unsupported kind`);
   }
   const tileSize = positiveInteger(parsed.tileSize, `Collision draft ${recipeId}.tileSize`);
   const subcellSize = positiveInteger(parsed.subcellSize, `Collision draft ${recipeId}.subcellSize`);
@@ -828,6 +859,22 @@ function productionCandidateEntries(
     const reviewState = currentReview?.candidateFingerprint === prepared.jobKey
       ? currentReview.decision
       : "pending";
+    const collisionFields: AssetLibraryDetailField[] = collisionDraft.kind === "hybrid-grid-draft"
+      ? [
+        { id: "profile", name: "Profile", value: "Hybrid grid draft" },
+        { id: "tile-size", name: "Navigation cell", value: collisionDraft.tileSize, unit: "px" },
+        { id: "subcell-size", name: "Collision subcell", value: collisionDraft.subcellSize, unit: "px" },
+        { id: "solid-subcells", name: "Solid subcells", value: collisionDraft.solidSubcells.length },
+      ]
+      : collisionDraft.kind === "empty"
+        ? [
+          { id: "profile", name: "Profile", value: "Explicitly passable" },
+          { id: "reason", name: "Reason", value: collisionDraft.reason },
+        ]
+        : [
+          { id: "profile", name: "Profile", value: "Preserve runtime collision" },
+          { id: "runtime-asset", name: "Runtime asset", value: collisionDraft.runtimeAssetId },
+        ];
     return {
       id: recipe.id,
       entryType: "production-candidate",
@@ -865,12 +912,7 @@ function productionCandidateEntries(
         {
           id: "collision",
           name: "Collision draft",
-          fields: [
-            { id: "profile", name: "Profile", value: "Hybrid grid draft" },
-            { id: "tile-size", name: "Navigation cell", value: collisionDraft.tileSize, unit: "px" },
-            { id: "subcell-size", name: "Collision subcell", value: collisionDraft.subcellSize, unit: "px" },
-            { id: "solid-subcells", name: "Solid subcells", value: collisionDraft.solidSubcells.length },
-          ],
+          fields: collisionFields,
         },
       ],
       recipe,

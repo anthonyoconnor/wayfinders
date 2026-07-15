@@ -132,6 +132,15 @@ describe("production asset recipe manifest", () => {
       }],
     })).toThrow(/repository-relative/);
 
+    expect(() => validateProductionAssetRecipeManifest({
+      formatVersion: 1,
+      recipes: [{
+        ...validIslandRecipe(),
+        provenance: { kind: "selected-source", sourceFile: "assets-src/gr1/island.png" },
+        layers: [{ ...validIslandRecipe().layers[0], sourceFile: "assets-src/gr1/island.png" }],
+      }],
+    })).toThrow(/assets-src\/\*-source\.png/);
+
     const recipe = validIslandRecipe();
     expect(() => validateProductionAssetRecipeManifest({
       formatVersion: 1,

@@ -295,6 +295,12 @@ function validateRecipe(input: unknown, index: number): ProductionAssetRecipe {
       preparation: validatePreparation(layer.preparation, `${layerLabel}.preparation`),
     };
   });
+  if (lifecycle === "source") {
+    const sourceFiles = [provenance.sourceFile, ...layers.map((layer) => layer.sourceFile)];
+    if (sourceFiles.some((file) => !file.startsWith("assets-src/") || !file.endsWith("-source.png"))) {
+      throw new RangeError(`${label} source lifecycle files must be assets-src/*-source.png files`);
+    }
+  }
 
   const animationsInput = parsed.animations ?? [];
   if (!Array.isArray(animationsInput)) throw new TypeError(`${label}.animations must be an array`);

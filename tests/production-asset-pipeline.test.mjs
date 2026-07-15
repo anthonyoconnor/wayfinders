@@ -4,6 +4,7 @@ import productionRecipes from "../assets-src/gr3/production-recipes.json";
 import {
   canonicalJson,
   createCollisionDraft,
+  runIsolatedProductionJobs,
   selectProductionRecipes,
 } from "../scripts/production-asset-pipeline.mjs";
 import {
@@ -78,5 +79,19 @@ describe("GR-3.2 production preparation pipeline", () => {
         solidSubcells: [],
       });
     }
+  });
+
+  it("continues a batch after one isolated recipe failure", async () => {
+    const recipes = [{ id: "first" }, { id: "broken" }, { id: "last" }];
+    const visited = [];
+    const batch = await runIsolatedProductionJobs(recipes, async (recipe) => {
+      visited.push(recipe.id);
+      if (recipe.id === "broken") throw new Error("source is invalid");
+      return { status: "prepared", recipeId: recipe.id };
+    });
+    expect(visited).toEqual(["first", "broken", "last"]);
+    expect(batch.results.map(({ recipeId }) => recipeId)).toEqual(["first", "last"]);
+    expect(batch.failures).toHaveLength(1);
+    expect(batch.failures[0]).toMatchObject({ recipeId: "broken" });
   });
 });
