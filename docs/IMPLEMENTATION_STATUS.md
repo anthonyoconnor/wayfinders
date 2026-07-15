@@ -20,9 +20,14 @@ architecture rules or completed milestone evidence.
   still required before graphics acceptance advances.
 - `GR-2.5` collision authoring is implemented. The workbench now includes a
   browsable 23-entry asset library, retained per-asset drafts, `8`/`32`-pixel
-  brushes and validated direct package saves. Its automated gates pass; the
-  in-app WebGL editing and performance pass is still required before graphics
+  brushes and validated direct package saves. Live whole-cell/detail editing
+  and direct save have been exercised. Its automated gates pass; the complete
+  in-app WebGL matrix and performance pass are still required before graphics
   acceptance advances.
+- The next proposed implementation milestone is `GR-2.6`: finish and validate
+  the currently saved home shoreline mask in gameplay, then prove one shared
+  diagnostic shape source for every runtime collision category. It remains
+  unauthorized.
 - No `GR-3` scope is authorized.
 - Gameplay-session saving is intentionally absent. Every launch or browser
   refresh starts a fresh voyage. Development-only asset package saves are a
@@ -58,7 +63,7 @@ Run the complete automated gate with:
 npm.cmd run check
 ```
 
-Latest accepted verification baseline:
+Latest committed verification baseline:
 
 - Asset catalog, PNG/frame, texture-limit, generated-code, thumbnail and report
   consistency checks pass before compilation.
@@ -75,13 +80,12 @@ Latest accepted verification baseline:
 - An interactive pass over the Great Hall's focused handover and optional
   browsing modes remains outstanding; their shared read model and exact-dock
   access policy have automated coverage.
-- An interactive WebGL pass over all three GR-2 viewer package kinds, contrast
-  overlays, the visual-candidate template/bind/preview/export flow, the GR-2.5
-  library/editor/direct-save workflow and GR-2.4 live collision diagnostics
-  remains outstanding. The in-app browser connection failed before it could
-  open the responding local server; the live page and loopback save endpoint
-  respond, while automated contracts, deterministic collision budgets and the
-  production build pass.
+- Live library browsing, `8`/`32`-pixel editing and direct collision save have
+  been exercised, including a subsequent saved home-mask revision. The formal
+  WebGL matrix still needs all three package kinds, all 20 references,
+  contrast/overlay states, visual-candidate intake, responsive layouts,
+  save-to-fresh-game reload and collision-diagnostic performance. Automated
+  contracts, deterministic collision budgets and the production build pass.
 - Representative mid-range mobile rendering/performance validation remains
   outstanding.
 - Touch-first sailing is not implemented.

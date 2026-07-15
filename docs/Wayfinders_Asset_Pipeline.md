@@ -1,14 +1,15 @@
 # Wayfinders authored-asset direction
 
 Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted.
-`GR-2.1` through `GR-2.5` are implemented; their interactive browser acceptance
-remains outstanding. Pilot collision reauthoring in `GR-2.6`, plus the
-production workflow in `GR-3.1` through `GR-3.4`, remains planned but not
-authorized.
+`GR-2.1` through `GR-2.5` are implemented. Library navigation, whole-cell
+editing and direct collision save have been exercised; the complete interactive
+browser and performance matrix remains outstanding. Collision accuracy/runtime
+acceptance in `GR-2.6`, plus the production workflow in `GR-3.1` through
+`GR-3.4`, remains planned but not authorized.
 
-Saving is not part of the active baseline. Any save-related language in this
-reference is a future compatibility consideration, not authorization to add
-persistence.
+Gameplay-session saving is not part of the active baseline. Development-only
+reviewed asset-package writes are repository authoring, not voyage persistence;
+they grant no general browser filesystem access.
 
 ## Goal
 
@@ -132,9 +133,10 @@ next changes shared world-generation or rendering code.
 GR-2 follows the complete GR-1 pilot and addresses its demonstrated preparation
 and review needs. Its viewer uses the same Phaser camera, package metadata and
 shared presentation factories as the game. Its intake workflow generates
-portable candidate bundles, edits metadata and validates grid/frame alignment
-without inventing separate placement rules. A repository command, rather than
-the browser, owns tracked-file materialization and catalog changes.
+portable full-visual candidate bundles, edits metadata and validates grid/frame
+alignment without inventing separate placement rules. Authoritative server-side
+intake owns tracked-file materialization and catalog changes; the browser can
+invoke only the collision-only loopback route implemented in GR-2.5.
 
 Deterministic catalog generation, thumbnails and batch validation are justified
 by repeated manual metadata/image wiring. Atlas packing remains deferred until
@@ -168,8 +170,8 @@ Implemented `GR-2.4` retains the `32`-pixel navigation grid and adds optional
 contains a `4 x 4` collision patch when refinement is needed. Mixed patches and
 intentional fully-open or fully-solid overrides are accepted; an omitted patch
 keeps the compact coarse terrain result. Implemented `GR-2.5` adds
-package-profile editing on top of that contract; accepted home-mask refinement
-remains planned in `GR-2.6`.
+package-profile editing on top of that contract. Accepted home-mask refinement
+and live runtime validation remain planned in `GR-2.6`.
 
 The V1 JSON property remains named `mixedCells` for compatibility with accepted
 packages. Its implemented meaning is now "sparse coarse-cell overrides," so a
@@ -187,8 +189,9 @@ service, island approach and home dock. Only the three finite package-backed
 profiles are authorable in `GR-2.5`: the home hybrid grid, centred player box
 and explicit-empty fishing shoal. Generated-island policy and the five
 developer/dynamic profiles remain inspectable and read-only until `GR-2.6` or a
-later runtime-authority milestone gives their geometry an authoritative
-consumer.
+later runtime-authority milestone. `GR-2.6` may expose their existing bounds in
+the shared diagnostic, but does not invent new blocking behavior merely to make
+an object visible there.
 
 The implemented workflow is:
 
@@ -228,18 +231,23 @@ the implemented automated gates do not claim that browser result.
 
 `GR-3.1` through `GR-3.4` extend the proven pilot tooling in four gates:
 
-1. A versioned recipe manifest records semantic identity, provenance, source
-   hashes, target geometry, style constraints, collision/interaction layers,
-   transforms and output bindings.
-2. Provider-neutral source jobs feed deterministic local preparation for
-   cleanup, trim/pad, scale, slicing, frames, sheets and thumbnails. Incremental
+1. A versioned recipe manifest extends the current library record with semantic
+   identity, lifecycle state, provenance, source hashes, target geometry,
+   ordered visual layers, visibility/blend defaults, animation descriptors,
+   style constraints, collision/interaction layers, transforms, thumbnails and
+   output bindings. The 20 island examples stay reference-only by default.
+2. Provider-neutral source jobs feed deterministic local preparation for matte
+   and transparency cleanup, trim/pad, scale, slicing, layer outputs,
+   directional frames, animation sheets and bounded thumbnails. Incremental
    caching and resumable batches must not weaken validation.
-3. The workbench compares variants, art diffs and mask diffs; records review
-   decisions; and promotes only explicit accepted bundles through repository
-   intake.
-4. Batch orchestration regenerates catalogs, reports and review queues, rejects
-   stale/unreviewed outputs and proves numeric throughput and runtime budgets on
-   a representative authorized batch.
+3. The existing browser/selected inspector gains layer controls, animation
+   playback, variant and mask diffs, review decisions and explicit promotion.
+   Collision retains constrained direct save; full visual promotion remains
+   review-gated server intake with portable bundles as a transfer fallback.
+4. Batch orchestration uses the 20 island references as its minimum preparation
+   benchmark, regenerates catalogs/reports/review queues, rejects stale or
+   unreviewed outputs and proves operator, throughput, payload, decoded-memory,
+   GPU-memory and runtime budgets before broader rollout.
 
 Source generation may be nondeterministic, but its inputs and resulting source
 hash are recorded. All derived outputs after source acceptance must be
@@ -265,6 +273,9 @@ into the base image.
 
 - Load the three pilot packages at boot and report startup time and texture
   memory.
+- Keep the 20 source references lazy: browsing must not preload every full-size
+  source into Phaser or retain more than the selected reference texture; record
+  initial thumbnail payload and selected-reference decoded/GPU memory.
 - Preserve current camera culling; split a large authored composition only when
   required for culling, fog or texture limits.
 - Confirm normal-zoom readability under fog, Personal grey, route and risk

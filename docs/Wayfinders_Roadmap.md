@@ -2,11 +2,12 @@
 
 Status: planning. The accepted gameplay work through `GP-4.1` and graphics
 work through `GR-1.4` form the current baseline. `GR-2.1` through `GR-2.5` are
-implemented and their automated gates pass. Interactive browser acceptance
-remains open for the viewer/workbench, live collision performance and the
-collision editor. `GR-2.6` and `GR-3.1` through `GR-3.4` remain proposed
-collision-acceptance and asset-production work; planning does not authorize
-their implementation.
+implemented and their automated gates pass. The concept-inspired 23-entry asset
+library, `8`/`32`-pixel collision brushes and direct collision save have been
+exercised in the live workbench; the complete browser matrix and numeric
+performance acceptance remain open. `GR-2.6` and `GR-3.1` through `GR-3.4`
+remain proposed collision-acceptance and asset-production work; planning does
+not authorize their implementation.
 
 This document contains only upcoming or explicitly deferred work. Completed
 milestone scope and acceptance evidence live in
@@ -57,9 +58,10 @@ one authored home island, the player boat, one fishing-shoal cue and directional
 boat/wake presentation. Its acceptance evidence is in the archive.
 
 No next gameplay milestone is currently defined. The immediate graphics
-planning sequence is to close the `GR-2.1` through `GR-2.5` browser acceptance
-pass, then authorize and complete pilot collision reauthoring before proving a
-production-asset workflow or expanding the runtime catalog.
+planning sequence is to close the remaining `GR-2.1` through `GR-2.5` browser
+matrix, then authorize `GR-2.6` to validate and finish the saved pilot collision
+mask in gameplay. The `GR-3` production workflow follows only after that gate;
+it extends the current library rather than replacing it.
 
 ## Upcoming graphics track
 
@@ -102,11 +104,13 @@ validate frames, dimensions and variants; export tracked source/runtime files
 and a package-catalog entry consumable by both viewer and game.
 
 Browser security prevents the workbench itself from silently writing tracked
-repository files. The workbench therefore exports one portable candidate
-bundle containing validated metadata and PNG bindings. A repository intake
-command revalidates that bundle with the same contract, materializes the
-tracked metadata/runtime images and catalog entry, and requires an explicit
-replacement flag when an existing semantic ID would change.
+repository files. Full visual candidates therefore export one portable bundle
+containing validated metadata and PNG bindings. A repository intake command
+revalidates that bundle with the same contract, materializes the tracked
+metadata/runtime images and catalog entry, and requires an explicit replacement
+flag when an existing semantic ID would change. GR-2.5's collision-only
+loopback endpoint is the narrow exception: the server, not the browser, owns
+that validated repository write.
 
 Acceptance gate: invalid IDs, missing frames, incompatible dimensions and
 incomplete metadata are rejected; valid output loads in the viewer and game
@@ -171,8 +175,9 @@ that browser measurement remains pending.
 
 #### GR-2.5 — Asset-viewer collision-mask editor
 
-Status: implemented; automated acceptance passes; interactive browser editing
-and performance acceptance pending. Depends on `GR-2.4`.
+Status: implemented; automated acceptance passes; live library navigation,
+whole-cell editing and direct save have been exercised; the full browser and
+performance acceptance matrix remains pending. Depends on `GR-2.4`.
 
 The asset viewer now combines the three runtime packages and 20 island source
 references in a searchable concept-inspired library, while still enumerating
@@ -212,31 +217,43 @@ editor operations and undo/redo, stable sparse-mask serialization, stale
 candidate rejection and exact required-anchor and derived navigation-edge
 clearance validation, whole-cell overrides, library enumeration and local-save
 transaction behavior. Interactive acceptance must still verify pointer hit
-testing, overlays, asset navigation, direct-save reload behavior and
-responsiveness in a WebGL browser; no browser performance result is claimed yet.
+testing for both brush sizes, overlay alignment, search/filter/previous/next over
+all 23 entries, per-asset draft retention, selected-only reference memory,
+responsive inspector layouts and direct-save reload into a fresh game. Collision
+diagnostics must retain the desktop `p95 <= 20 ms` frame target; no browser
+performance result is claimed yet.
 
-#### GR-2.6 — Pilot collision reauthoring and runtime acceptance
+#### GR-2.6 — Pilot collision accuracy and runtime acceptance
 
 Status: planned; depends on `GR-2.5`; not authorized.
 
-Reauthor the home island shoreline with sparse `8`-pixel subcells, including the
-outer beach, internal water and the protected harbour opening. Give every current
-runtime object category an explicit debug shape source: package masks for
-authored assets, the shared hull shape for player and wreck ships, explicit empty
-masks for passable shoals, and declared tile/service bounds for generated sites
-until those sites receive authored packages.
+Start from the home shoreline mask already saved through the asset library.
+Refine it with `32`-pixel whole-cell edits and `8`-pixel shoreline detail rather
+than regenerating it from rendered pixels. Cover the complete outer beach,
+internal water and protected harbour opening, and verify the accepted revision
+after reloading it in the live game.
+
+Give every current runtime object category one shared collision/debug descriptor:
+package masks for authored assets, the authoritative hull for player and wreck
+ships, explicit empty profiles for passable shoals, and declared tile/service
+bounds for generated sites until those sites receive authored packages. The
+asset-library profile, in-game diagnostic and movement query must consume that
+same descriptor rather than maintain parallel shapes.
+Diagnostic coverage records existing blocking/passable semantics; it does not
+make a developer object solid merely so a box can be drawn.
 
 Upgrade the in-game collision diagnostic to show fine solid cells, hull shapes,
 passable item bounds and service anchors at normal play zoom. Record fixed-view
-reference images for the north, east/harbour, south and west home shoreline plus
-representative non-home objects.
+references for the north, east/harbour, south and west home shoreline plus every
+non-home object category, including the saved package revision and profile kind.
 
 Acceptance gate: the visible home shoreline has neither material missing solids
 nor blocked internal water; the ship can enter and leave the harbour at all
-headings without overlapping land; every current object category appears in the
-diagnostic with correct blocking/passable semantics; fixed-view references and
-movement regressions pass; and no expedition, route or interaction behavior
-regresses.
+headings without overlapping land; the library-saved revision is the revision
+loaded by a fresh game; every current object category appears in the diagnostic
+with correct blocking/passable semantics; fixed-view references, movement
+regressions and the collision-overlay frame budget pass; and no expedition,
+route or interaction behavior regresses.
 
 ### GR-3 — Asset production pipeline
 
@@ -246,24 +263,31 @@ runtime catalog expansion.
 
 #### GR-3.1 — Production asset specification and recipe manifest
 
-Define package-family templates for islands, vessels, shoals, sites, activity
-cues and UI/presentation art. Each source record declares semantic ID, revision,
-provenance, source hashes, target dimensions, origins, frames/slices, palette and
-style requirements, collision/interaction layers, preparation recipe and output
-bindings. Distinguish source, candidate, accepted and runtime-derived states.
+Extend the existing `AssetLibraryEntry` model into versioned package-family
+recipes for islands, vessels, shoals, sites, activity cues and UI/presentation
+art. Each record declares semantic ID, revision, provenance, source hashes,
+target dimensions, origins, ordered image layers, default visibility, opacity,
+blend metadata, frames/slices, animation descriptors, thumbnails,
+collision/interaction layers, preparation steps and output bindings. Distinguish
+reference, source, candidate, accepted and runtime-derived states; the 20 island
+examples remain `reference-only` until an explicit promotion decision.
 
 Acceptance gate: schemas reject incomplete or incompatible recipes; source and
-runtime files cannot be confused; one representative recipe per existing pilot
-family validates; and a visual-only revision cannot silently change collision,
-anchors or gameplay semantics.
+runtime files cannot be confused; all 23 current library records migrate without
+identity drift; one representative recipe per existing pilot family validates;
+and a visual-only revision cannot silently change collision, anchors or gameplay
+semantics.
 
 #### GR-3.2 — Generation and deterministic preparation runners
 
 Build provider-neutral source intake/generation jobs followed by deterministic
-local preparation steps for transparency cleanup, trim/pad, scale, pixel-grid
-alignment, slicing, directional frames, animation sheets and thumbnails. A job
-may suggest collision from offline alpha/segmentation, but suggested masks remain
-unaccepted candidates until reviewed in the `GR-2.5` editor.
+local preparation steps for matte/transparency cleanup, trim/pad, scale,
+pixel-grid alignment, slicing, ordered layer outputs, directional frames,
+animation sheets and bounded thumbnails. Use representative inhabited and
+uninhabited island examples to prove the path without granting them runtime
+authority. A job may suggest collision from offline alpha/segmentation, but
+suggested masks remain unaccepted candidates until reviewed in the existing
+collision editor.
 
 Record source hashes and generation parameters even when source generation is
 nondeterministic; every derived transform after an accepted source must be
@@ -271,21 +295,27 @@ reproducible. Support incremental rebuilds, content-addressed caching, resumable
 batches and isolated failure reports without adding runtime generation.
 
 Acceptance gate: clean preparation from an accepted source reproduces identical
-runtime outputs and reports; unchanged work is skipped safely; one failed asset
-does not corrupt or promote the rest of a batch; and all outputs satisfy package,
-texture and collision validators.
+layer, animation, thumbnail and report outputs; unchanged work is skipped
+safely; one failed asset does not corrupt or promote the rest of a batch; source
+references stay reference-only; and all outputs satisfy package, texture and
+collision validators.
 
 #### GR-3.3 — Review, comparison and promotion workbench
 
-Add variant contact sheets, side-by-side diffs, animation/heading playback,
-in-game overlay previews, collision editing, reviewer notes and explicit
-candidate/accepted/rejected states. Promotion continues through portable bundles
-and repository intake; the browser does not gain arbitrary repository writes.
+Extend the current left browser and unified selected-asset inspector with layer
+visibility/opacity controls, animation and heading playback, variant contact
+sheets, side-by-side visual and mask diffs, in-game overlay previews, reviewer
+notes and explicit candidate/accepted/rejected states. Do not create a parallel
+workbench. Collision keeps its constrained direct-save route; full visual
+promotion becomes an explicit review-gated server intake action with portable
+bundles retained for transfer and recovery. The browser never gains arbitrary
+repository writes.
 
-Acceptance gate: reviewers can identify the exact source, recipe, visual diff
-and mask diff for a candidate; accepting a visual replacement never overwrites a
-reviewed collision mask implicitly; rejected candidates leave the runtime catalog
-unchanged; and promoted output loads through the same viewer and game factories.
+Acceptance gate: reviewers can identify the exact source, recipe, layer stack,
+animation, visual diff and mask diff for a candidate; accepting a visual
+replacement never overwrites a reviewed collision mask implicitly; rejected
+candidates leave the runtime catalog unchanged; and promoted output appears in
+the same library record and loads through the same viewer and game factories.
 
 #### GR-3.4 — Batch production and readiness gate
 
@@ -295,9 +325,12 @@ detection, package thumbnails, review queues and an auditable promotion summary.
 Atlas packing remains evidence-driven rather than automatic.
 
 Prove the workflow on an explicitly authorized representative batch before any
-broad content rollout. Measure operator time, generation/preparation throughput,
-cache effectiveness, review rework, runtime startup, texture memory and frame
-cost. Later non-home island, remaining shoal, survey-site, activity, lineage and
+broad content rollout. Use the 20-example island collection as the minimum
+reference/preparation benchmark, while promoting only the explicitly reviewed
+subset. Measure operator time, generation/preparation throughput, cache
+effectiveness, review rework, library startup and thumbnail payload, selected-
+asset decoded/GPU memory, game startup, texture memory and frame cost. Later
+non-home island, remaining shoal, survey-site, activity, lineage and
 environmental-art milestones may be defined only from that evidence.
 
 Acceptance gate: the representative batch can be rebuilt, reviewed and promoted
@@ -314,7 +347,7 @@ flowchart LR
     GR22 --> GR23["GR-2.3 deterministic validation and catalog automation"]
     GR23 --> GR24["GR-2.4 hybrid collision contract"]
     GR24 --> GR25["GR-2.5 collision-mask editor"]
-    GR25 --> GR26["GR-2.6 collision reauthoring acceptance"]
+    GR25 --> GR26["GR-2.6 collision accuracy and runtime acceptance"]
     GR26 --> GR31["GR-3.1 production recipe manifest"]
     GR31 --> GR32["GR-3.2 generation and preparation runners"]
     GR32 --> GR33["GR-3.3 review and promotion workbench"]
@@ -347,11 +380,11 @@ serialized gate; isolated tooling must not fork rendering or gameplay rules.
   to semantic collision masks, anchors and bounds.
 - Touch-first sailing until separately designed and approved as a
   gameplay/platform input minor.
-- Saving, cloud sync, server saves and multiplayer.
+- Gameplay saving, cloud sync, server-backed voyage saves and multiplayer.
 
 ## Active authorization boundary
 
-This roadmap update authorizes planning only. Implementation remains paused
-after `GR-2.3`; the remaining previously authorized action is the interactive
-viewer/workbench acceptance pass. Starting `GR-2.4`, any `GR-3` minor, a new
+This roadmap update authorizes planning only. Implementation is paused after
+the completed `GR-2.5`; the remaining in-scope action is the formal interactive
+viewer/workbench acceptance pass. Starting `GR-2.6`, any `GR-3` minor, a new
 gameplay minor or semantic asset-ID expansion requires explicit authorization.
