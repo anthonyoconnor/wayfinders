@@ -42,6 +42,33 @@ describe("GR-2.2 asset candidate validation", () => {
     expect(validateAssetCandidateBundle(bundle(metadata)).metadata.assetId).toBe(metadata.assetId);
   });
 
+  it("round-trips explicit collision profiles through candidate normalization", () => {
+    const home = validateAssetCandidateBundle(bundle(homeIsland)).metadata;
+    const boat = validateAssetCandidateBundle(bundle(playerBoat)).metadata;
+    const shoal = validateAssetCandidateBundle(bundle(fishingShoal)).metadata;
+    expect(home.collision).toEqual(homeIsland.collision);
+    expect(boat.collision).toEqual(playerBoat.collision);
+    expect(shoal.collision).toEqual(fishingShoal.collision);
+  });
+
+  it("keeps a legacy candidate's omitted collision profile omitted", () => {
+    const legacy = structuredClone(homeIsland) as Record<string, unknown>;
+    delete legacy.collision;
+    const metadata = validateAssetCandidateBundle(bundle(legacy)).metadata;
+    expect(Object.hasOwn(metadata, "collision")).toBe(false);
+  });
+
+  it("rejects malformed collision metadata before accepting candidate images", () => {
+    const malformed = structuredClone(homeIsland) as unknown as Record<string, unknown>;
+    const collision = malformed.collision as { mixedCells: unknown[] };
+    collision.mixedCells = [{
+      x: 1,
+      y: 1,
+      solidRows: ["1111", "1111", "1111", "1111"],
+    }];
+    expect(() => bundle(malformed)).toThrow(/must be mixed/);
+  });
+
   it("derives exact directional and wake sheet layouts", () => {
     const directional = {
       ...playerBoat,

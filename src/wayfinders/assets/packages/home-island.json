@@ -3,8 +3,13 @@
   "assetId": "home.island.primary",
   "kind": "home-island",
   "sourceAssetId": "generated.home-island.source.v1",
-  "runtimeRevision": 1,
+  "runtimeRevision": 2,
   "tileSize": 32,
+  "collision": {
+    "kind": "hybrid-grid",
+    "subcellSize": 8,
+    "mixedCells": []
+  },
   "grid": {
     "width": 15,
     "height": 15,

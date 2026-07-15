@@ -6,6 +6,7 @@ import {
 } from "../world/TileData.ts";
 
 export const AUTHORED_ASSET_CONTRACT_VERSION = 1 as const;
+export const AUTHORED_COLLISION_SUBCELL_SIZE = 8 as const;
 
 export const AUTHORED_ASSET_IDS = Object.freeze({
   homeIsland: "home.island.primary",
@@ -41,6 +42,40 @@ export interface GridRect extends GridPoint {
   height: number;
 }
 
+/**
+ * One optional 8-pixel collision refinement inside an authored navigation cell.
+ * Rows are north-to-south, characters are west-to-east, and `1` means solid.
+ * When present, the patch replaces the coarse terrain collision for that cell.
+ */
+export type AuthoredCollisionSolidRows = readonly [string, string, string, string];
+
+export interface AuthoredMixedCollisionCell extends GridPoint {
+  solidRows: AuthoredCollisionSolidRows;
+}
+
+export interface AuthoredHybridGridCollision {
+  kind: "hybrid-grid";
+  subcellSize: typeof AUTHORED_COLLISION_SUBCELL_SIZE;
+  mixedCells: readonly Readonly<AuthoredMixedCollisionCell>[];
+}
+
+export interface AuthoredBoxCollision {
+  kind: "box";
+  /** Pixel offset from the authored object's placement point. */
+  offset: Readonly<PixelPoint>;
+  /** Positive half-width and half-height in world pixels. */
+  halfSize: Readonly<PixelSize>;
+}
+
+export interface AuthoredEmptyCollision {
+  kind: "empty";
+}
+
+export type AuthoredCollisionProfile =
+  | AuthoredHybridGridCollision
+  | AuthoredBoxCollision
+  | AuthoredEmptyCollision;
+
 export interface AuthoredRenderSlice {
   id: string;
   imageId: string;
@@ -68,6 +103,8 @@ export interface AuthoredHomeCell extends GridPoint {
 export interface AuthoredHomeIslandMetadata extends AuthoredAssetMetadataBase {
   assetId: typeof AUTHORED_ASSET_IDS.homeIsland;
   kind: "home-island";
+  /** Omission is the V1 legacy coarse-terrain collision contract. */
+  collision?: Readonly<AuthoredHybridGridCollision>;
   grid: {
     width: number;
     height: number;
@@ -92,6 +129,8 @@ export type BoatHeadingMode = "rotate" | "directional";
 export interface AuthoredPlayerBoatMetadata extends AuthoredAssetMetadataBase {
   assetId: typeof AUTHORED_ASSET_IDS.playerBoat;
   kind: "player-boat";
+  /** Omission preserves the legacy configured ship footprint. */
+  collision?: Readonly<AuthoredBoxCollision>;
   visual: {
     imageId: string;
     frameSize: Readonly<PixelSize>;
@@ -122,6 +161,8 @@ export interface AuthoredPlayerBoatMetadata extends AuthoredAssetMetadataBase {
 export interface AuthoredFishingShoalMetadata extends AuthoredAssetMetadataBase {
   assetId: typeof AUTHORED_ASSET_IDS.fishingShoal;
   kind: "fishing-shoal";
+  /** Omission preserves the legacy passable shoal contract. */
+  collision?: Readonly<AuthoredEmptyCollision>;
   grid: {
     width: number;
     height: number;
@@ -210,6 +251,87 @@ function assertPointInGrid(value: GridPoint, width: number, height: number, labe
   }
 }
 
+function optionalHybridGridCollision(
+  value: unknown,
+  tileSize: number,
+  width: number,
+  height: number,
+): AuthoredHybridGridCollision | undefined {
+  if (value === undefined) return undefined;
+  const parsed = record(value, "collision");
+  if (parsed.kind !== "hybrid-grid") {
+    throw new RangeError("home-island collision.kind must be hybrid-grid");
+  }
+  const subcellSize = integer(parsed.subcellSize, "collision.subcellSize", 1);
+  if (
+    tileSize !== 32
+    || subcellSize !== AUTHORED_COLLISION_SUBCELL_SIZE
+    || tileSize % subcellSize !== 0
+  ) {
+    throw new RangeError("hybrid-grid collision requires 32-pixel navigation cells and 8-pixel subcells");
+  }
+  if (!Array.isArray(parsed.mixedCells)) {
+    throw new TypeError("collision.mixedCells must be an array");
+  }
+
+  const subcellsPerAxis = tileSize / subcellSize;
+  const occupied = new Set<string>();
+  const mixedCells = parsed.mixedCells.map((value, index): AuthoredMixedCollisionCell => {
+    const label = `collision.mixedCells[${index}]`;
+    const cellInput = record(value, label);
+    const cellPoint = point(cellInput, label, true);
+    assertPointInGrid(cellPoint, width, height, label);
+    const key = `${cellPoint.x},${cellPoint.y}`;
+    if (occupied.has(key)) throw new RangeError(`collision.mixedCells contains duplicate cell ${key}`);
+    occupied.add(key);
+
+    if (!Array.isArray(cellInput.solidRows) || cellInput.solidRows.length !== subcellsPerAxis) {
+      throw new RangeError(`${label}.solidRows must contain exactly ${subcellsPerAxis} rows`);
+    }
+    const solidRows = cellInput.solidRows.map((row, rowIndex) => {
+      if (typeof row !== "string" || row.length !== subcellsPerAxis || !/^[01]+$/u.test(row)) {
+        throw new RangeError(
+          `${label}.solidRows[${rowIndex}] must contain exactly ${subcellsPerAxis} zero-or-one values`,
+        );
+      }
+      return row;
+    }) as unknown as AuthoredCollisionSolidRows;
+    const values = solidRows.join("");
+    if (!values.includes("0") || !values.includes("1")) {
+      throw new RangeError(`${label} must be mixed; fully open or solid cells use coarse terrain collision`);
+    }
+    return { ...cellPoint, solidRows };
+  });
+
+  return {
+    kind: "hybrid-grid",
+    subcellSize: AUTHORED_COLLISION_SUBCELL_SIZE,
+    mixedCells,
+  };
+}
+
+function optionalBoxCollision(value: unknown, tileSize: number): AuthoredBoxCollision | undefined {
+  if (value === undefined) return undefined;
+  const parsed = record(value, "collision");
+  if (parsed.kind !== "box") throw new RangeError("player-boat collision.kind must be box");
+  const offset = point(parsed.offset, "collision.offset", false);
+  if (offset.x !== 0 || offset.y !== 0) {
+    throw new RangeError("player-boat collision box must be centered at offset 0,0");
+  }
+  const halfSize = size(parsed.halfSize, "collision.halfSize");
+  if (halfSize.width >= tileSize / 2 || halfSize.height >= tileSize / 2) {
+    throw new RangeError("player-boat collision halfSize must be smaller than half tileSize");
+  }
+  return { kind: "box", offset, halfSize };
+}
+
+function optionalEmptyCollision(value: unknown): AuthoredEmptyCollision | undefined {
+  if (value === undefined) return undefined;
+  const parsed = record(value, "collision");
+  if (parsed.kind !== "empty") throw new RangeError("fishing-shoal collision.kind must be empty");
+  return { kind: "empty" };
+}
+
 function authoredTerrain(value: unknown, label: string): AuthoredTerrain {
   if (!Object.values(AUTHORED_TERRAINS).includes(value as AuthoredTerrain)) {
     throw new RangeError(`${label} is not a supported terrain value`);
@@ -274,6 +396,7 @@ function validateHomeIsland(parsed: Record<string, unknown>): AuthoredHomeIsland
   if (cells.length !== width * height) {
     throw new RangeError(`grid.cells must define every cell in the ${width}x${height} asset grid`);
   }
+  const collision = optionalHybridGridCollision(parsed.collision, base.tileSize, width, height);
 
   const anchorInput = record(parsed.anchors, "anchors");
   const anchors = {
@@ -365,6 +488,7 @@ function validateHomeIsland(parsed: Record<string, unknown>): AuthoredHomeIsland
     ...base,
     assetId: AUTHORED_ASSET_IDS.homeIsland,
     kind: "home-island",
+    ...(collision ? { collision } : {}),
     grid: { width, height, placementOrigin, cells },
     anchors,
     render: { pixelSize, slices },
@@ -434,6 +558,7 @@ function assertDockPathToEdge(
 
 function validatePlayerBoat(parsed: Record<string, unknown>): AuthoredPlayerBoatMetadata {
   const base = validateBase(parsed, AUTHORED_ASSET_IDS.playerBoat, "player-boat");
+  const collision = optionalBoxCollision(parsed.collision, base.tileSize);
   const visualInput = record(parsed.visual, "visual");
   const headingMode = visualInput.headingMode;
   if (headingMode !== "rotate" && headingMode !== "directional") {
@@ -480,11 +605,19 @@ function validatePlayerBoat(parsed: Record<string, unknown>): AuthoredPlayerBoat
     throw new RangeError("wake.fullSpeedPixelsPerSecond must exceed wake.minimumSpeedPixelsPerSecond");
   }
   if (wake.depth >= visual.depth) throw new RangeError("wake.depth must be below visual.depth");
-  return { ...base, assetId: AUTHORED_ASSET_IDS.playerBoat, kind: "player-boat", visual, wake };
+  return {
+    ...base,
+    assetId: AUTHORED_ASSET_IDS.playerBoat,
+    kind: "player-boat",
+    ...(collision ? { collision } : {}),
+    visual,
+    wake,
+  };
 }
 
 function validateFishingShoal(parsed: Record<string, unknown>): AuthoredFishingShoalMetadata {
   const base = validateBase(parsed, AUTHORED_ASSET_IDS.fishingShoal, "fishing-shoal");
+  const collision = optionalEmptyCollision(parsed.collision);
   const gridInput = record(parsed.grid, "grid");
   const width = integer(gridInput.width, "grid.width", 1);
   const height = integer(gridInput.height, "grid.height", 1);
@@ -509,6 +642,7 @@ function validateFishingShoal(parsed: Record<string, unknown>): AuthoredFishingS
     ...base,
     assetId: AUTHORED_ASSET_IDS.fishingShoal,
     kind: "fishing-shoal",
+    ...(collision ? { collision } : {}),
     grid: { width, height, placementOrigin, serviceAnchor, passable: true },
     visual,
     visibilitySource: "fishing-shoal-read-model",

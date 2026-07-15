@@ -28,6 +28,15 @@ function homeFixture(): Record<string, unknown> {
     sourceAssetId: "generated.home-island.source.v1",
     runtimeRevision: 1,
     tileSize: 32,
+    collision: {
+      kind: "hybrid-grid",
+      subcellSize: 8,
+      mixedCells: [{
+        x: 0,
+        y: 0,
+        solidRows: ["0000", "0110", "0110", "0000"],
+      }],
+    },
     grid: { width: 5, height: 5, placementOrigin: { x: 2, y: 2 }, cells },
     anchors: {
       homeCenter: { x: 2, y: 2 },
@@ -59,6 +68,11 @@ function boatFixture(): Record<string, unknown> {
     sourceAssetId: "generated.player-boat.source.v1",
     runtimeRevision: 1,
     tileSize: 32,
+    collision: {
+      kind: "box",
+      offset: { x: 0, y: 0 },
+      halfSize: { width: 14, height: 14 },
+    },
     visual: {
       imageId: "player.boat.primary.frames",
       frameSize: { width: 48, height: 48 },
@@ -95,6 +109,7 @@ function shoalFixture(): Record<string, unknown> {
     sourceAssetId: "generated.fishing-shoal.source.v1",
     runtimeRevision: 1,
     tileSize: 32,
+    collision: { kind: "empty" },
     grid: {
       width: 1,
       height: 1,
@@ -115,9 +130,87 @@ function shoalFixture(): Record<string, unknown> {
 
 describe("GR-1.1 authored asset contracts", () => {
   it("accepts complete home, boat and shoal package metadata", () => {
-    expect(validateAuthoredAssetMetadata(homeFixture()).assetId).toBe(AUTHORED_ASSET_IDS.homeIsland);
-    expect(validateAuthoredAssetMetadata(boatFixture()).assetId).toBe(AUTHORED_ASSET_IDS.playerBoat);
-    expect(validateAuthoredAssetMetadata(shoalFixture()).assetId).toBe(AUTHORED_ASSET_IDS.fishingShoal);
+    const home = validateAuthoredAssetMetadata(homeFixture());
+    const boat = validateAuthoredAssetMetadata(boatFixture());
+    const shoal = validateAuthoredAssetMetadata(shoalFixture());
+    expect(home.assetId).toBe(AUTHORED_ASSET_IDS.homeIsland);
+    expect(boat.assetId).toBe(AUTHORED_ASSET_IDS.playerBoat);
+    expect(shoal.assetId).toBe(AUTHORED_ASSET_IDS.fishingShoal);
+    expect(home.collision).toMatchObject({ kind: "hybrid-grid", subcellSize: 8 });
+    expect(boat.collision).toEqual({
+      kind: "box",
+      offset: { x: 0, y: 0 },
+      halfSize: { width: 14, height: 14 },
+    });
+    expect(shoal.collision).toEqual({ kind: "empty" });
+  });
+
+  it("preserves omitted collision metadata as the legacy V1 contract", () => {
+    for (const fixture of [homeFixture(), boatFixture(), shoalFixture()]) {
+      delete fixture.collision;
+      const validated = validateAuthoredAssetMetadata(fixture);
+      expect(Object.hasOwn(validated, "collision")).toBe(false);
+      expect(Object.hasOwn(JSON.parse(JSON.stringify(validated)), "collision")).toBe(false);
+    }
+  });
+
+  it("validates sparse 4x4 mixed-cell collision patches", () => {
+    const duplicate = homeFixture();
+    const duplicateCollision = duplicate.collision as { mixedCells: Record<string, unknown>[] };
+    duplicateCollision.mixedCells.push(structuredClone(duplicateCollision.mixedCells[0]));
+    expect(() => validateAuthoredAssetMetadata(duplicate)).toThrow(/duplicate cell 0,0/);
+
+    const outside = homeFixture();
+    const outsideCollision = outside.collision as { mixedCells: Record<string, unknown>[] };
+    outsideCollision.mixedCells[0].x = 5;
+    expect(() => validateAuthoredAssetMetadata(outside)).toThrow(/outside the 5x5 asset grid/);
+
+    const misaligned = homeFixture();
+    (misaligned.collision as Record<string, unknown>).subcellSize = 4;
+    expect(() => validateAuthoredAssetMetadata(misaligned)).toThrow(/32-pixel navigation cells and 8-pixel/);
+  });
+
+  it("rejects malformed or redundant fine collision rows", () => {
+    const wrongRowCount = homeFixture();
+    const wrongCountCell = (wrongRowCount.collision as { mixedCells: { solidRows: string[] }[] }).mixedCells[0];
+    wrongCountCell.solidRows.pop();
+    expect(() => validateAuthoredAssetMetadata(wrongRowCount)).toThrow(/exactly 4 rows/);
+
+    const invalidValue = homeFixture();
+    const invalidCell = (invalidValue.collision as { mixedCells: { solidRows: string[] }[] }).mixedCells[0];
+    invalidCell.solidRows[1] = "0102";
+    expect(() => validateAuthoredAssetMetadata(invalidValue)).toThrow(/zero-or-one/);
+
+    for (const value of ["0000", "1111"]) {
+      const redundant = homeFixture();
+      const redundantCell = (redundant.collision as { mixedCells: { solidRows: string[] }[] }).mixedCells[0];
+      redundantCell.solidRows = Array.from({ length: 4 }, () => value);
+      expect(() => validateAuthoredAssetMetadata(redundant)).toThrow(/must be mixed/);
+    }
+  });
+
+  it("enforces each package kind's collision profile", () => {
+    const wrongHomeKind = homeFixture();
+    wrongHomeKind.collision = { kind: "empty" };
+    expect(() => validateAuthoredAssetMetadata(wrongHomeKind)).toThrow(/home-island collision.kind/);
+
+    const offCenterBoat = boatFixture();
+    const offCenterCollision = offCenterBoat.collision as { offset: { x: number; y: number } };
+    offCenterCollision.offset.x = 1;
+    expect(() => validateAuthoredAssetMetadata(offCenterBoat)).toThrow(/must be centered/);
+
+    const oversizedBoat = boatFixture();
+    const oversizedCollision = oversizedBoat.collision as { halfSize: { width: number; height: number } };
+    oversizedCollision.halfSize.width = 16;
+    expect(() => validateAuthoredAssetMetadata(oversizedBoat)).toThrow(/smaller than half tileSize/);
+
+    const blockedShoal = shoalFixture();
+    blockedShoal.collision = {
+      kind: "box",
+      offset: { x: 0, y: 0 },
+      halfSize: { width: 4, height: 4 },
+    };
+    expect(() => validateAuthoredAssetMetadata(blockedShoal)).toThrow(/fishing-shoal collision.kind/);
   });
 
   it("requires a complete unique home cell map", () => {

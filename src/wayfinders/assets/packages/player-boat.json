@@ -3,8 +3,13 @@
   "assetId": "player.boat.primary",
   "kind": "player-boat",
   "sourceAssetId": "generated.player-boat.source.v1",
-  "runtimeRevision": 1,
+  "runtimeRevision": 2,
   "tileSize": 32,
+  "collision": {
+    "kind": "box",
+    "offset": { "x": 0, "y": 0 },
+    "halfSize": { "width": 14, "height": 14 }
+  },
   "visual": {
     "imageId": "player.boat.primary.frames",
     "frameSize": { "width": 64, "height": 64 },

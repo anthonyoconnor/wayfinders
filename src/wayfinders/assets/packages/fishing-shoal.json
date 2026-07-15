@@ -3,8 +3,11 @@
   "assetId": "shoal.fishing.primary",
   "kind": "fishing-shoal",
   "sourceAssetId": "generated.fishing-shoal.source.v1",
-  "runtimeRevision": 1,
+  "runtimeRevision": 2,
   "tileSize": 32,
+  "collision": {
+    "kind": "empty"
+  },
   "grid": {
     "width": 1,
     "height": 1,
