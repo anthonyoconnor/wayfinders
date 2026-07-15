@@ -2,7 +2,9 @@
 
 Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted.
 `GR-2.1` through `GR-2.3` are implemented as an ordered tooling batch; their
-interactive browser acceptance remains outstanding.
+interactive browser acceptance remains outstanding. Hybrid collision authoring
+in `GR-2.4` through `GR-2.6` and the production workflow in `GR-3.1` through
+`GR-3.4` are planned but not authorized.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
@@ -155,6 +157,60 @@ Candidate intake remains limited to `home.island.primary`,
 repository directly, and the command never replaces an accepted semantic ID
 without the explicit `--replace` flag. Each runtime PNG must be non-interlaced
 8-bit RGB or RGBA and no larger than `4096 x 4096`.
+
+## Planned hybrid collision authoring
+
+`GR-2.4` through `GR-2.6` retain the `32`-pixel navigation grid and add optional
+`8`-pixel collision subcells only to mixed shoreline or object cells. One
+navigation cell therefore contains a `4 x 4` collision patch when refinement is
+needed. Fully open and fully blocked cells keep the existing compact coarse
+form.
+
+The fine mask is reviewed metadata, never a texture sampled by the game. Offline
+preparation may suggest a mask from alpha or segmentation, but suggestions are
+candidate data until explicitly accepted. Passable objects use an explicit
+empty solid mask. Navigation edges are clearance-tested against the fine mask so
+coarse routes cannot promise a passage rejected by continuous ship collision.
+
+The asset viewer gains a focused collision editor for every registered asset or
+object profile, including developer-rendered object categories that do not yet
+have production packages:
+
+1. Overlay the `32`-pixel navigation cells, `8`-pixel collision subcells, art,
+   origins, bounds and anchors.
+2. Paint or erase solids, mark an explicit empty mask, inspect effective ship
+   clearance and undo/redo edits.
+3. Validate dimensions, anchors, harbour/service connectivity and derived
+   navigation edges continuously.
+4. Export a replacement candidate bundle and use the existing intake command
+   to materialize reviewed metadata.
+5. Reopen the accepted package in the same viewer and fixed game views for
+   collision acceptance.
+
+This is not a general raster editor. It edits semantic masks and anchors while
+the source and runtime PNGs remain separate artifacts.
+
+## Planned production workflow
+
+`GR-3.1` through `GR-3.4` extend the proven pilot tooling in four gates:
+
+1. A versioned recipe manifest records semantic identity, provenance, source
+   hashes, target geometry, style constraints, collision/interaction layers,
+   transforms and output bindings.
+2. Provider-neutral source jobs feed deterministic local preparation for
+   cleanup, trim/pad, scale, slicing, frames, sheets and thumbnails. Incremental
+   caching and resumable batches must not weaken validation.
+3. The workbench compares variants, art diffs and mask diffs; records review
+   decisions; and promotes only explicit accepted bundles through repository
+   intake.
+4. Batch orchestration regenerates catalogs, reports and review queues, rejects
+   stale/unreviewed outputs and proves numeric throughput and runtime budgets on
+   a representative authorized batch.
+
+Source generation may be nondeterministic, but its inputs and resulting source
+hash are recorded. All derived outputs after source acceptance must be
+reproducible. Runtime generation, silent mask replacement and automatic catalog
+promotion remain prohibited.
 
 ## Runtime separation
 
