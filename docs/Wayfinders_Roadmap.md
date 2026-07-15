@@ -30,6 +30,9 @@ includes it. No gameplay-saving milestone is currently planned or authorized.
 - `GP-x.y` identifies gameplay milestones and acceptance gates.
 - `GR-x.y` identifies graphics, asset-pipeline and production-presentation
   milestones and acceptance gates.
+- `AM-x` identifies architecture, performance and development-feedback
+  milestones. Their detailed scope and acceptance gates live in
+  [`architecture_milestones.md`](../architecture_milestones.md).
 - A minor is complete only when its behavior, tests, readability, performance
   criteria and acceptance evidence pass.
 - Authorization and acceptance are separate. This roadmap proposes sequencing
@@ -60,6 +63,72 @@ is the authorized `GR-3.1` through `GR-3.4` prototype: prepare new asset
 variations, browse them without sailing to them, review collision candidates and
 move selected visuals toward in-game testing without building a general-purpose
 art, animation or generation suite.
+
+The architecture audit is now an upcoming work track. `AM-0` through `AM-5`
+form its planned dependency order. Scheduling relative to other upcoming work
+may be explicitly reprioritized, but architecture implementation begins with
+`AM-0` rather than skipping directly to a large-world rewrite. `AM-6` is
+permitted only when measurements show that hierarchy or worker complexity is
+needed. `AM-7` remains deferred under the standing gameplay-saving policy.
+
+## Architecture and scale track
+
+Status: upcoming; implementation has not started. The authoritative detailed
+plan is [`architecture_milestones.md`](../architecture_milestones.md).
+
+Goal: remove the measured tile-entry sailing hitch, make runtime work scale
+with nearby or changed content, support a deterministic `384 x 384` world with
+hundreds of islands, and shorten the feedback loop for AI-agent development
+without replacing the prototype wholesale.
+
+### AM-0 — Trustworthy baseline
+
+Freeze repeatable prototype and scale fixtures; type-check tests; split quick,
+integration and performance feedback; and record subsystem-level navigation,
+generation, resource and memory measurements.
+
+### AM-1 — Sailing responsiveness
+
+Cache topology/collision edge classification and separate authoritative
+movement and return queries from revisioned forward guidance. Meet the
+tile-entry and rendered-frame budgets before changing camera or shoreline feel.
+
+### AM-2 — Agent-friendly ownership boundaries
+
+Introduce immutable session configuration, small command/read-model contracts,
+typed mutation effects and one representative feature extraction while keeping
+compatibility facades around the current simulation and scene.
+
+### AM-3 — Local-change scaling
+
+Add spatial indexes, chunk membership and revision-driven interaction and
+presentation updates so idle, interaction and diagnostics work no longer grows
+with every island or feature definition.
+
+### AM-4 — Deterministic high-density world pipeline
+
+Introduce a versioned world manifest, bounded spatially indexed island
+placement and one shared analysis index. Prove the normal `384 x 384` profile
+across fixed seeds with at least 300 islands.
+
+### AM-5 — Active-chunk presentation
+
+Tie terrain, overlay, marker and authored-asset lifetime to a bounded active
+chunk window. Prove stable object, texture and memory use during a
+coast-to-coast large-world voyage.
+
+### AM-6 — Evidence-gated hierarchy or workers
+
+Status: conditional. Add hierarchical routing, worker guidance/generation or
+other concurrency only for a named budget that `AM-1` through `AM-5` still
+miss.
+
+### AM-7 — Persistence
+
+Status: explicitly deferred. This heading records the architectural handoff
+only; it does not plan or authorize gameplay saving. Persistence may begin only
+under a separately authorized milestone consistent with the standing saving
+policy.
 
 ## Graphics track
 
@@ -365,6 +434,13 @@ flowchart LR
     GR31 --> GR32["GR-3.2 generation and preparation runners"]
     GR32 --> GR33["GR-3.3 review and promotion workbench"]
     GR33 --> GR34["GR-3.4 batch readiness gate"]
+    GR34 --> AM0["AM-0 trustworthy baseline"]
+    AM0 --> AM1["AM-1 sailing responsiveness"]
+    AM1 --> AM2["AM-2 ownership boundaries"]
+    AM2 --> AM3["AM-3 local-change scaling"]
+    AM3 --> AM4["AM-4 high-density world pipeline"]
+    AM4 --> AM5["AM-5 active-chunk presentation"]
+    AM5 -. "only if measured" .-> AM6["AM-6 hierarchy or workers"]
 ```
 
 The graph shows acceptance dependencies, not authorization. Viewer and intake
@@ -401,3 +477,7 @@ The user authorized `GR-3.1` through `GR-3.4` as one ordered implementation
 batch. `GR-2.6` is skipped for now. A new gameplay minor, automatic broad
 runtime rollout, new world-placement authority or scope beyond this prototype
 still requires explicit authorization.
+The `AM-0` through `AM-5` architecture sequence is recorded as upcoming
+work, not as work already started; its detailed scope and gates are owned by
+`architecture_milestones.md`. `AM-6` remains evidence-gated and `AM-7`
+remains deferred.
