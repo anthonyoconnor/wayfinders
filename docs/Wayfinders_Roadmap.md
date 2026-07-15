@@ -3,9 +3,10 @@
 Status: planning. The accepted gameplay work through `GP-4.1` and graphics
 work through `GR-1.4` form the current baseline. `GR-2.1` through `GR-2.3` are
 implemented as one dependency-ordered tooling batch and await their interactive
-browser acceptance pass. `GR-2.4` through `GR-2.6` and `GR-3.1` through
-`GR-3.4` are now defined as proposed collision-authoring and asset-production
-work; planning does not authorize their implementation.
+browser acceptance pass. `GR-2.4` is implemented with automated acceptance and
+awaits its interactive collision/performance pass. `GR-2.5`, `GR-2.6` and
+`GR-3.1` through `GR-3.4` remain proposed collision-authoring and
+asset-production work; planning does not authorize their implementation.
 
 This document contains only upcoming or explicitly deferred work. Completed
 milestone scope and acceptance evidence live in
@@ -54,17 +55,17 @@ one authored home island, the player boat, one fishing-shoal cue and directional
 boat/wake presentation. Its acceptance evidence is in the archive.
 
 No next gameplay milestone is currently defined. The immediate graphics
-planning sequence is to close the `GR-2.1` through `GR-2.3` browser acceptance
-pass, add fine collision-mask authoring without replacing the `32`-pixel
-navigation grid, then prove a production-asset workflow before expanding the
-runtime catalog.
+planning sequence is to close the `GR-2.1` through `GR-2.4` browser acceptance
+pass, add collision-mask editing without replacing the `32`-pixel navigation
+grid, then prove a production-asset workflow before expanding the runtime
+catalog.
 
 ## Upcoming graphics track
 
 ### GR-2 — Asset viewing, creation and collision authoring
 
-Status: `GR-2.1` through `GR-2.3` are implemented and await interactive browser
-acceptance; `GR-2.4` through `GR-2.6` are planned and not authorized. The
+Status: `GR-2.1` through `GR-2.4` are implemented and await interactive browser
+acceptance; `GR-2.5` and `GR-2.6` are planned and not authorized. The
 accepted `GR-1` pilot supplies the manual asset-preparation evidence for this
 work.
 
@@ -129,7 +130,8 @@ catalog and thumbnail work.
 
 #### GR-2.4 — Hybrid navigation and collision-mask contract
 
-Status: planned; not authorized.
+Status: implemented; automated acceptance passes; interactive collision and
+performance acceptance pending.
 
 Keep `32 x 32`-pixel navigation cells as the terrain, knowledge and route node
 grid, while allowing an optional `8 x 8`-pixel solid mask inside mixed shoreline
@@ -143,6 +145,8 @@ pixels for collision. Every runtime object category has a registered collision
 profile, package-backed when authored and metadata-backed when still rendered
 with developer graphics. Intentionally passable objects such as fishing shoals
 carry an empty solid mask rather than relying on an omitted or ambiguous shape.
+The authored player-ship hull is locked into the simulation's runtime config
+view so later live tuning cannot silently diverge from package metadata.
 
 Add a coarse broad phase and fine narrow phase for swept ship collision. Derive
 cardinal navigation-edge connectivity from the fine mask after applying the
@@ -155,6 +159,15 @@ round-trip without coordinate drift; the ship cannot overlap a solid subcell or
 tunnel through one; a route never advertises an edge the ship cannot traverse;
 home dock, service anchors and accepted channels remain reachable; and collision
 queries stay within the recorded frame-time budget.
+
+Implemented regression budget: a sailing query visits only the coarse cells
+intersecting the swept hull AABB and at most `16` primitives for any refined
+cell; route topology is derived lazily and must not scan the world during a
+normal return calculation. The scale-invariance fixture records `8` broad-phase
+cells and `1` fine primitive for the same high-speed sweep in both `10`- and
+`96`-cell-wide worlds. Interactive acceptance must retain the desktop target of
+`p95 <= 20 ms` rendered frames while sailing with collision diagnostics enabled;
+that browser measurement remains pending.
 
 #### GR-2.5 — Asset-viewer collision-mask editor
 

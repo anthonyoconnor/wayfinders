@@ -1,10 +1,10 @@
 # Wayfinders authored-asset direction
 
 Status: active. `GR-1.1` through `GR-1.4` are implemented and accepted.
-`GR-2.1` through `GR-2.3` are implemented as an ordered tooling batch; their
-interactive browser acceptance remains outstanding. Hybrid collision authoring
-in `GR-2.4` through `GR-2.6` and the production workflow in `GR-3.1` through
-`GR-3.4` are planned but not authorized.
+`GR-2.1` through `GR-2.4` are implemented; their interactive browser acceptance
+remains outstanding. Collision-mask editing/refinement in `GR-2.5` and
+`GR-2.6`, plus the production workflow in `GR-3.1` through `GR-3.4`, remain
+planned but not authorized.
 
 Saving is not part of the active baseline. Any save-related language in this
 reference is a future compatibility consideration, not authorization to add
@@ -158,13 +158,14 @@ repository directly, and the command never replaces an accepted semantic ID
 without the explicit `--replace` flag. Each runtime PNG must be non-interlaced
 8-bit RGB or RGBA and no larger than `4096 x 4096`.
 
-## Planned hybrid collision authoring
+## Hybrid collision foundation and planned authoring
 
-`GR-2.4` through `GR-2.6` retain the `32`-pixel navigation grid and add optional
+Implemented `GR-2.4` retains the `32`-pixel navigation grid and adds optional
 `8`-pixel collision subcells only to mixed shoreline or object cells. One
 navigation cell therefore contains a `4 x 4` collision patch when refinement is
 needed. Fully open and fully blocked cells keep the existing compact coarse
-form.
+form. `GR-2.5` and `GR-2.6` add editing and accepted home-mask refinement on top
+of that contract.
 
 The fine mask is reviewed metadata, never a texture sampled by the game. Offline
 preparation may suggest a mask from alpha or segmentation, but suggestions are

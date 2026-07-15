@@ -15,6 +15,9 @@ architecture rules or completed milestone evidence.
 - `GR-2.1` through `GR-2.3` are implemented as an ordered graphics-tooling
   batch. Their automated gates pass; interactive browser acceptance is still
   required before the accepted graphics baseline advances beyond `GR-1.4`.
+- `GR-2.4` hybrid collision contracts and runtime behavior are implemented.
+  Its automated gates pass; the live interactive collision/performance pass is
+  still required before graphics acceptance advances.
 - No `GR-3` scope is authorized.
 - Saving is intentionally absent. Every launch or browser refresh starts a
   fresh session. Saving may return only in an explicitly authorized named
@@ -26,7 +29,10 @@ navigator succession and Great Hall history, provision-funded island/site
 surveys, three hidden idol locations in the default world, final completion
 choices, authored home/boat/pilot-shoal presentation and developer diagnostics,
 plus a separate shared-runtime asset viewer, candidate intake workbench and
-deterministic catalog/preparation pipeline.
+deterministic catalog/preparation pipeline. The runtime also supports sparse
+8-pixel collision masks within the 32-pixel navigation grid, swept fine
+collision, clearance-tested route edges and registered authored/developer
+collision profiles.
 
 ## Run and verify
 
@@ -49,7 +55,7 @@ Latest accepted verification baseline:
 - Asset catalog, PNG/frame, texture-limit, generated-code, thumbnail and report
   consistency checks pass before compilation.
 - TypeScript typecheck passes.
-- 275 automated tests pass across 35 files.
+- 305 automated tests pass across 39 files.
 - The production Vite build passes.
 - Browser acceptance covers the accepted fishing, return, wreck, succession,
   survey-site, idol completion, continued-world and new-game flows with a clean
@@ -62,9 +68,10 @@ Latest accepted verification baseline:
   browsing modes remains outstanding; their shared read model and exact-dock
   access policy have automated coverage.
 - An interactive WebGL pass over all three GR-2 viewer package kinds, contrast
-  overlays and the candidate template/bind/preview/export flow remains
-  outstanding. Browser control failed before it could open the local page;
-  automated contracts, deterministic rebuilds and production build pass.
+  overlays, the candidate template/bind/preview/export flow and GR-2.4 live
+  collision diagnostics remains outstanding. The in-app browser connection
+  failed before it could open the responding local server; automated contracts,
+  deterministic collision budgets and the production build pass.
 - Representative mid-range mobile rendering/performance validation remains
   outstanding.
 - Touch-first sailing is not implemented.

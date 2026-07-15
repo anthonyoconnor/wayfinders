@@ -153,10 +153,26 @@ The ship has continuous world position, heading and speed plus its current
 navigation tile.
 
 WASD and arrow keys provide turning and forward/reverse thrust. Movement sweeps
-the ship's configured square gameplay footprint along the continuous line
-segment, stops before the first blocked tile and emits centre-entered tile
-information in order. The sweep prevents both visible hull overlap and
-high-speed tunnelling without sampling rendered pixels.
+the ship's authored square gameplay footprint along the continuous line
+segment, stops before the first solid primitive and emits centre-entered tile
+information in order. The `32 x 32` navigation grid remains authoritative for
+terrain, knowledge and route nodes. An optional sparse `4 x 4` mask replaces
+coarse collision in mixed cells with `8 x 8` solid subcells. Cells without a
+mask retain their exact legacy full-open or full-solid behavior.
+
+The pilot boat package currently authors a centered `14 x 14`-pixel half-size.
+Simulation startup rejects package/config disagreement, then exposes an
+authoritative movement-config view: later live tuning still forwards ship speed
+and related values, but cannot silently replace the authored hull.
+
+The sweep uses coarse cells as its broad phase and only expands set subcells in
+mixed cells for the narrow phase. Cardinal route edges are cached lazily after
+replaying the same centre-to-centre swept-hull test. Return routes, supported
+service connectivity, dock/open-ocean validation and manual sailing therefore
+share one clearance predicate. Forward range uses the same predicate but
+filters collision in unseen Unknown cells so it does not reveal hidden islands.
+The sweep prevents both visible hull overlap and high-speed tunnelling without
+sampling rendered pixels.
 
 Terrain is authoritative:
 
@@ -611,6 +627,13 @@ not write repository files. The repository command revalidates PNG headers and
 decoded pixels, requires explicit replacement of an existing semantic ID,
 materializes source/package/runtime files and regenerates the catalog.
 
+Contract V1 now permits optional collision metadata without invalidating legacy
+packages. Home packages carry sparse hybrid-grid patches, the authored player
+boat declares its centred box hull and the fishing-shoal package declares an
+explicit empty profile. One exhaustive registry also assigns coarse or empty
+profiles to developer-rendered islands, wrecks, sites, service anchors and the
+home dock. Fine masks are semantic metadata; runtime PNG alpha is never sampled.
+
 The generated catalog, bounded nearest-neighbour thumbnails and asset report
 are deterministic build artifacts. The normal verification gate rejects stale
 artifacts before TypeScript compilation. The report records exact dimensions,
@@ -704,6 +727,9 @@ The current implementation avoids full-world work during normal sailing:
 - return roots use an incrementally maintained sparse boundary;
 - expedition commit/revert touches only owned indices;
 - Dijkstra systems reuse typed buffers, result masks and numeric heaps;
+- collision queries inspect only the swept coarse AABB, mixed cells contribute
+  at most 16 narrow-phase primitives, and cardinal edge results are cached
+  lazily by collision revision;
 - provision-only changes reclassify cached results where possible;
 - unchanged knowledge reuses cached canonical save runs;
 - return rendering processes one sparse route/corridor;
