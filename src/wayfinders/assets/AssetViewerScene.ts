@@ -17,6 +17,13 @@ import {
   type CandidateImageRequirement,
 } from "./AssetCandidate";
 import {
+  ASSET_LIBRARY_CATALOG,
+  ASSET_LIBRARY_GROUPS,
+  assetLibraryEntryById,
+  type AssetLibraryEntry,
+  type IslandReferenceLibraryEntry,
+} from "./AssetLibraryCatalog";
+import {
   createAuthoredFishingShoalVisual,
   createAuthoredHomeIslandVisual,
   type AuthoredFishingShoalVisual,
@@ -44,7 +51,9 @@ import {
 } from "./CollisionAuthoringTargets";
 import {
   CollisionEditorModel,
+  collisionBrushFootprint,
   createCollisionEditorBaseMasks,
+  type CollisionEditorBrushSize,
   type CollisionEditorSelection,
   type CollisionEditorSnapshot,
   type CollisionEditorSubcellPoint,
@@ -119,6 +128,16 @@ const PLAYER_PROFILE = PILOT_COLLISION_PROFILE_REGISTRY.get("player-ship").profi
 const AUTHORITATIVE_SHIP_HALF_EXTENT = PLAYER_PROFILE.kind === "box"
   ? PLAYER_PROFILE.halfSize.width
   : 14;
+const COLLISION_SAVE_ROUTE = "/__wayfinders/collision/save";
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
 
 export class AssetViewerScene extends Phaser.Scene {
   private catalogAssets!: PilotAssetRuntime;
@@ -143,6 +162,14 @@ export class AssetViewerScene extends Phaser.Scene {
   private homeVisual?: AuthoredHomeIslandVisual;
   private shipRenderer?: ShipRenderer;
   private shoalVisual?: AuthoredFishingShoalVisual;
+  private referenceVisual?: Phaser.GameObjects.Image;
+  private assetLibraryBrowser?: HTMLElement;
+  private selectedLibraryAssetId: string = AUTHORED_ASSET_IDS.homeIsland;
+  private readonly acceptedMetadataByAssetId = new Map<AuthoredAssetId, Readonly<AuthoredAssetMetadata>>();
+  private readonly collisionDraftsByAssetId = new Map<AuthoredAssetId, RuntimeCollisionProfile>();
+  private referenceLoadRevision = 0;
+  private loadedReferenceTextureKey?: string;
+  private collisionSaveInFlight = false;
   private controlsAbort?: AbortController;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private zoomIn?: Phaser.Input.Keyboard.Key;
@@ -155,6 +182,7 @@ export class AssetViewerScene extends Phaser.Scene {
   private collisionAcceptedMetadata?: Readonly<AuthoredAssetMetadata>;
   private validatedCollisionCandidate?: Readonly<CollisionCandidateBundle>;
   private collisionTool: CollisionTool = "paint";
+  private collisionBrushSize: CollisionEditorBrushSize = 1;
   private collisionSelection?: Readonly<CollisionEditorSelection>;
   private collisionSelectionStart?: Readonly<CollisionEditorSubcellPoint>;
   private collisionHover?: Readonly<CollisionEditorSubcellPoint>;
@@ -200,6 +228,10 @@ export class AssetViewerScene extends Phaser.Scene {
 
     const initialMetadata = this.catalogAssets.metadata(AUTHORED_ASSET_IDS.homeIsland);
     if (!initialMetadata) throw new Error("The home-island package is unavailable to collision authoring");
+    for (const assetId of ASSET_IDS) {
+      const metadata = this.catalogAssets.metadata(assetId);
+      if (metadata) this.acceptedMetadataByAssetId.set(assetId, metadata);
+    }
     this.activateCollisionTarget("home-island", initialMetadata, initialMetadata, false);
 
     this.cameras.main.setBounds(0, 0, STAGE.width, STAGE.height).centerOn(STAGE.centerX, STAGE.centerY);
@@ -254,14 +286,106 @@ export class AssetViewerScene extends Phaser.Scene {
     for (let y = 0; y <= STAGE.height; y += 32) grid.lineBetween(0, y, STAGE.width, y);
   }
 
+  private libraryTextureKey(assetId: string): string {
+    return `wayfinders:library:${assetId}`;
+  }
+
+  private selectedLibraryEntry(): Readonly<AssetLibraryEntry> {
+    const entry = assetLibraryEntryById(this.selectedLibraryAssetId);
+    if (!entry) throw new RangeError(`Unknown asset library entry ${this.selectedLibraryAssetId}`);
+    return entry;
+  }
+
+  private selectedReferenceEntry(): Readonly<IslandReferenceLibraryEntry> | undefined {
+    const entry = this.selectedLibraryEntry();
+    return entry.entryType === "reference-image" ? entry : undefined;
+  }
+
+  private acceptedMetadata(assetId: AuthoredAssetId): Readonly<AuthoredAssetMetadata> | undefined {
+    return this.acceptedMetadataByAssetId.get(assetId) ?? this.catalogAssets.metadata(assetId);
+  }
+
+  private releaseReferenceTexture(exceptKey?: string): void {
+    const key = this.loadedReferenceTextureKey;
+    if (!key || key === exceptKey) return;
+    if (this.textures.exists(key)) this.textures.remove(key);
+    this.loadedReferenceTextureKey = undefined;
+  }
+
+  private beginReferencePreviewLoad(entry: Readonly<IslandReferenceLibraryEntry>): void {
+    const revision = ++this.referenceLoadRevision;
+    const key = this.libraryTextureKey(entry.id);
+    this.rebuildPreview();
+    if (this.textures.exists(key)) {
+      this.loadedReferenceTextureKey = key;
+      this.rebuildPreview();
+      this.fitSelectedLibraryAsset();
+      return;
+    }
+
+    const source = new Image();
+    source.decoding = "async";
+    source.addEventListener("load", () => {
+      if (revision !== this.referenceLoadRevision || this.selectedLibraryAssetId !== entry.id) return;
+      this.referenceVisual?.destroy();
+      this.referenceVisual = undefined;
+      this.releaseReferenceTexture(key);
+      this.textures.addImage(key, source);
+      this.loadedReferenceTextureKey = key;
+      this.rebuildPreview();
+      this.fitSelectedLibraryAsset();
+    }, { once: true });
+    source.addEventListener("error", () => {
+      if (revision !== this.referenceLoadRevision || this.selectedLibraryAssetId !== entry.id) return;
+      this.title.setText(entry.name);
+      this.placement.setText("Source reference could not be loaded");
+    }, { once: true });
+    source.src = entry.layers[0].url;
+  }
+
   private rebuildPreview(): void {
     this.homeVisual?.destroy();
     this.shipRenderer?.destroy();
     this.shoalVisual?.image.destroy();
+    this.referenceVisual?.destroy();
     this.homeVisual = undefined;
     this.shipRenderer = undefined;
     this.shoalVisual = undefined;
+    this.referenceVisual = undefined;
     this.developerVisualGraphics.clear();
+
+    const reference = this.selectedReferenceEntry();
+    if (reference) {
+      const textureKey = this.libraryTextureKey(reference.id);
+      if (!this.textures.exists(textureKey)) {
+        this.title.setText(reference.name);
+        this.placement.setText("Loading source reference\u2026");
+        this.guideGraphics.clear();
+        this.collisionGraphics.clear();
+        this.drawContrast();
+        this.syncSelectedAssetUi();
+        return;
+      }
+      const texture = this.textures.get(textureKey);
+      const source = texture.getSourceImage() as { width?: number; height?: number } | undefined;
+      const width = source?.width ?? 1;
+      const height = source?.height ?? 1;
+      const scale = Math.min((STAGE.width - 220) / width, (STAGE.height - 140) / height, 1);
+      this.referenceVisual = this.add.image(STAGE.centerX, STAGE.centerY + 22, textureKey)
+        .setDepth(5)
+        .setScale(scale);
+      this.title.setText(reference.name);
+      this.placement.setText(
+        `Source reference · ${width}×${height} px · ${reference.reference.settlement} · matte background`,
+      );
+      this.guideGraphics.clear();
+      this.collisionGraphics.clear();
+      this.drawContrast();
+      this.syncSelectedAssetUi();
+      return;
+    }
+
+    this.releaseReferenceTexture();
 
     if (!this.collisionTarget.packageMetadata) {
       this.drawDeveloperVisual();
@@ -285,10 +409,15 @@ export class AssetViewerScene extends Phaser.Scene {
     this.updatePlacementLabel();
     this.drawGuides();
     this.drawContrast();
+    this.syncSelectedAssetUi();
   }
 
   private drawGuides(): void {
     this.guideGraphics.clear();
+    if (this.selectedReferenceEntry()) {
+      this.collisionGraphics.clear();
+      return;
+    }
     this.drawCollisionOverlay();
   }
 
@@ -307,7 +436,7 @@ export class AssetViewerScene extends Phaser.Scene {
     this.collisionTarget = target;
     this.collisionModel = this.createCollisionModel(target);
     this.collisionAcceptedMetadata = acceptedMetadata
-      ?? (expectedAssetId ? this.catalogAssets.metadata(expectedAssetId) : undefined);
+      ?? (expectedAssetId ? this.acceptedMetadata(expectedAssetId) : undefined);
     this.validatedCollisionCandidate = undefined;
     this.collisionSelection = undefined;
     this.collisionSelectionStart = undefined;
@@ -325,11 +454,65 @@ export class AssetViewerScene extends Phaser.Scene {
       }
       : { x: STAGE.centerX, y: STAGE.centerY };
 
-    if (expectedAssetId) this.state.assetId = expectedAssetId;
+    if (expectedAssetId) {
+      this.state.assetId = expectedAssetId;
+      this.selectedLibraryAssetId = expectedAssetId;
+    }
     if (rebuild) this.rebuildPreview();
     else this.drawGuides();
     this.syncCollisionControls();
     this.syncPackageSelectors();
+  }
+
+  private stashCurrentCollisionDraft(): void {
+    if (!this.collisionModel || !this.collisionTarget) return;
+    const assetId = authoredAssetIdForCollisionObject(this.collisionTarget.objectKind);
+    if (!assetId) return;
+    const snapshot = this.collisionModel.snapshot();
+    if (snapshot.dirty) this.collisionDraftsByAssetId.set(assetId, snapshot.profile);
+    else this.collisionDraftsByAssetId.delete(assetId);
+  }
+
+  private restoreCollisionDraft(assetId: AuthoredAssetId): void {
+    const draft = this.collisionDraftsByAssetId.get(assetId);
+    if (!draft || !this.collisionModel.snapshot().editable) return;
+    const snapshot = this.collisionModel.snapshot();
+    if (snapshot.masks && (draft.kind === "hybrid-grid" || draft.kind === "coarse-grid")) {
+      const grid = {
+        width: this.collisionTarget.width,
+        height: this.collisionTarget.height,
+        tileSize: COLLISION_SUBCELL_SIZE * COLLISION_SUBCELLS_PER_TILE,
+        subcellSize: COLLISION_SUBCELL_SIZE,
+        coarseMasks: Object.freeze(Array.from(this.collisionTarget.baseMasks)),
+      };
+      const desired = createCollisionEditorBaseMasks(grid, draft);
+      const solid: CollisionEditorSubcellPoint[] = [];
+      const clear: CollisionEditorSubcellPoint[] = [];
+      for (let cellY = 0; cellY < grid.height; cellY++) {
+        for (let cellX = 0; cellX < grid.width; cellX++) {
+          const index = cellY * grid.width + cellX;
+          for (let localY = 0; localY < COLLISION_SUBCELLS_PER_TILE; localY++) {
+            for (let localX = 0; localX < COLLISION_SUBCELLS_PER_TILE; localX++) {
+              const currentSolid = isCollisionSubcellSolid(snapshot.masks[index], localX, localY);
+              const desiredSolid = isCollisionSubcellSolid(desired[index], localX, localY);
+              if (currentSolid === desiredSolid) continue;
+              const point = {
+                x: cellX * COLLISION_SUBCELLS_PER_TILE + localX,
+                y: cellY * COLLISION_SUBCELLS_PER_TILE + localY,
+              };
+              (desiredSolid ? solid : clear).push(point);
+            }
+          }
+        }
+      }
+      if (clear.length > 0) this.collisionModel.eraseStroke(clear);
+      if (solid.length > 0) this.collisionModel.paintStroke(solid);
+    } else if (draft.kind === "box") {
+      this.collisionModel.setBox(draft);
+    } else if (draft.kind === "empty") {
+      this.collisionModel.setExplicitEmpty();
+    }
+    this.validatedCollisionCandidate = undefined;
   }
 
   private collisionOverrides(
@@ -497,11 +680,21 @@ export class AssetViewerScene extends Phaser.Scene {
       );
     }
     if (this.collisionHover && snapshot.masks) {
+      const hoverBrushSize = this.collisionTool === "paint" || this.collisionTool === "erase"
+        ? this.collisionBrushSize
+        : 1;
+      const hoverPoints = collisionBrushFootprint(
+        this.collisionHover,
+        hoverBrushSize,
+        target.width * COLLISION_SUBCELLS_PER_TILE,
+        target.height * COLLISION_SUBCELLS_PER_TILE,
+      );
+      const first = hoverPoints[0];
       graphics.lineStyle(2, 0xfff2a8, 0.95).strokeRect(
-        rect.left + this.collisionHover.x * displaySubcellSize,
-        rect.top + this.collisionHover.y * displaySubcellSize,
-        displaySubcellSize,
-        displaySubcellSize,
+        rect.left + first.x * displaySubcellSize,
+        rect.top + first.y * displaySubcellSize,
+        hoverBrushSize * displaySubcellSize,
+        hoverBrushSize * displaySubcellSize,
       );
     }
     if (this.collisionStrokePoints) {
@@ -610,7 +803,19 @@ export class AssetViewerScene extends Phaser.Scene {
     return Object.freeze({ x, y });
   }
 
+  private collisionBrushPoints(
+    point: Readonly<CollisionEditorSubcellPoint>,
+  ): readonly Readonly<CollisionEditorSubcellPoint>[] {
+    return collisionBrushFootprint(
+      point,
+      this.collisionBrushSize,
+      this.collisionTarget.width * COLLISION_SUBCELLS_PER_TILE,
+      this.collisionTarget.height * COLLISION_SUBCELLS_PER_TILE,
+    );
+  }
+
   private onCollisionPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.selectedReferenceEntry() || this.collisionSaveInFlight) return;
     this.collisionProbeWorld = Object.freeze({ x: pointer.worldX, y: pointer.worldY });
     if (pointer.button === 1 || this.collisionSpaceHeld || this.collisionTool === "pan") {
       this.collisionPanGesture = Object.freeze({
@@ -630,7 +835,12 @@ export class AssetViewerScene extends Phaser.Scene {
     this.collisionHover = point;
     try {
       if (this.collisionTool === "paint" || this.collisionTool === "erase") {
-        this.collisionStrokePoints = new Map([[`${point.x},${point.y}`, point]]);
+        this.collisionStrokePoints = new Map(
+          this.collisionBrushPoints(point).map((brushPoint) => [
+            `${brushPoint.x},${brushPoint.y}`,
+            brushPoint,
+          ]),
+        );
       } else if (this.collisionTool === "flood-solid" || this.collisionTool === "flood-clear") {
         const selection = this.collisionSelection && this.selectionContains(this.collisionSelection, point)
           ? this.collisionSelection
@@ -651,6 +861,7 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionPointerMove(pointer: Phaser.Input.Pointer): void {
+    if (this.selectedReferenceEntry() || this.collisionSaveInFlight) return;
     this.collisionProbeWorld = Object.freeze({ x: pointer.worldX, y: pointer.worldY });
     const point = this.collisionSubcellAt(pointer.worldX, pointer.worldY);
     this.collisionHover = point;
@@ -661,7 +872,9 @@ export class AssetViewerScene extends Phaser.Scene {
       return;
     }
     if (point && pointer.isDown && this.collisionStrokePoints) {
-      this.collisionStrokePoints.set(`${point.x},${point.y}`, point);
+      for (const brushPoint of this.collisionBrushPoints(point)) {
+        this.collisionStrokePoints.set(`${brushPoint.x},${brushPoint.y}`, brushPoint);
+      }
     }
     if (point && pointer.isDown && this.collisionSelectionStart) {
       this.collisionSelection = this.selectionBetween(this.collisionSelectionStart, point);
@@ -670,6 +883,11 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionPointerUp(): void {
+    if (this.collisionSaveInFlight) {
+      this.collisionStrokePoints = undefined;
+      this.collisionSelectionStart = undefined;
+      return;
+    }
     this.collisionPanGesture = undefined;
     this.collisionSelectionStart = undefined;
     const stroke = this.collisionStrokePoints;
@@ -743,111 +961,163 @@ export class AssetViewerScene extends Phaser.Scene {
     const signal = this.controlsAbort.signal;
     slot.classList.add("tool-slot--connected");
     slot.innerHTML = `
-      <section class="asset-viewer-controls" aria-labelledby="asset-viewer-title">
-        <h3 id="asset-viewer-title">Runtime viewer</h3>
-        <label>Package <select data-viewer="asset"></select></label>
-        <label>Heading <input data-viewer="heading" type="range" min="0" max="359" step="1"><output data-viewer-output="heading"></output></label>
-        <label>Speed <input data-viewer="speed" type="range" min="-96" max="96" step="1"><output data-viewer-output="speed"></output></label>
-        <label>Fixed seed <input data-viewer="seed" type="number" step="1"></label>
-        <div class="asset-viewer-checks">
-          <label><input data-viewer="animate" type="checkbox"> Animate headings/frames</label>
-          <label><input data-viewer="origin" type="checkbox"> Origin guides</label>
-          <label><input data-viewer="footprint" type="checkbox"> Footprint/grid</label>
-          <label><input data-viewer="personal" type="checkbox"> Personal-grey overlay</label>
-          <label><input data-viewer="fog" type="checkbox"> Fog contrast</label>
-        </div>
-        <output data-viewer-output="diagnostics" class="asset-viewer-diagnostics"></output>
-      </section>
-      <section class="collision-workbench" aria-labelledby="collision-workbench-title">
+      <section class="asset-selection-inspector" aria-labelledby="selected-asset-title">
         <header>
           <div>
-            <p class="eyebrow">GR-2.5</p>
-            <h3 id="collision-workbench-title">Collision authoring</h3>
+            <p class="eyebrow">Selected asset</p>
+            <h3 id="selected-asset-title" data-library="title"></h3>
+            <p data-library="subtitle" class="asset-selection-subtitle"></p>
           </div>
-          <button data-collision="fit" type="button">Fit</button>
+          <button data-library-action="fit" type="button">Fit</button>
         </header>
-        <label class="collision-target-row">Runtime profile
-          <select data-collision="target"></select>
-        </label>
-        <p data-collision="note" class="collision-note"></p>
-        <div class="collision-legend" aria-label="Collision overlay legend">
-          <span><i data-swatch="solid"></i>Solid</span>
-          <span><i data-swatch="coarse"></i>32 px grid</span>
-          <span><i data-swatch="fine"></i>8 px subgrid</span>
-          <span><i data-swatch="clearance"></i>14 px hull probe</span>
+        <div class="asset-selection-nav">
+          <button data-library-action="previous" type="button" aria-label="Previous asset">← Previous</button>
+          <code data-library="id"></code>
+          <button data-library-action="next" type="button" aria-label="Next asset">Next →</button>
         </div>
-        <div data-collision-panel="hybrid-grid" class="collision-panel" hidden>
-          <div class="collision-tool-grid" role="group" aria-label="Collision grid tools">
-            <button data-collision-tool="paint" type="button">Paint</button>
-            <button data-collision-tool="erase" type="button">Erase</button>
-            <button data-collision-tool="flood-solid" type="button">Fill solid</button>
-            <button data-collision-tool="flood-clear" type="button">Fill clear</button>
-            <button data-collision-tool="select" type="button">Select</button>
-            <button data-collision-tool="pan" type="button">Pan</button>
+        <div data-library="badges" class="asset-selection-badges"></div>
+        <details class="asset-selection-overview">
+          <summary>Asset overview, layers and animation</summary>
+          <div class="asset-selection-overview-body">
+            <div data-library="details" class="asset-selection-details"></div>
+            <div class="asset-selection-subsection">
+              <h4>Visual layers</h4>
+              <div data-library="layers" class="asset-layer-list"></div>
+            </div>
+            <div data-library="animation-section" class="asset-selection-subsection">
+              <h4>Animations</h4>
+              <div data-library="animations" class="asset-animation-list"></div>
+            </div>
           </div>
-          <div class="collision-action-grid">
-            <button data-collision="selection-solid" type="button">Selection solid</button>
-            <button data-collision="selection-clear" type="button">Selection clear</button>
-            <button data-collision="revert-cell" type="button">Revert hovered cell</button>
-          </div>
-        </div>
-        <div data-collision-panel="box" class="collision-panel" hidden>
-          <label>Centered square half-extent
-            <input data-collision="half-extent" type="number" min="1" max="15" step="1">
+        </details>
+      </section>
+      <details class="asset-inspector-section" data-selected-package-only open>
+        <summary>Collision</summary>
+        <section class="collision-workbench" aria-labelledby="collision-workbench-title">
+          <header>
+            <div>
+              <p class="eyebrow">Live package editor</p>
+              <h3 id="collision-workbench-title">Collision authoring</h3>
+            </div>
+            <button data-collision="fit" type="button">Fit</button>
+          </header>
+          <label class="collision-target-row">Runtime profile
+            <select data-collision="target"></select>
           </label>
-          <button data-collision="apply-box" type="button">Apply hull</button>
-        </div>
-        <div data-collision-panel="explicit-empty" class="collision-panel" hidden>
-          <p>Passable objects use an explicit empty collision profile.</p>
-          <button data-collision="set-empty" type="button">Set explicitly passable</button>
-        </div>
-        <div data-collision-panel="read-only" class="collision-panel collision-panel--read-only" hidden>
-          <p data-collision="read-only-note"></p>
-        </div>
-        <div class="collision-history-actions">
-          <button data-collision="undo" type="button">Undo</button>
-          <button data-collision="redo" type="button">Redo</button>
-          <button data-collision="reset" type="button">Reset edits</button>
-        </div>
-        <label class="collision-import">Import collision candidate
-          <input data-collision="import" type="file" accept="application/json,.json">
-        </label>
-        <div class="collision-candidate-actions">
-          <button data-collision="validate" type="button">Validate profile</button>
-          <button data-collision="export" type="button" disabled>Export collision bundle</button>
-        </div>
-        <output data-collision="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
-      </section>
-      <section class="asset-workbench" aria-labelledby="asset-workbench-title">
-        <header>
-          <div>
-            <p class="eyebrow">GR-2.2</p>
-            <h3 id="asset-workbench-title">Candidate intake</h3>
+          <p data-collision="note" class="collision-note"></p>
+          <div class="collision-legend" aria-label="Collision overlay legend">
+            <span><i data-swatch="solid"></i>Solid</span>
+            <span><i data-swatch="coarse"></i>32 px grid</span>
+            <span><i data-swatch="fine"></i>8 px subgrid</span>
+            <span><i data-swatch="clearance"></i>14 px hull probe</span>
           </div>
-          <button data-workbench="template" type="button">Load template</button>
-        </header>
-        <label>Contract template <select data-workbench="kind"></select></label>
-        <label>Collision handling
-          <select data-workbench="collision-intent">
-            <option value="preserve">Preserve accepted mask</option>
-            <option value="replace">Replace with candidate mask</option>
-            <option value="reset-to-coarse">Reset to coarse terrain</option>
-          </select>
-        </label>
-        <label class="asset-workbench-editor">Semantic metadata
-          <textarea data-workbench="metadata" rows="18" spellcheck="false"></textarea>
-        </label>
-        <div class="asset-workbench-actions">
-          <button data-workbench="bindings" type="button">Refresh PNG bindings</button>
-          <button data-workbench="catalog-images" type="button">Use catalog PNGs</button>
-        </div>
-        <div data-workbench="images" class="asset-workbench-images"></div>
-        <div class="asset-workbench-actions">
-          <button data-workbench="validate" type="button">Validate and preview</button>
-          <button data-workbench="export" type="button" disabled>Export candidate bundle</button>
-        </div>
-        <output data-workbench-output="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
-      </section>`;
+          <div data-collision-panel="hybrid-grid" class="collision-panel" hidden>
+            <div class="collision-brush-toolbar">
+              <span>Brush size</span>
+              <div class="collision-segmented" role="group" aria-label="Collision brush size">
+                <button data-collision-brush="1" type="button">8 px detail</button>
+                <button data-collision-brush="4" type="button">32 px cell</button>
+              </div>
+            </div>
+            <div class="collision-tool-grid" role="group" aria-label="Collision grid tools">
+              <button data-collision-tool="paint" type="button">Paint</button>
+              <button data-collision-tool="erase" type="button">Erase</button>
+              <button data-collision-tool="flood-solid" type="button">Fill solid</button>
+              <button data-collision-tool="flood-clear" type="button">Fill clear</button>
+              <button data-collision-tool="select" type="button">Select</button>
+              <button data-collision-tool="pan" type="button">Pan</button>
+            </div>
+            <div class="collision-action-grid">
+              <button data-collision="selection-solid" type="button">Selection solid</button>
+              <button data-collision="selection-clear" type="button">Selection clear</button>
+              <button data-collision="revert-cell" type="button">Revert hovered cell</button>
+            </div>
+          </div>
+          <div data-collision-panel="box" class="collision-panel" hidden>
+            <label>Centered square half-extent
+              <input data-collision="half-extent" type="number" min="1" max="15" step="1">
+            </label>
+            <button data-collision="apply-box" type="button">Apply hull</button>
+          </div>
+          <div data-collision-panel="explicit-empty" class="collision-panel" hidden>
+            <p>Passable objects use an explicit empty collision profile.</p>
+            <button data-collision="set-empty" type="button">Set explicitly passable</button>
+          </div>
+          <div data-collision-panel="read-only" class="collision-panel collision-panel--read-only" hidden>
+            <p data-collision="read-only-note"></p>
+          </div>
+          <div class="collision-history-actions">
+            <button data-collision="undo" type="button">Undo</button>
+            <button data-collision="redo" type="button">Redo</button>
+            <button data-collision="reset" type="button">Reset edits</button>
+          </div>
+          <button data-collision="save" class="collision-save-button" type="button">Save to library</button>
+          <output data-collision="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
+          <details class="collision-portable">
+            <summary>Portable candidate file</summary>
+            <div class="collision-portable-body">
+              <label class="collision-import">Import collision candidate
+                <input data-collision="import" type="file" accept="application/json,.json">
+              </label>
+              <div class="collision-candidate-actions">
+                <button data-collision="validate" type="button">Validate profile</button>
+                <button data-collision="export" type="button" disabled>Export collision bundle</button>
+              </div>
+            </div>
+          </details>
+        </section>
+      </details>
+      <details class="asset-inspector-section" data-selected-package-only>
+        <summary>Preview and animation</summary>
+        <section class="asset-viewer-controls" aria-labelledby="asset-viewer-title">
+          <h3 id="asset-viewer-title">Runtime preview</h3>
+          <label>Package <select data-viewer="asset"></select></label>
+          <label>Heading <input data-viewer="heading" type="range" min="0" max="359" step="1"><output data-viewer-output="heading"></output></label>
+          <label>Speed <input data-viewer="speed" type="range" min="-96" max="96" step="1"><output data-viewer-output="speed"></output></label>
+          <label>Fixed seed <input data-viewer="seed" type="number" step="1"></label>
+          <div class="asset-viewer-checks">
+            <label><input data-viewer="animate" type="checkbox"> Animate headings/frames</label>
+            <label><input data-viewer="origin" type="checkbox"> Origin guides</label>
+            <label><input data-viewer="footprint" type="checkbox"> Footprint/grid</label>
+            <label><input data-viewer="personal" type="checkbox"> Personal-grey overlay</label>
+            <label><input data-viewer="fog" type="checkbox"> Fog contrast</label>
+          </div>
+          <output data-viewer-output="diagnostics" class="asset-viewer-diagnostics"></output>
+        </section>
+      </details>
+      <details class="asset-inspector-section" data-selected-package-only>
+        <summary>Advanced package candidate</summary>
+        <section class="asset-workbench" aria-labelledby="asset-workbench-title">
+          <header>
+            <div>
+              <p class="eyebrow">Portable visual intake</p>
+              <h3 id="asset-workbench-title">Candidate package</h3>
+            </div>
+            <button data-workbench="template" type="button">Load template</button>
+          </header>
+          <label>Contract template <select data-workbench="kind"></select></label>
+          <label>Collision handling
+            <select data-workbench="collision-intent">
+              <option value="preserve">Preserve accepted mask</option>
+              <option value="replace">Replace with candidate mask</option>
+              <option value="reset-to-coarse">Reset to coarse terrain</option>
+            </select>
+          </label>
+          <label class="asset-workbench-editor">Semantic metadata
+            <textarea data-workbench="metadata" rows="18" spellcheck="false"></textarea>
+          </label>
+          <div class="asset-workbench-actions">
+            <button data-workbench="bindings" type="button">Refresh PNG bindings</button>
+            <button data-workbench="catalog-images" type="button">Use catalog PNGs</button>
+          </div>
+          <div data-workbench="images" class="asset-workbench-images"></div>
+          <div class="asset-workbench-actions">
+            <button data-workbench="validate" type="button">Validate and preview</button>
+            <button data-workbench="export" type="button" disabled>Export candidate bundle</button>
+          </div>
+          <output data-workbench-output="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
+        </section>
+      </details>`;
     const assetSelect = slot.querySelector<HTMLSelectElement>("[data-viewer=asset]");
     if (!assetSelect) return;
     for (const assetId of ASSET_IDS) assetSelect.add(new Option(assetId, assetId));
@@ -896,6 +1166,214 @@ export class AssetViewerScene extends Phaser.Scene {
       : this.catalogAssets.diagnostics.map(({ assetId, message }) => `${assetId}: ${message}`).join("\n");
     this.mountCollisionWorkbench(slot, signal);
     this.mountCandidateWorkbench(slot, signal, assetSelect);
+    this.mountAssetLibraryBrowser(signal);
+    this.mountSelectedAssetControls(slot, signal);
+    this.syncSelectedAssetUi();
+  }
+
+  private mountAssetLibraryBrowser(signal: AbortSignal): void {
+    const host = document.querySelector<HTMLElement>(".game-region");
+    if (!host) return;
+    const browser = this.assetLibraryBrowser ?? document.createElement("aside");
+    browser.id = "asset-library-browser";
+    browser.className = "asset-library-browser";
+    browser.setAttribute("aria-label", "Asset library browser");
+    const groups = ASSET_LIBRARY_GROUPS.map((group) => `
+      <section class="asset-library-group" data-library-group="${escapeHtml(group.id)}">
+        <header><h3>${escapeHtml(group.name)}</h3><span>${group.entries.length}</span></header>
+        <div class="asset-library-list">
+          ${group.entries.map((entry) => {
+            const layer = entry.layers[0];
+            const settlement = entry.entryType === "reference-image" ? entry.reference.settlement : "runtime";
+            return `
+              <button
+                type="button"
+                class="asset-library-item"
+                data-library-id="${escapeHtml(entry.id)}"
+                data-library-type="${escapeHtml(entry.entryType)}"
+                data-library-settlement="${escapeHtml(settlement)}"
+                data-library-search="${escapeHtml(`${entry.name} ${entry.subtitle} ${entry.id} ${entry.tags.join(" ")}`.toLowerCase())}"
+              >
+                <span class="asset-library-thumb"><img loading="lazy" decoding="async" alt="" ${entry.entryType === "reference-image" ? `data-library-thumb-src="${escapeHtml(layer?.url ?? "")}"` : `src="${escapeHtml(layer?.url ?? "")}"`}></span>
+                <span class="asset-library-item-copy">
+                  <strong>${escapeHtml(entry.name)}</strong>
+                  <small>${escapeHtml(entry.subtitle)}</small>
+                </span>
+                <span class="asset-library-status" data-status="${escapeHtml(entry.entryType)}">
+                  ${entry.entryType === "authored-package" ? "Runtime" : String(entry.reference.sequence).padStart(2, "0")}
+                </span>
+              </button>`;
+          }).join("")}
+        </div>
+      </section>`).join("");
+    browser.innerHTML = `
+      <header class="asset-library-header">
+        <div><p class="eyebrow">Wayfinders workshop</p><h2>Asset library</h2></div>
+        <span>${ASSET_LIBRARY_CATALOG.length} assets</span>
+      </header>
+      <div class="asset-library-filters">
+        <label><span>Search</span><input data-library-search type="search" placeholder="Name, tag, or ID"></label>
+        <label><span>Show</span>
+          <select data-library-filter>
+            <option value="all">All assets</option>
+            <option value="authored-package">Runtime packages</option>
+            <option value="reference-image">Source examples</option>
+            <option value="inhabited">Inhabited islands</option>
+            <option value="uninhabited">Uninhabited islands</option>
+          </select>
+        </label>
+      </div>
+      <div class="asset-library-groups">${groups}</div>`;
+    if (!browser.isConnected) host.append(browser);
+    this.assetLibraryBrowser = browser;
+
+    const search = browser.querySelector<HTMLInputElement>("[data-library-search]");
+    const filter = browser.querySelector<HTMLSelectElement>("[data-library-filter]");
+    const applyFilters = () => {
+      const query = search?.value.trim().toLowerCase() ?? "";
+      const mode = filter?.value ?? "all";
+      for (const item of browser.querySelectorAll<HTMLButtonElement>("[data-library-id]")) {
+        const matchesQuery = query.length === 0 || (item.dataset.librarySearch ?? "").includes(query);
+        const matchesMode = mode === "all"
+          || item.dataset.libraryType === mode
+          || item.dataset.librarySettlement === mode;
+        item.hidden = !matchesQuery || !matchesMode;
+      }
+      for (const group of browser.querySelectorAll<HTMLElement>("[data-library-group]")) {
+        group.hidden = !group.querySelector("[data-library-id]:not([hidden])");
+      }
+    };
+    search?.addEventListener("input", applyFilters, { signal });
+    filter?.addEventListener("change", applyFilters, { signal });
+    const deferredThumbnails = browser.querySelectorAll<HTMLImageElement>("[data-library-thumb-src]");
+    if ("IntersectionObserver" in window) {
+      const observer = new IntersectionObserver((records) => {
+        for (const record of records) {
+          if (!record.isIntersecting) continue;
+          const image = record.target as HTMLImageElement;
+          const source = image.dataset.libraryThumbSrc;
+          if (source) image.src = source;
+          delete image.dataset.libraryThumbSrc;
+          observer.unobserve(image);
+        }
+      }, {
+        root: browser.querySelector(".asset-library-groups"),
+        rootMargin: "160px",
+      });
+      deferredThumbnails.forEach((image) => observer.observe(image));
+      signal.addEventListener("abort", () => observer.disconnect(), { once: true });
+    } else {
+      deferredThumbnails.forEach((image) => {
+        if (image.dataset.libraryThumbSrc) image.src = image.dataset.libraryThumbSrc;
+        delete image.dataset.libraryThumbSrc;
+      });
+    }
+    for (const item of browser.querySelectorAll<HTMLButtonElement>("[data-library-id]")) {
+      item.addEventListener("click", () => {
+        const id = item.dataset.libraryId;
+        if (id) this.selectLibraryAsset(id);
+      }, { signal });
+    }
+  }
+
+  private mountSelectedAssetControls(slot: HTMLElement, signal: AbortSignal): void {
+    slot.querySelector<HTMLButtonElement>("[data-library-action=fit]")
+      ?.addEventListener("click", () => this.fitSelectedLibraryAsset(), { signal });
+    slot.querySelector<HTMLButtonElement>("[data-library-action=previous]")
+      ?.addEventListener("click", () => this.stepLibrarySelection(-1), { signal });
+    slot.querySelector<HTMLButtonElement>("[data-library-action=next]")
+      ?.addEventListener("click", () => this.stepLibrarySelection(1), { signal });
+  }
+
+  private stepLibrarySelection(direction: -1 | 1): void {
+    if (this.collisionSaveInFlight) return;
+    const visibleItems = [...(this.assetLibraryBrowser?.querySelectorAll<HTMLButtonElement>(
+      "[data-library-id]:not([hidden])",
+    ) ?? [])].filter((item) => !item.closest<HTMLElement>("[data-library-group]")?.hidden);
+    if (visibleItems.length === 0) return;
+    const current = visibleItems.findIndex(({ dataset }) => dataset.libraryId === this.selectedLibraryAssetId);
+    const start = current < 0 ? (direction > 0 ? -1 : 0) : current;
+    const next = (start + direction + visibleItems.length) % visibleItems.length;
+    const id = visibleItems[next].dataset.libraryId;
+    if (id) this.selectLibraryAsset(id);
+  }
+
+  private selectLibraryAsset(id: string): void {
+    if (this.collisionSaveInFlight) return;
+    const entry = assetLibraryEntryById(id);
+    if (!entry) return;
+    this.stashCurrentCollisionDraft();
+    this.referenceLoadRevision++;
+    this.selectedLibraryAssetId = entry.id;
+    this.previewAssets = this.catalogAssets;
+    if (entry.entryType === "authored-package") {
+      this.selectCatalogCollisionTarget(entry.package.metadata.assetId);
+    } else {
+      this.validatedCollisionCandidate = undefined;
+      this.beginReferencePreviewLoad(entry);
+    }
+  }
+
+  private selectedAssetDetails(entry: Readonly<AssetLibraryEntry>): Readonly<AssetLibraryEntry>["details"] {
+    if (entry.entryType !== "authored-package") return entry.details;
+    const metadata = this.acceptedMetadata(entry.package.metadata.assetId) ?? entry.package.metadata;
+    return entry.details.map((section) => ({
+      ...section,
+      fields: section.fields.map((field) => {
+        let value = field.value;
+        if (field.id === "runtime-revision") value = metadata.runtimeRevision;
+        else if (field.id === "source-asset-id") value = metadata.sourceAssetId;
+        else if (metadata.kind === "home-island" && field.id === "collision") {
+          value = metadata.collision
+            ? `Hybrid grid (${metadata.collision.subcellSize} px, ${metadata.collision.mixedCells.length} overrides)`
+            : "Coarse terrain grid";
+        } else if (metadata.kind === "player-boat" && metadata.collision && field.id === "half-width") {
+          value = metadata.collision.halfSize.width;
+        } else if (metadata.kind === "player-boat" && metadata.collision && field.id === "half-height") {
+          value = metadata.collision.halfSize.height;
+        }
+        return { ...field, value };
+      }),
+    }));
+  }
+
+  private syncSelectedAssetUi(): void {
+    const entry = this.selectedLibraryEntry();
+    for (const item of document.querySelectorAll<HTMLButtonElement>("[data-library-id]")) {
+      const active = item.dataset.libraryId === entry.id;
+      item.dataset.active = String(active);
+      item.setAttribute("aria-current", active ? "true" : "false");
+      if (active) item.scrollIntoView({ block: "nearest" });
+    }
+    const title = document.querySelector<HTMLElement>("[data-library=title]");
+    const subtitle = document.querySelector<HTMLElement>("[data-library=subtitle]");
+    const id = document.querySelector<HTMLElement>("[data-library=id]");
+    if (title) title.textContent = entry.name;
+    if (subtitle) subtitle.textContent = entry.subtitle;
+    if (id) id.textContent = entry.id;
+
+    const badges = document.querySelector<HTMLElement>("[data-library=badges]");
+    if (badges) badges.innerHTML = [
+      `<span>${entry.entryType === "authored-package" ? "Runtime package" : "Source reference"}</span>`,
+      `<span>${escapeHtml(entry.collection)}</span>`,
+      ...(entry.entryType === "reference-image" ? ["<span>RGB matte</span>"] : []),
+    ].join("");
+    const details = document.querySelector<HTMLElement>("[data-library=details]");
+    if (details) details.innerHTML = this.selectedAssetDetails(entry).map((section) => `
+      <section><h4>${escapeHtml(section.name)}</h4><dl>
+        ${section.fields.map((field) => `<div><dt>${escapeHtml(field.name)}</dt><dd>${escapeHtml(String(field.value))}${field.unit ? ` ${escapeHtml(field.unit)}` : ""}</dd></div>`).join("")}
+      </dl></section>`).join("");
+    const layers = document.querySelector<HTMLElement>("[data-library=layers]");
+    if (layers) layers.innerHTML = entry.layers.map((layer) => `
+      <div class="asset-layer-row"><span data-role="${escapeHtml(layer.role)}">${escapeHtml(layer.role)}</span><strong>${escapeHtml(layer.name)}</strong><small>${layer.frameSize ? `${layer.frameSize.width}×${layer.frameSize.height} frame` : layer.pixelSize ? `${layer.pixelSize.width}×${layer.pixelSize.height} px` : "Source image"}</small></div>`).join("");
+    const animationSection = document.querySelector<HTMLElement>("[data-library=animation-section]");
+    const animations = document.querySelector<HTMLElement>("[data-library=animations]");
+    if (animationSection) animationSection.hidden = entry.animations.length === 0;
+    if (animations) animations.innerHTML = entry.animations.map((animation) => `
+      <div class="asset-animation-row"><strong>${escapeHtml(animation.name)}</strong><span>${animation.frameCount} frames · ${animation.framesPerSecond} fps · ${animation.directionCount} direction${animation.directionCount === 1 ? "" : "s"}</span></div>`).join("");
+    for (const packageOnly of document.querySelectorAll<HTMLElement>("[data-selected-package-only]")) {
+      packageOnly.hidden = entry.entryType !== "authored-package";
+    }
   }
 
   private mountCollisionWorkbench(slot: HTMLDivElement, signal: AbortSignal): void {
@@ -910,25 +1388,28 @@ export class AssetViewerScene extends Phaser.Scene {
     const undo = slot.querySelector<HTMLButtonElement>("[data-collision=undo]");
     const redo = slot.querySelector<HTMLButtonElement>("[data-collision=redo]");
     const reset = slot.querySelector<HTMLButtonElement>("[data-collision=reset]");
+    const save = slot.querySelector<HTMLButtonElement>("[data-collision=save]");
     const importInput = slot.querySelector<HTMLInputElement>("[data-collision=import]");
     const validate = slot.querySelector<HTMLButtonElement>("[data-collision=validate]");
     const exportButton = slot.querySelector<HTMLButtonElement>("[data-collision=export]");
     if (
       !targetSelect || !fitButton || !selectionSolid || !selectionClear || !revertCell
       || !halfExtent || !applyBox || !setEmpty || !undo || !redo || !reset
-      || !importInput || !validate || !exportButton
+      || !save || !importInput || !validate || !exportButton
     ) return;
 
     for (const target of createCollisionAuthoringTargets()) {
       targetSelect.add(new Option(`${target.label} · ${target.objectKind}`, target.objectKind));
     }
     targetSelect.addEventListener("change", () => {
+      if (this.collisionSaveInFlight) return;
       const objectKind = targetSelect.value as RuntimeCollisionObjectKind;
       if (!RUNTIME_COLLISION_OBJECT_KINDS.includes(objectKind)) return;
       try {
         const assetId = authoredAssetIdForCollisionObject(objectKind);
         if (assetId) this.selectCatalogCollisionTarget(assetId);
         else {
+          this.stashCurrentCollisionDraft();
           this.previewAssets = this.catalogAssets;
           this.activateCollisionTarget(objectKind);
         }
@@ -942,6 +1423,15 @@ export class AssetViewerScene extends Phaser.Scene {
     for (const button of slot.querySelectorAll<HTMLButtonElement>("[data-collision-tool]")) {
       button.addEventListener("click", () => {
         this.collisionTool = button.dataset.collisionTool as CollisionTool;
+        this.syncCollisionControls();
+        this.drawGuides();
+      }, { signal });
+    }
+    for (const button of slot.querySelectorAll<HTMLButtonElement>("[data-collision-brush]")) {
+      button.addEventListener("click", () => {
+        const brushSize = Number(button.dataset.collisionBrush);
+        if (brushSize !== 1 && brushSize !== COLLISION_SUBCELLS_PER_TILE) return;
+        this.collisionBrushSize = brushSize;
         this.syncCollisionControls();
         this.drawGuides();
       }, { signal });
@@ -979,6 +1469,7 @@ export class AssetViewerScene extends Phaser.Scene {
     undo.addEventListener("click", () => this.afterCollisionMutation(this.collisionModel.undo()), { signal });
     redo.addEventListener("click", () => this.afterCollisionMutation(this.collisionModel.redo()), { signal });
     reset.addEventListener("click", () => run(() => this.collisionModel.reset()), { signal });
+    save.addEventListener("click", () => { void this.saveCollisionToLibrary(); }, { signal });
     validate.addEventListener("click", () => {
       try {
         const candidate = this.validateCollisionDraft();
@@ -1013,10 +1504,15 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private selectCatalogCollisionTarget(assetId: AuthoredAssetId): void {
-    const metadata = this.catalogAssets.metadata(assetId);
+    if (this.collisionSaveInFlight) return;
+    this.stashCurrentCollisionDraft();
+    const metadata = this.acceptedMetadata(assetId);
     if (!metadata) throw new RangeError(`Catalog metadata ${assetId} is unavailable`);
     this.previewAssets = this.catalogAssets;
-    this.activateCollisionTarget(this.collisionObjectKindForAsset(assetId), metadata, metadata);
+    this.activateCollisionTarget(this.collisionObjectKindForAsset(assetId), metadata, metadata, false);
+    this.restoreCollisionDraft(assetId);
+    this.rebuildPreview();
+    this.syncCollisionControls();
   }
 
   private collisionObjectKindForAsset(assetId: AuthoredAssetId): RuntimeCollisionObjectKind {
@@ -1029,9 +1525,9 @@ export class AssetViewerScene extends Phaser.Scene {
 
   private validateCollisionMetadataExact(value: unknown): Readonly<AuthoredAssetMetadata> {
     const metadata = validateAuthoredAssetMetadata(value);
-    const acceptedHome = this.catalogAssets.metadata(AUTHORED_ASSET_IDS.homeIsland);
-    const acceptedPlayer = this.catalogAssets.metadata(AUTHORED_ASSET_IDS.playerBoat);
-    const acceptedShoal = this.catalogAssets.metadata(AUTHORED_ASSET_IDS.fishingShoal);
+    const acceptedHome = this.acceptedMetadata(AUTHORED_ASSET_IDS.homeIsland);
+    const acceptedPlayer = this.acceptedMetadata(AUTHORED_ASSET_IDS.playerBoat);
+    const acceptedShoal = this.acceptedMetadata(AUTHORED_ASSET_IDS.fishingShoal);
     if (!acceptedHome || !acceptedPlayer || !acceptedShoal) {
       throw new Error("Exact collision validation requires all three accepted pilot packages");
     }
@@ -1086,7 +1582,7 @@ export class AssetViewerScene extends Phaser.Scene {
 
   private importCollisionCandidate(value: unknown): Readonly<CollisionCandidateBundle> {
     const candidate = validateCollisionCandidateBundle(value);
-    const current = this.catalogAssets.metadata(candidate.assetId);
+    const current = this.acceptedMetadata(candidate.assetId);
     if (!current) throw new RangeError(`Catalog metadata ${candidate.assetId} is unavailable`);
     const applied = applyCollisionCandidate(
       current,
@@ -1114,7 +1610,7 @@ export class AssetViewerScene extends Phaser.Scene {
     return Object.freeze({
       metadata: (assetId: AuthoredAssetId) => assetId === metadata.assetId
         ? metadata
-        : this.catalogAssets.metadata(assetId),
+        : this.acceptedMetadata(assetId),
       textureKey: (imageId: string) => textures.textureKey(imageId) ?? this.catalogAssets.textureKey(imageId),
     });
   }
@@ -1133,13 +1629,60 @@ export class AssetViewerScene extends Phaser.Scene {
     this.reportCollision(`Exported ${filename}; repository intake will revalidate its revision and fingerprint.`);
   }
 
+  private async saveCollisionToLibrary(): Promise<void> {
+    if (this.collisionSaveInFlight) return;
+    try {
+      const candidate = this.validateCollisionDraft();
+      const appliedMetadata = this.previewAssets.metadata(candidate.assetId);
+      if (!appliedMetadata || appliedMetadata.runtimeRevision !== candidate.baseRuntimeRevision + 1) {
+        throw new Error("The validated collision preview did not produce the next runtime revision");
+      }
+      this.collisionSaveInFlight = true;
+      this.syncCollisionControls();
+      this.reportCollision("Validating collision and saving to the local asset library…");
+      const response = await fetch(COLLISION_SAVE_ROUTE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(candidate),
+      });
+      const payload = await response.json().catch(() => undefined) as
+        | { ok?: boolean; message?: string; error?: string }
+        | undefined;
+      if (!response.ok || payload?.ok !== true) {
+        const message = response.status === 404
+          ? "Direct save is unavailable. Restart npm.cmd run dev so the local save bridge is active."
+          : payload?.error ?? `Collision save failed with HTTP ${response.status}`;
+        throw new Error(message);
+      }
+
+      this.acceptedMetadataByAssetId.set(candidate.assetId, appliedMetadata);
+      this.collisionDraftsByAssetId.delete(candidate.assetId);
+      if (this.selectedLibraryAssetId === candidate.assetId) {
+        this.previewAssets = this.runtimeWithMetadata(appliedMetadata, this.catalogAssets);
+        this.activateCollisionTarget(
+          this.collisionObjectKindForAsset(candidate.assetId),
+          appliedMetadata,
+          appliedMetadata,
+          false,
+        );
+        this.rebuildPreview();
+      }
+      this.reportCollision(`${payload.message ?? "Collision saved."} The runtime package is now current.`);
+    } catch (error) {
+      this.reportCollision(this.errorMessage(error), true);
+    } finally {
+      this.collisionSaveInFlight = false;
+      this.syncCollisionControls();
+    }
+  }
+
   private afterCollisionMutation(changed: boolean): void {
     if (changed) this.validatedCollisionCandidate = undefined;
     const snapshot = this.collisionModel.snapshot();
     this.drawGuides();
     this.syncCollisionControls();
     if (snapshot.serializationError) this.reportCollision(snapshot.serializationError, true);
-    else if (changed) this.reportCollision("Collision draft changed; validate before export.");
+    else if (changed) this.reportCollision("Collision draft changed; save it to update the runtime package.");
   }
 
   private syncCollisionControls(): void {
@@ -1149,7 +1692,10 @@ export class AssetViewerScene extends Phaser.Scene {
       ? "read-only"
       : this.collisionTarget.editing;
     const target = document.querySelector<HTMLSelectElement>("[data-collision=target]");
-    if (target) target.value = this.collisionTarget.objectKind;
+    if (target) {
+      target.value = this.collisionTarget.objectKind;
+      target.disabled = this.collisionSaveInFlight;
+    }
     const note = document.querySelector<HTMLElement>("[data-collision=note]");
     if (note) note.textContent = effectiveMode === "read-only" && this.collisionTarget.tileSize !== 32
       ? `${this.collisionTarget.editingNote} Fine editing requires a 32 px package grid.`
@@ -1163,24 +1709,54 @@ export class AssetViewerScene extends Phaser.Scene {
       const active = button.dataset.collisionTool === this.collisionTool;
       button.dataset.active = String(active);
       button.setAttribute("aria-pressed", String(active));
+      button.disabled = this.collisionSaveInFlight || !snapshot.editable;
+    }
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-collision-brush]")) {
+      const active = Number(button.dataset.collisionBrush) === this.collisionBrushSize;
+      button.dataset.active = String(active);
+      button.setAttribute("aria-pressed", String(active));
+      button.disabled = this.collisionSaveInFlight || !snapshot.editable;
     }
     const halfExtent = document.querySelector<HTMLInputElement>("[data-collision=half-extent]");
-    if (halfExtent && snapshot.profile.kind === "box") halfExtent.value = String(snapshot.profile.halfSize.width);
+    if (halfExtent) {
+      if (snapshot.profile.kind === "box") halfExtent.value = String(snapshot.profile.halfSize.width);
+      halfExtent.disabled = this.collisionSaveInFlight || !snapshot.editable;
+    }
     const setDisabled = (selector: string, disabled: boolean) => {
       const button = document.querySelector<HTMLButtonElement>(selector);
       if (button) button.disabled = disabled;
     };
-    setDisabled("[data-collision=undo]", !snapshot.canUndo);
-    setDisabled("[data-collision=redo]", !snapshot.canRedo);
-    setDisabled("[data-collision=reset]", !snapshot.editable || !snapshot.dirty);
-    setDisabled("[data-collision=selection-solid]", !this.collisionSelection || !snapshot.editable);
-    setDisabled("[data-collision=selection-clear]", !this.collisionSelection || !snapshot.editable);
-    setDisabled("[data-collision=revert-cell]", !this.collisionHover || !snapshot.editable);
+    setDisabled("[data-collision=undo]", this.collisionSaveInFlight || !snapshot.canUndo);
+    setDisabled("[data-collision=redo]", this.collisionSaveInFlight || !snapshot.canRedo);
+    setDisabled("[data-collision=reset]", this.collisionSaveInFlight || !snapshot.editable || !snapshot.dirty);
+    setDisabled(
+      "[data-collision=save]",
+      this.collisionSaveInFlight
+        || !snapshot.editable
+        || !snapshot.dirty
+        || !snapshot.exportable
+        || !this.collisionAcceptedMetadata,
+    );
+    setDisabled("[data-collision=selection-solid]", this.collisionSaveInFlight || !this.collisionSelection || !snapshot.editable);
+    setDisabled("[data-collision=selection-clear]", this.collisionSaveInFlight || !this.collisionSelection || !snapshot.editable);
+    setDisabled("[data-collision=revert-cell]", this.collisionSaveInFlight || !this.collisionHover || !snapshot.editable);
+    setDisabled("[data-collision=apply-box]", this.collisionSaveInFlight || !snapshot.editable);
+    setDisabled("[data-collision=set-empty]", this.collisionSaveInFlight || !snapshot.editable);
     setDisabled(
       "[data-collision=validate]",
-      !snapshot.editable || !snapshot.exportable || !this.collisionAcceptedMetadata,
+      this.collisionSaveInFlight || !snapshot.editable || !snapshot.exportable || !this.collisionAcceptedMetadata,
     );
-    setDisabled("[data-collision=export]", !this.validatedCollisionCandidate);
+    setDisabled("[data-collision=export]", this.collisionSaveInFlight || !this.validatedCollisionCandidate);
+    const save = document.querySelector<HTMLButtonElement>("[data-collision=save]");
+    if (save) {
+      save.textContent = this.collisionSaveInFlight ? "Saving…" : "Save to library";
+      save.setAttribute("aria-busy", String(this.collisionSaveInFlight));
+    }
+    for (const button of document.querySelectorAll<HTMLButtonElement>(
+      "[data-library-id], [data-library-action=previous], [data-library-action=next]",
+    )) button.disabled = this.collisionSaveInFlight;
+    const viewer = document.querySelector<HTMLSelectElement>("[data-viewer=asset]");
+    if (viewer) viewer.disabled = this.collisionSaveInFlight;
   }
 
   private syncPackageSelectors(): void {
@@ -1198,21 +1774,50 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private fitCollisionTarget(): void {
-    const width = Math.max(
-      this.collisionTarget.width * this.collisionTarget.tileSize,
-      this.collisionTarget.visualBounds.width,
+    this.fitSelectedLibraryAsset();
+  }
+
+  private fitSelectedLibraryAsset(): void {
+    const reference = this.selectedReferenceEntry();
+    const width = reference
+      ? (this.referenceVisual?.displayWidth ?? STAGE.width * 0.7)
+      : Math.max(
+        this.collisionTarget.width * this.collisionTarget.tileSize,
+        this.collisionTarget.visualBounds.width,
+      );
+    const height = reference
+      ? (this.referenceVisual?.displayHeight ?? STAGE.height * 0.7)
+      : Math.max(
+        this.collisionTarget.height * this.collisionTarget.tileSize,
+        this.collisionTarget.visualBounds.height,
+      );
+    const browserRect = this.assetLibraryBrowser?.getBoundingClientRect();
+    const inspector = document.querySelector<HTMLElement>("#developer-tools-panel");
+    const inspectorRect = inspector && !inspector.hidden ? inspector.getBoundingClientRect() : undefined;
+    const stackedPanels = window.matchMedia("(max-width: 64rem)").matches;
+    const browserWidth = stackedPanels ? 0 : browserRect?.width ?? 0;
+    const inspectorWidth = stackedPanels ? 0 : inspectorRect?.width ?? 0;
+    const topOccupied = stackedPanels && browserRect ? browserRect.bottom + 12 : 48;
+    const bottomOccupied = stackedPanels && inspectorRect
+      ? Math.max(0, this.scale.height - inspectorRect.top) + 12
+      : 48;
+    const availableWidth = Math.max(240, this.scale.width - browserWidth - inspectorWidth - 72);
+    const availableHeight = Math.max(120, this.scale.height - topOccupied - bottomOccupied);
+    const zoom = Phaser.Math.Clamp(
+      Math.min(availableWidth / (width + 96), availableHeight / (height + 128)),
+      0.3,
+      2.5,
     );
-    const height = Math.max(
-      this.collisionTarget.height * this.collisionTarget.tileSize,
-      this.collisionTarget.visualBounds.height,
-    );
-    const availableWidth = Math.max(320, this.scale.width - 440);
-    const zoom = Phaser.Math.Clamp(Math.min(availableWidth / (width + 96), this.scale.height / (height + 128)), 0.55, 2.5);
-    this.cameras.main.centerOn(STAGE.centerX, STAGE.centerY).setZoom(zoom);
+    const horizontalOffset = (inspectorWidth - browserWidth) / (2 * zoom);
+    const verticalOffset = stackedPanels ? (bottomOccupied - topOccupied) / (2 * zoom) : 0;
+    this.cameras.main.centerOn(
+      STAGE.centerX + horizontalOffset,
+      STAGE.centerY + verticalOffset,
+    ).setZoom(zoom);
   }
 
   private onCollisionKeyDown(event: KeyboardEvent): void {
-    if (this.domControlsFocused(event.target)) return;
+    if (this.domControlsFocused(event.target) || this.collisionSaveInFlight) return;
     if (event.code === "Space") {
       this.collisionSpaceHeld = true;
       event.preventDefault();
@@ -1233,7 +1838,8 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private domControlsFocused(target: EventTarget | null = document.activeElement): boolean {
-    return target instanceof Element && target.closest("#developer-tools-panel") !== null;
+    return target instanceof Element
+      && target.closest("#developer-tools-panel, #asset-library-browser") !== null;
   }
 
   private mountCandidateWorkbench(
@@ -1328,7 +1934,7 @@ export class AssetViewerScene extends Phaser.Scene {
       )
         .then(async (bundle) => {
           this.validatedCandidate = bundle;
-          const accepted = this.catalogAssets.metadata(bundle.metadata.assetId);
+          const accepted = this.acceptedMetadata(bundle.metadata.assetId);
           if (!accepted) throw new RangeError(`Catalog metadata ${bundle.metadata.assetId} is unavailable`);
           const previewMetadata = mergeAssetCandidateMetadata(
             accepted,
@@ -1470,7 +2076,7 @@ export class AssetViewerScene extends Phaser.Scene {
     this.activateCollisionTarget(
       this.collisionObjectKindForAsset(bundle.metadata.assetId),
       bundle.metadata,
-      this.catalogAssets.metadata(bundle.metadata.assetId),
+      this.acceptedMetadata(bundle.metadata.assetId),
       false,
     );
     this.rebuildPreview();
@@ -1493,7 +2099,7 @@ export class AssetViewerScene extends Phaser.Scene {
     window.__WAYFINDERS_ASSET_VIEWER__ = {
       snapshot: () => Object.freeze({ ...this.state }),
       select: (assetId) => {
-        if (!ASSET_IDS.includes(assetId)) return false;
+        if (this.collisionSaveInFlight || !ASSET_IDS.includes(assetId)) return false;
         this.selectCatalogCollisionTarget(assetId);
         return true;
       },
@@ -1505,10 +2111,11 @@ export class AssetViewerScene extends Phaser.Scene {
       },
       diagnostics: () => this.catalogAssets.diagnostics.map(({ assetId, message }) => `${assetId}: ${message}`),
       selectCollisionTarget: (objectKind) => {
-        if (!RUNTIME_COLLISION_OBJECT_KINDS.includes(objectKind)) return false;
+        if (this.collisionSaveInFlight || !RUNTIME_COLLISION_OBJECT_KINDS.includes(objectKind)) return false;
         const assetId = authoredAssetIdForCollisionObject(objectKind);
         if (assetId) this.selectCatalogCollisionTarget(assetId);
         else {
+          this.stashCurrentCollisionDraft();
           this.previewAssets = this.catalogAssets;
           this.activateCollisionTarget(objectKind);
         }
@@ -1516,6 +2123,7 @@ export class AssetViewerScene extends Phaser.Scene {
       },
       collisionSnapshot: () => this.collisionModel.snapshot(),
       paintCollision: (x, y, solid = true) => {
+        if (this.collisionSaveInFlight) return false;
         try {
           const changed = solid
             ? this.collisionModel.paintStroke([{ x, y }])
@@ -1527,11 +2135,13 @@ export class AssetViewerScene extends Phaser.Scene {
         }
       },
       undoCollision: () => {
+        if (this.collisionSaveInFlight) return false;
         const changed = this.collisionModel.undo();
         this.afterCollisionMutation(changed);
         return changed;
       },
       redoCollision: () => {
+        if (this.collisionSaveInFlight) return false;
         const changed = this.collisionModel.redo();
         this.afterCollisionMutation(changed);
         return changed;
@@ -1559,9 +2169,11 @@ export class AssetViewerScene extends Phaser.Scene {
 
   private onResize(): void {
     this.drawGuides();
+    this.fitSelectedLibraryAsset();
   }
 
   private destroyBindings(): void {
+    this.referenceLoadRevision++;
     this.controlsAbort?.abort();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onCollisionPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_MOVE, this.onCollisionPointerMove, this);
@@ -1572,6 +2184,10 @@ export class AssetViewerScene extends Phaser.Scene {
     this.homeVisual?.destroy();
     this.shipRenderer?.destroy();
     this.shoalVisual?.image.destroy();
+    this.referenceVisual?.destroy();
+    this.releaseReferenceTexture();
+    this.assetLibraryBrowser?.remove();
+    this.assetLibraryBrowser = undefined;
     for (const key of this.candidateTextureKeys) this.textures.remove(key);
     this.candidateTextureKeys = [];
     delete window.__WAYFINDERS_ASSET_VIEWER__;

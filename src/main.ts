@@ -167,6 +167,7 @@ const toolsEyebrow = document.querySelector<HTMLElement>(".developer-tools__head
 if (toolsEyebrow) toolsEyebrow.textContent = applicationMode === "assets" ? "GR-2 tooling" : "Prototype sandbox";
 const riskLegend = document.querySelector<HTMLElement>("#risk-legend");
 if (riskLegend && applicationMode === "assets") riskLegend.hidden = true;
+if (applicationMode === "assets") setDeveloperToolsOpen(true);
 document.documentElement.dataset.appReady = "true";
 document.documentElement.dataset.applicationMode = applicationMode;
 

@@ -32,4 +32,20 @@ describe("GR-2.1 asset application mode", () => {
       "read-only",
     ]);
   });
+
+  it("keeps direct save, whole-cell painting, draft retention, and lazy references in the library workspace", () => {
+    const source = readFileSync(
+      new URL("../src/wayfinders/assets/AssetViewerScene.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain('data-collision-brush="1"');
+    expect(source).toContain('data-collision-brush="4"');
+    expect(source).toContain("Save to library");
+    expect(source).toContain("/__wayfinders/collision/save");
+    expect(source).toContain("collisionDraftsByAssetId");
+    expect(source).toContain("acceptedMetadataByAssetId");
+    expect(source).toContain("data-library-thumb-src");
+    expect(source).not.toContain("this.load.image(this.libraryTextureKey(entry.id)");
+  });
 });
