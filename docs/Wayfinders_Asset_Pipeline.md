@@ -153,19 +153,27 @@ runtime measurements demonstrate a need.
    asset report fail before the normal type/test/build gate.
 
 Candidate intake remains limited to `home.island.primary`,
-`player.boat.primary` and `shoal.fishing.primary`. The browser never writes the
-repository directly, and the command never replaces an accepted semantic ID
-without the explicit `--replace` flag. Each runtime PNG must be non-interlaced
-8-bit RGB or RGBA and no larger than `4096 x 4096`.
+`player.boat.primary` and `shoal.fishing.primary`. Full visual candidates remain
+portable bundles. Collision editing adds a development-only loopback save
+bridge: **Save to library** posts the validated collision-only candidate to the
+local server, which runs the same authoritative intake command with explicit
+replacement. Intake is serialized across processes and collision package/archive
+writes roll back together if verification fails. Each runtime PNG must be
+non-interlaced 8-bit RGB or RGBA and no larger than `4096 x 4096`.
 
 ## Hybrid collision foundation and authoring
 
 Implemented `GR-2.4` retains the `32`-pixel navigation grid and adds optional
-`8`-pixel collision subcells only to mixed shoreline or object cells. One
-navigation cell therefore contains a `4 x 4` collision patch when refinement is
-needed. Fully open and fully blocked cells keep the existing compact coarse
-form. Implemented `GR-2.5` adds package-profile editing on top of that contract;
-accepted home-mask refinement remains planned in `GR-2.6`.
+`8`-pixel collision subcells as sparse overrides. One navigation cell therefore
+contains a `4 x 4` collision patch when refinement is needed. Mixed patches and
+intentional fully-open or fully-solid overrides are accepted; an omitted patch
+keeps the compact coarse terrain result. Implemented `GR-2.5` adds
+package-profile editing on top of that contract; accepted home-mask refinement
+remains planned in `GR-2.6`.
+
+The V1 JSON property remains named `mixedCells` for compatibility with accepted
+packages. Its implemented meaning is now "sparse coarse-cell overrides," so a
+row may legally be mixed, all zeroes or all ones.
 
 The fine mask is reviewed metadata, never a texture sampled by the game. Offline
 preparation may suggest a mask from alpha or segmentation, but suggestions are
@@ -184,22 +192,30 @@ consumer.
 
 The implemented workflow is:
 
-1. Overlay `32`-pixel navigation cells, optional `8`-pixel collision subcells,
+1. Use the left asset browser to search the three runtime packages and 20 island
+   references. The selected inspector keeps package information, collision,
+   visual layers and animation descriptors together; references remain clearly
+   marked as source-only.
+2. Overlay `32`-pixel navigation cells, optional `8`-pixel collision subcells,
    art or developer previews, origins, bounds, anchors, raw solids and the
    effective ship-clearance probe.
-2. Paint, erase, flood-fill or rectangularly select home subcells; edit the
-   constrained centred player box; explicitly confirm the passable shoal; and
-   use deterministic undo/redo and zoom/pan.
-3. Run the shared exact validator before export and intake. Required anchors,
+3. Paint or erase with an aligned `8`-pixel detail brush or `32`-pixel whole-cell
+   brush; flood-fill or rectangularly select home subcells; edit the constrained
+   centred player box; explicitly confirm the passable shoal; and use
+   deterministic undo/redo and zoom/pan. Unsaved drafts remain available while
+   browsing other assets.
+4. Run the shared exact validator before save/export and intake. Required anchors,
    dock-to-edge connectivity and derived cardinal navigation edges use the
    runtime swept-hull geometry rather than a second approximation.
-4. Export or import a collision-only candidate containing no PNG data. Its base
-   runtime revision and deterministic collision fingerprint reject stale edits;
-   replace and reset-to-coarse are explicit operations.
-5. Run `npm.cmd run assets:intake -- <collision-candidate.json> --replace` to
-   update collision metadata and increment the package revision once without
-   replacing runtime images or catalog image bindings.
-6. For a full visual candidate, omit `collisionIntent` or use `preserve` to keep
+5. Choose **Save to library** for the normal local workflow. The loopback-only
+   bridge revalidates the current revision and fingerprint, runs authoritative
+   intake and immediately updates the accepted in-memory package view. Open game
+   tabs receive the changed package through the development server's module
+   update/reload path.
+6. Portable collision candidate import/export remains available under the
+   advanced disclosure for review or transfer. The equivalent CLI is
+   `npm.cmd run assets:intake -- <collision-candidate.json> --replace`.
+7. For a full visual candidate, omit `collisionIntent` or use `preserve` to keep
    accepted collision metadata. Only explicit `replace` or `reset-to-coarse`
    changes it.
 

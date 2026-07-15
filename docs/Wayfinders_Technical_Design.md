@@ -4,11 +4,11 @@ This document describes the accepted implementation baseline. The roadmap
 contains proposed future sequencing; this document contains current runtime
 behavior and constraints.
 
-Saving is intentionally absent. Every launch or refresh creates a fresh
-session, and the runtime has no save schema, browser store, autosave, checkpoint
-or restoration path. Saving may be added only by an explicitly authorized
-milestone that names it as in scope; a future design starts from the gameplay
-model that exists then rather than reviving the removed implementation.
+Gameplay-session saving is intentionally absent. Every launch or refresh
+creates a fresh session, and the runtime has no save schema, browser store,
+autosave, checkpoint or restoration path. The development asset workbench may
+persist reviewed package metadata; that repository-authoring path is not a
+gameplay save system.
 
 ## 1. Design goals
 
@@ -156,9 +156,11 @@ WASD and arrow keys provide turning and forward/reverse thrust. Movement sweeps
 the ship's authored square gameplay footprint along the continuous line
 segment, stops before the first solid primitive and emits centre-entered tile
 information in order. The `32 x 32` navigation grid remains authoritative for
-terrain, knowledge and route nodes. An optional sparse `4 x 4` mask replaces
-coarse collision in mixed cells with `8 x 8` solid subcells. Cells without a
-mask retain their exact legacy full-open or full-solid behavior.
+terrain, knowledge and route nodes. An optional sparse `4 x 4` override replaces
+coarse collision with `8 x 8` solid subcells. An override may be mixed, fully
+open or fully solid when authored collision intentionally differs from the
+coarse terrain cell. Cells without an override retain their exact legacy
+full-open or full-solid behavior.
 
 The pilot boat package currently authors a centered `14 x 14`-pixel half-size.
 Simulation startup rejects package/config disagreement, then exposes an
@@ -166,7 +168,7 @@ authoritative movement-config view: later live tuning still forwards ship speed
 and related values, but cannot silently replace the authored hull.
 
 The sweep uses coarse cells as its broad phase and only expands set subcells in
-mixed cells for the narrow phase. Cardinal route edges are cached lazily after
+overridden cells for the narrow phase. Cardinal route edges are cached lazily after
 replaying the same centre-to-centre swept-hull test. Return routes, supported
 service connectivity, dock/open-ocean validation and manual sailing therefore
 share one clearance predicate. Forward range uses the same predicate but
@@ -622,13 +624,17 @@ heading rotation.
 Candidate intake shares contract V1 validation with the runtime. It additionally
 requires exact PNG dimensions and frame layouts, lowercase safe runtime
 filenames, non-interlaced 8-bit RGB/RGBA data and a `4096 x 4096` texture limit.
-The browser may preview data-URL textures and export a portable bundle but does
-not write repository files. The repository command revalidates PNG headers and
-decoded pixels, requires explicit replacement of an existing semantic ID,
-materializes source/package/runtime files and regenerates the catalog.
+The browser may preview data-URL textures and export a portable full-visual
+bundle. Full visual intake remains an explicit repository command that
+revalidates PNG headers and decoded pixels, requires replacement of an existing
+semantic ID, materializes source/package/runtime files and regenerates the
+catalog. Collision-only editing also exposes a development-only loopback POST;
+the server passes the validated candidate to that same authoritative intake
+boundary rather than granting the browser a general filesystem API.
 
 Contract V1 now permits optional collision metadata without invalidating legacy
-packages. Home packages carry sparse hybrid-grid patches, the authored player
+packages. Home packages carry sparse hybrid-grid overrides, including uniform
+fully-open or fully-solid overrides when they differ from coarse terrain. The authored player
 boat declares its centred box hull and the fishing-shoal package declares an
 explicit empty profile. One exhaustive registry also assigns coarse or empty
 profiles to developer-rendered islands, wrecks, sites, service anchors and the
@@ -636,18 +642,32 @@ home dock. Fine masks are semantic metadata; runtime PNG alpha is never sampled.
 
 Implemented GR-2.5 keeps collision editing in a renderer-agnostic model with
 normalized drafts and deterministic transaction history, while an exhaustive
-authoring-target layer describes all nine registry categories. Only the finite
-package-backed home hybrid grid, player box and empty fishing-shoal profile are
-editable; the generated-island policy and five dynamic/developer categories are
-inspectable but read-only until they gain runtime collision authority. The
-viewer batches art, grids, solids, anchors, bounds and clearance probes into a
-Phaser overlay, but export validation calls the shared swept-hull geometry for
-exact anchor and derived-edge clearance. Collision-only candidates carry a base
-revision and deterministic collision fingerprint for stale-edit protection;
-visual candidates merge with explicit preserve, replace or reset-to-coarse
-intent, and collision intake changes metadata and one runtime revision without
-rewriting PNGs or catalog image bindings. Automated coverage passes, while the
-interactive WebGL usability and performance acceptance remains outstanding.
+authoring-target layer describes all nine registry categories. A typed library
+catalog presents the three authored packages plus 20 source-only island
+references through a persistent browser and one selected-asset inspector. Its
+layer and animation descriptors allow later visual planes and playback sources
+without changing entry identity; large references and their browser thumbnails
+load on demand.
+
+Only the finite package-backed home hybrid grid, player box and empty
+fishing-shoal profile are editable; the generated-island policy and five
+dynamic/developer categories are inspectable but read-only until they gain
+runtime collision authority. The viewer batches art, grids, solids, anchors,
+bounds and clearance probes into a Phaser overlay. The home editor supports
+aligned `8`-pixel and `32`-pixel brushes, and retains unsaved drafts while the
+user browses another asset. Save/export validation calls the shared swept-hull
+geometry for exact anchor and derived-edge clearance.
+
+Collision-only candidates carry a base revision and deterministic collision
+fingerprint for stale-edit protection. Direct saves are locked in the UI while
+in flight, retained in an accepted-metadata overlay after success and serialized
+against CLI or other development-server intake with a repository lock. Package
+metadata and the reviewed candidate archive commit through rollback-safe sibling
+files before the existing catalog check releases their backups. Visual
+candidates merge with explicit preserve, replace or reset-to-coarse intent, and
+collision intake changes metadata and one runtime revision without rewriting
+PNGs or catalog image bindings. Automated coverage passes, while interactive
+WebGL usability and performance acceptance remains outstanding.
 
 The generated catalog, bounded nearest-neighbour thumbnails and asset report
 are deterministic build artifacts. The normal verification gate rejects stale

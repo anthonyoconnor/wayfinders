@@ -16,13 +16,15 @@ milestone scope and acceptance evidence live in
 
 ### Saving policy
 
-Saving is intentionally absent from the active baseline. Every launch or
-refresh starts a fresh session, and new work has no schema, storage, migration,
-checkpoint, reload or restoration obligation.
+Gameplay-session saving is intentionally absent from the active baseline. Every
+launch or refresh starts a fresh voyage, and new gameplay work has no schema,
+storage, migration, checkpoint, reload or restoration obligation. Reviewed
+asset-package writes in the development workbench are repository authoring, not
+gameplay persistence.
 
-Saving must not be added incidentally to another feature. It may return only
-when the user explicitly authorizes a named milestone whose scope includes it.
-No saving milestone is currently planned or authorized.
+Gameplay persistence must not be added incidentally to another feature. It may
+return only when the user explicitly authorizes a named milestone whose scope
+includes it. No gameplay-saving milestone is currently planned or authorized.
 
 ### Milestones and authorization
 
@@ -132,10 +134,10 @@ Status: implemented; automated acceptance passes; interactive collision and
 performance acceptance pending.
 
 Keep `32 x 32`-pixel navigation cells as the terrain, knowledge and route node
-grid, while allowing an optional `8 x 8`-pixel solid mask inside mixed shoreline
-or object cells. Store fine data sparsely: fully open and fully solid navigation
-cells retain their compact coarse representation, and only mixed cells carry a
-`4 x 4` subcell patch.
+grid, while allowing an optional `8 x 8`-pixel solid override inside shoreline
+or object cells. Store fine data sparsely: cells without an override retain
+their compact coarse representation; authored `4 x 4` patches may be mixed or
+uniform when they intentionally differ from coarse terrain.
 
 The accepted fine mask is semantic package metadata. Offline tooling may propose
 a mask from source alpha or segmentation, but the game must never sample PNG
@@ -172,11 +174,14 @@ that browser measurement remains pending.
 Status: implemented; automated acceptance passes; interactive browser editing
 and performance acceptance pending. Depends on `GR-2.4`.
 
-The asset viewer now enumerates all nine registered runtime collision
-categories. The finite package-backed profiles are editable with truthful,
-profile-specific controls: sparse `8`-pixel hybrid-grid painting for the home
-island, a centred square box for the player ship and an explicit empty/passable
-profile for the fishing shoal. Generated-island policy plus the wreck, survey
+The asset viewer now combines the three runtime packages and 20 island source
+references in a searchable concept-inspired library, while still enumerating
+all nine registered runtime collision categories. One selected-asset inspector
+keeps metadata, layers, animation descriptors and collision tools together.
+The finite package-backed profiles are editable with truthful, profile-specific
+controls: aligned `8`-pixel detail and `32`-pixel whole-cell hybrid-grid brushes
+for the home island, a centred square box for the player ship and an explicit
+empty/passable profile for the fishing shoal. Generated-island policy plus the wreck, survey
 site, survey service, island approach and home-dock developer profiles remain
 inspectable and explicitly read-only. Giving those dynamic categories blocking
 geometry requires runtime authority and remains deferred to `GR-2.6` or a later
@@ -185,15 +190,19 @@ named runtime-collision milestone.
 The workbench shows the `32`-pixel navigation grid, optional `8`-pixel subgrid,
 rendered art or developer preview, origins, anchors, bounds, raw solids and the
 effective ship-clearance probe together. Hybrid editing provides paint, erase,
-flood fill, rectangular selection, undo/redo and zoom/pan. Box and empty
-profiles use their constrained semantic controls rather than pretending every
-object is a paintable raster.
+flood fill, rectangular selection, undo/redo and zoom/pan. Unsaved drafts are
+retained per asset while browsing, and reference textures/thumbnails load on
+demand. Box and empty profiles use their constrained semantic controls rather
+than pretending every object is a paintable raster.
 
 Collision edits never modify or rebundle the source PNG. A discriminated,
 versioned collision-only candidate records the target, base runtime revision,
 deterministic base-collision fingerprint and an explicit replace or
-reset-to-coarse intent. Browser import/export and repository intake share exact
-metadata validation; intake increments the package revision once while
+reset-to-coarse intent. **Save to library** sends that candidate only to the
+loopback development server, where authoritative intake revalidates it and
+updates the package directly. Cross-process locking and rollback-safe writes
+prevent concurrent or partial acceptance. Portable import/export remains an
+advanced transfer path. Intake increments the package revision once while
 preserving runtime art and catalog image bindings. Full visual candidates
 default to preserving accepted collision metadata and require an explicit
 `replace` or `reset-to-coarse` intent to change it.
@@ -201,9 +210,10 @@ default to preserving accepted collision metadata and require an explicit
 Automated acceptance covers exhaustive registry descriptors, deterministic
 editor operations and undo/redo, stable sparse-mask serialization, stale
 candidate rejection and exact required-anchor and derived navigation-edge
-clearance validation. Interactive acceptance must still verify pointer hit
-testing, overlays, import/export and responsiveness in a WebGL browser; no
-browser performance result is claimed yet.
+clearance validation, whole-cell overrides, library enumeration and local-save
+transaction behavior. Interactive acceptance must still verify pointer hit
+testing, overlays, asset navigation, direct-save reload behavior and
+responsiveness in a WebGL browser; no browser performance result is claimed yet.
 
 #### GR-2.6 — Pilot collision reauthoring and runtime acceptance
 

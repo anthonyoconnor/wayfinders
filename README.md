@@ -51,8 +51,12 @@ Then open `http://127.0.0.1:5174/`. An explicitly requested port will not silent
 
 Open `http://127.0.0.1:5173/?mode=assets` or choose **Asset tools** in the
 running prototype. The GR-2 viewer uses the same catalog, textures and shared
-Phaser presentation factories as the game. It can inspect headings, animation
-frames, origins, footprints, fixed-seed placement and fog/overlay contrast.
+Phaser presentation factories as the game. Its left library browses the three
+runtime packages and 20 source island examples; the selected inspector keeps
+metadata, layers, animations and collision controls together. Home collision
+can be painted with `8 px` detail or aligned `32 px` whole-cell brushes, then
+written through **Save to library**. Open game tabs pick up the accepted package
+change from the development server.
 
 The workbench starts from any accepted package template. Edit its semantic
 metadata, bind PNGs (or use the current catalog PNGs), then validate and preview
@@ -69,9 +73,10 @@ catalog/source changes. `npm.cmd run assets:check` verifies package contracts,
 PNG dimensions and frames, texture limits, generated catalog code, thumbnails
 and the deterministic asset report.
 
-Saving is intentionally absent during active development. Reloading starts a
-fresh session. Saving must not be reintroduced unless an explicitly authorized
-milestone names it as in scope.
+Gameplay-session saving is intentionally absent during active development.
+Reloading starts a fresh voyage session. This is separate from the asset
+workbench's development-only **Save to library** action, which validates and
+writes reviewed collision metadata to the tracked asset package.
 
 ## Verify
 

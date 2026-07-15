@@ -18,13 +18,15 @@ architecture rules or completed milestone evidence.
 - `GR-2.4` hybrid collision contracts and runtime behavior are implemented.
   Its automated gates pass; the live interactive collision/performance pass is
   still required before graphics acceptance advances.
-- `GR-2.5` collision authoring is implemented. Its automated gates pass; the
-  in-app WebGL editing/import/export and performance pass is still required
-  before graphics acceptance advances.
+- `GR-2.5` collision authoring is implemented. The workbench now includes a
+  browsable 23-entry asset library, retained per-asset drafts, `8`/`32`-pixel
+  brushes and validated direct package saves. Its automated gates pass; the
+  in-app WebGL editing and performance pass is still required before graphics
+  acceptance advances.
 - No `GR-3` scope is authorized.
-- Saving is intentionally absent. Every launch or browser refresh starts a
-  fresh session. Saving may return only in an explicitly authorized named
-  milestone whose scope includes it.
+- Gameplay-session saving is intentionally absent. Every launch or browser
+  refresh starts a fresh voyage. Development-only asset package saves are a
+  separate authoring operation and do not persist gameplay state.
 
 The playable baseline includes deterministic sailing and islands, fog and
 inherited water knowledge, provision-aware voyages, exact-dock settlement,
@@ -36,8 +38,9 @@ deterministic catalog/preparation pipeline. The runtime also supports sparse
 8-pixel collision masks within the 32-pixel navigation grid, swept fine
 collision, clearance-tested route edges and registered authored/developer
 collision profiles. The viewer enumerates all nine profiles, edits the three
-finite package-backed collision shapes, validates exact cross-package ship
-clearance and exports revision/fingerprint-protected collision-only candidates.
+finite package-backed collision shapes, browses 20 reference islands, validates
+exact cross-package ship clearance and directly saves revision/fingerprint-
+protected collision-only candidates through authoritative repository intake.
 
 ## Run and verify
 
@@ -60,7 +63,7 @@ Latest accepted verification baseline:
 - Asset catalog, PNG/frame, texture-limit, generated-code, thumbnail and report
   consistency checks pass before compilation.
 - TypeScript typecheck passes.
-- 347 automated tests pass across 43 files.
+- 367 automated tests pass across 46 files.
 - The production Vite build passes.
 - Browser acceptance covers the accepted fishing, return, wreck, succession,
   survey-site, idol completion, continued-world and new-game flows with a clean
@@ -74,10 +77,11 @@ Latest accepted verification baseline:
   access policy have automated coverage.
 - An interactive WebGL pass over all three GR-2 viewer package kinds, contrast
   overlays, the visual-candidate template/bind/preview/export flow, the GR-2.5
-  collision editor/import/export workflow and GR-2.4 live collision diagnostics
+  library/editor/direct-save workflow and GR-2.4 live collision diagnostics
   remains outstanding. The in-app browser connection failed before it could
-  open the responding local server; automated contracts, deterministic
-  collision budgets and the production build pass.
+  open the responding local server; the live page and loopback save endpoint
+  respond, while automated contracts, deterministic collision budgets and the
+  production build pass.
 - Representative mid-range mobile rendering/performance validation remains
   outstanding.
 - Touch-first sailing is not implemented.
