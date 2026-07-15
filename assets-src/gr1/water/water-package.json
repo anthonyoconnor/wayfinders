@@ -1,0 +1,105 @@
+{
+  "contractVersion": 1,
+  "assetId": "world.water.milestone-pack",
+  "kind": "water-tile-package",
+  "status": "proposal-assets-not-runtime-registered",
+  "sourceAssetId": "generated.water-style-masters.v1",
+  "tileSize": 32,
+  "artTileSize": 16,
+  "frameLayout": "frames-across-variants-down",
+  "variantCount": 4,
+  "defaultPlayback": {
+    "base": "static",
+    "surfaceOverlays": "visible-chunks-only",
+    "timeSource": "presentation-clock",
+    "phaseNamespace": "wayfinders.water.v1",
+    "reducedMotion": "water-static.png"
+  },
+  "paletteAnchors": {
+    "abyss": "#082f40",
+    "deep": "#12536a",
+    "lagoon": "#2d858b",
+    "coastal": "#4aa1a0",
+    "shorewash": "#8bd0cf",
+    "foam": "#a9d6ad"
+  },
+  "profiles": [
+    { "id": "abyss", "terrain": "DeepOcean", "rowStart": 0, "frameCount": 8, "framesPerSecond": 3, "role": "rare far/deep-water presentation" },
+    { "id": "deep", "terrain": "DeepOcean", "rowStart": 4, "frameCount": 8, "framesPerSecond": 4, "role": "default open ocean" },
+    { "id": "coastal", "terrain": "ShallowOcean", "rowStart": 8, "frameCount": 8, "framesPerSecond": 5, "role": "island shelf and shore handoff" },
+    { "id": "lagoon", "terrain": "ShallowOcean", "rowStart": 12, "frameCount": 8, "framesPerSecond": 4, "role": "protected harbor and atoll interior" },
+    { "id": "reef", "terrain": "Reef", "rowStart": 16, "frameCount": 8, "framesPerSecond": 3, "role": "blocking reef readability" },
+    { "id": "current", "terrain": "visual-only", "rowStart": 20, "frameCount": 8, "framesPerSecond": 7, "role": "directional passable-water accent" },
+    { "id": "rough", "terrain": "visual-only", "rowStart": 24, "frameCount": 8, "framesPerSecond": 7, "role": "weather or exposed-water accent" },
+    { "id": "brackish", "terrain": "ShallowOcean", "rowStart": 28, "frameCount": 8, "framesPerSecond": 3, "role": "mangrove and river-mouth accent" }
+  ],
+  "images": [
+    {
+      "imageId": "world.water.tiles.animated",
+      "file": "runtime/water-tiles.png",
+      "loader": "spritesheet",
+      "pixelSize": { "width": 256, "height": 1024 },
+      "frameSize": { "width": 32, "height": 32 },
+      "layout": "x = frame 0..7; y = profile.rowStart + variant 0..3"
+    },
+    {
+      "imageId": "world.water.tiles.static",
+      "file": "runtime/water-static.png",
+      "loader": "spritesheet",
+      "pixelSize": { "width": 128, "height": 256 },
+      "frameSize": { "width": 32, "height": 32 },
+      "layout": "x = variant 0..3; y = profile index 0..7"
+    },
+    {
+      "imageId": "world.water.depth-transitions",
+      "file": "runtime/water-depth-transitions.png",
+      "loader": "spritesheet",
+      "pixelSize": { "width": 1504, "height": 128 },
+      "frameSize": { "width": 32, "height": 32 },
+      "frameCount": 188,
+      "framesPerSecond": 4,
+      "layout": "x = canonical mask index; y = animation phase 0..3",
+      "neighborBits": { "north": 1, "east": 2, "south": 4, "west": 8, "northEast": 16, "southEast": 32, "southWest": 64, "northWest": 128 },
+      "cornerRule": "a diagonal bit is retained only when both adjacent cardinal bits are set",
+      "maskLookup": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 19, 23, 27, 31, 38, 39, 46, 47, 55, 63, 76, 77, 78, 79, 95, 110, 111, 127, 137, 139, 141, 143, 155, 159, 175, 191, 205, 207, 223, 239, 255]
+    },
+    {
+      "imageId": "world.water.surface-overlays",
+      "file": "runtime/water-overlays.png",
+      "loader": "spritesheet",
+      "pixelSize": { "width": 256, "height": 128 },
+      "frameSize": { "width": 32, "height": 32 },
+      "frameCount": 32,
+      "layout": "x = frame 0..7; rows = glint, shallow-caustic, current-ribbon, whitecap",
+      "alpha": true
+    },
+    {
+      "imageId": "world.water.home-shore-overlay",
+      "file": "runtime/water-home-shore-overlay.png",
+      "loader": "spritesheet",
+      "pixelSize": { "width": 3840, "height": 480 },
+      "frameSize": { "width": 480, "height": 480 },
+      "frameCount": 8,
+      "framesPerSecond": 5,
+      "origin": { "x": 0, "y": 0 },
+      "placement": "same top-left and scale as home.island.primary",
+      "alpha": true
+    }
+  ],
+  "previewImages": [
+    "runtime/water-contact-sheet.png",
+    "runtime/water-home-island-preview.png"
+  ],
+  "sourceImages": [
+    "source/water-deep-master.png",
+    "source/water-shallow-master.png",
+    "source/water-reef-master.png",
+    "source/water-current-master.png"
+  ],
+  "islandBlend": {
+    "authoredIslandUnderlay": "continue coastal water beneath transparent authored-island pixels",
+    "authoredIslandOverlay": "use only an asset-aligned shoreline clip above the authored composition",
+    "genericFoamRule": "never draw coarse generic foam above home.island.primary",
+    "topologyAuthority": "terrain and package metadata, never image pixels"
+  }
+}
