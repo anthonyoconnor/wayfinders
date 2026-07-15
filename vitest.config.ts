@@ -28,12 +28,12 @@ const project = (
 export default defineConfig({
   test: {
     projects: [
-      project("quick", ["tests/**/*.test.ts"], [
+      project("quick", ["tests/**/*.test.ts", "tests/feature-boundaries.test.mjs"], [
         ...integrationTests,
         "tests/performance/**/*.test.ts",
       ]),
       project("integration", integrationTests),
-      project("io", ["tests/**/*.test.mjs"]),
+      project("io", ["tests/**/*.test.mjs"], ["tests/feature-boundaries.test.mjs"]),
       project("performance", ["tests/performance/**/*.test.ts"]),
     ],
   },

@@ -50,14 +50,31 @@ Features may not import Phaser.
 
 ## Current compatibility seams
 
-- GameSimulation is the compatibility facade and current composition root. AM-2
-  will introduce GameSession contracts behind it.
-- prototypeConfig is the live tuning compatibility object. New sessions and
-  tests should use detached configuration values; AM-2 makes this instance-safe.
+- GameSession is the command/read-model boundary. It returns typed
+  SessionMutation revision flags and retains `compatibilitySimulation` only so
+  presentation can migrate incrementally.
+- GameSimulation remains the gameplay composition facade. New feature code is
+  registered through a feature public barrel; fishing is the reference slice.
+- SessionConfig is an immutable, isolated startup value. SessionBuilder and
+  tests/support/TestSessionBuilder are the supported construction paths.
+- prototypeConfig remains only as the live developer-panel compatibility
+  input. GameSimulation no longer changes it during regeneration.
 - WorldGrid chunks are storage units, not presentation activation. AM-3 and AM-5
   introduce spatial and active-chunk lifecycle boundaries.
 - WayfindersScene remains Phaser's lifecycle owner while presentation
   controllers are extracted by feature.
+
+## Feature folder convention
+
+Each migrated feature lives under `src/wayfinders/features/<feature>` and has
+one public `index.ts`. Contracts and renderer-neutral presentation adapters are
+public seams. Commands, selectors, state and system modules are private details
+re-exported deliberately from the public index when needed. Feature unit tests
+use small explicit worlds and never instantiate Phaser or GameSimulation.
+
+Run `npm run check:architecture` to enforce these rules. The checker rejects
+Phaser/rendering imports from features and private cross-feature or presentation
+imports with a file, line and suggested public boundary.
 
 ## Change-location rule
 

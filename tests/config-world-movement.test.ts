@@ -21,7 +21,7 @@ beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
 
 describe("prototype configuration", () => {
-  it("keeps detached simulation regeneration isolated from the live config", () => {
+  it("keeps regeneration isolated from both input and live configuration", () => {
     const liveSeed = prototypeConfig.world.seed;
     const detached = makeConfig();
     detached.world.seed = liveSeed + 1;
@@ -29,7 +29,8 @@ describe("prototype configuration", () => {
 
     expect(prototypeConfig.world.seed).toBe(liveSeed);
     simulation.regenerate(liveSeed + 2);
-    expect(detached.world.seed).toBe(liveSeed + 2);
+    expect(detached.world.seed).toBe(liveSeed + 1);
+    expect(simulation.generated.seed).toBe(liveSeed + 2);
     expect(prototypeConfig.world.seed).toBe(liveSeed);
   });
 

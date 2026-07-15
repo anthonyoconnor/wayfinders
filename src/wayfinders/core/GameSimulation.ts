@@ -1,8 +1,12 @@
 import {
-  patchPrototypeConfig,
   prototypeConfig,
+  type DeepReadonly,
   type PrototypeConfig,
 } from "../config/prototypeConfig";
+import {
+  materializeSessionConfig,
+  type SessionConfig,
+} from "../config/SessionConfig";
 import { PILOT_COLLISION_PROFILE_REGISTRY } from "../assets/CollisionProfileRegistry";
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import type {
@@ -20,8 +24,10 @@ import {
   type FishingShoalReadModel,
   type FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
-import { generateFishingShoalCatalog } from "../exploration/FishingShoalCatalog";
-import { FishingShoalSystem } from "../exploration/FishingShoalSystem";
+import {
+  createGeneratedFishingFeature,
+  type FishingFeatureSystem,
+} from "../features/fishing";
 import {
   ISLAND_DOSSIER_CONTRACT_VERSION,
   type IslandDossierDefinitionV1,
@@ -256,10 +262,9 @@ export class GameSimulation {
   private returnPathing!: ReturnQuery;
   private islandDossierSystem!: IslandDossierSystem;
   private surveySiteSystem!: SurveySiteSystem;
-  private fishingShoalSystem!: FishingShoalSystem;
+  private fishingFeature!: FishingFeatureSystem;
   private idolLocationDefinitionsValue: readonly Readonly<IdolLocationDefinition>[] = Object.freeze([]);
   private readonly generator: WorldGenerator;
-  private readonly usesPrototypeConfig: boolean;
   private expeditionId = 1;
   private activeExpedition = false;
   private lineage = new NavigatorLineageSystem();
@@ -284,16 +289,23 @@ export class GameSimulation {
   });
 
   constructor(
-    config: PrototypeConfig = prototypeConfig,
+    config: DeepReadonly<PrototypeConfig> = prototypeConfig,
     trace?: SimulationTraceSink,
     options: Readonly<GameSimulationOptions> = {},
   ) {
     this.trace = trace;
     this.deferForwardGuidance = options.deferredForwardGuidance === true;
-    this.usesPrototypeConfig = config === prototypeConfig;
+    // Immutable GameSession inputs receive a private compatibility view. The
+    // mutable prototype object remains a temporary live-tuning adapter until
+    // the developer panel migrates behind GameSession.
+    const runtimeConfig = Object.isFrozen(config)
+      ? materializeSessionConfig(config as SessionConfig)
+      : config as PrototypeConfig;
     this.config = {
-      ...config,
-      movement: PILOT_COLLISION_PROFILE_REGISTRY.createAuthoritativeMovementView(config.movement),
+      ...runtimeConfig,
+      movement: PILOT_COLLISION_PROFILE_REGISTRY.createAuthoritativeMovementView(
+        runtimeConfig.movement,
+      ),
     };
     this.generator = new WorldGenerator(this.config);
     this.regenerate(this.config.world.seed);
@@ -462,31 +474,31 @@ export class GameSimulation {
   }
 
   get fishingShoalDefinitions(): readonly Readonly<FishingShoalDefinition>[] {
-    return this.fishingShoalSystem.definitions;
+    return this.fishingFeature.definitions;
   }
 
   get provisionalFishingShoals(): readonly Readonly<FishingShoalProvisionalRecordV1>[] {
-    return this.fishingShoalSystem.provisional;
+    return this.fishingFeature.provisional;
   }
 
   get returnedFishingShoals(): readonly Readonly<FishingShoalReturnedRecordV1>[] {
-    return this.fishingShoalSystem.returned;
+    return this.fishingFeature.returned;
   }
 
   get activationEligibleFishingShoals(): readonly Readonly<FishingShoalReturnedRecordV1>[] {
-    return this.fishingShoalSystem.activationEligible;
+    return this.fishingFeature.activationEligible;
   }
 
   get fishingShoalConnectivityBuildCount(): number {
-    return this.fishingShoalSystem.connectivityBuildCount;
+    return this.fishingFeature.connectivityBuildCount;
   }
 
   get fishingShoalReadModels(): readonly Readonly<FishingShoalReadModel>[] {
-    return this.fishingShoalSystem.readModels();
+    return this.fishingFeature.readModels();
   }
 
   get fishingShoalRecordsRevision(): number {
-    return this.fishingShoalSystem.recordsRevision;
+    return this.fishingFeature.recordsRevision;
   }
 
   get surveyBudget(): Readonly<SurveyBudgetReadModel> {
@@ -499,7 +511,7 @@ export class GameSimulation {
 
   get fishingShoalInteraction(): Readonly<FishingShoalInteractionReadModel> | undefined {
     if (this.pendingRespawn || this.pendingGenerationHandoverValue || this.completionChoiceActive) return undefined;
-    return this.fishingShoalSystem.interactionNear({
+    return this.fishingFeature.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
     }, this.surveyBudget);
@@ -668,11 +680,6 @@ export class GameSimulation {
     if (this.interactionTransactionActive) return;
     PILOT_COLLISION_PROFILE_REGISTRY.assertMovementConfigCompatible(this.config);
     const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
-    if (this.usesPrototypeConfig) {
-      patchPrototypeConfig({ world: { seed: normalizedSeed } });
-    } else {
-      this.config.world.seed = normalizedSeed;
-    }
     this.generated = measureSimulationPhase(
       this.trace,
       "world-generation",
@@ -734,18 +741,12 @@ export class GameSimulation {
         this.surveySiteSystem.definitions,
       );
       this.completionStateValue = "in-progress";
-      this.fishingShoalSystem = new FishingShoalSystem(
-        this.world,
-        generateFishingShoalCatalog(
-          this.world,
-          this.generated.seed,
-          this.generated.landmarks.homeReturnTile,
-          undefined,
-          this.config,
-        ),
-        this.generated.landmarks.homeReturnTile,
-        this.config,
-      );
+      this.fishingFeature = createGeneratedFishingFeature({
+        world: this.world,
+        seed: this.generated.seed,
+        homeReturnTile: this.generated.landmarks.homeReturnTile,
+        config: this.config,
+      });
     });
     this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
@@ -1007,7 +1008,7 @@ export class GameSimulation {
     }
     this.interactionTransactionActive = true;
     try {
-      const result = this.fishingShoalSystem.applyInteraction(command, {
+      const result = this.fishingFeature.applyInteraction(command, {
         x: this.ship.currentTileX,
         y: this.ship.currentTileY,
       }, this.expeditionId, this.generation, this.surveyBudget);
@@ -1016,7 +1017,7 @@ export class GameSimulation {
       const expeditionStarted = !this.activeExpedition;
       if (expeditionStarted) this.activeExpedition = true;
       this.applySurveyProvisionCharge(result.provisionsSpent);
-      const definition = this.fishingShoalSystem.definitionFor(result.id);
+      const definition = this.fishingFeature.definitionFor(result.id);
       if (!definition) throw new Error(`Surveyed fishing shoal ${result.id} has no definition`);
       this.revision++;
       if (expeditionStarted) {
@@ -1333,7 +1334,7 @@ export class GameSimulation {
     const committed = this.knowledge.commitExpedition(expeditionId);
     const returnedIslandDossiers = this.islandDossierSystem.commitExpedition(expeditionId);
     const returnedSurveySites = this.surveySiteSystem.commitExpedition(expeditionId);
-    const returnedFishingShoals = this.fishingShoalSystem.commitExpedition(expeditionId);
+    const returnedFishingShoals = this.fishingFeature.commitExpedition(expeditionId);
     const returnedWreckSurveys = this.commitWreckSurveys(expeditionId);
     const returnedIdolLocations = this.idolLocationDefinitionsValue.filter(({ host }) => {
       if (host.kind === "island-dossier") {
@@ -1483,7 +1484,7 @@ export class GameSimulation {
     const reverted = this.knowledge.revertExpedition(expeditionId);
     const lostIslandDossiers = this.islandDossierSystem.revertExpedition(expeditionId);
     const lostSurveySites = this.surveySiteSystem.revertExpedition(expeditionId);
-    const lostFishingShoals = this.fishingShoalSystem.revertExpedition(expeditionId);
+    const lostFishingShoals = this.fishingFeature.revertExpedition(expeditionId);
     const lostWreckSurveys = this.revertWreckSurveys(expeditionId);
     const lostIdolLocations = this.idolLocationDefinitionsValue.filter(({ host }) => {
       if (host.kind === "island-dossier") {
@@ -1839,12 +1840,12 @@ export class GameSimulation {
 
   private observeFishingShoals(): number {
     if (!this.activeExpedition || this.pendingRespawn) return 0;
-    const observation = this.fishingShoalSystem.observeCurrentSight(
+    const observation = this.fishingFeature.observeCurrentSight(
       this.expeditionId,
       this.generation,
     );
     for (const record of observation.found) {
-      const definition = this.fishingShoalSystem.definitionFor(record.id);
+      const definition = this.fishingFeature.definitionFor(record.id);
       if (!definition) continue;
       this.events.emit("fishingShoalSighted", {
         id: definition.id,
