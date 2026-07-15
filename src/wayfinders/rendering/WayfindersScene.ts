@@ -258,7 +258,9 @@ export class WayfindersScene extends Phaser.Scene {
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.on(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
-    this.cameras.main.startFollow(this.shipRenderer.container, true, 0.08, 0.08);
+    // Fractional zoom and pixel rounding create visible one-pixel steps. A
+    // stronger bounded lerp keeps the first camera response below one frame.
+    this.cameras.main.startFollow(this.shipRenderer.container, false, 0.18, 0.18);
     this.configureCamera();
     this.renderWorld();
     this.eventUnsubscribers.push(onPrototypeConfigChanged((sections) => {
@@ -281,6 +283,9 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   override update(_time: number, delta: number): void {
+    // Derived guidance requested by the prior authoritative tick is applied
+    // before this frame's movement. Requests are coalesced by revision.
+    this.simulation.advanceForwardGuidance();
     const activeElement = document.activeElement;
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const textInputFocused = this.isTextEntryElement(activeElement);

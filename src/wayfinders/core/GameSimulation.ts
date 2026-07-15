@@ -5,6 +5,11 @@ import {
 } from "../config/prototypeConfig";
 import { PILOT_COLLISION_PROFILE_REGISTRY } from "../assets/CollisionProfileRegistry";
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
+import type {
+  ForwardGuidance,
+  ForwardGuidanceSource,
+  ForwardGuidanceStatus,
+} from "../exploration/ForwardGuidance";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
   type FishingShoalDefinition,
@@ -42,6 +47,7 @@ import {
   knowledgeTravelCost,
 } from "../exploration/ProvisionSystem";
 import { ReturnPathSystem, type ReturnPathResult } from "../exploration/ReturnPathSystem";
+import type { ReturnQuery } from "../exploration/ReturnQuery";
 import { VisibilitySystem } from "../exploration/VisibilitySystem";
 import {
   createSurveyBudget,
@@ -72,6 +78,7 @@ import {
   type WreckSurveyRejectionReasonV1,
 } from "../exploration/WreckSurveyContracts";
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
+import type { MovementAuthority } from "../navigation/MovementAuthority";
 import { GridGraph } from "../navigation/GridGraph";
 import {
   NAVIGATOR_GENERATION_HANDOVER_VERSION,
@@ -183,6 +190,14 @@ export interface SimulationSnapshot {
   debug: Readonly<DebugVisibilityState>;
 }
 
+export interface GameSimulationOptions {
+  /**
+   * Coalesces expensive forward-overlay recalculation until
+   * `advanceForwardGuidance`. Movement and return safety remain synchronous.
+   */
+  readonly deferredForwardGuidance?: boolean;
+}
+
 const NO_MOVEMENT: MovementResult = {
   movedDistancePixels: 0,
   collided: false,
@@ -233,12 +248,12 @@ export class GameSimulation {
   forwardRange!: ForwardRangeResult;
   returnPaths!: ReturnPathResult;
 
-  private movement!: MovementSystem;
+  private movement!: MovementAuthority;
   private visibility!: VisibilitySystem;
   private knowledge!: KnowledgeSystem;
   private provisions!: ProvisionSystem;
-  private forwardRanges!: ForwardRangeSystem;
-  private returnPathing!: ReturnPathSystem;
+  private forwardRanges!: ForwardGuidance;
+  private returnPathing!: ReturnQuery;
   private islandDossierSystem!: IslandDossierSystem;
   private surveySiteSystem!: SurveySiteSystem;
   private fishingShoalSystem!: FishingShoalSystem;
@@ -255,9 +270,26 @@ export class GameSimulation {
   private interactionTransactionActive = false;
   private riskResultsInitialized = false;
   private readonly trace: SimulationTraceSink | undefined;
+  private readonly deferForwardGuidance: boolean;
+  private forwardGuidancePending = false;
+  private forwardGuidanceRequestId = 0;
+  private forwardGuidanceAppliedRequestId = 0;
+  private forwardGuidanceSourceValue: ForwardGuidanceSource = Object.freeze({
+    requestId: 0,
+    worldRevision: 0,
+    knowledgeRevision: 0,
+    originX: 0,
+    originY: 0,
+    provisionUnits: 0,
+  });
 
-  constructor(config: PrototypeConfig = prototypeConfig, trace?: SimulationTraceSink) {
+  constructor(
+    config: PrototypeConfig = prototypeConfig,
+    trace?: SimulationTraceSink,
+    options: Readonly<GameSimulationOptions> = {},
+  ) {
     this.trace = trace;
+    this.deferForwardGuidance = options.deferredForwardGuidance === true;
     this.usesPrototypeConfig = config === prototypeConfig;
     this.config = {
       ...config,
@@ -269,6 +301,16 @@ export class GameSimulation {
 
   get world(): WorldGrid {
     return this.generated.grid;
+  }
+
+  get forwardGuidanceStatus(): ForwardGuidanceStatus {
+    return {
+      deferred: this.deferForwardGuidance,
+      pending: this.forwardGuidancePending,
+      requestedId: this.forwardGuidanceRequestId,
+      appliedId: this.forwardGuidanceAppliedRequestId,
+      source: this.forwardGuidanceSourceValue,
+    };
   }
 
   get currentExpeditionId(): number {
@@ -649,6 +691,10 @@ export class GameSimulation {
       0,
       this.config,
     );
+    this.forwardGuidancePending = false;
+    this.forwardGuidanceRequestId = 0;
+    this.forwardGuidanceAppliedRequestId = 0;
+    this.forwardGuidanceSourceValue = this.captureForwardGuidanceSource(0);
     this.movement = new MovementSystem(this.world, this.config);
     this.visibility = new VisibilitySystem(this.world, this.config);
     this.knowledge = new KnowledgeSystem(this.world, this.config);
@@ -1120,6 +1166,37 @@ export class GameSimulation {
   refreshRiskOverlays(): void {
     this.recalculateRiskOverlays();
     this.revision++;
+  }
+
+  /**
+   * Applies the newest coalesced forward-guidance request. Interactive callers
+   * invoke this once per frame, before authoritative simulation updates.
+   */
+  advanceForwardGuidance(): boolean {
+    if (!this.deferForwardGuidance || !this.forwardGuidancePending || !this.riskResultsInitialized) {
+      return false;
+    }
+
+    const source = this.forwardGuidanceSourceValue;
+    if (!this.isCurrentForwardGuidanceSource(source)) {
+      this.requestForwardGuidance();
+      return false;
+    }
+
+    const requestId = source.requestId;
+    const result = measureSimulationPhase(
+      this.trace,
+      "forward-guidance",
+      () => this.forwardRanges.recalculate(this.forwardRange, this.ship),
+    );
+    if (requestId !== this.forwardGuidanceRequestId) return false;
+
+    this.forwardRange = result;
+    this.forwardGuidanceAppliedRequestId = requestId;
+    this.forwardGuidancePending = false;
+    this.overlaysRevision++;
+    this.events.emit("returnStateChanged", undefined);
+    return true;
   }
 
   setDebugVisibility<K extends keyof DebugVisibilityState>(name: K, visible: boolean): void {
@@ -1780,11 +1857,15 @@ export class GameSimulation {
 
   private recalculateRiskOverlays(): void {
     if (this.riskResultsInitialized) {
-      this.forwardRange = measureSimulationPhase(
-        this.trace,
-        "forward-guidance",
-        () => this.forwardRanges.recalculate(this.forwardRange, this.ship),
-      );
+      if (this.deferForwardGuidance) {
+        this.requestForwardGuidance();
+      } else {
+        this.forwardRange = measureSimulationPhase(
+          this.trace,
+          "forward-guidance",
+          () => this.forwardRanges.recalculate(this.forwardRange, this.ship),
+        );
+      }
       this.returnPaths = measureSimulationPhase(
         this.trace,
         "return-query",
@@ -1801,6 +1882,11 @@ export class GameSimulation {
         "return-query",
         () => this.returnPathing.calculate(this.ship),
       );
+      this.forwardGuidanceSourceValue = this.captureForwardGuidanceSource(
+        this.forwardGuidanceRequestId,
+      );
+      this.forwardGuidanceAppliedRequestId = this.forwardGuidanceRequestId;
+      this.forwardGuidancePending = false;
       this.riskResultsInitialized = true;
     }
     this.overlaysRevision++;
@@ -1819,5 +1905,32 @@ export class GameSimulation {
     if (!this.forwardRanges.updateHeading(this.forwardRange, this.ship)) return;
     this.overlaysRevision++;
     this.events.emit("returnStateChanged", undefined);
+  }
+
+  private requestForwardGuidance(): void {
+    this.forwardGuidanceRequestId++;
+    this.forwardGuidanceSourceValue = this.captureForwardGuidanceSource(
+      this.forwardGuidanceRequestId,
+    );
+    this.forwardGuidancePending = true;
+  }
+
+  private captureForwardGuidanceSource(requestId: number): ForwardGuidanceSource {
+    return Object.freeze({
+      requestId,
+      worldRevision: this.world.collisionVersion,
+      knowledgeRevision: this.world.knowledgeVersion,
+      originX: this.ship.currentTileX,
+      originY: this.ship.currentTileY,
+      provisionUnits: availableProvisionUnits(this.ship),
+    });
+  }
+
+  private isCurrentForwardGuidanceSource(source: ForwardGuidanceSource): boolean {
+    return source.worldRevision === this.world.collisionVersion
+      && source.knowledgeRevision === this.world.knowledgeVersion
+      && source.originX === this.ship.currentTileX
+      && source.originY === this.ship.currentTileY
+      && source.provisionUnits === availableProvisionUnits(this.ship);
   }
 }

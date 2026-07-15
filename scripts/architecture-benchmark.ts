@@ -15,7 +15,7 @@ import {
   type WorldProfileName,
 } from "../tests/fixtures/worldProfiles.ts";
 
-const RESULT_VERSION = 1;
+const RESULT_VERSION = 2;
 const DEFAULT_UPDATE_SAMPLES = 25;
 const DEFAULT_CONSTRUCTION_SAMPLES = 3;
 const DEFAULT_WARMUP_CROSSINGS = 5;
@@ -40,6 +40,7 @@ interface ProfileResult {
   readonly construction?: Distribution;
   readonly ordinaryUpdate?: Distribution;
   readonly tileEntryUpdate?: Distribution;
+  readonly derivedGuidance?: Distribution;
   readonly phases: Partial<Record<SimulationPhase, Distribution>>;
   readonly resources?: {
     readonly loadedChunks: number;
@@ -191,7 +192,9 @@ function benchmarkProfile(
     let simulation: GameSimulation | undefined;
     for (let sample = 0; sample < constructionSamples; sample++) {
       const startedAt = performance.now();
-      simulation = new GameSimulation(createWorldProfileConfig(profileName), trace);
+      simulation = new GameSimulation(createWorldProfileConfig(profileName), trace, {
+        deferredForwardGuidance: true,
+      });
       constructionDurations.push(performance.now() - startedAt);
     }
     if (!simulation) throw new Error("Construction produced no simulation");
@@ -208,12 +211,17 @@ function benchmarkProfile(
     const ordinaryPhases = trace.snapshot();
 
     const tileEntryDurations: number[] = [];
+    const derivedGuidanceDurations: number[] = [];
     const tileTrace = new TraceCollector();
     const start = findEastboundRun(simulation, warmupCrossings + updateSamples + 1);
     if (!simulation.teleport(start)) throw new Error("Tile-entry fixture teleport was rejected");
+    simulation.advanceForwardGuidance();
     for (let warmup = 0; warmup < warmupCrossings; warmup++) {
       const movement = simulation.update({ turn: 0, throttle: 1 }, 0.4);
       if (!movement.tileChanged) throw new Error("Tile-entry warmup did not cross a tile");
+      if (!simulation.advanceForwardGuidance()) {
+        throw new Error("Tile-entry warmup did not apply derived guidance");
+      }
     }
     trace.clear();
     for (let sample = 0; sample < updateSamples; sample++) {
@@ -221,6 +229,13 @@ function benchmarkProfile(
       const movement = simulation.update({ turn: 0, throttle: 1 }, 0.4);
       tileEntryDurations.push(performance.now() - startedAt);
       if (!movement.tileChanged) throw new Error("Tile-entry fixture did not cross a tile");
+      tileTrace.appendFrom(trace);
+      trace.clear();
+      const guidanceStartedAt = performance.now();
+      if (!simulation.advanceForwardGuidance()) {
+        throw new Error("Tile-entry fixture did not apply derived guidance");
+      }
+      derivedGuidanceDurations.push(performance.now() - guidanceStartedAt);
       tileTrace.appendFrom(trace);
       trace.clear();
     }
@@ -233,6 +248,7 @@ function benchmarkProfile(
       construction: distribution(constructionDurations),
       ordinaryUpdate: distribution(ordinaryDurations),
       tileEntryUpdate: distribution(tileEntryDurations),
+      derivedGuidance: distribution(derivedGuidanceDurations),
       phases,
       resources,
       heapDeltaBytes: process.memoryUsage().heapUsed - heapBefore,

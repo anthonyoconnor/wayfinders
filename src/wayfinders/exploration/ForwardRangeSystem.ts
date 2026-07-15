@@ -9,6 +9,7 @@ import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState } from "../world/TileData";
 import { WorldGrid } from "../world/WorldGrid";
 import { availableProvisionUnits, knowledgeTravelCost } from "./ProvisionSystem";
+import type { ForwardGuidance } from "./ForwardGuidance";
 
 export interface ForwardRangeResult {
   /** 1 only for reachable cells which are currently Unknown. */
@@ -47,7 +48,7 @@ interface ForwardBudgetCache {
   sparePresentationIndices: number[];
 }
 
-export class ForwardRangeSystem {
+export class ForwardRangeSystem implements ForwardGuidance {
   private graph: GridGraph;
   private budgetCaches = new WeakMap<ForwardRangeResult, ForwardBudgetCache>();
   private readonly searchWorkspace = new DijkstraWorkspace();

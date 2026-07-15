@@ -10,6 +10,7 @@ import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState } from "../world/TileData";
 import { WorldGrid } from "../world/WorldGrid";
 import { availableProvisionUnits, knowledgeTravelCost } from "./ProvisionSystem";
+import type { ReturnQuery } from "./ReturnQuery";
 
 export enum ReturnRiskLevel {
   Hidden = 0,
@@ -48,7 +49,7 @@ interface ReturnBudgetCache {
   showRisk: boolean;
 }
 
-export class ReturnPathSystem {
+export class ReturnPathSystem implements ReturnQuery {
   private graph: GridGraph;
   private budgetCaches = new WeakMap<ReturnPathResult, ReturnBudgetCache>();
   private readonly searchWorkspace = new DijkstraWorkspace();

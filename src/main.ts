@@ -176,7 +176,9 @@ export let wayfindersGame: Phaser.Game | undefined;
 try {
   const scenes = applicationMode === "assets"
     ? [new AssetViewerScene()]
-    : [new WayfindersScene(new GameSimulation(prototypeConfig))];
+    : [new WayfindersScene(new GameSimulation(prototypeConfig, undefined, {
+      deferredForwardGuidance: true,
+    }))];
   wayfindersGame = createWayfindersGame(scenes);
   window.dispatchEvent(
     new CustomEvent("wayfinders:shell-ready", {

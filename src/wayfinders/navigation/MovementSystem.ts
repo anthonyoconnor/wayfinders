@@ -3,6 +3,7 @@ import type { GridPoint, MovementInput, MovementResult, ShipState, TravelSegment
 import { gridToWorld, worldToGrid } from "../world/CoordinateSystem";
 import { WorldGrid } from "../world/WorldGrid";
 import { firstShipCollisionTime } from "./CollisionGeometry";
+import type { MovementAuthority } from "./MovementAuthority";
 
 interface GridTraversalEntry extends GridPoint {
   tEnter: number;
@@ -93,7 +94,7 @@ export function createShipStateAtGrid(
   };
 }
 
-export class MovementSystem {
+export class MovementSystem implements MovementAuthority {
   constructor(
     private world: WorldGrid,
     private readonly config: PrototypeConfig = prototypeConfig,
