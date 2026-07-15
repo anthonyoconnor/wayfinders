@@ -5,6 +5,7 @@ import fishingShoal from "../src/wayfinders/assets/packages/fishing-shoal.json";
 import {
   ASSET_CANDIDATE_BUNDLE_VERSION,
   candidateImageRequirements,
+  mergeAssetCandidateMetadata,
   validateAssetCandidateBundle,
 } from "../src/wayfinders/assets/AssetCandidate";
 import { validateAuthoredAssetMetadata } from "../src/wayfinders/assets/AuthoredAssetContracts";
@@ -39,7 +40,31 @@ function bundle(metadataInput: unknown) {
 
 describe("GR-2.2 asset candidate validation", () => {
   it.each([homeIsland, playerBoat, fishingShoal])("accepts a complete package bundle", (metadata) => {
-    expect(validateAssetCandidateBundle(bundle(metadata)).metadata.assetId).toBe(metadata.assetId);
+    const candidate = validateAssetCandidateBundle(bundle(metadata));
+    expect(candidate.metadata.assetId).toBe(metadata.assetId);
+    expect(candidate.collisionIntent).toBe("preserve");
+  });
+
+  it.each(["preserve", "replace", "reset-to-coarse"] as const)(
+    "normalizes and preserves the explicit %s collision intent",
+    (collisionIntent) => {
+      const input = { ...bundle(homeIsland), collisionIntent };
+      expect(validateAssetCandidateBundle(input).collisionIntent).toBe(collisionIntent);
+    },
+  );
+
+  it("rejects invalid intent and an ambiguous replacement without collision metadata", () => {
+    expect(() => validateAssetCandidateBundle({
+      ...bundle(homeIsland),
+      collisionIntent: "overwrite",
+    })).toThrow(/collisionIntent/);
+
+    const legacy = structuredClone(homeIsland) as Record<string, unknown>;
+    delete legacy.collision;
+    expect(() => validateAssetCandidateBundle({
+      ...bundle(legacy),
+      collisionIntent: "replace",
+    })).toThrow(/requires explicit collision metadata/);
   });
 
   it("round-trips explicit collision profiles through candidate normalization", () => {
@@ -56,6 +81,47 @@ describe("GR-2.2 asset candidate validation", () => {
     delete legacy.collision;
     const metadata = validateAssetCandidateBundle(bundle(legacy)).metadata;
     expect(Object.hasOwn(metadata, "collision")).toBe(false);
+  });
+
+  it("preserves accepted collision by default when pure-merging a visual candidate", () => {
+    const current = validateAuthoredAssetMetadata(homeIsland);
+    const visualInput = structuredClone(homeIsland) as Record<string, unknown>;
+    visualInput.runtimeRevision = homeIsland.runtimeRevision + 1;
+    visualInput.sourceAssetId = "visual-only-replacement";
+    delete visualInput.collision;
+    const visual = validateAuthoredAssetMetadata(visualInput);
+
+    const merged = mergeAssetCandidateMetadata(current, visual);
+    expect(merged.collision).toEqual(current.collision);
+    expect(merged.runtimeRevision).toBe(homeIsland.runtimeRevision + 1);
+    expect(merged.sourceAssetId).toBe("visual-only-replacement");
+  });
+
+  it("applies explicit replace and reset intent in the pure visual merge helper", () => {
+    const current = validateAuthoredAssetMetadata(homeIsland);
+    const replacementInput = structuredClone(homeIsland) as Record<string, unknown>;
+    replacementInput.runtimeRevision = homeIsland.runtimeRevision + 1;
+    replacementInput.collision = {
+      kind: "hybrid-grid",
+      subcellSize: 8,
+      mixedCells: [{ x: 1, y: 1, solidRows: ["1000", "0000", "0000", "0000"] }],
+    };
+    const replacement = validateAuthoredAssetMetadata(replacementInput);
+
+    expect(mergeAssetCandidateMetadata(current, replacement, "replace").collision)
+      .toEqual(replacement.collision);
+    const reset = mergeAssetCandidateMetadata(current, replacement, "reset-to-coarse");
+    expect(Object.hasOwn(reset, "collision")).toBe(false);
+  });
+
+  it("does not introduce candidate collision under default preserve when accepted metadata is legacy", () => {
+    const legacyInput = structuredClone(homeIsland) as Record<string, unknown>;
+    delete legacyInput.collision;
+    const legacy = validateAuthoredAssetMetadata(legacyInput);
+    const candidate = validateAuthoredAssetMetadata(homeIsland);
+
+    const merged = mergeAssetCandidateMetadata(legacy, candidate);
+    expect(Object.hasOwn(merged, "collision")).toBe(false);
   });
 
   it("rejects malformed collision metadata before accepting candidate images", () => {

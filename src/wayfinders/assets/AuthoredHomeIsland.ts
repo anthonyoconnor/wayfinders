@@ -2,8 +2,9 @@ import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig
 import type { GridPoint } from "../core/types";
 import { GridGraph } from "../navigation/GridGraph";
 import { solidRowsToCollisionMask } from "../world/CollisionMask";
+import { KnowledgeState, TerrainType } from "../world/TileData";
 import type { WorldLandmarks } from "../world/WorldGenerator";
-import type { WorldGrid } from "../world/WorldGrid";
+import { WorldGrid } from "../world/WorldGrid";
 import {
   authoredTerrainToTerrainType,
   validateAuthoredAssetMetadata,
@@ -23,6 +24,25 @@ export interface AuthoredHomeIslandPlacement {
   topLeft: Readonly<GridPoint>;
   landmarks: Pick<WorldLandmarks, "homeCenter" | "harbour" | "dock" | "homeReturnTile">;
   service: Readonly<GridPoint>;
+}
+
+/**
+ * Runs package collision through the same exact ship-clearance checks used by
+ * world generation without mutating a live world. Intended for candidate
+ * validation before an authored package can be exported or accepted.
+ */
+export function validateAuthoredHomeIslandCollision(
+  metadata: Readonly<AuthoredHomeIslandMetadata>,
+  config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
+): Readonly<AuthoredHomeIslandMetadata> {
+  const localGrid = new WorldGrid(
+    metadata.grid.width,
+    metadata.grid.height,
+    config.navigation.chunkSize,
+  );
+  localGrid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  stampAuthoredHomeIsland(localGrid, metadata.grid.placementOrigin, metadata, config);
+  return metadata;
 }
 
 function translate(point: Readonly<GridPoint>, topLeft: Readonly<GridPoint>): GridPoint {

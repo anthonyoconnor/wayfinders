@@ -1,10 +1,10 @@
-import type { PrototypeConfig } from "../config/prototypeConfig";
+import type { PrototypeConfig } from "../config/prototypeConfig.ts";
 import {
   COLLISION_SUBCELL_SIZE,
   COLLISION_SUBCELLS_PER_TILE,
   isCollisionSubcellSolid,
-} from "../world/CollisionMask";
-import type { WorldGrid } from "../world/WorldGrid";
+} from "../world/CollisionMask.ts";
+import type { WorldGrid } from "../world/WorldGrid.ts";
 
 export interface AxisAlignedBounds {
   readonly left: number;

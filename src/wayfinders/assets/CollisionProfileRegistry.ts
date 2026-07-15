@@ -103,30 +103,25 @@ export class RuntimeCollisionProfileRegistry {
     return value;
   }
 
-  /**
-   * Gameplay currently consumes a square ship hull from PrototypeConfig. Reject
-   * startup when authored metadata and that runtime input disagree, so edits can
-   * never silently describe collision geometry that the simulation ignores.
-   */
-  assertMovementConfigCompatible(config: Pick<PrototypeConfig, "movement">): void {
+  /** Validates the shape consumed by the square-hull movement implementation. */
+  assertMovementConfigCompatible(_config: Pick<PrototypeConfig, "movement">): void {
     const profile = this.get("player-ship").profile;
-    const configuredHalfExtent = config.movement.shipCollisionHalfExtent;
     if (
       profile.kind !== "box"
       || profile.offset.x !== 0
       || profile.offset.y !== 0
       || profile.halfSize.width !== profile.halfSize.height
-      || profile.halfSize.width !== configuredHalfExtent
     ) {
       throw new RangeError(
-        `Player-ship collision profile must be a centered ${configuredHalfExtent}x${configuredHalfExtent} square half-size`,
+        "Player-ship collision profile must define a centered square half-size",
       );
     }
   }
 
   /**
    * Keeps the authored hull authoritative even though PrototypeConfig's other
-   * movement tuning remains intentionally live and mutable.
+   * movement tuning remains intentionally live and mutable. PrototypeConfig's
+   * hull is consulted only when a legacy package omits collision metadata.
    */
   createAuthoritativeMovementView(
     movement: PrototypeConfig["movement"],

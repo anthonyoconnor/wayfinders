@@ -4,6 +4,10 @@ import {
   type AuthoredAssetMetadata,
   type PixelSize,
 } from "./AuthoredAssetContracts.ts";
+import {
+  validateAssetCollisionIntent,
+  type AssetCollisionIntent,
+} from "./CollisionCandidate.ts";
 import type { AuthoredAssetRuntime } from "./PilotAssetRuntime.ts";
 
 export const ASSET_CANDIDATE_BUNDLE_VERSION = 1 as const;
@@ -28,9 +32,19 @@ export interface CandidateImage {
 
 export interface AssetCandidateBundle {
   bundleVersion: typeof ASSET_CANDIDATE_BUNDLE_VERSION;
+  /** Omission is normalized to preserve for legacy visual candidates. */
+  collisionIntent?: AssetCollisionIntent;
   metadata: Readonly<AuthoredAssetMetadata>;
   images: readonly Readonly<CandidateImage>[];
 }
+
+export interface ValidatedAssetCandidateBundle extends AssetCandidateBundle {
+  collisionIntent: AssetCollisionIntent;
+}
+
+export type AssetCandidateMetadataValidator = (
+  value: unknown,
+) => Readonly<AuthoredAssetMetadata>;
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -121,12 +135,18 @@ export function candidateImageRequirements(
   }
 }
 
-export function validateAssetCandidateBundle(value: unknown): Readonly<AssetCandidateBundle> {
+export function validateAssetCandidateBundle(value: unknown): Readonly<ValidatedAssetCandidateBundle> {
   const parsed = record(value, "asset candidate bundle");
   if (parsed.bundleVersion !== ASSET_CANDIDATE_BUNDLE_VERSION) {
     throw new RangeError(`Unsupported asset candidate bundle version ${String(parsed.bundleVersion)}`);
   }
+  const collisionIntent = parsed.collisionIntent === undefined
+    ? "preserve"
+    : validateAssetCollisionIntent(parsed.collisionIntent);
   const metadata = validateAuthoredAssetMetadata(parsed.metadata);
+  if (collisionIntent === "replace" && metadata.collision === undefined) {
+    throw new RangeError("replace collisionIntent requires explicit collision metadata");
+  }
   const requirements = candidateImageRequirements(metadata);
   if (!Array.isArray(parsed.images)) throw new TypeError("asset candidate bundle.images must be an array");
   const imagesById = new Map<string, Readonly<CandidateImage>>();
@@ -169,11 +189,44 @@ export function validateAssetCandidateBundle(value: unknown): Readonly<AssetCand
   }
   return Object.freeze({
     bundleVersion: ASSET_CANDIDATE_BUNDLE_VERSION,
+    collisionIntent,
     metadata,
     images: Object.freeze([...imagesById.values()].map(
       (image): Readonly<CandidateImage> => Object.freeze({ ...image }),
     )),
   });
+}
+
+/**
+ * Pure collision merge used when a visual candidate replaces package art or
+ * presentation metadata. Legacy candidates default to preserving the accepted
+ * collision field rather than silently reverting it.
+ */
+export function mergeAssetCandidateMetadata(
+  currentInput: unknown,
+  candidateInput: unknown,
+  collisionIntent: AssetCollisionIntent = "preserve",
+  validateMetadata: AssetCandidateMetadataValidator = validateAuthoredAssetMetadata,
+): Readonly<AuthoredAssetMetadata> {
+  const intent = validateAssetCollisionIntent(collisionIntent);
+  const current = validateMetadata(currentInput);
+  const candidate = validateMetadata(candidateInput);
+  if (current.assetId !== candidate.assetId || current.kind !== candidate.kind) {
+    throw new RangeError(
+      `Visual candidate ${candidate.assetId} cannot replace accepted package ${current.assetId}`,
+    );
+  }
+
+  const mergedInput = { ...candidate } as Record<string, unknown>;
+  if (intent === "preserve") {
+    if (current.collision === undefined) delete mergedInput.collision;
+    else mergedInput.collision = current.collision;
+  } else if (intent === "reset-to-coarse") {
+    delete mergedInput.collision;
+  } else if (candidate.collision === undefined) {
+    throw new RangeError("replace collisionIntent requires explicit collision metadata");
+  }
+  return validateMetadata(mergedInput);
 }
 
 export class CandidateAssetRuntime implements AuthoredAssetRuntime {

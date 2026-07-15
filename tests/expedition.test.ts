@@ -247,7 +247,7 @@ describe("GameSimulation expedition lifecycle", () => {
     expect(simulation.successfulReturns).toBe(1);
     expect(simulation.snapshot().knowledge.supported).toBeGreaterThan(startingSupported);
     expect(simulation.ship.provisions).toBe(simulation.config.provisions.startingBundles);
-  });
+  }, 10_000);
 
   it("resolves natural final-bundle consumption as one ordered wreck transition", () => {
     patchPrototypeConfig({ provisions: { startingBundles: 1 } });

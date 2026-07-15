@@ -28,6 +28,19 @@ function legacyPackages() {
   return { homeIsland, playerBoat, fishingShoal };
 }
 
+function packagesWithPlayerHalfExtent(halfExtent: number) {
+  const packages = legacyPackages();
+  const boatInput = structuredClone(playerBoatPackage) as Record<string, unknown>;
+  boatInput.collision = {
+    kind: "box",
+    offset: { x: 0, y: 0 },
+    halfSize: { width: halfExtent, height: halfExtent },
+  };
+  const playerBoat = validateAuthoredAssetMetadata(boatInput);
+  if (playerBoat.kind !== "player-boat") throw new Error("Expected boat package");
+  return { ...packages, playerBoat };
+}
+
 describe("GR-2.4 runtime collision profile registry", () => {
   it("registers every runtime object kind exactly once with immutable explicit profiles", () => {
     expect(PILOT_COLLISION_PROFILE_REGISTRY.entries.map(({ objectKind }) => objectKind))
@@ -69,11 +82,22 @@ describe("GR-2.4 runtime collision profile registry", () => {
     expect(PILOT_COLLISION_PROFILE_REGISTRY.get("fishing-shoal").source).toBe("authored-package");
   });
 
-  it("rejects a runtime ship hull that diverges from the authored package", () => {
+  it("accepts live config divergence because the authored package is authoritative", () => {
     expect(() => PILOT_COLLISION_PROFILE_REGISTRY.assertMovementConfigCompatible(makeConfig())).not.toThrow();
     expect(() => PILOT_COLLISION_PROFILE_REGISTRY.assertMovementConfigCompatible(
       makeConfig({ movement: { shipCollisionHalfExtent: 3 } }),
-    )).toThrow(/Player-ship collision profile/);
+    )).not.toThrow();
+  });
+
+  it("uses a valid future authored hull size instead of the configured fallback", () => {
+    const config = makeConfig({ movement: { shipCollisionHalfExtent: 14 } });
+    const registry = new RuntimeCollisionProfileRegistry(packagesWithPlayerHalfExtent(12), config);
+    const movement = registry.createAuthoritativeMovementView(config.movement);
+
+    expect(registry.get("player-ship").source).toBe("authored-package");
+    expect(movement.shipCollisionHalfExtent).toBe(12);
+    config.movement.shipCollisionHalfExtent = 3;
+    expect(movement.shipCollisionHalfExtent).toBe(12);
   });
 
   it("keeps the authored hull fixed while forwarding other live movement tuning", () => {
@@ -82,11 +106,19 @@ describe("GR-2.4 runtime collision profile registry", () => {
 
     config.movement.shipCollisionHalfExtent = 3;
     config.movement.shipSpeed = 91;
+    config.movement.turnRate = 137;
+    config.movement.collisionEpsilon = 0.125;
     expect(movement.shipCollisionHalfExtent).toBe(14);
     expect(movement.shipSpeed).toBe(91);
+    expect(movement.turnRate).toBe(137);
+    expect(movement.collisionEpsilon).toBe(0.125);
 
     movement.shipSpeed = 73;
+    movement.turnRate = 109;
+    movement.collisionEpsilon = 0.25;
     expect(config.movement.shipSpeed).toBe(73);
+    expect(config.movement.turnRate).toBe(109);
+    expect(config.movement.collisionEpsilon).toBe(0.25);
     expect(() => { movement.shipCollisionHalfExtent = 3; }).toThrow();
     expect(movement.shipCollisionHalfExtent).toBe(14);
   });
@@ -115,5 +147,8 @@ describe("GR-2.4 runtime collision profile registry", () => {
       profile: { kind: "empty" },
     });
     expect(() => registry.assertMovementConfigCompatible(config)).not.toThrow();
+    const movement = registry.createAuthoritativeMovementView(config.movement);
+    config.movement.shipCollisionHalfExtent = 5;
+    expect(movement.shipCollisionHalfExtent).toBe(3);
   });
 });

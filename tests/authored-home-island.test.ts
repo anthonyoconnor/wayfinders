@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   PILOT_HOME_ISLAND_METADATA,
   stampAuthoredHomeIsland,
+  validateAuthoredHomeIslandCollision,
 } from "../src/wayfinders/assets/AuthoredHomeIsland.ts";
 import {
   authoredCellBlocksMovement,
@@ -129,6 +130,28 @@ describe("GR-1.3 authored home-island placement", () => {
     };
 
     expect(() => stampAuthoredHomeIsland(grid, { x: 15, y: 15 }, metadata))
+      .toThrow(/anchors\.dock lacks ship clearance/);
+  });
+
+  it("validates package collision against exact clearance in an isolated local grid", () => {
+    expect(validateAuthoredHomeIslandCollision(PILOT_HOME_ISLAND_METADATA))
+      .toBe(PILOT_HOME_ISLAND_METADATA);
+
+    const dock = PILOT_HOME_ISLAND_METADATA.anchors.dock;
+    const metadata = {
+      ...PILOT_HOME_ISLAND_METADATA,
+      collision: {
+        kind: "hybrid-grid" as const,
+        subcellSize: 8 as const,
+        mixedCells: [{
+          x: dock.x,
+          y: dock.y,
+          solidRows: ["1000", "0000", "0000", "0000"] as const,
+        }],
+      },
+    };
+
+    expect(() => validateAuthoredHomeIslandCollision(metadata))
       .toThrow(/anchors\.dock lacks ship clearance/);
   });
 
