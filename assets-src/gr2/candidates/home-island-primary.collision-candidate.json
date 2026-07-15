@@ -1,0 +1,74 @@
+{
+  "bundleKind": "collision",
+  "bundleVersion": 1,
+  "assetId": "home.island.primary",
+  "baseRuntimeRevision": 2,
+  "baseCollisionFingerprint": "collision-v1-8118994f8d73b13a",
+  "collisionIntent": "replace",
+  "collision": {
+    "kind": "hybrid-grid",
+    "mixedCells": [
+      {
+        "solidRows": [
+          "1111",
+          "1111",
+          "1111",
+          "1111"
+        ],
+        "x": 13,
+        "y": 1
+      },
+      {
+        "solidRows": [
+          "1111",
+          "1111",
+          "1111",
+          "1111"
+        ],
+        "x": 14,
+        "y": 1
+      },
+      {
+        "solidRows": [
+          "1111",
+          "1111",
+          "1111",
+          "1111"
+        ],
+        "x": 13,
+        "y": 2
+      },
+      {
+        "solidRows": [
+          "1111",
+          "1111",
+          "1111",
+          "1111"
+        ],
+        "x": 14,
+        "y": 2
+      },
+      {
+        "solidRows": [
+          "1111",
+          "1111",
+          "1111",
+          "1111"
+        ],
+        "x": 13,
+        "y": 3
+      },
+      {
+        "solidRows": [
+          "1111",
+          "1111",
+          "1111",
+          "1111"
+        ],
+        "x": 14,
+        "y": 3
+      }
+    ],
+    "subcellSize": 8
+  }
+}
