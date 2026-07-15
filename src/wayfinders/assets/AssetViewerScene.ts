@@ -22,6 +22,7 @@ import {
   assetLibraryEntryById,
   type AssetLibraryEntry,
   type IslandReferenceLibraryEntry,
+  type ProductionCandidateLibraryEntry,
 } from "./AssetLibraryCatalog";
 import {
   createAuthoredFishingShoalVisual,
@@ -129,6 +130,11 @@ const AUTHORITATIVE_SHIP_HALF_EXTENT = PLAYER_PROFILE.kind === "box"
   ? PLAYER_PROFILE.halfSize.width
   : 14;
 const COLLISION_SAVE_ROUTE = "/__wayfinders/collision/save";
+const ASSET_REVIEW_ROUTE = "/__wayfinders/assets/review";
+
+type StandaloneLibraryEntry = IslandReferenceLibraryEntry | ProductionCandidateLibraryEntry;
+type ProductionPreviewMode = "source" | "prepared" | "compare";
+type ProductionReviewState = "pending" | "approved" | "rejected";
 
 function escapeHtml(value: string): string {
   return value
@@ -163,12 +169,19 @@ export class AssetViewerScene extends Phaser.Scene {
   private shipRenderer?: ShipRenderer;
   private shoalVisual?: AuthoredFishingShoalVisual;
   private referenceVisual?: Phaser.GameObjects.Image;
+  private comparisonVisual?: Phaser.GameObjects.Image;
   private assetLibraryBrowser?: HTMLElement;
   private selectedLibraryAssetId: string = AUTHORED_ASSET_IDS.homeIsland;
   private readonly acceptedMetadataByAssetId = new Map<AuthoredAssetId, Readonly<AuthoredAssetMetadata>>();
   private readonly collisionDraftsByAssetId = new Map<AuthoredAssetId, RuntimeCollisionProfile>();
   private referenceLoadRevision = 0;
-  private loadedReferenceTextureKey?: string;
+  private loadedReferenceTextureKeys: string[] = [];
+  private readonly productionPreviewModes = new Map<string, ProductionPreviewMode>();
+  private readonly productionCompareOpacity = new Map<string, number>();
+  private readonly productionReviewStates = new Map<string, ProductionReviewState>();
+  private readonly layerVisibility = new Map<string, boolean>();
+  private readonly layerOpacity = new Map<string, number>();
+  private productionReviewInFlight = false;
   private collisionSaveInFlight = false;
   private controlsAbort?: AbortController;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -286,8 +299,8 @@ export class AssetViewerScene extends Phaser.Scene {
     for (let y = 0; y <= STAGE.height; y += 32) grid.lineBetween(0, y, STAGE.width, y);
   }
 
-  private libraryTextureKey(assetId: string): string {
-    return `wayfinders:library:${assetId}`;
+  private libraryTextureKey(assetId: string, variant = "primary"): string {
+    return `wayfinders:library:${assetId}:${variant}`;
   }
 
   private selectedLibraryEntry(): Readonly<AssetLibraryEntry> {
@@ -301,46 +314,217 @@ export class AssetViewerScene extends Phaser.Scene {
     return entry.entryType === "reference-image" ? entry : undefined;
   }
 
+  private selectedStandaloneEntry(): Readonly<StandaloneLibraryEntry> | undefined {
+    const entry = this.selectedLibraryEntry();
+    return entry.entryType === "authored-package" ? undefined : entry;
+  }
+
+  private selectedProductionCandidate(): Readonly<ProductionCandidateLibraryEntry> | undefined {
+    const entry = this.selectedLibraryEntry();
+    return entry.entryType === "production-candidate" ? entry : undefined;
+  }
+
   private acceptedMetadata(assetId: AuthoredAssetId): Readonly<AuthoredAssetMetadata> | undefined {
     return this.acceptedMetadataByAssetId.get(assetId) ?? this.catalogAssets.metadata(assetId);
   }
 
-  private releaseReferenceTexture(exceptKey?: string): void {
-    const key = this.loadedReferenceTextureKey;
-    if (!key || key === exceptKey) return;
-    if (this.textures.exists(key)) this.textures.remove(key);
-    this.loadedReferenceTextureKey = undefined;
+  private releaseReferenceTexture(exceptKeys: readonly string[] = []): void {
+    const retained = new Set(exceptKeys);
+    for (const key of this.loadedReferenceTextureKeys) {
+      if (!retained.has(key) && this.textures.exists(key)) this.textures.remove(key);
+    }
+    this.loadedReferenceTextureKeys = this.loadedReferenceTextureKeys.filter((key) => retained.has(key));
   }
 
-  private beginReferencePreviewLoad(entry: Readonly<IslandReferenceLibraryEntry>): void {
+  private standaloneTextureSources(entry: Readonly<StandaloneLibraryEntry>): readonly Readonly<{
+    key: string;
+    url: string;
+  }>[] {
+    if (entry.entryType === "production-candidate") {
+      const source = entry.sourceLayers[0];
+      const prepared = entry.candidateLayers[0];
+      if (!source || !prepared) throw new RangeError(`${entry.id} needs source and prepared preview layers`);
+      return [
+        { key: this.libraryTextureKey(entry.id, "source"), url: source.url },
+        { key: this.libraryTextureKey(entry.id, "prepared"), url: prepared.url },
+      ];
+    }
+    const layer = entry.layers[0];
+    if (!layer) throw new RangeError(`${entry.id} has no preview layer`);
+    return [{ key: this.libraryTextureKey(entry.id, "reference"), url: layer.url }];
+  }
+
+  private beginReferencePreviewLoad(entry: Readonly<StandaloneLibraryEntry>): void {
     const revision = ++this.referenceLoadRevision;
-    const key = this.libraryTextureKey(entry.id);
+    const sources = this.standaloneTextureSources(entry);
+    const keys = sources.map(({ key }) => key);
     this.rebuildPreview();
-    if (this.textures.exists(key)) {
-      this.loadedReferenceTextureKey = key;
+    if (keys.every((key) => this.textures.exists(key))) {
+      this.releaseReferenceTexture(keys);
+      this.loadedReferenceTextureKeys = [...keys];
       this.rebuildPreview();
       this.fitSelectedLibraryAsset();
       return;
     }
 
-    const source = new Image();
-    source.decoding = "async";
-    source.addEventListener("load", () => {
+    const pending = sources
+      .filter(({ key }) => !this.textures.exists(key))
+      .map(({ key, url }) => new Promise<Readonly<{ key: string; image: HTMLImageElement }>>((resolve, reject) => {
+        const image = new Image();
+        image.decoding = "async";
+        image.addEventListener("load", () => resolve({ key, image }), { once: true });
+        image.addEventListener("error", () => reject(new Error(`Could not load ${url}`)), { once: true });
+        image.src = url;
+      }));
+    void Promise.all(pending).then((loaded) => {
       if (revision !== this.referenceLoadRevision || this.selectedLibraryAssetId !== entry.id) return;
       this.referenceVisual?.destroy();
+      this.comparisonVisual?.destroy();
       this.referenceVisual = undefined;
-      this.releaseReferenceTexture(key);
-      this.textures.addImage(key, source);
-      this.loadedReferenceTextureKey = key;
+      this.comparisonVisual = undefined;
+      this.releaseReferenceTexture(keys);
+      for (const { key, image } of loaded) {
+        if (!this.textures.exists(key)) this.textures.addImage(key, image);
+      }
+      this.loadedReferenceTextureKeys = [...keys];
       this.rebuildPreview();
       this.fitSelectedLibraryAsset();
-    }, { once: true });
-    source.addEventListener("error", () => {
+    }).catch(() => {
       if (revision !== this.referenceLoadRevision || this.selectedLibraryAssetId !== entry.id) return;
       this.title.setText(entry.name);
-      this.placement.setText("Source reference could not be loaded");
-    }, { once: true });
-    source.src = entry.layers[0].url;
+      this.placement.setText("Asset preview could not be loaded");
+    });
+  }
+
+  private layerStateKey(entryId: string, layerId: string): string {
+    return `${entryId}:${layerId}`;
+  }
+
+  private layerIsVisible(entryId: string, layer: Readonly<{ id: string; defaultVisible: boolean }>): boolean {
+    return this.layerVisibility.get(this.layerStateKey(entryId, layer.id)) ?? layer.defaultVisible;
+  }
+
+  private layerAlpha(entryId: string, layer: Readonly<{ id: string; opacity: number }>): number {
+    return this.layerOpacity.get(this.layerStateKey(entryId, layer.id)) ?? layer.opacity;
+  }
+
+  private createStandaloneVisual(
+    textureKey: string,
+    x: number,
+    maximumWidth: number,
+    maximumHeight: number,
+    alpha = 1,
+  ): Phaser.GameObjects.Image {
+    const texture = this.textures.get(textureKey);
+    const source = texture.getSourceImage() as { width?: number; height?: number } | undefined;
+    const width = source?.width ?? 1;
+    const height = source?.height ?? 1;
+    const scale = Math.min(maximumWidth / width, maximumHeight / height, 1);
+    return this.add.image(x, STAGE.centerY + 22, textureKey).setDepth(5).setScale(scale).setAlpha(alpha);
+  }
+
+  private drawProductionCollisionOverlay(
+    entry: Readonly<ProductionCandidateLibraryEntry>,
+    visual?: Phaser.GameObjects.Image,
+  ): void {
+    const graphics = this.collisionGraphics.clear();
+    if (!this.state.showFootprint || !visual?.visible) return;
+    const bounds = visual.getBounds();
+    const { grid } = entry.collisionDraft;
+    const subcellWidth = bounds.width / grid.subcellColumns;
+    const subcellHeight = bounds.height / grid.subcellRows;
+    graphics.fillStyle(0xff4e4e, 0.32);
+    for (const solid of entry.collisionDraft.solidSubcells) {
+      graphics.fillRect(
+        bounds.left + solid.x * subcellWidth,
+        bounds.top + solid.y * subcellHeight,
+        subcellWidth,
+        subcellHeight,
+      );
+    }
+    graphics.lineStyle(1, 0xa4d9d3, 0.18);
+    for (let x = 0; x <= grid.subcellColumns; x++) {
+      const worldX = bounds.left + x * subcellWidth;
+      graphics.lineBetween(worldX, bounds.top, worldX, bounds.bottom);
+    }
+    for (let y = 0; y <= grid.subcellRows; y++) {
+      const worldY = bounds.top + y * subcellHeight;
+      graphics.lineBetween(bounds.left, worldY, bounds.right, worldY);
+    }
+    graphics.lineStyle(2, 0x45d584, 0.78);
+    for (let x = 0; x <= grid.width; x++) {
+      const worldX = bounds.left + x * (bounds.width / grid.width);
+      graphics.lineBetween(worldX, bounds.top, worldX, bounds.bottom);
+    }
+    for (let y = 0; y <= grid.height; y++) {
+      const worldY = bounds.top + y * (bounds.height / grid.height);
+      graphics.lineBetween(bounds.left, worldY, bounds.right, worldY);
+    }
+  }
+
+  private rebuildStandalonePreview(entry: Readonly<StandaloneLibraryEntry>): void {
+    const sources = this.standaloneTextureSources(entry);
+    if (!sources.every(({ key }) => this.textures.exists(key))) {
+      this.title.setText(entry.name);
+      this.placement.setText("Loading asset preview\u2026");
+      this.guideGraphics.clear();
+      this.collisionGraphics.clear();
+      this.drawContrast();
+      this.syncSelectedAssetUi();
+      return;
+    }
+
+    this.guideGraphics.clear();
+    this.collisionGraphics.clear();
+    this.title.setText(entry.name);
+    if (entry.entryType === "reference-image") {
+      const layer = entry.layers[0];
+      const key = sources[0].key;
+      this.referenceVisual = this.createStandaloneVisual(key, STAGE.centerX, STAGE.width - 220, STAGE.height - 140);
+      this.referenceVisual
+        .setVisible(this.layerIsVisible(entry.id, layer))
+        .setAlpha(this.layerAlpha(entry.id, layer));
+      const source = this.textures.get(key).getSourceImage() as { width?: number; height?: number } | undefined;
+      const settlement = entry.reference.settlement ? ` \u00b7 ${entry.reference.settlement}` : "";
+      this.placement.setText(
+        `Source reference \u00b7 ${source?.width ?? 1}\u00d7${source?.height ?? 1} px${settlement} \u00b7 ${entry.reference.kind}`,
+      );
+    } else {
+      const [source, prepared] = sources;
+      const layer = entry.candidateLayers[0];
+      const mode = this.productionPreviewModes.get(entry.id) ?? "prepared";
+      const preparedAlpha = this.layerAlpha(entry.id, layer);
+      const preparedVisible = this.layerIsVisible(entry.id, layer);
+      let preparedVisual: Phaser.GameObjects.Image | undefined;
+      if (mode === "compare") {
+        this.referenceVisual = this.createStandaloneVisual(source.key, 350, 430, STAGE.height - 150);
+        preparedVisual = this.createStandaloneVisual(
+          prepared.key,
+          850,
+          430,
+          STAGE.height - 150,
+          preparedAlpha * (this.productionCompareOpacity.get(entry.id) ?? 1),
+        ).setVisible(preparedVisible);
+        this.comparisonVisual = preparedVisual;
+        this.placement.setText("Source on left \u00b7 prepared candidate on right \u00b7 collision draft overlays prepared art");
+      } else if (mode === "source") {
+        this.referenceVisual = this.createStandaloneVisual(source.key, STAGE.centerX, STAGE.width - 220, STAGE.height - 140);
+        this.placement.setText("Original selected source \u00b7 no runtime files changed");
+      } else {
+        preparedVisual = this.createStandaloneVisual(
+          prepared.key,
+          STAGE.centerX,
+          STAGE.width - 220,
+          STAGE.height - 140,
+          preparedAlpha,
+        ).setVisible(preparedVisible);
+        this.referenceVisual = preparedVisual;
+        this.placement.setText("Deterministically prepared candidate \u00b7 visual test keeps accepted runtime collision");
+      }
+      this.drawProductionCollisionOverlay(entry, preparedVisual);
+    }
+    this.drawContrast();
+    this.syncSelectedAssetUi();
   }
 
   private rebuildPreview(): void {
@@ -348,11 +532,19 @@ export class AssetViewerScene extends Phaser.Scene {
     this.shipRenderer?.destroy();
     this.shoalVisual?.image.destroy();
     this.referenceVisual?.destroy();
+    this.comparisonVisual?.destroy();
     this.homeVisual = undefined;
     this.shipRenderer = undefined;
     this.shoalVisual = undefined;
     this.referenceVisual = undefined;
+    this.comparisonVisual = undefined;
     this.developerVisualGraphics.clear();
+
+    const standalone = this.selectedStandaloneEntry();
+    if (standalone) {
+      this.rebuildStandalonePreview(standalone);
+      return;
+    }
 
     const reference = this.selectedReferenceEntry();
     if (reference) {
@@ -414,6 +606,11 @@ export class AssetViewerScene extends Phaser.Scene {
 
   private drawGuides(): void {
     this.guideGraphics.clear();
+    const candidate = this.selectedProductionCandidate();
+    if (candidate) {
+      this.drawProductionCollisionOverlay(candidate, this.comparisonVisual ?? this.referenceVisual);
+      return;
+    }
     if (this.selectedReferenceEntry()) {
       this.collisionGraphics.clear();
       return;
@@ -815,7 +1012,7 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionPointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.selectedReferenceEntry() || this.collisionSaveInFlight) return;
+    if (this.selectedStandaloneEntry() || this.collisionSaveInFlight) return;
     this.collisionProbeWorld = Object.freeze({ x: pointer.worldX, y: pointer.worldY });
     if (pointer.button === 1 || this.collisionSpaceHeld || this.collisionTool === "pan") {
       this.collisionPanGesture = Object.freeze({
@@ -861,7 +1058,7 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionPointerMove(pointer: Phaser.Input.Pointer): void {
-    if (this.selectedReferenceEntry() || this.collisionSaveInFlight) return;
+    if (this.selectedStandaloneEntry() || this.collisionSaveInFlight) return;
     this.collisionProbeWorld = Object.freeze({ x: pointer.worldX, y: pointer.worldY });
     const point = this.collisionSubcellAt(pointer.worldX, pointer.worldY);
     this.collisionHover = point;
@@ -976,6 +1173,28 @@ export class AssetViewerScene extends Phaser.Scene {
           <button data-library-action="next" type="button" aria-label="Next asset">Next →</button>
         </div>
         <div data-library="badges" class="asset-selection-badges"></div>
+        <section data-production-review class="production-review-panel" hidden>
+          <div class="production-preview-modes" role="group" aria-label="Candidate preview mode">
+            <button data-production-mode="source" type="button">Source</button>
+            <button data-production-mode="prepared" type="button">Prepared</button>
+            <button data-production-mode="compare" type="button">Compare</button>
+          </div>
+          <label class="production-opacity">Prepared opacity
+            <input data-production="opacity" type="range" min="0" max="1" step="0.05" value="1">
+            <output data-production="opacity-output">100%</output>
+          </label>
+          <label class="production-collision-toggle">
+            <input data-production="collision" type="checkbox" checked>
+            Show 32/8 px collision draft
+          </label>
+          <p data-production="notice" class="production-review-notice"></p>
+          <div class="production-review-actions">
+            <button data-production-review-action="approved" type="button">Approve for testing</button>
+            <button data-production-review-action="rejected" type="button">Reject</button>
+            <a data-production="test-link" class="production-test-link" href="#" hidden>Test visually in game</a>
+          </div>
+          <output data-production="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
+        </section>
         <details class="asset-selection-overview">
           <summary>Asset overview, layers and animation</summary>
           <div class="asset-selection-overview-body">
@@ -1183,8 +1402,18 @@ export class AssetViewerScene extends Phaser.Scene {
         <header><h3>${escapeHtml(group.name)}</h3><span>${group.entries.length}</span></header>
         <div class="asset-library-list">
           ${group.entries.map((entry) => {
-            const layer = entry.layers[0];
-            const settlement = entry.entryType === "reference-image" ? entry.reference.settlement : "runtime";
+            const settlement = entry.entryType === "reference-image"
+              ? entry.reference.settlement ?? entry.reference.kind
+              : entry.entryType === "production-candidate"
+                ? entry.reviewState
+                : "runtime";
+            const status = entry.entryType === "authored-package"
+              ? "Runtime"
+              : entry.entryType === "production-candidate"
+                ? entry.reviewState
+                : entry.reference.sequence === undefined
+                  ? "Reference"
+                  : String(entry.reference.sequence).padStart(2, "0");
             return `
               <button
                 type="button"
@@ -1194,13 +1423,13 @@ export class AssetViewerScene extends Phaser.Scene {
                 data-library-settlement="${escapeHtml(settlement)}"
                 data-library-search="${escapeHtml(`${entry.name} ${entry.subtitle} ${entry.id} ${entry.tags.join(" ")}`.toLowerCase())}"
               >
-                <span class="asset-library-thumb"><img loading="lazy" decoding="async" alt="" ${entry.entryType === "reference-image" ? `data-library-thumb-src="${escapeHtml(layer?.url ?? "")}"` : `src="${escapeHtml(layer?.url ?? "")}"`}></span>
+                <span class="asset-library-thumb"><img loading="lazy" decoding="async" alt="" data-library-thumb-src="${escapeHtml(entry.thumbnailUrl)}"></span>
                 <span class="asset-library-item-copy">
                   <strong>${escapeHtml(entry.name)}</strong>
                   <small>${escapeHtml(entry.subtitle)}</small>
                 </span>
                 <span class="asset-library-status" data-status="${escapeHtml(entry.entryType)}">
-                  ${entry.entryType === "authored-package" ? "Runtime" : String(entry.reference.sequence).padStart(2, "0")}
+                  ${escapeHtml(status)}
                 </span>
               </button>`;
           }).join("")}
@@ -1217,6 +1446,7 @@ export class AssetViewerScene extends Phaser.Scene {
           <select data-library-filter>
             <option value="all">All assets</option>
             <option value="authored-package">Runtime packages</option>
+            <option value="production-candidate">Production candidates</option>
             <option value="reference-image">Source examples</option>
             <option value="inhabited">Inhabited islands</option>
             <option value="uninhabited">Uninhabited islands</option>
@@ -1283,6 +1513,107 @@ export class AssetViewerScene extends Phaser.Scene {
       ?.addEventListener("click", () => this.stepLibrarySelection(-1), { signal });
     slot.querySelector<HTMLButtonElement>("[data-library-action=next]")
       ?.addEventListener("click", () => this.stepLibrarySelection(1), { signal });
+    for (const button of slot.querySelectorAll<HTMLButtonElement>("[data-production-mode]")) {
+      button.addEventListener("click", () => {
+        const entry = this.selectedProductionCandidate();
+        const mode = button.dataset.productionMode as ProductionPreviewMode | undefined;
+        if (!entry || !mode || !["source", "prepared", "compare"].includes(mode)) return;
+        this.productionPreviewModes.set(entry.id, mode);
+        this.rebuildPreview();
+      }, { signal });
+    }
+    slot.querySelector<HTMLInputElement>("[data-production=opacity]")
+      ?.addEventListener("input", (event) => {
+        const entry = this.selectedProductionCandidate();
+        if (!entry) return;
+        const value = Number((event.currentTarget as HTMLInputElement).value);
+        this.productionCompareOpacity.set(entry.id, Phaser.Math.Clamp(value, 0, 1));
+        this.rebuildPreview();
+      }, { signal });
+    slot.querySelector<HTMLInputElement>("[data-production=collision]")
+      ?.addEventListener("change", (event) => {
+        this.state.showFootprint = (event.currentTarget as HTMLInputElement).checked;
+        this.drawGuides();
+        this.syncSelectedAssetUi();
+      }, { signal });
+    for (const button of slot.querySelectorAll<HTMLButtonElement>("[data-production-review-action]")) {
+      button.addEventListener("click", () => {
+        const decision = button.dataset.productionReviewAction as ProductionReviewState | undefined;
+        if (decision === "approved" || decision === "rejected") {
+          void this.reviewProductionCandidate(decision);
+        }
+      }, { signal });
+    }
+    const layers = slot.querySelector<HTMLElement>("[data-library=layers]");
+    layers?.addEventListener("change", (event) => {
+      const input = event.target as HTMLInputElement;
+      const entry = this.selectedLibraryEntry();
+      const layerId = input.dataset.layerVisibility;
+      if (!layerId) return;
+      this.layerVisibility.set(this.layerStateKey(entry.id, layerId), input.checked);
+      this.rebuildPreview();
+    }, { signal });
+    layers?.addEventListener("input", (event) => {
+      const input = event.target as HTMLInputElement;
+      const entry = this.selectedLibraryEntry();
+      const layerId = input.dataset.layerOpacity;
+      if (!layerId) return;
+      this.layerOpacity.set(
+        this.layerStateKey(entry.id, layerId),
+        Phaser.Math.Clamp(Number(input.value), 0, 1),
+      );
+      this.rebuildPreview();
+    }, { signal });
+  }
+
+  private productionReviewState(entry: Readonly<ProductionCandidateLibraryEntry>): ProductionReviewState {
+    return this.productionReviewStates.get(entry.id) ?? entry.reviewState;
+  }
+
+  private reportProductionReview(message: string, error = false): void {
+    const status = document.querySelector<HTMLOutputElement>("[data-production=status]");
+    if (!status) return;
+    status.value = message;
+    status.dataset.state = error ? "error" : "ready";
+  }
+
+  private productionGameTestUrl(entry: Readonly<ProductionCandidateLibraryEntry>): string {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("mode");
+    url.searchParams.set("testAsset", entry.id);
+    return `${url.pathname}${url.search}${url.hash}`;
+  }
+
+  private async reviewProductionCandidate(decision: "approved" | "rejected"): Promise<void> {
+    const entry = this.selectedProductionCandidate();
+    if (!entry || this.productionReviewInFlight) return;
+    this.productionReviewInFlight = true;
+    this.syncSelectedAssetUi();
+    this.reportProductionReview(`Saving ${decision} decision\u2026`);
+    try {
+      const response = await fetch(ASSET_REVIEW_ROUTE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipeId: entry.id,
+          candidateFingerprint: entry.fingerprint,
+          decision,
+        }),
+      });
+      const payload = await response.json() as Readonly<{ error?: string; message?: string }>;
+      if (!response.ok) throw new Error(payload.error ?? `Review save failed with HTTP ${response.status}`);
+      this.productionReviewStates.set(entry.id, decision);
+      this.reportProductionReview(
+        decision === "approved"
+          ? "Approved for visual testing. Collision and gameplay metadata remain unchanged."
+          : "Rejected. Runtime files remain unchanged.",
+      );
+    } catch (error) {
+      this.reportProductionReview(this.errorMessage(error), true);
+    } finally {
+      this.productionReviewInFlight = false;
+      this.syncSelectedAssetUi();
+    }
   }
 
   private stepLibrarySelection(direction: -1 | 1): void {
@@ -1315,6 +1646,15 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private selectedAssetDetails(entry: Readonly<AssetLibraryEntry>): Readonly<AssetLibraryEntry>["details"] {
+    if (entry.entryType === "production-candidate") {
+      const reviewState = this.productionReviewState(entry);
+      return entry.details.map((section) => ({
+        ...section,
+        fields: section.fields.map((field) => field.id === "review"
+          ? { ...field, value: reviewState[0].toUpperCase() + reviewState.slice(1) }
+          : field),
+      }));
+    }
     if (entry.entryType !== "authored-package") return entry.details;
     const metadata = this.acceptedMetadata(entry.package.metadata.assetId) ?? entry.package.metadata;
     return entry.details.map((section) => ({
@@ -1354,9 +1694,12 @@ export class AssetViewerScene extends Phaser.Scene {
 
     const badges = document.querySelector<HTMLElement>("[data-library=badges]");
     if (badges) badges.innerHTML = [
-      `<span>${entry.entryType === "authored-package" ? "Runtime package" : "Source reference"}</span>`,
+      `<span>${entry.entryType === "authored-package" ? "Runtime package" : entry.entryType === "production-candidate" ? "Production candidate" : "Source reference"}</span>`,
       `<span>${escapeHtml(entry.collection)}</span>`,
       ...(entry.entryType === "reference-image" ? ["<span>RGB matte</span>"] : []),
+      ...(entry.entryType === "production-candidate"
+        ? [`<span>${escapeHtml(this.productionReviewState(entry))}</span>`]
+        : []),
     ].join("");
     const details = document.querySelector<HTMLElement>("[data-library=details]");
     if (details) details.innerHTML = this.selectedAssetDetails(entry).map((section) => `
@@ -1364,13 +1707,64 @@ export class AssetViewerScene extends Phaser.Scene {
         ${section.fields.map((field) => `<div><dt>${escapeHtml(field.name)}</dt><dd>${escapeHtml(String(field.value))}${field.unit ? ` ${escapeHtml(field.unit)}` : ""}</dd></div>`).join("")}
       </dl></section>`).join("");
     const layers = document.querySelector<HTMLElement>("[data-library=layers]");
-    if (layers) layers.innerHTML = entry.layers.map((layer) => `
+    if (layers && entry.entryType !== "authored-package") layers.innerHTML = entry.layers.map((layer) => {
+      const dimensions = layer.frameSize
+        ? `${layer.frameSize.width}\u00d7${layer.frameSize.height} frame`
+        : layer.pixelSize
+          ? `${layer.pixelSize.width}\u00d7${layer.pixelSize.height} px`
+          : "Source image";
+      return `<div class="asset-layer-row asset-layer-row--editable">
+        <input data-layer-visibility="${escapeHtml(layer.id)}" type="checkbox" aria-label="Show ${escapeHtml(layer.name)}" ${this.layerIsVisible(entry.id, layer) ? "checked" : ""}>
+        <span data-role="${escapeHtml(layer.role)}">${escapeHtml(layer.role)}</span>
+        <strong>${escapeHtml(layer.name)}</strong>
+        <small>${dimensions}</small>
+        <input data-layer-opacity="${escapeHtml(layer.id)}" type="range" min="0" max="1" step="0.05" aria-label="${escapeHtml(layer.name)} opacity" value="${this.layerAlpha(entry.id, layer)}">
+      </div>`;
+    }).join("");
+    if (layers && entry.entryType === "authored-package") layers.innerHTML = entry.layers.map((layer) => `
       <div class="asset-layer-row"><span data-role="${escapeHtml(layer.role)}">${escapeHtml(layer.role)}</span><strong>${escapeHtml(layer.name)}</strong><small>${layer.frameSize ? `${layer.frameSize.width}×${layer.frameSize.height} frame` : layer.pixelSize ? `${layer.pixelSize.width}×${layer.pixelSize.height} px` : "Source image"}</small></div>`).join("");
     const animationSection = document.querySelector<HTMLElement>("[data-library=animation-section]");
     const animations = document.querySelector<HTMLElement>("[data-library=animations]");
     if (animationSection) animationSection.hidden = entry.animations.length === 0;
     if (animations) animations.innerHTML = entry.animations.map((animation) => `
       <div class="asset-animation-row"><strong>${escapeHtml(animation.name)}</strong><span>${animation.frameCount} frames · ${animation.framesPerSecond} fps · ${animation.directionCount} direction${animation.directionCount === 1 ? "" : "s"}</span></div>`).join("");
+    const productionPanel = document.querySelector<HTMLElement>("[data-production-review]");
+    if (productionPanel) productionPanel.hidden = entry.entryType !== "production-candidate";
+    if (entry.entryType === "production-candidate") {
+      const mode = this.productionPreviewModes.get(entry.id) ?? "prepared";
+      const reviewState = this.productionReviewState(entry);
+      const opacity = this.productionCompareOpacity.get(entry.id) ?? 1;
+      for (const button of document.querySelectorAll<HTMLButtonElement>("[data-production-mode]")) {
+        button.dataset.active = String(button.dataset.productionMode === mode);
+      }
+      const opacityInput = document.querySelector<HTMLInputElement>("[data-production=opacity]");
+      const opacityOutput = document.querySelector<HTMLOutputElement>("[data-production=opacity-output]");
+      if (opacityInput) {
+        opacityInput.value = String(opacity);
+        opacityInput.disabled = mode !== "compare";
+      }
+      if (opacityOutput) opacityOutput.value = `${Math.round(opacity * 100)}%`;
+      const collision = document.querySelector<HTMLInputElement>("[data-production=collision]");
+      if (collision) collision.checked = this.state.showFootprint;
+      const notice = document.querySelector<HTMLElement>("[data-production=notice]");
+      if (notice) notice.textContent = entry.recipe.runtimeBinding
+        ? `${reviewState}. Visual game testing uses ${entry.recipe.runtimeBinding.assetId} and preserves its accepted collision mask.`
+        : `${reviewState}. This candidate has no runtime test binding.`;
+      for (const button of document.querySelectorAll<HTMLButtonElement>("[data-production-review-action]")) {
+        button.disabled = this.productionReviewInFlight;
+        button.dataset.active = String(button.dataset.productionReviewAction === reviewState);
+      }
+      const testLink = document.querySelector<HTMLAnchorElement>("[data-production=test-link]");
+      if (testLink) {
+        testLink.hidden = reviewState !== "approved" || !entry.recipe.runtimeBinding;
+        testLink.href = this.productionGameTestUrl(entry);
+      }
+      const item = this.assetLibraryBrowser?.querySelector<HTMLButtonElement>(
+        `[data-library-id="${CSS.escape(entry.id)}"]`,
+      );
+      const status = item?.querySelector<HTMLElement>(".asset-library-status");
+      if (status) status.textContent = reviewState;
+    }
     for (const packageOnly of document.querySelectorAll<HTMLElement>("[data-selected-package-only]")) {
       packageOnly.hidden = entry.entryType !== "authored-package";
     }
@@ -1778,15 +2172,21 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private fitSelectedLibraryAsset(): void {
-    const reference = this.selectedReferenceEntry();
-    const width = reference
-      ? (this.referenceVisual?.displayWidth ?? STAGE.width * 0.7)
+    const standalone = this.selectedStandaloneEntry();
+    const width = standalone
+      ? (this.comparisonVisual
+        ? Math.max(1, this.comparisonVisual.getBounds().right - (this.referenceVisual?.getBounds().left ?? 0))
+        : this.referenceVisual?.displayWidth ?? STAGE.width * 0.7)
       : Math.max(
         this.collisionTarget.width * this.collisionTarget.tileSize,
         this.collisionTarget.visualBounds.width,
       );
-    const height = reference
-      ? (this.referenceVisual?.displayHeight ?? STAGE.height * 0.7)
+    const height = standalone
+      ? Math.max(
+        this.referenceVisual?.displayHeight ?? 0,
+        this.comparisonVisual?.displayHeight ?? 0,
+        STAGE.height * 0.45,
+      )
       : Math.max(
         this.collisionTarget.height * this.collisionTarget.tileSize,
         this.collisionTarget.visualBounds.height,
@@ -1817,7 +2217,7 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionKeyDown(event: KeyboardEvent): void {
-    if (this.domControlsFocused(event.target) || this.collisionSaveInFlight) return;
+    if (this.selectedStandaloneEntry() || this.domControlsFocused(event.target) || this.collisionSaveInFlight) return;
     if (event.code === "Space") {
       this.collisionSpaceHeld = true;
       event.preventDefault();
@@ -2185,6 +2585,7 @@ export class AssetViewerScene extends Phaser.Scene {
     this.shipRenderer?.destroy();
     this.shoalVisual?.image.destroy();
     this.referenceVisual?.destroy();
+    this.comparisonVisual?.destroy();
     this.releaseReferenceTexture();
     this.assetLibraryBrowser?.remove();
     this.assetLibraryBrowser = undefined;

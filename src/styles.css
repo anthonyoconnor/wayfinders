@@ -1179,6 +1179,11 @@ a:focus-visible {
   background: rgba(37, 120, 78, 0.34);
 }
 
+.asset-library-status[data-status="production-candidate"] {
+  color: #c9f4ff;
+  background: rgba(38, 112, 142, 0.42);
+}
+
 .asset-selection-inspector {
   display: grid;
   gap: 0.65rem;
@@ -1231,6 +1236,83 @@ a:focus-visible {
   color: var(--shell-muted);
   font-size: 0.6rem;
   text-transform: uppercase;
+}
+
+.production-review-panel {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(83, 225, 141, 0.4);
+  border-radius: 0.45rem;
+  background: rgba(4, 30, 37, 0.7);
+}
+
+.production-review-panel[hidden],
+.production-test-link[hidden] {
+  display: none;
+}
+
+.production-preview-modes,
+.production-review-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.production-preview-modes button,
+.production-review-actions button,
+.production-test-link {
+  min-height: 2rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+  color: var(--shell-ink);
+  background: rgba(13, 45, 55, 0.8);
+  font-size: 0.66rem;
+  text-align: center;
+  cursor: pointer;
+}
+
+.production-preview-modes button[data-active="true"],
+.production-review-actions button[data-active="true"] {
+  border-color: rgba(83, 225, 141, 0.9);
+  background: rgba(36, 100, 75, 0.72);
+}
+
+.production-review-actions button:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.production-test-link {
+  display: grid;
+  place-items: center;
+  color: #b8f3d0;
+  text-decoration: none;
+}
+
+.production-opacity {
+  display: grid;
+  grid-template-columns: auto minmax(4rem, 1fr) 2.5rem;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--shell-muted);
+  font-size: 0.65rem;
+}
+
+.production-collision-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--shell-ink);
+  font-size: 0.68rem;
+}
+
+.production-review-notice {
+  margin: 0;
+  color: var(--shell-muted);
+  font-size: 0.65rem;
+  line-height: 1.45;
 }
 
 .asset-selection-details {
@@ -1320,6 +1402,15 @@ a:focus-visible {
 .asset-animation-row span {
   color: var(--shell-muted);
   font-size: 0.61rem;
+}
+
+.asset-layer-row--editable {
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+}
+
+.asset-layer-row--editable > input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
 }
 
 .asset-animation-row {

@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "recipeId": "production.island.colossal-wilderness",
-  "candidateFingerprint": "06ebee7538411e591fc8e6803b6ba62bc237bc7493ca340e3fad9f7cdd60bfba",
+  "candidateFingerprint": "487501c658b47caed5c71d3902389cb91da57e27f757a2388415d21a84105d68",
   "kind": "hybrid-grid-draft",
   "tileSize": 32,
   "subcellSize": 8,

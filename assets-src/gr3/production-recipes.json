@@ -182,7 +182,11 @@
         }
       ],
       "animations": [],
-      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 }
+      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 },
+      "runtimeBinding": {
+        "assetId": "home.island.primary",
+        "collisionIntent": "preserve"
+      }
     },
     {
       "id": "production.island.large-fortified-port",
@@ -219,7 +223,11 @@
         }
       ],
       "animations": [],
-      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 }
+      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 },
+      "runtimeBinding": {
+        "assetId": "home.island.primary",
+        "collisionIntent": "preserve"
+      }
     },
     {
       "id": "production.island.medium-abandoned-atoll",
@@ -256,7 +264,11 @@
         }
       ],
       "animations": [],
-      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 }
+      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 },
+      "runtimeBinding": {
+        "assetId": "home.island.primary",
+        "collisionIntent": "preserve"
+      }
     },
     {
       "id": "production.island.small-fishing-cay",
@@ -293,7 +305,11 @@
         }
       ],
       "animations": [],
-      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 }
+      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 },
+      "runtimeBinding": {
+        "assetId": "home.island.primary",
+        "collisionIntent": "preserve"
+      }
     },
     {
       "id": "production.island.tiny-volcanic-stack",
@@ -330,7 +346,11 @@
         }
       ],
       "animations": [],
-      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 }
+      "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 },
+      "runtimeBinding": {
+        "assetId": "home.island.primary",
+        "collisionIntent": "preserve"
+      }
     }
   ]
 }

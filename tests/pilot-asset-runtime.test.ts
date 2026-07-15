@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import homeIsland from "../src/wayfinders/assets/packages/home-island.json";
 import playerBoat from "../src/wayfinders/assets/packages/player-boat.json";
 import fishingShoal from "../src/wayfinders/assets/packages/fishing-shoal.json";
-import { AUTHORED_ASSET_IDS } from "../src/wayfinders/assets/AuthoredAssetContracts";
+import {
+  AUTHORED_ASSET_IDS,
+  validateAuthoredAssetMetadata,
+} from "../src/wayfinders/assets/AuthoredAssetContracts";
 import {
   PILOT_ASSET_CATALOG,
   queuePilotAssetPackages,
@@ -66,5 +69,26 @@ describe("GR-1.2 pilot asset loading", () => {
     expect(runtime.isAvailable(AUTHORED_ASSET_IDS.homeIsland)).toBe(false);
     expect(runtime.textureKey("home.island.primary.complete")).toBeUndefined();
     expect(runtime.diagnostics[0]?.message).toMatch(/Unsupported authored asset contract version/);
+  });
+
+  it("can test a visual override while retaining the accepted package metadata", () => {
+    const textureKeys = new Set([
+      ...PILOT_ASSET_CATALOG.flatMap(({ images }) => images.map(({ textureKey }) => textureKey)),
+      "wayfinders:production-test:small-cay",
+    ]);
+    const runtime = new PilotAssetRuntime({
+      metadata: (key) => metadataByKey.get(key),
+      hasTexture: (key) => textureKeys.has(key),
+    }, PILOT_ASSET_CATALOG, [{
+      assetId: AUTHORED_ASSET_IDS.homeIsland,
+      imageId: "home.island.primary.complete",
+      textureKey: "wayfinders:production-test:small-cay",
+    }]);
+
+    expect(runtime.diagnostics).toEqual([]);
+    expect(runtime.textureKey("home.island.primary.complete"))
+      .toBe("wayfinders:production-test:small-cay");
+    expect(runtime.metadata(AUTHORED_ASSET_IDS.homeIsland))
+      .toEqual(validateAuthoredAssetMetadata(homeIsland));
   });
 });

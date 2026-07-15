@@ -6,6 +6,8 @@ import {
   createCollisionSaveMiddleware,
   createCollisionSaver,
 } from "./collision-save-api.mjs";
+import { createAssetReviewMiddleware } from "./asset-review-api.mjs";
+import { reviewProductionCandidate } from "./production-asset-review.mjs";
 
 const DEFAULT_PORT = 5173;
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -50,11 +52,16 @@ try {
     expectedOrigin: collisionSaveOrigin(port),
     saveCollision,
   });
+  const assetReviewMiddleware = createAssetReviewMiddleware({
+    expectedOrigin: collisionSaveOrigin(port),
+    reviewCandidate: (request) => reviewProductionCandidate(request, { repositoryRoot }),
+  });
   const server = await createServer({
     plugins: [{
-      name: "wayfinders-local-collision-save",
+      name: "wayfinders-local-asset-writes",
       configureServer(viteServer) {
         viteServer.middlewares.use(collisionSaveMiddleware);
+        viteServer.middlewares.use(assetReviewMiddleware);
       },
     }],
     server: {

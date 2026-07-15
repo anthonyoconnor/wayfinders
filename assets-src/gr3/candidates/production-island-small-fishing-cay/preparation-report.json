@@ -4,8 +4,8 @@
   "recipeId": "production.island.small-fishing-cay",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "ebd0151596ff936f910596b3a6ac4d9cb12d7b8ae5ba3cfb7acca551ea50563c",
-  "jobKey": "38868d7c8a04595a6f61cd676441f73d5d1a8b2cdce7671db373623711e5ca3c",
+  "recipeHash": "39eac9bb008a6fc3c797c7d90d6c608e15ce80422ebf6be0c25a853fdf27c9ef",
+  "jobKey": "f1f7957ffde2136694a166fd88c784c66e255116f92123c58234ff52743872f6",
   "sources": [
     {
       "layerId": "base",
@@ -44,7 +44,11 @@
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-small-fishing-cay/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "9b4e031a607a9fcd314557d8a9c9c317b0003781d37d05b1fbb063e7fd2ac6cb"
+      "sha256": "29a934c420713a3eeb2c0bf2ebd68ad7a911c9552be48b8160888116a7d73b4e"
     }
+  },
+  "runtimeBinding": {
+    "assetId": "home.island.primary",
+    "collisionIntent": "preserve"
   }
 }

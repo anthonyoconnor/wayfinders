@@ -19,6 +19,13 @@ export interface PilotAssetDiagnostic {
   message: string;
 }
 
+/** Development-only visual substitution; metadata and collision remain unchanged. */
+export interface PilotAssetTextureOverride {
+  readonly assetId: AuthoredAssetId;
+  readonly imageId: string;
+  readonly textureKey: string;
+}
+
 /** Minimal presentation contract shared by the game, asset viewer and candidate preview. */
 export interface AuthoredAssetRuntime {
   metadata(assetId: AuthoredAssetId): Readonly<AuthoredAssetMetadata> | undefined;
@@ -39,13 +46,29 @@ export class PilotAssetRuntime {
   private readonly metadataById: ReadonlyMap<AuthoredAssetId, Readonly<AuthoredAssetMetadata>>;
   private readonly textureKeysByImageId: ReadonlyMap<string, string>;
 
-  constructor(source: Readonly<PilotAssetRuntimeSource>, catalog = PILOT_ASSET_CATALOG) {
+  constructor(
+    source: Readonly<PilotAssetRuntimeSource>,
+    catalog = PILOT_ASSET_CATALOG,
+    textureOverrides: readonly Readonly<PilotAssetTextureOverride>[] = [],
+  ) {
     const diagnostics: PilotAssetDiagnostic[] = [];
     const metadataById = new Map<AuthoredAssetId, Readonly<AuthoredAssetMetadata>>();
     const textureKeysByImageId = new Map<string, string>();
 
     for (const entry of catalog) {
       this.loadEntry(source, entry, metadataById, textureKeysByImageId, diagnostics);
+    }
+    for (const override of textureOverrides) {
+      const metadata = metadataById.get(override.assetId);
+      if (!metadata) {
+        diagnostics.push({ assetId: override.assetId, message: "visual test override target is unavailable" });
+      } else if (!referencedImageIds(metadata).includes(override.imageId)) {
+        diagnostics.push({ assetId: override.assetId, message: `visual test override cannot replace ${override.imageId}` });
+      } else if (!source.hasTexture(override.textureKey)) {
+        diagnostics.push({ assetId: override.assetId, message: `visual test texture ${override.textureKey} did not load` });
+      } else {
+        textureKeysByImageId.set(override.imageId, override.textureKey);
+      }
     }
 
     this.diagnostics = Object.freeze(diagnostics);
@@ -94,9 +117,12 @@ export class PilotAssetRuntime {
   }
 }
 
-export function createPilotAssetRuntime(scene: Phaser.Scene): PilotAssetRuntime {
+export function createPilotAssetRuntime(
+  scene: Phaser.Scene,
+  textureOverrides: readonly Readonly<PilotAssetTextureOverride>[] = [],
+): PilotAssetRuntime {
   return new PilotAssetRuntime({
     metadata: (key) => scene.cache.json.get(key),
     hasTexture: (key) => scene.textures.exists(key),
-  });
+  }, PILOT_ASSET_CATALOG, textureOverrides);
 }

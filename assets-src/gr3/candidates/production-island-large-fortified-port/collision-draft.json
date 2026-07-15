@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "recipeId": "production.island.large-fortified-port",
-  "candidateFingerprint": "e8d9820db17b5aaf3692c3ff1b9791b7aa2ac38db3e408327cbe639c9cb7396b",
+  "candidateFingerprint": "ddc4bfbef67357a64cef49736c81f7a7fc346dcc6a880c755f638d57b2985093",
   "kind": "hybrid-grid-draft",
   "tileSize": 32,
   "subcellSize": 8,

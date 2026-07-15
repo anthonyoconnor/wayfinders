@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "recipeId": "production.island.tiny-volcanic-stack",
-  "candidateFingerprint": "4db4e9a9aadd50ffdeb1d121adc103927b5822c1ad111876ea3f9cfa05fc247e",
+  "candidateFingerprint": "e98c544cd06360ae3b10e79f0b21f79bf8abcff55b659b701455f4d6b4af1ec2",
   "kind": "hybrid-grid-draft",
   "tileSize": 32,
   "subcellSize": 8,

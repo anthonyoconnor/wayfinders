@@ -4,8 +4,8 @@
   "recipeId": "production.island.large-fortified-port",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "4550c6397bb39031f6139e9d003c753749d68585f9b035020a8d2a3b3e915a31",
-  "jobKey": "e8d9820db17b5aaf3692c3ff1b9791b7aa2ac38db3e408327cbe639c9cb7396b",
+  "recipeHash": "d404054a6becc826a82ccd1127d1bfefed9c60b66869b5c758bbc36b344d5cdc",
+  "jobKey": "ddc4bfbef67357a64cef49736c81f7a7fc346dcc6a880c755f638d57b2985093",
   "sources": [
     {
       "layerId": "base",
@@ -44,7 +44,11 @@
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-large-fortified-port/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "e71539e230996ceb63027627a2dd7d41c03cde6a2b546c151b871813f2bf1e0a"
+      "sha256": "b83d054e9d736b5c61e1f4e12d08a894f2c05380d5bd668dc001451be3f86c0a"
     }
+  },
+  "runtimeBinding": {
+    "assetId": "home.island.primary",
+    "collisionIntent": "preserve"
   }
 }

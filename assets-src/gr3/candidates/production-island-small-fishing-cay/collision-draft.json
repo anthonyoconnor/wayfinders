@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "recipeId": "production.island.small-fishing-cay",
-  "candidateFingerprint": "38868d7c8a04595a6f61cd676441f73d5d1a8b2cdce7671db373623711e5ca3c",
+  "candidateFingerprint": "f1f7957ffde2136694a166fd88c784c66e255116f92123c58234ff52743872f6",
   "kind": "hybrid-grid-draft",
   "tileSize": 32,
   "subcellSize": 8,

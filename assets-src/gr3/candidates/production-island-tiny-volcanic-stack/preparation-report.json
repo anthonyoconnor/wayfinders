@@ -4,8 +4,8 @@
   "recipeId": "production.island.tiny-volcanic-stack",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "1e8c6a59a78d5b82098699eab35ab5833fbdfa32308b82828862c0ed90122822",
-  "jobKey": "4db4e9a9aadd50ffdeb1d121adc103927b5822c1ad111876ea3f9cfa05fc247e",
+  "recipeHash": "fbbf95d9837abe2c0ba98e08c628f288f7bee75a13a0f9f475eba14ffddb816c",
+  "jobKey": "e98c544cd06360ae3b10e79f0b21f79bf8abcff55b659b701455f4d6b4af1ec2",
   "sources": [
     {
       "layerId": "base",
@@ -44,7 +44,11 @@
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "0431c21f2dfc66ea2b466dc9aa0c895446567b822ea143f67dc5800789e85909"
+      "sha256": "570034039d62ad806b9b15d2235025d2dcfa2e63d16ed91dd2d64915a7f85bdd"
     }
+  },
+  "runtimeBinding": {
+    "assetId": "home.island.primary",
+    "collisionIntent": "preserve"
   }
 }
