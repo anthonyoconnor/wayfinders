@@ -4,8 +4,9 @@ Status: active implementation plan. The accepted gameplay baseline runs through
 `GP-4.1`, and the accepted graphics/tooling baseline runs through `GR-2.5`.
 The user verified the saved home-island collision in gameplay, so the separate
 `GR-2.6` acceptance pass is skipped for now. `GR-3.1` through `GR-3.4` are an
-authorized ordered batch for a deliberately lightweight production-asset
-prototype.
+implemented lightweight production-asset prototype. `GR-3.5` through `GR-3.8`
+are defined but not started; they close the remaining UI-only intake,
+collision-finalization and isolated sea-trial gaps.
 
 This document records active, upcoming and explicitly deferred work. Concise
 completion state is retained here for dependency clarity; detailed acceptance
@@ -58,11 +59,12 @@ The completed `GR-1` and `GR-2.1` through `GR-2.5` work proved authored runtime
 packages, the shared asset library, hybrid collision authoring and direct
 repository save. Their acceptance evidence is in the archive.
 
-No next gameplay milestone is currently defined. The immediate graphics work
-is the authorized `GR-3.1` through `GR-3.4` prototype: prepare new asset
-variations, browse them without sailing to them, review collision candidates and
-move selected visuals toward in-game testing without building a general-purpose
-art, animation or generation suite.
+No next gameplay milestone is currently defined. The implemented `GR-3.1`
+through `GR-3.4` prototype can prepare, browse and review candidates, but still
+requires command-line preparation/promotion and does not let a pending island
+finalize its own collision or enter a faithful isolated game test. The next
+defined graphics work is `GR-3.5` through `GR-3.8`; it removes those gaps without
+building a general-purpose art, animation or generation suite.
 
 The architecture audit is now an upcoming work track. `AM-0` through `AM-5`
 form its planned dependency order. Scheduling relative to other upcoming work
@@ -320,9 +322,10 @@ route or interaction behavior regresses.
 
 ### GR-3 — Asset production pipeline
 
-Status: `GR-3.1` through `GR-3.4` are authorized as an ordered prototype batch.
-They improve the source-to-preview-to-game-testing loop without authorizing a
-general renderer rewrite or broad automatic runtime catalog expansion.
+Status: `GR-3.1` through `GR-3.4` are implemented. `GR-3.5` through `GR-3.8`
+are defined but not started. The track improves the source-to-preview-to-game-
+testing loop without authorizing a general renderer rewrite or broad automatic
+runtime catalog expansion.
 
 #### GR-3.1 — Production asset specification and recipe manifest
 
@@ -420,6 +423,103 @@ without manual catalog edits; source-to-runtime lineage is complete; stale or
 unreviewed outputs fail the normal verification gate; numeric budgets pass; and
 the batch demonstrates a repeatable production cadence.
 
+#### GR-3.5 — Guided UI source intake and recipe creation
+
+Status: defined, not started.
+
+Turn every usable source/reference record into an actionable library item. A
+reference such as `island-01-crescent-cay-uninhabited` gains **Import and
+prepare**, and the same flow accepts a new local image. A compact guided form
+asks only for information that cannot be inferred safely: asset name/family,
+stable ID confirmation, intended size, layer roles, passable-versus-solid
+collision semantics and an optional runtime/test category. It supplies sensible
+family defaults and writes the internal recipe itself.
+
+Preparation runs behind the existing constrained local development-server API,
+with progress, validation errors, retry and cancel represented in the library.
+No asset-production command or hand-authored JSON is part of the operator flow.
+The standard act of launching the development app is outside this pipeline
+scope; after the library is open, intake through promotion must be UI-driven.
+
+Acceptance gate: starting from the Crescent Cay reference or a newly selected
+PNG, a user can create one stable pending candidate without editing a file or
+opening a terminal; inferred/defaulted values are visible before confirmation;
+refreshing the library preserves the new record; re-import cannot silently
+duplicate or overwrite an existing identity; and invalid input produces a
+recoverable field-level error rather than partial repository output.
+
+#### GR-3.6 — Best-effort collision seed on import
+
+Status: defined, not started.
+
+Generate a useful first collision draft as part of island preparation. Use the
+prepared transparency/matte boundary and connected shoreline geometry to seed
+sparse `8`-pixel collision subcells within the `32`-pixel navigation grid.
+Prefer a conservative shoreline that blocks visible land while retaining coves,
+channels and surrounding water; do not fill the entire image rectangle. Family
+semantics still win: shoals and declared passable effects remain explicitly
+empty, and uncertain results remain editable drafts rather than accepted
+gameplay authority.
+
+Show the generated mask, its method and any warnings immediately after import.
+The algorithm must be deterministic for the same source and form settings, but
+does not need computer-vision sophistication or a promise of final-quality
+collision.
+
+Acceptance gate: each of the 20 island examples receives a deterministic,
+non-empty shoreline draft aligned to its prepared image; transparent exterior
+water is not broadly marked solid; thin projections and concave shorelines are
+represented at `8`-pixel resolution where detectable; passable families remain
+empty; and every generated result enters pending review without becoming a
+runtime mask automatically.
+
+#### GR-3.7 — Pending candidate authoring and UI completion
+
+Status: defined, not started.
+
+Make the pending record the single place to finish an asset. Reuse the existing
+paint/erase, `8`/`32`-pixel brush, selection, fill, undo/redo and hull-probe tools
+against the candidate's own collision draft. Present structured controls for
+the recipe details that matter in the prototype—name, family, dimensions,
+layer order/visibility/opacity, collision semantics and test binding—without
+exposing raw JSON as the editing interface.
+
+**Save candidate** writes the source-side recipe and collision draft through a
+narrow validated API, re-prepares affected output, creates a new fingerprint
+and returns any earlier approval to pending. Approval, rejection, validation
+and promotion also become UI actions with clear current/stale/error states.
+Preview-only controls must be visibly distinguished from saved recipe values.
+
+Acceptance gate: a user can refine a generated shoreline, change supported
+asset settings, save, refresh and see the exact edits again; changed source,
+recipe or mask invalidates the previous fingerprint and review; invalid masks
+or settings cannot be approved or promoted; and a valid candidate can complete
+prepare, validate, approve/reject and promote without commands or manual JSON.
+
+#### GR-3.8 — Isolated single-island sea trial
+
+Status: defined, not started.
+
+Replace the current home-island visual substitution with an explicit candidate
+trial launched from the pending editor. The trial world contains only open
+water, the player boat and the selected island centered at a deterministic test
+position. It loads that candidate's actual prepared layer stack and saved
+collision draft; it must not borrow the home island's image, footprint or
+collision. Pending candidates may be trialed before approval so collision can
+be iterated quickly.
+
+Provide safe boat spawn/reset positions around the island, collision and
+navigation-grid debug overlays, and a direct return to the same candidate in
+the library. Trial state is disposable and is not gameplay-session saving or
+world-catalog promotion.
+
+Acceptance gate: the selected candidate fingerprint, image dimensions, origin
+and collision revision are visible in the trial; no home island, other islands,
+shoals, sites or discoveries are present; the boat can circle the shoreline and
+is blocked exactly by the saved candidate mask; collision edits followed by
+save/retrial are reflected immediately; and returning to the library restores
+the same pending record and review state.
+
 ## Forward dependency
 
 ```mermaid
@@ -441,6 +541,10 @@ flowchart LR
     AM3 --> AM4["AM-4 high-density world pipeline"]
     AM4 --> AM5["AM-5 active-chunk presentation"]
     AM5 -. "only if measured" .-> AM6["AM-6 hierarchy or workers"]
+    GR34 --> GR35["GR-3.5 guided UI intake"]
+    GR35 --> GR36["GR-3.6 collision seed"]
+    GR36 --> GR37["GR-3.7 pending candidate authoring"]
+    GR37 --> GR38["GR-3.8 isolated sea trial"]
 ```
 
 The graph shows acceptance dependencies, not authorization. Viewer and intake
@@ -449,7 +553,8 @@ serialized gate; isolated tooling must not fork rendering or gameplay rules.
 
 ## Explicitly deferred
 
-- Broad automatic runtime-asset expansion until `GR-3.4` proves the pipeline and a
+- Broad automatic runtime-asset expansion until the defined `GR-3.5` through
+  `GR-3.8` UI-native intake, authoring and sea-trial loop is implemented and a
   separate content batch is explicitly authorized.
 - Authoritative tribe economy/output, selectable voyage loadouts, generic
   wreck salvage/recovery and automatic trade gameplay.
@@ -476,8 +581,7 @@ serialized gate; isolated tooling must not fork rendering or gameplay rules.
 The user authorized `GR-3.1` through `GR-3.4` as one ordered implementation
 batch. `GR-2.6` is skipped for now. A new gameplay minor, automatic broad
 runtime rollout, new world-placement authority or scope beyond this prototype
-still requires explicit authorization.
-The `AM-0` through `AM-5` architecture sequence is recorded as upcoming
-work, not as work already started; its detailed scope and gates are owned by
-`architecture_milestones.md`. `AM-6` remains evidence-gated and `AM-7`
-remains deferred.
+still requires explicit authorization. The `AM-0` through `AM-5` architecture
+sequence is recorded as upcoming work, not as work already started; its detailed
+scope and gates are owned by `architecture_milestones.md`. `AM-6` remains
+evidence-gated and `AM-7` remains deferred.

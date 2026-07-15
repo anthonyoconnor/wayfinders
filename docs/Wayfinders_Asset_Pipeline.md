@@ -2,8 +2,10 @@
 
 Status: active. `GR-1.1` through `GR-2.5` are implemented and accepted. The user
 verified the saved home-island collision in gameplay, so `GR-2.6` is skipped for
-now. `GR-3.1` through `GR-3.4` are authorized as a lightweight production
-prototype focused on rapid preparation, preview, review and game testing.
+now. `GR-3.1` through `GR-3.4` implement a lightweight production prototype.
+`GR-3.5` through `GR-3.8` are defined but not started; their goal is to move
+intake, preparation, collision finalization, validation, promotion and isolated
+game testing behind the asset-library UI.
 
 Gameplay-session saving is not part of the active baseline. Development-only
 reviewed asset-package writes are repository authoring, not voyage persistence;
@@ -276,6 +278,29 @@ recorded for audit and is never promoted implicitly. The normal asset check
 rejects stale reviews, modified artifacts, stale manifests and orphaned public
 production files. See [Asset production quickstart](ASSET_PRODUCTION_QUICKSTART.md)
 for the operator workflow and island/shoal examples.
+
+## Defined UI-native production follow-up
+
+`GR-3.5` through `GR-3.8` replace the remaining operator-facing command and JSON
+steps. They are planning scope only and have not been implemented:
+
+1. `GR-3.5` adds **Import and prepare** to usable references and a guided local
+   image intake form. The form creates the internal recipe and invokes
+   preparation through the constrained development-server boundary.
+2. `GR-3.6` generates a deterministic best-effort `32`/`8` shoreline mask for
+   imported islands, while preserving explicit passable semantics for shoals
+   and other non-blocking assets.
+3. `GR-3.7` makes pending candidates editable: collision painting and the small
+   set of supported recipe fields save directly, refresh fingerprints and review
+   state, and expose validation/approval/promotion as UI actions.
+4. `GR-3.8` launches a disposable empty-ocean trial containing only the boat and
+   selected candidate, using that candidate's prepared art and collision rather
+   than substituting art over the home-island package.
+
+The internal files remain versioned JSON for validation, reproducibility and
+reviewable diffs, but the operator does not create or edit them manually. This
+follow-up remains a focused prototype workflow, not a browser filesystem,
+general image editor or production world-placement system.
 
 ## Runtime separation
 

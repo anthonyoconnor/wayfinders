@@ -1,6 +1,6 @@
 # Wayfinders implementation status
 
-Last verified: 2026-07-14.
+Last verified: 2026-07-15.
 
 This is the operational handoff for a new development session. It records what
 is running, the latest verification baseline and the gaps that matter before
@@ -11,13 +11,16 @@ architecture rules or completed milestone evidence.
 
 - The accepted gameplay baseline runs through `GP-4.1`.
 - The graphics/tooling baseline runs through the implemented `GR-3.4` prototype.
+- `GR-3.5` through `GR-3.8` are defined but not started. They specify guided
+  UI-only source intake, best-effort shoreline collision seeding, editable
+  pending-candidate recipes/masks and a true isolated single-island sea trial.
 - No later gameplay milestone is authorized.
 - `GR-2.1` through `GR-2.5` are accepted. The workbench includes a
   browsable 23-entry asset library, retained per-asset drafts, `8`/`32`-pixel
   brushes and validated direct package saves. The user verified the saved home
   collision in gameplay. `GR-2.6` is skipped for now rather than blocking asset
   production on an unnecessary broader acceptance exercise.
-- `GR-3.1` through `GR-3.4` are authorized as an ordered prototype batch. The
+- `GR-3.1` through `GR-3.4` are implemented as an ordered prototype batch. The
   focus is rapid source preparation, library preview, reviewed collision drafts
   and selected in-game testing—not a general art, animation or generation tool.
 - `GR-3.1` is implemented: a strict version-1 recipe manifest covers all three
@@ -39,6 +42,10 @@ architecture rules or completed milestone evidence.
   deterministic public lineage, review/readiness summaries and stale-output
   checks form the lightweight handoff gate. The current five candidates remain
   pending rather than being treated as artistically approved by tooling.
+- The current production workflow still requires commands for preparation and
+  promotion, and pending candidates cannot edit their own mask or structured
+  recipe values. Those are known gaps assigned to `GR-3.5` through `GR-3.8`, not
+  capabilities of the current baseline.
 - Gameplay-session saving is intentionally absent. Every launch or browser
   refresh starts a fresh voyage. Development-only asset package saves are a
   separate authoring operation and do not persist gameplay state.
