@@ -5,8 +5,19 @@ import { fileURLToPath } from "node:url";
 import { deflateSync, inflateSync } from "node:zlib";
 import {
   candidateImageRequirements,
+  mergeAssetCandidateMetadata,
   validateAssetCandidateBundle,
 } from "../src/wayfinders/assets/AssetCandidate.ts";
+import {
+  COLLISION_CANDIDATE_BUNDLE_KIND,
+  applyCollisionCandidate,
+  validateCollisionCandidateBundle,
+} from "../src/wayfinders/assets/CollisionCandidate.ts";
+import {
+  PILOT_COLLISION_VALIDATION_SHIP_HALF_EXTENT,
+  validateExactAuthoredAssetMetadata,
+  validateExactCollisionPackageSet,
+} from "../src/wayfinders/assets/ExactCollisionValidation.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(root, "assets-src", "gr2", "asset-catalog.json");
@@ -158,6 +169,7 @@ async function readManifest() {
 }
 
 async function validateManifest(manifest) {
+  const validateMetadata = await createExactMetadataValidator();
   const assetIds = new Set();
   const metadataKeys = new Set();
   const textureKeys = new Set();
@@ -198,6 +210,7 @@ async function validateManifest(manifest) {
       });
     }
     const bundle = validateAssetCandidateBundle({ bundleVersion: 1, metadata, images: candidateImages });
+    validateMetadata(bundle.metadata);
     if (bundle.metadata.assetId !== entry.assetId) {
       throw new RangeError(`${metadataFile} resolves ${bundle.metadata.assetId} instead of ${entry.assetId}`);
     }
@@ -328,10 +341,78 @@ async function buildCatalog(checkOnly = false) {
   return manifest;
 }
 
-async function intakeCandidate(bundleFile, replace, dryRun) {
-  if (!bundleFile) throw new Error("Usage: npm.cmd run assets:intake -- <candidate.json> [--replace]");
+async function validateAcceptedCollisionPackageSet(replacement) {
+  const metadata = async (assetId) => {
+    if (replacement?.assetId === assetId) return replacement;
+    const metadataFile = knownPackageFiles.get(assetId);
+    if (!metadataFile) throw new RangeError(`No GR-2 package exists for ${assetId}`);
+    return JSON.parse(await readFile(path.join(packageRoot, metadataFile), "utf8"));
+  };
+  return validateExactCollisionPackageSet({
+    homeIsland: await metadata("home.island.primary"),
+    playerBoat: await metadata("player.boat.primary"),
+    fishingShoal: await metadata("shoal.fishing.primary"),
+  });
+}
+
+async function createExactMetadataValidator() {
+  const packages = await validateAcceptedCollisionPackageSet();
+  const shipHalfExtent = packages.playerBoat.collision?.halfSize.width
+    ?? PILOT_COLLISION_VALIDATION_SHIP_HALF_EXTENT;
+  return (value) => validateExactAuthoredAssetMetadata(value, { shipHalfExtent });
+}
+
+async function intakeCollisionCandidate(candidateInput, replace, dryRun) {
+  const candidate = validateCollisionCandidateBundle(candidateInput);
+  if (!replace) {
+    throw new Error(`${candidate.assetId} collision is accepted metadata; review the candidate and rerun with --replace`);
+  }
+  const metadataFile = knownPackageFiles.get(candidate.assetId);
+  if (!metadataFile) throw new RangeError(`No GR-2 collision intake target exists for ${candidate.assetId}`);
+  const validateMetadata = await createExactMetadataValidator();
+  const current = validateMetadata(JSON.parse(await readFile(path.join(packageRoot, metadataFile), "utf8")));
+  const next = applyCollisionCandidate(current, candidate, validateMetadata);
+  await validateAcceptedCollisionPackageSet(next);
+  if (dryRun) {
+    console.log(
+      `Validated ${candidate.assetId} collision candidate; intake would update ${metadataFile} to runtime revision ${next.runtimeRevision} without replacing art.`,
+    );
+    return;
+  }
+
+  // Refuse to start a metadata-only update from a stale visual catalog. This
+  // keeps a later check failure from leaving an otherwise valid partial write.
+  await buildCatalog(true);
+  const slug = candidate.assetId.replaceAll(".", "-");
+  const candidateDirectory = path.join(root, "assets-src", "gr2", "candidates");
+  await mkdir(candidateDirectory, { recursive: true });
+  await writeFile(
+    path.join(candidateDirectory, `${slug}.collision-candidate.json`),
+    `${JSON.stringify(candidate, null, 2)}\n`,
+    "utf8",
+  );
+  // Commit the accepted package last so an archive write failure cannot leave
+  // runtime metadata changed without its reviewed candidate record.
+  await writeFile(path.join(packageRoot, metadataFile), `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  // Collision metadata cannot change catalog bindings, reports or thumbnails.
+  // Verify those artifacts remain current without rewriting any visual output.
+  await buildCatalog(true);
+  console.log(
+    `Accepted ${candidate.assetId} collision revision ${next.runtimeRevision}: metadata updated; runtime art and catalog image bindings preserved.`,
+  );
+}
+
+export async function intakeCandidate(bundleFile, replace, dryRun) {
+  if (!bundleFile) {
+    throw new Error("Usage: npm.cmd run assets:intake -- <candidate.json|collision-candidate.json> [--replace] [--dry-run]");
+  }
   const sourcePath = path.resolve(root, bundleFile);
-  const bundle = validateAssetCandidateBundle(JSON.parse(await readFile(sourcePath, "utf8")));
+  const candidateInput = JSON.parse(await readFile(sourcePath, "utf8"));
+  if (candidateInput?.bundleKind === COLLISION_CANDIDATE_BUNDLE_KIND) {
+    await intakeCollisionCandidate(candidateInput, replace, dryRun);
+    return;
+  }
+  let bundle = validateAssetCandidateBundle(candidateInput);
   for (const image of bundle.images) {
     const buffer = Buffer.from(image.dataUrl.slice("data:image/png;base64,".length), "base64");
     const actual = pngSize(buffer, image.filename);
@@ -347,6 +428,17 @@ async function intakeCandidate(bundleFile, replace, dryRun) {
   }
   const metadataFile = knownPackageFiles.get(bundle.metadata.assetId);
   if (!metadataFile) throw new RangeError(`No GR-2 intake target exists for ${bundle.metadata.assetId}`);
+  const validateMetadata = await createExactMetadataValidator();
+  const metadata = existingIndex >= 0
+    ? mergeAssetCandidateMetadata(
+      JSON.parse(await readFile(path.join(packageRoot, metadataFile), "utf8")),
+      bundle.metadata,
+      bundle.collisionIntent,
+      validateMetadata,
+    )
+    : validateMetadata(bundle.metadata);
+  await validateAcceptedCollisionPackageSet(metadata);
+  bundle = Object.freeze({ ...bundle, metadata });
   const slug = bundle.metadata.assetId.replaceAll(".", "-");
   if (dryRun) {
     console.log(`Validated ${bundle.metadata.assetId}: ${bundle.images.length} PNG(s); intake would ${existingIndex >= 0 ? "replace" : "add"} ${metadataFile}.`);
