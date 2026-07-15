@@ -20,6 +20,10 @@ architecture rules or completed milestone evidence.
 - `GR-3.1` through `GR-3.4` are authorized as an ordered prototype batch. The
   focus is rapid source preparation, library preview, reviewed collision drafts
   and selected in-game testing—not a general art, animation or generation tool.
+- `GR-3.1` is implemented: a strict version-1 recipe manifest covers all three
+  current runtime package families plus five selected island variations. Runtime
+  bindings preserve accepted collision, while new islands begin as blank
+  editable `32`/`8`-pixel collision drafts.
 - Gameplay-session saving is intentionally absent. Every launch or browser
   refresh starts a fresh voyage. Development-only asset package saves are a
   separate authoring operation and do not persist gameplay state.

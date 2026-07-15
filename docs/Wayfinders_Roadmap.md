@@ -257,6 +257,10 @@ general renderer rewrite or broad automatic runtime catalog expansion.
 
 #### GR-3.1 — Production asset specification and recipe manifest
 
+Status: implemented and accepted. The version-1 manifest records the three
+collision-preserving pilot bindings and five selected island sources without
+expanding runtime world-placement authority.
+
 Add a small versioned recipe manifest beside the closed pilot runtime contracts.
 Recipes cover islands, vessels, shoals and other world finds with stable source
 identity, lifecycle, provenance, ordered layers, minimal animation metadata,
