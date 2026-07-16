@@ -23,6 +23,8 @@ export interface PlannedIslandFactsV1 {
   readonly rotation: number;
   readonly shapeSeed: number;
   readonly bounds: Readonly<WorldManifestBoundsV1>;
+  readonly sourceKind: "authored" | "procedural";
+  readonly authoredAssetId?: string;
 }
 
 /** Structural form of the current fixed landmark inventory. */
@@ -48,6 +50,7 @@ export interface PlannedWorldManifestMetadataV1 {
   readonly generatorVersion: string;
   readonly settingsProfileId: string;
   readonly settingsFingerprint?: string;
+  readonly authoredIslandCatalogRevision: string;
 }
 
 /**
@@ -63,6 +66,7 @@ export function createManifestFromPlannedWorldV1(
     generatorVersion: metadata.generatorVersion,
     seed: world.seed,
     settingsProfileId: metadata.settingsProfileId,
+    authoredIslandCatalogRevision: metadata.authoredIslandCatalogRevision,
     ...(metadata.settingsFingerprint === undefined
       ? {}
       : { settingsFingerprint: metadata.settingsFingerprint }),
@@ -89,6 +93,8 @@ function islandDescriptor(island: Readonly<PlannedIslandFactsV1>): WorldManifest
     rotation: island.rotation,
     shapeSeed: island.shapeSeed,
     bounds: { ...island.bounds },
+    sourceKind: island.sourceKind,
+    ...(island.authoredAssetId === undefined ? {} : { authoredAssetId: island.authoredAssetId }),
   };
 }
 

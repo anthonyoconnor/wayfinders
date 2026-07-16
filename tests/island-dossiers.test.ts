@@ -188,6 +188,7 @@ describe("island-dossier catalog", () => {
       rotation: 0,
       shapeSeed: 1,
       bounds: { minX: 3, minY: 3, maxX: 3, maxY: 3 },
+      sourceKind: "procedural",
     };
 
     const [definition] = generateIslandDossierCatalog(world, 7, [island], { x: 0, y: 0 });

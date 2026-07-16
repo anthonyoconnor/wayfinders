@@ -1,7 +1,7 @@
 # Wayfinders authored-asset pipeline
 
-This document owns the current source, preparation, review, promotion, and
-repository-transaction contracts. The operator sequence is in
+This document owns the current source, preparation, island availability,
+general-family review/promotion, and repository-transaction contracts. The operator sequence is in
 `ASSET_PRODUCTION_QUICKSTART.md`; runtime rendering and collision behavior are
 in `Wayfinders_Technical_Design.md`; future workflow scope is in
 `Wayfinders_Roadmap.md`.
@@ -79,19 +79,36 @@ rewrite PNGs or image bindings.
 Imported islands use the focused Islands workbench. The selected left-library
 record alone drives the preview and exposes only name, current availability,
 the isolated ship trial, `8`/`32`-pixel collision editing, and **Save changes**.
-One save writes the editable name and exact complete live mask through the
-existing serialized candidate transaction. Candidate fingerprints, review,
-promotion, runtime binding, dimensions, layer composition, and preparation
-details remain private to this island UI. General pending candidates in the
-other workspaces retain their structured production workbench.
+One save writes the editable name, exact complete live mask, and durable
+`availableInGame` value through the serialized transaction. Candidate
+fingerprints remain private transaction details. Review, promotion, and runtime
+binding do not apply to islands. General pending candidates in the other
+workspaces retain their structured production workbench.
 
-## Production recipe lifecycle
+## Production recipe and availability lifecycles
 
 `assets-src/gr3/production-recipes.json` is the authoritative recipe manifest.
-A recipe records stable identity, family, provenance, layer preparation,
-collision draft semantics, and any existing runtime test binding.
+A recipe records stable identity, family, provenance, layer preparation, and
+collision semantics. Island recipes also carry the only user-facing lifecycle
+state, `availableInGame`; other families may carry an existing runtime test
+binding.
 
-The lifecycle is:
+The island lifecycle is:
+
+```text
+imported and unavailable
+    ↓ edit name or exact mask, and save as often as needed
+available in game ↔ unavailable in game
+```
+
+Enabling availability validates the current PNG, recipe, prepared output, and
+saved mask inside one rollback-safe transaction. Failure preserves the prior
+unavailable state. Disabling availability does not delete any source or derived
+artifact. The resulting immutable game catalog is sorted by stable ID and is
+read only during world creation. Island review and promotion operations reject
+island IDs.
+
+For Ships, Fishing shoals, and other general families, the lifecycle remains:
 
 ```text
 source + recipe
@@ -106,8 +123,8 @@ public runtime handoff + lineage report
 ```
 
 Preparation is isolated per job. Identical inputs may reuse a cache entry;
-changed source, recipe, or authored mask input changes the fingerprint and
-invalidates review. A modified or missing prepared output, thumbnail, or
+changed source, recipe, or authored mask input changes the fingerprint. For
+general families this invalidates review. A modified or missing prepared output, thumbnail, or
 generated collision draft makes the derived output stale without changing the
 input fingerprint. A failed job cannot leave another job partially updated.
 
@@ -123,8 +140,8 @@ prepared alpha at `8`-pixel subcell resolution inside the `32`-pixel navigation
 grid. Connected opaque geometry retains fine projections and concavities;
 isolated low-coverage noise is ignored. The draft records a deterministic
 method ID and warnings for blank, disconnected, edge-touching, or unusually
-broad geometry. This is review data: it remains editable and does not replace
-accepted runtime collision. Passable families continue to produce explicit
+broad geometry. This is an editable seed and cannot make the island available
+until its exact saved mask validates. Passable families continue to produce explicit
 empty collision.
 
 For an imported island, **Save changes** validates the name and complete
@@ -135,27 +152,25 @@ complete collision
 draft against the current fingerprint, writes recipe and semantic mask data,
 and prepares only the affected candidate under the shared repository lock. The
 operation is rollback-safe. A successful save must issue a different
-fingerprint, reproduce the authored collision exactly, and remove the prior
-review so the refreshed candidate is pending. Validation and promotion reject
-stale fingerprints and invalid derived output. The UI enables approval only
-after current validation; rejection may be recorded for an exact-current
-fingerprint without first validating the candidate.
+fingerprint and reproduce the authored collision exactly. Island saves also
+persist availability and remove any obsolete island review record. General
+candidate saves invalidate prior review so the refreshed candidate is pending.
 
-Promotion publishes only current approved candidates. The promotion summary
+Promotion publishes only current approved non-island candidates. The promotion summary
 and production index record source hashes, candidate fingerprints, public
 layer URLs, review state, and preserved runtime bindings. The UI invokes the
 same exact-fingerprint promotion seam as the scripting command. Validation
 rejects stale reviews, mismatched hashes, orphaned public output, and unreviewed
 promotion.
 
-Pending, approved, rejected, or stale island candidates with a current prepared
-record can be opened in the isolated sea trial. The trial loads the candidate's
+Imported islands with a current prepared record can be opened in the isolated
+sea trial regardless of availability. The trial loads the island's
 actual prepared layers and exact saved hybrid collision into a disposable open-
 water world with the authored player boat. It provides hull-safe reset points,
 navigation and collision overlays, visible fingerprint, dimensions, origin,
 and collision revision, and a direct return to the same library record. The
-trial does not create `GameSimulation`, save trial state, change review state,
-promote output, or add the candidate to runtime world content.
+trial does not create `GameSimulation`, save trial state, change availability,
+or alter world content.
 
 ## Command ownership
 
@@ -165,8 +180,8 @@ promote output, or add the candidate to runtime world content.
 | `npm.cmd run assets:build` | Regenerate package catalog, thumbnails, and reports after deliberate package/source changes |
 | `npm.cmd run assets:intake -- <candidate> [--replace]` | Revalidate and materialize a portable visual or collision candidate |
 | `npm.cmd run assets:prepare -- [--id <id> \| --family <family>]` | Prepare one job, one family, or the production batch |
-| `npm.cmd run assets:review -- <approve\|reject> <id> <fingerprint>` | Record an exact-candidate review decision for scripting |
-| `npm.cmd run assets:promote -- [--id <id>]` | Publish approved current production output for scripting or batch operation |
+| `npm.cmd run assets:review -- <approve\|reject> <id> <fingerprint>` | Record an exact non-island candidate review decision for scripting |
+| `npm.cmd run assets:promote -- [--id <id>]` | Publish approved current non-island production output for scripting or batch operation |
 
 Use the narrow command for the intended mutation. Do not run intake, prepare,
 review, or promotion as generic verification. `assets:check` is the read-only
@@ -184,6 +199,7 @@ gate and is included in `npm.cmd run check`.
 - Treat source art and recipes as inputs; never repair a stale generated file
   directly.
 - Treat generated collision as an editable seed and require an exact current
-  fingerprint for authoring, review, trial launch, and promotion.
+  fingerprint for authoring and trial launch. Review and promotion remain
+  additional exact-fingerprint gates only for non-island families.
 - Keep atlas packing absent until texture or draw-call evidence justifies its
   continuing cost.

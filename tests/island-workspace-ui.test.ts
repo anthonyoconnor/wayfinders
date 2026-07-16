@@ -43,6 +43,8 @@ describe("GR-4.1 focused island workshop", () => {
     expect(scene).toContain("private islandCandidateAuthoringRequest");
     expect(scene).toContain("this.productionHybridCollisionFromModel(dimensions.width, dimensions.height)");
     expect(scene).toContain("body: JSON.stringify(request)");
+    expect(scene).toContain("availableInGame");
+    expect(scene).toContain("available.checked");
     expect(scene).toContain('this.reportIslandStatus("Saving changes…")');
   });
 

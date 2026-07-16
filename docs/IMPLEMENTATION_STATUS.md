@@ -2,13 +2,15 @@
 
 Status: current development handoff, verified 2026-07-16.
 
-The asset workflow through GR-4.1 is implemented. Focused contract and
+The asset workflow through GR-4.3 is implemented. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,
-deterministic shoreline seeding, structured candidate save/validation/review/
-promotion, fingerprint invalidation, rollback, and isolated-trial authority.
-Run the aggregate source gates below against the current tree. Serial
-performance verification remains recorded through commit `0ea2d7a`; this local
-asset work does not change gameplay frame work or performance budgets.
+deterministic shoreline seeding, atomic island availability, exact-mask
+round trips, duplicate identity rejection, rollback, and isolated-trial
+authority. World-generation coverage verifies deterministic authored selection
+without replacement, manifest provenance, exact collision rasterization, and
+procedural shortfall.
+The aggregate source gates and serial performance lane below pass against this
+current handoff tree, including world-density and island-placement coverage.
 
 This file records only volatile operational facts. Implemented behavior belongs
 in `Wayfinders_Technical_Design.md`, ownership in `ARCHITECTURE_MAP.md`, future
@@ -22,7 +24,7 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
   workspaces. Islands use a focused import, properties, availability-status,
   sea-trial, collision-mask, and single-save workflow. The other workspaces
   retain the general asset inspection and production controls.
-- An island candidate can launch a disposable open-water sea trial from its
+- An imported island can launch a disposable open-water sea trial from its
   library record and return directly to that same record.
 - Gameplay-session saving is absent; refresh starts a new session.
 - Repository asset authoring is local development tooling and is independent of

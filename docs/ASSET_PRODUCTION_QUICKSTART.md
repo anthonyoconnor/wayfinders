@@ -35,8 +35,11 @@ general art or atlas tool.
    positions and grid/
    collision overlays, then return to the island. Saving and reopening the trial
    picks up the current mask.
-6. **Available in game** reports the current state. Imported islands are
-   currently unavailable; the built-in home island is always available.
+6. Toggle **Available in game**, then choose **Save changes**. Enabling performs
+   the same exact recipe, prepared-output, and collision validation; a failure
+   leaves the island unavailable and reports what to correct. Disabling the
+   toggle preserves the island and removes it only from subsequently created
+   worlds. The built-in home island is always available.
 7. Run the read-only repository gate after an authoring session:
 
    ```powershell
@@ -119,19 +122,14 @@ examples):
   ],
   "animations": [],
   "collision": { "mode": "shoreline-seed", "tileSize": 32, "subcellSize": 8 },
-  "runtimeBinding": {
-    "assetId": "home.island.primary",
-    "collisionIntent": "preserve"
-  }
+  "availableInGame": false
 }
 ```
 
-The generated `32`/`8` shoreline draft is visible and editable, but it is never
-silently substituted for the accepted home collision. The binding records the
-intended runtime handoff; it does not enable a full-game candidate override.
-Use the isolated sea trial to test the candidate's own prepared layers and
-saved collision. Creating a distinct world island with its own final mask and
-placement remains an explicit runtime package/world-data change.
+The generated `32`/`8` shoreline draft is visible and editable. Use the isolated
+sea trial to test the island's prepared layers and saved collision. Marking it
+available adds that stable ID and exact saved mask to subsequent deterministic
+world creation; it never replaces the built-in home island.
 
 ## Advanced manual recipe: passable fishing shoal variation
 

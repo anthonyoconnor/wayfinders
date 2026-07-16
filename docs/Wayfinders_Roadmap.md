@@ -45,68 +45,14 @@ The implemented baseline supports the prototype world and the named large-world
 profiles. Its current contracts are documented in the technical design and
 architecture map; its delivery history is archived.
 
-The asset-workspace tab shell and focused island workshop are implemented. The
-next proposed production-asset milestone replaces the remaining internal island
-lifecycle with one durable availability state, before available islands become
-deterministic world-generation inputs. The remaining sequence is proposed but
-not authorized.
+The asset-workspace shell, focused island workshop, single island-availability
+lifecycle, and deterministic authored-island world planning are implemented.
+The next proposed production-asset milestone supplies authored runtime
+presentation through the existing active-chunk boundary.
 
 The water-system proposal remains a separate candidate track.
 
 ## Asset workspaces and authored-island integration
-
-### GR-4.2 — Single availability lifecycle
-
-Status: proposed, not started, and not authorized.
-
-Replace pending, approved, rejected, promoted, and runtime-binding lifecycle
-records with one durable `availableInGame` boolean on each authored island.
-Checksums or revisions may remain private transaction-safety details but must
-not become user workflow states. Enabling availability validates the current
-PNG, properties, prepared output, and saved collision mask atomically. A failed
-validation leaves the island unavailable and reports the specific correction.
-
-Saving a valid available island updates its game-facing catalog entry without
-requiring reapproval or repromotion. Disabling availability removes the island
-from future world-generation input without deleting its source, prepared art,
-properties, collision mask, or sea-trial access. Availability changes affect
-newly created worlds only; they do not mutate a running world.
-
-Acceptance requires rollback-safe serialized writes, unique stable IDs and
-names, exact saved-mask round trips, and a read-only deterministic catalog of
-available authored islands. Obsolete review, promotion, and runtime-binding
-artifacts and APIs are removed rather than retained as hidden parallel paths.
-
-### GR-4.3 — Deterministic authored-island world planning
-
-Status: proposed, not started, and not authorized.
-
-Supply the sorted available-island catalog to renderer-neutral world planning.
-For a fixed world seed and catalog revision, planning selects authored islands
-deterministically and without replacement. An authored island may appear at
-most once in a world. When more authored islands are available than the
-configured island count, select a deterministic subset without replacement.
-When fewer are available, use every selected authored island at most once and
-fill only the shortfall with procedural islands.
-
-Each generated-island manifest entry records whether it is authored or
-procedural and, for authored entries, its stable asset ID. Placement bounds are
-derived from the authored canvas and collision footprint before placement, so
-edge clearance, home clearance, starter-lane clearance, and minimum navigable
-channels remain enforced. The saved authored collision mask—not rendered
-pixels—becomes authoritative collision for that island. Procedural generation
-remains available only as the deterministic shortfall fallback.
-
-Acceptance requires:
-
-- total non-home island count still equals the configured requirement;
-- no authored asset ID occurs more than once in a world manifest;
-- authored count equals `min(available authored islands, required islands)`;
-- procedural count equals `max(0, required islands - available authored islands)`;
-- identical seed, settings, and catalog inputs produce identical selection,
-  placement, manifests, terrain, and collision; and
-- catalog reordering cannot change the result because selection begins from
-  stable-ID order.
 
 ### GR-4.4 — Authored-island runtime presentation and closure
 

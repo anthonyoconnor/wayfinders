@@ -19,6 +19,11 @@ import {
   type WorldManifestV1,
 } from "./manifest";
 import { WorldGrid } from "./WorldGrid";
+import {
+  EMPTY_AUTHORED_ISLAND_CATALOG,
+  validateAuthoredIslandCatalog,
+  type AuthoredIslandCatalog,
+} from "./AuthoredIslandCatalog";
 
 export { seededValue } from "./SeededRandom";
 
@@ -31,7 +36,7 @@ export interface WorldLandmarks {
   hiddenResource: GridPoint;
 }
 
-export const WORLD_GENERATOR_VERSION = "wayfinders-world-v1";
+export const WORLD_GENERATOR_VERSION = "wayfinders-world-v2";
 
 export interface PlannedWorld {
   seed: number;
@@ -69,7 +74,14 @@ function valueNoise(seed: number, x: number, y: number, scale: number): number {
 }
 
 export class WorldGenerator {
-  constructor(private readonly config: PrototypeConfig = prototypeConfig) {}
+  private readonly authoredIslandCatalog: Readonly<AuthoredIslandCatalog>;
+
+  constructor(
+    private readonly config: PrototypeConfig = prototypeConfig,
+    authoredIslandCatalog: Readonly<AuthoredIslandCatalog> = EMPTY_AUTHORED_ISLAND_CATALOG,
+  ) {
+    this.authoredIslandCatalog = validateAuthoredIslandCatalog(authoredIslandCatalog);
+  }
 
   generate(seed = this.config.world.seed): GeneratedWorld {
     const planned = this.plan(seed);
@@ -96,6 +108,7 @@ export class WorldGenerator {
       normalizedSeed,
       home.landmarks.homeCenter,
       home.landmarks.dock,
+      this.authoredIslandCatalog,
     );
     const hiddenObstacle = islands[0];
     if (!hiddenObstacle) throw new RangeError("World generation requires at least one scattered island");
@@ -106,7 +119,7 @@ export class WorldGenerator {
         planningGrid,
         normalizedSeed,
         home.landmarks.homeCenter,
-        hiddenObstacle.center,
+        hiddenObstacle,
       ),
     };
     const manifest = createManifestFromPlannedWorldV1({
@@ -120,6 +133,7 @@ export class WorldGenerator {
       generatorVersion: WORLD_GENERATOR_VERSION,
       settingsProfileId: worldGenerationProfileIdForConfig(this.config),
       settingsFingerprint: worldGenerationSettingsFingerprint(this.config),
+      authoredIslandCatalogRevision: this.authoredIslandCatalog.revision,
     });
     return Object.freeze({
       seed: normalizedSeed,
@@ -198,11 +212,16 @@ export class WorldGenerator {
     }
   }
 
-  private planHiddenResource(grid: WorldGrid, seed: number, home: GridPoint, obstacle: GridPoint): GridPoint {
+  private planHiddenResource(
+    grid: WorldGrid,
+    seed: number,
+    home: GridPoint,
+    obstacle: Readonly<GeneratedIsland>,
+  ): GridPoint {
     const offsetSign = seededValue(seed + 307, 0, 0) < 0.5 ? -1 : 1;
     const candidate = {
-      x: obstacle.x + offsetSign * (this.config.world.hiddenObstacleRadius + 3),
-      y: obstacle.y + offsetSign * 2,
+      x: obstacle.center.x + offsetSign * (Math.ceil(obstacle.outerRadius) + 3),
+      y: obstacle.center.y + offsetSign * 2,
     };
     if (grid.inBounds(candidate.x, candidate.y)) return candidate;
 

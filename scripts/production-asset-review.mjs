@@ -91,15 +91,15 @@ function validateRecipeManifest(value) {
   if (!isRecord(value) || value.formatVersion !== 1 || !Array.isArray(value.recipes)) {
     throw new ProductionAssetReviewError("Production recipe manifest is not a supported formatVersion 1 manifest");
   }
-  const ids = new Set();
+  const recipes = new Map();
   for (const recipe of value.recipes) {
     if (!isRecord(recipe) || typeof recipe.id !== "string" || recipe.id.length === 0) {
       throw new ProductionAssetReviewError("Production recipe manifest contains a recipe without an ID");
     }
-    if (ids.has(recipe.id)) throw new ProductionAssetReviewError(`Production recipe manifest repeats ${recipe.id}`);
-    ids.add(recipe.id);
+    if (recipes.has(recipe.id)) throw new ProductionAssetReviewError(`Production recipe manifest repeats ${recipe.id}`);
+    recipes.set(recipe.id, recipe);
   }
-  return ids;
+  return recipes;
 }
 
 function validateProductionIndex(value) {
@@ -145,12 +145,17 @@ async function reviewProductionCandidateUnlocked(request, repositoryRoot) {
     readJson(indexPath, "Generated production index"),
     readJson(reviewPath, "Production review store"),
   ]);
-  const recipeIds = validateRecipeManifest(manifestValue);
+  const recipes = validateRecipeManifest(manifestValue);
   const candidates = validateProductionIndex(indexValue);
   const store = validateProductionReviewStore(storeValue);
 
-  if (!recipeIds.has(request.recipeId)) {
+  if (!recipes.has(request.recipeId)) {
     throw new ProductionAssetReviewError(`Unknown production recipe ${request.recipeId}`);
+  }
+  if (recipes.get(request.recipeId)?.family === "island") {
+    throw new ProductionAssetReviewError(
+      `${request.recipeId} uses Available in game instead of review decisions`,
+    );
   }
   const candidate = candidates.get(request.recipeId);
   if (!candidate) {

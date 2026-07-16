@@ -1097,6 +1097,44 @@ browser acceptance verified the focused controls and import fields, cross-tab
 isolation, one canvas after switching, independent right-panel scrolling, and a
 clean warning/error console.
 
+#### GR-4.2 — Single availability lifecycle
+
+Status: implemented and accepted on 2026-07-16.
+
+Island recipes now normalize one durable `availableInGame` boolean. Import
+creates an unavailable island; the focused save transaction atomically commits
+name, exact semantic mask, prepared output, and availability. Enabling requires
+non-empty valid collision and current prepared output. Failed validation and
+preparation restore the prior recipe, mask, candidate directory, and generated
+index. Disabling preserves every authoring and sea-trial artifact.
+
+The read-only available-island catalog is stable-ID ordered and rejects
+duplicate IDs, names, invalid revisions, canvas mismatches, duplicate subcells,
+and empty solid masks. Island review and promotion endpoints reject island IDs,
+and batch promotion excludes islands; Ships and Fishing shoals retain their
+general review workflow. Contract and repository-I/O coverage verifies exact
+mask round trips, duplicate-name rejection, invalid-enable rollback, review
+removal, and catalog projection.
+
+#### GR-4.3 — Deterministic authored-island world planning
+
+Status: implemented and accepted on 2026-07-16.
+
+`WorldGenerator` now receives a renderer-neutral snapshot of available islands.
+Stable-ID sorting precedes deterministic seeded selection without replacement.
+Every selected authored island is used at most once, and procedural profiles
+fill exactly the configured shortfall. Manifest entries record authored or
+procedural provenance and the authored asset ID, while the manifest records the
+catalog revision used to plan the world.
+
+Authored canvas dimensions and collision footprint drive conservative bounded
+placement through the existing spatial index and clearance rules. Rasterization
+installs every saved `32`/`8` collision cell, including explicit clear cells, as
+authority; pixels are never sampled. Acceptance coverage verifies total count,
+unique authored IDs, exact procedural shortfall, catalog-order independence,
+deterministic subset selection, byte-equivalent manifests, and exact fine-mask
+rasterization.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development
@@ -1142,5 +1180,5 @@ determine whether the user-visible departure symptom remains.
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-4.1`, graphics and asset
-work through `GR-4.1`, and architecture work through `AM-6`. Upcoming, proposed,
+work through `GR-4.3`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.

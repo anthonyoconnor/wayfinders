@@ -113,6 +113,7 @@ function recipeSettings(recipe) {
       opacity: layer.opacity,
     })),
     runtimeBindingAssetId: recipe.runtimeBinding?.assetId ?? null,
+    availableInGame: recipe.family === "island" && recipe.availableInGame === true,
   };
 }
 
@@ -258,11 +259,13 @@ export function createProductionCandidateAuthoringService({
       candidate.recipeId === recipe.id && candidate.candidateFingerprint === entry.jobKey);
     const staleDecision = decision === undefined
       && reviews.decisions.some((candidate) => candidate.recipeId === recipe.id);
+    const reviewState = decision?.decision ?? (staleDecision ? "stale" : "pending");
     return {
       recipeId: recipe.id,
       fingerprint: entry.jobKey,
       validationState: "current",
-      reviewState: decision?.decision ?? (staleDecision ? "stale" : "pending"),
+      ...(recipe.family === "island" ? {} : { reviewState }),
+      ...(recipe.family === "island" ? { availableInGame: recipe.availableInGame === true } : {}),
       settings: normalized.settings,
       collision: normalized.collision,
       recipe,
@@ -342,7 +345,7 @@ export function createProductionCandidateAuthoringService({
               `${request.recipeId} prepared collision does not match the authored mask`,
             );
           }
-          if (refreshed.reviewState !== "pending") {
+          if (updatedRecipe.family !== "island" && refreshed.reviewState !== "pending") {
             throw new ProductionCandidateAuthoringError(`${request.recipeId} review was not invalidated`);
           }
         });
@@ -375,7 +378,9 @@ export function createProductionCandidateAuthoringService({
       return {
         ...refreshed,
         previousFingerprint: previous.fingerprint,
-        message: `${request.recipeId} saved and returned to pending review`,
+        message: updatedRecipe.family === "island"
+          ? `${request.recipeId} saved ${updatedRecipe.availableInGame ? "and made available in game" : "as unavailable in game"}`
+          : `${request.recipeId} saved and returned to pending review`,
       };
     });
   }

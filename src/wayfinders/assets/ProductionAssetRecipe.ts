@@ -89,6 +89,8 @@ export interface ProductionAssetRecipe {
   readonly layers: readonly Readonly<ProductionAssetLayerRecipe>[];
   readonly animations: readonly Readonly<ProductionAssetAnimationRecipe>[];
   readonly collision: Readonly<ProductionAssetCollisionRecipe>;
+  /** Island-only game catalog membership. It is not a review or promotion state. */
+  readonly availableInGame?: boolean;
   readonly runtimeBinding?: Readonly<{
     assetId: AuthoredAssetId;
     collisionIntent: "preserve";
@@ -336,6 +338,9 @@ function validateRecipe(input: unknown, index: number): ProductionAssetRecipe {
   });
 
   const collision = validateCollision(parsed.collision, `${label}.collision`);
+  const availableInGame = parsed.availableInGame === undefined
+    ? family === "island" ? false : undefined
+    : boolean(parsed.availableInGame, `${label}.availableInGame`);
   let runtimeBinding: ProductionAssetRecipe["runtimeBinding"];
   if (parsed.runtimeBinding !== undefined) {
     const binding = record(parsed.runtimeBinding, `${label}.runtimeBinding`);
@@ -366,6 +371,9 @@ function validateRecipe(input: unknown, index: number): ProductionAssetRecipe {
   if (family === "island" && collision.mode === "empty") {
     throw new RangeError(`${label} islands require an authored collision draft or preserved profile`);
   }
+  if (family !== "island" && availableInGame !== undefined) {
+    throw new RangeError(`${label} only islands may declare availableInGame`);
+  }
   if (family === "environment" && collision.mode !== "empty") {
     throw new RangeError(`${label} environment visuals must be explicitly passable`);
   }
@@ -385,6 +393,7 @@ function validateRecipe(input: unknown, index: number): ProductionAssetRecipe {
     layers,
     animations,
     collision,
+    ...(availableInGame === undefined ? {} : { availableInGame }),
     ...(runtimeBinding ? { runtimeBinding } : {}),
   };
 }
@@ -405,9 +414,13 @@ export function validateProductionAssetRecipeManifest(input: unknown): Readonly<
   if (!Array.isArray(parsed.recipes)) throw new TypeError("Production asset recipe manifest recipes must be an array");
   const recipes = parsed.recipes.map(validateRecipe);
   const ids = new Set<string>();
+  const names = new Set<string>();
   for (const recipe of recipes) {
     if (ids.has(recipe.id)) throw new RangeError(`Duplicate production asset recipe ID ${recipe.id}`);
     ids.add(recipe.id);
+    const normalizedName = recipe.name.toLocaleLowerCase("en");
+    if (names.has(normalizedName)) throw new RangeError(`Duplicate production asset recipe name ${recipe.name}`);
+    names.add(normalizedName);
   }
   return deepFreeze({ formatVersion: PRODUCTION_ASSET_RECIPE_FORMAT_VERSION, recipes });
 }

@@ -32,6 +32,7 @@
       ],
       "animations": [],
       "collision": {"mode": "preserve"},
+      "availableInGame": true,
       "runtimeBinding": {
         "assetId": "home.island.primary",
         "collisionIntent": "preserve"

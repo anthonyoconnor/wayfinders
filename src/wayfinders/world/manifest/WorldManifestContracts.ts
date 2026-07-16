@@ -65,6 +65,8 @@ export interface WorldManifestIslandV1 {
   readonly rotation: number;
   readonly shapeSeed: number;
   readonly bounds: Readonly<WorldManifestBoundsV1>;
+  readonly sourceKind: "authored" | "procedural";
+  readonly authoredAssetId?: string;
 }
 
 export interface WorldManifestV1 {
@@ -76,6 +78,7 @@ export interface WorldManifestV1 {
   readonly settingsProfileId: string;
   /** Optional build-produced hash of all generator settings. */
   readonly settingsFingerprint?: string;
+  readonly authoredIslandCatalogRevision: string;
   readonly dimensions: Readonly<WorldManifestDimensionsV1>;
   readonly landmarks: readonly Readonly<WorldManifestLandmarkV1>[];
   readonly islands: readonly Readonly<WorldManifestIslandV1>[];

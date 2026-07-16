@@ -281,6 +281,11 @@ async function createPromotionPlan(repositoryRoot, selectedId) {
   for (const decision of reviews.decisions) {
     const entry = entries.get(decision.recipeId);
     if (!entry) throw new ProductionAssetPromotionError(`Review decision names missing candidate ${decision.recipeId}`);
+    if (recipes.get(decision.recipeId)?.family === "island") {
+      throw new ProductionAssetPromotionError(
+        `Obsolete review decision for island ${decision.recipeId}; use availableInGame`,
+      );
+    }
     if (decision.candidateFingerprint !== entry.jobKey) {
       throw new ProductionAssetPromotionError(`Review decision for ${decision.recipeId} is stale; review the current candidate again`);
     }
@@ -288,6 +293,9 @@ async function createPromotionPlan(repositoryRoot, selectedId) {
   if (selectedId !== undefined) {
     const selected = entries.get(selectedId);
     if (!selected) throw new ProductionAssetPromotionError(`No prepared candidate matches ${selectedId}`);
+    if (recipes.get(selectedId)?.family === "island") {
+      throw new ProductionAssetPromotionError(`${selectedId} uses availableInGame instead of promotion`);
+    }
     if (decisions.get(selectedId)?.decision !== "approved") {
       throw new ProductionAssetPromotionError(`${selectedId} must be approved before promotion`);
     }
@@ -306,6 +314,7 @@ async function createPromotionPlan(repositoryRoot, selectedId) {
 
   for (const entry of [...entries.values()].sort((left, right) => left.id.localeCompare(right.id, "en"))) {
     const recipe = recipes.get(entry.id);
+    if (recipe.family === "island") continue;
     const artifacts = await candidateArtifacts(repositoryRoot, recipe, entry);
     thumbnailBytes += artifacts.thumbnailBytes.length;
     maxSelectedDecodedBytes = Math.max(

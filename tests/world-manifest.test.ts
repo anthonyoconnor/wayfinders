@@ -24,6 +24,7 @@ const ISLAND_ONE: PlannedIslandFactsV1 = {
   rotation: 0.25,
   shapeSeed: 101,
   bounds: { minX: 18, minY: 10, maxX: 22, maxY: 14 },
+  sourceKind: "procedural",
 };
 
 const ISLAND_TWO: PlannedIslandFactsV1 = {
@@ -37,6 +38,7 @@ const ISLAND_TWO: PlannedIslandFactsV1 = {
   rotation: 1.5,
   shapeSeed: 202,
   bounds: { minX: 36, minY: 16, maxX: 44, maxY: 24 },
+  sourceKind: "procedural",
 };
 
 function plannedWorld(islands: readonly PlannedIslandFactsV1[]): PlannedWorldFactsV1 {
@@ -64,6 +66,7 @@ function manifest(
     generatorVersion: "islands-v1",
     settingsProfileId: "P2-normal",
     settingsFingerprint: "sha256-a1b2c3",
+    authoredIslandCatalogRevision: "none",
   });
 }
 

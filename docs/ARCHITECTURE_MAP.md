@@ -31,7 +31,7 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 | `exploration` / `features` | feature state, commands, selectors, and mutation results | scene lifecycle |
 | `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering | feature-specific presentation rules |
 | `rendering` | Phaser lifecycle, resource activation, and read-model adaptation | authoritative gameplay decisions |
-| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, review, promotion, and isolated trials | navigation authority outside declared collision metadata or gameplay-session state |
+| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, and isolated trials | navigation authority outside declared collision metadata or gameplay-session state |
 
 ## Dependency direction
 
@@ -91,9 +91,14 @@ not import Phaser.
   namespaced selection, and scene lifetime. Stopping a workspace aborts its DOM
   listeners and Phaser bindings before another workspace starts.
 - The Islands workspace owns its focused properties, availability-status,
-  sea-trial, and collision UI. Its single save adapter projects those controls
-  onto the existing rollback-safe candidate or package collision transaction;
-  repository fingerprints and review state do not cross into the island UI.
+  sea-trial, and collision UI. Its single save adapter commits those controls
+  through one rollback-safe transaction. `availableAuthoredIslandCatalog`
+  exposes only validated, stable-ID-ordered planning inputs; repository
+  fingerprints remain private and review/promotion do not apply to islands.
+- `WorldGenerator` accepts the renderer-neutral authored-island catalog at
+  composition. It owns deterministic selection without replacement, bounded
+  placement, manifest provenance, exact saved-mask rasterization, and
+  procedural shortfall. World code does not import asset-pipeline modules.
 
 Diagnostics are distributed with their owner: simulation traces and counters
 live in `core`, presentation/resource counters in `WayfindersScene` and its

@@ -22,6 +22,10 @@ import {
   type ProductionAssetRecipeManifest,
   validateProductionAssetRecipeManifest,
 } from "./ProductionAssetRecipe";
+import {
+  validateAuthoredIslandCatalog,
+  type AuthoredIslandCatalog,
+} from "../world/AuthoredIslandCatalog";
 
 /** Stable browser sections. Their order is deliberately independent of labels. */
 export const ASSET_LIBRARY_CATEGORIES = Object.freeze([
@@ -121,6 +125,7 @@ export interface ProductionCandidateLibraryEntry extends AssetLibraryEntryBase {
   readonly collisionDraft: Readonly<ProductionCandidateCollisionDraft>;
   readonly lifecycle: "candidate";
   readonly reviewState: "pending" | "approved" | "rejected" | "stale";
+  readonly availableInGame: boolean;
 }
 
 export interface ProductionCandidateHybridCollisionDraft {
@@ -930,6 +935,7 @@ function productionCandidateEntries(
       collisionDraft,
       lifecycle: "candidate",
       reviewState,
+      availableInGame: recipe.family === "island" && recipe.availableInGame === true,
     };
   });
 }
@@ -1159,3 +1165,43 @@ export function assetLibraryEntryById(
 
 export const ASSET_LIBRARY_CATALOG = buildAssetLibraryCatalog();
 export const ASSET_LIBRARY_GROUPS = groupAssetLibraryEntries(ASSET_LIBRARY_CATALOG);
+
+function catalogRevision(entries: readonly Readonly<ProductionCandidateLibraryEntry>[]): string {
+  let hash = 0x811c9dc5;
+  for (const character of entries.map(({ id, fingerprint }) => `${id}.${fingerprint}`).join("/")) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `catalog-${hash.toString(16).padStart(8, "0")}`;
+}
+
+/** Read-only, stable-ID ordered game-planning input; home remains its dedicated landmark. */
+export function availableAuthoredIslandCatalog(
+  entries: readonly Readonly<AssetLibraryEntry>[] = ASSET_LIBRARY_CATALOG,
+): Readonly<AuthoredIslandCatalog> {
+  const available = entries
+    .filter((entry): entry is Readonly<ProductionCandidateLibraryEntry> =>
+      entry.entryType === "production-candidate"
+      && entry.recipe.family === "island"
+      && entry.availableInGame)
+    .slice()
+    .sort((left, right) => left.id.localeCompare(right.id, "en"));
+  return validateAuthoredIslandCatalog({
+    revision: catalogRevision(available),
+    islands: available.map((entry) => {
+      if (entry.collisionDraft.kind !== "hybrid-grid-draft") {
+        throw new RangeError(`Available island ${entry.id} requires a saved hybrid collision mask`);
+      }
+      return {
+        assetId: entry.id,
+        name: entry.name,
+        revision: entry.fingerprint,
+        gridWidth: entry.collisionDraft.grid.width,
+        gridHeight: entry.collisionDraft.grid.height,
+        solidSubcells: entry.collisionDraft.solidSubcells,
+      };
+    }),
+  });
+}
+
+export const AVAILABLE_AUTHORED_ISLAND_CATALOG = availableAuthoredIslandCatalog();

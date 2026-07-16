@@ -26,6 +26,7 @@ function saveRequest() {
       targetHeight: 32,
       layers: [{ id: "base", defaultVisible: true, opacity: 1 }],
       runtimeBindingAssetId: null,
+      availableInGame: false,
     },
     collision: {
       kind: "hybrid-grid-draft",

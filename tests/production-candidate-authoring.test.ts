@@ -67,6 +67,7 @@ function request() {
         { id: "base", defaultVisible: true, opacity: 0.9 },
       ],
       runtimeBindingAssetId: "player.boat.primary",
+      availableInGame: false,
     },
     collision: {
       kind: "hybrid-grid-draft",

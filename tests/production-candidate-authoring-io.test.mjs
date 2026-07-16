@@ -106,6 +106,7 @@ function request(fingerprint = oldFingerprint) {
       targetHeight: 64,
       layers: [{ id: "base", defaultVisible: false, opacity: 0.65 }],
       runtimeBindingAssetId: "home.island.primary",
+      availableInGame: true,
     },
     collision: {
       kind: "hybrid-grid-draft",
@@ -125,6 +126,7 @@ function passableRequest(fingerprint = oldFingerprint) {
       family: "shoal",
       targetWidth: 95,
       targetHeight: 61,
+      availableInGame: false,
     },
     collision: {
       kind: "empty",
@@ -152,7 +154,7 @@ async function missing(filename) {
 }
 
 describe("GR-3.7 production candidate repository authoring", () => {
-  it("persists recipe settings and an exact mask, reprepares once, and invalidates review", async () => {
+  it("persists island availability and an exact mask atomically without a review state", async () => {
     const root = await repository();
     const prepared = [];
     const service = createProductionCandidateAuthoringService({
@@ -178,7 +180,7 @@ describe("GR-3.7 production candidate repository authoring", () => {
       previousFingerprint: oldFingerprint,
       fingerprint: newFingerprint,
       validationState: "current",
-      reviewState: "pending",
+      availableInGame: true,
       settings: { name: "Authored Test Cay" },
       collision: { solidSubcells: [{ x: 1, y: 0 }, { x: 3, y: 2 }] },
     });
@@ -193,6 +195,7 @@ describe("GR-3.7 production candidate repository authoring", () => {
         mode: "mask-file",
         maskFile: "assets-src/gr3/candidate-masks/production-island-test-cay-mask.png",
       },
+      availableInGame: true,
     });
     expect(JSON.parse(await readFile(path.join(root, "assets-src", "gr3", "reviews.json"), "utf8")))
       .toEqual({ formatVersion: 1, decisions: [] });
@@ -200,7 +203,7 @@ describe("GR-3.7 production candidate repository authoring", () => {
       formatVersion: 1,
       recipeId,
       candidateFingerprint: newFingerprint,
-    })).resolves.toMatchObject({ fingerprint: newFingerprint, reviewState: "pending" });
+    })).resolves.toMatchObject({ fingerprint: newFingerprint, availableInGame: true });
   });
 
   it("rejects a stale fingerprint before invoking preparation or changing repository files", async () => {
@@ -215,6 +218,54 @@ describe("GR-3.7 production candidate repository authoring", () => {
     });
     await expect(service.save(request("c".repeat(64)))).rejects.toBeInstanceOf(ProductionCandidateAuthoringError);
     expect(prepares).toBe(0);
+    expect(await readFile(manifestPath)).toEqual(before);
+  });
+
+  it("leaves an island unavailable when enabling it fails collision validation", async () => {
+    const root = await repository();
+    const manifestPath = path.join(root, "assets-src", "gr3", "production-recipes.json");
+    const before = await readFile(manifestPath);
+    const service = createProductionCandidateAuthoringService({
+      repositoryRoot: root,
+      validateRecipe: async () => undefined,
+      prepareRecipe: async () => undefined,
+    });
+    await expect(service.save({
+      ...request(),
+      collision: { ...request().collision, solidSubcells: [] },
+    })).rejects.toThrow(/available island must contain saved solid collision/u);
+    expect(await readFile(manifestPath)).toEqual(before);
+  });
+
+  it("rejects a duplicate island name before changing repository files", async () => {
+    const root = await repository();
+    const manifestPath = path.join(root, "assets-src", "gr3", "production-recipes.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.recipes.push({
+      ...recipe(),
+      id: "production.island.taken-name",
+      name: "Taken Name",
+      availableInGame: false,
+      provenance: {
+        ...recipe().provenance,
+        sourceFile: "assets-src/gr3/intake/production-island-taken-name-source.png",
+      },
+      layers: recipe().layers.map((layer) => ({
+        ...layer,
+        sourceFile: "assets-src/gr3/intake/production-island-taken-name-source.png",
+      })),
+    });
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const before = await readFile(manifestPath);
+    const service = createProductionCandidateAuthoringService({
+      repositoryRoot: root,
+      validateRecipe: async () => undefined,
+      prepareRecipe: async () => undefined,
+    });
+    await expect(service.save({
+      ...request(),
+      settings: { ...request().settings, name: "taken name" },
+    })).rejects.toThrow(/Duplicate production asset recipe name/u);
     expect(await readFile(manifestPath)).toEqual(before);
   });
 
@@ -265,7 +316,6 @@ describe("GR-3.7 production candidate repository authoring", () => {
       previousFingerprint: oldFingerprint,
       fingerprint: newFingerprint,
       validationState: "current",
-      reviewState: "pending",
       settings: { family: "shoal", targetWidth: 95, targetHeight: 61 },
       collision: {
         kind: "empty",
@@ -276,7 +326,7 @@ describe("GR-3.7 production candidate repository authoring", () => {
     await missing(maskPath);
   });
 
-  it("reports an older review decision as stale instead of silently pending", async () => {
+  it("does not expose an obsolete island review state", async () => {
     const root = await repository();
     await writeFile(path.join(root, "assets-src", "gr3", "reviews.json"), `${JSON.stringify({
       formatVersion: 1,
@@ -295,7 +345,7 @@ describe("GR-3.7 production candidate repository authoring", () => {
     })).resolves.toMatchObject({
       fingerprint: oldFingerprint,
       validationState: "current",
-      reviewState: "stale",
+      availableInGame: false,
     });
   });
 

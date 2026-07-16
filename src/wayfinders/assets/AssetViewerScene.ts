@@ -1746,7 +1746,7 @@ export class AssetViewerScene extends Phaser.Scene {
             <input data-island="name" type="text" maxlength="120" required>
           </label>
           <label class="island-availability">
-            <input data-island="available" type="checkbox" disabled>
+            <input data-island="available" type="checkbox">
             <span>Available in game</span>
           </label>
           <p data-island="availability-status" class="island-availability-status"></p>
@@ -1821,6 +1821,11 @@ export class AssetViewerScene extends Phaser.Scene {
       }
       this.syncIslandWorkbench();
     }, { signal });
+    slot.querySelector<HTMLInputElement>("[data-island=available]")?.addEventListener("change", () => {
+      const entry = this.selectedProductionCandidate();
+      if (entry) this.productionLocallyDirty.add(entry.id);
+      this.syncIslandWorkbench();
+    }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-island-action=save]")
       ?.addEventListener("click", () => { void this.saveIslandChanges(); }, { signal });
     slot.querySelector<HTMLAnchorElement>("[data-island-action=trial]")
@@ -1851,6 +1856,7 @@ export class AssetViewerScene extends Phaser.Scene {
   private islandCandidateAuthoringRequest(
     entry: Readonly<ProductionCandidateLibraryEntry>,
     name: string,
+    availableInGame: boolean,
   ): Readonly<ProductionCandidateAuthoringRequest> {
     if (entry.recipe.family !== "island") throw new RangeError("The selected asset is not an island");
     const dimensions = this.productionCandidateDimensions(entry);
@@ -1869,6 +1875,7 @@ export class AssetViewerScene extends Phaser.Scene {
           opacity: layer.opacity,
         })),
         runtimeBindingAssetId: null,
+        availableInGame,
       },
       collision: this.productionHybridCollisionFromModel(dimensions.width, dimensions.height),
     });
@@ -1888,8 +1895,10 @@ export class AssetViewerScene extends Phaser.Scene {
     if (subtitle) subtitle.textContent = entry.subtitle;
     if (name && document.activeElement !== name) name.value = this.islandNameDrafts.get(entry.id) ?? entry.name;
     if (name) name.disabled = entry.entryType !== "production-candidate" || this.productionAuthoringInFlight;
-    const isAvailable = entry.entryType === "authored-package";
-    if (available) available.checked = isAvailable;
+    const isAvailable = entry.entryType === "authored-package"
+      || (entry.entryType === "production-candidate" && entry.availableInGame);
+    if (available && document.activeElement !== available) available.checked = isAvailable;
+    if (available) available.disabled = entry.entryType !== "production-candidate" || this.productionAuthoringInFlight;
     if (availabilityStatus) availabilityStatus.textContent = isAvailable
       ? "Available in game"
       : "Unavailable in game";
@@ -1898,8 +1907,8 @@ export class AssetViewerScene extends Phaser.Scene {
     const locallyDirty = candidate !== undefined && this.productionLocallyDirty.has(candidate.id);
     const collision = this.collisionModel.snapshot();
     let requestError: string | undefined;
-    if (candidate && name) {
-      try { this.islandCandidateAuthoringRequest(candidate, name.value); }
+    if (candidate && name && available) {
+      try { this.islandCandidateAuthoringRequest(candidate, name.value, available.checked); }
       catch (error) { requestError = this.errorMessage(error); }
     }
     if (save) {
@@ -1944,9 +1953,10 @@ export class AssetViewerScene extends Phaser.Scene {
     }
     if (entry.entryType !== "production-candidate" || this.productionAuthoringInFlight) return;
     const name = document.querySelector<HTMLInputElement>("[data-island=name]");
-    if (!name) return;
+    const available = document.querySelector<HTMLInputElement>("[data-island=available]");
+    if (!name || !available) return;
     try {
-      const request = this.islandCandidateAuthoringRequest(entry, name.value);
+      const request = this.islandCandidateAuthoringRequest(entry, name.value, available.checked);
       this.productionAuthoringInFlight = true;
       this.syncIslandWorkbench();
       this.reportIslandStatus("Saving changes…");
@@ -2350,6 +2360,7 @@ export class AssetViewerScene extends Phaser.Scene {
           opacity: layer.opacity,
         })),
         runtimeBindingAssetId: entry.recipe.runtimeBinding?.assetId ?? null,
+        availableInGame: entry.availableInGame,
       },
       collision: this.productionCandidateAuthoredCollision(entry),
     });
@@ -2540,6 +2551,7 @@ export class AssetViewerScene extends Phaser.Scene {
         targetHeight,
         layers,
         runtimeBindingAssetId,
+        availableInGame: entry.availableInGame,
       },
       collision,
     });

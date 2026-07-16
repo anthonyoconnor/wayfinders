@@ -30,12 +30,12 @@ async function writeJson(filename, value) {
 async function createRepository(decision = "approved") {
   const root = await mkdtemp(path.join(tmpdir(), "wayfinders-production-promotion-"));
   roots.push(root);
-  const id = "production.island.test-cay";
+  const id = "production.ship.test-sloop";
   const candidateBytes = Buffer.from("prepared candidate image");
   const thumbnailBytes = Buffer.from("prepared thumbnail");
   const sourceBytes = Buffer.from("source");
-  const sourceFile = "assets-src/gr1/test-cay-source.png";
-  const candidateDirectory = "assets-src/gr3/candidates/production-island-test-cay";
+  const sourceFile = "assets-src/gr1/test-sloop-source.png";
+  const candidateDirectory = "assets-src/gr3/candidates/production-ship-test-sloop";
   const layerFile = `${candidateDirectory}/base.png`;
   const thumbnailFile = `${candidateDirectory}/thumbnail.png`;
   const collisionDraftFile = `${candidateDirectory}/collision-draft.json`;
@@ -44,16 +44,16 @@ async function createRepository(decision = "approved") {
     formatVersion: 1,
     recipes: [{
       id,
-      name: "Test Cay",
-      family: "island",
+      name: "Test Sloop",
+      family: "vessel",
       lifecycle: "source",
       collection: "Test sources",
       sortOrder: 1,
-      tags: ["island", "test"],
+      tags: ["ship", "test"],
       provenance: { kind: "selected-source", sourceFile },
       layers: [{
         id: "base",
-        name: "Base island",
+        name: "Base ship",
         role: "base",
         sourceFile,
         defaultVisible: true,
@@ -73,7 +73,7 @@ async function createRepository(decision = "approved") {
       }],
       animations: [],
       collision: { mode: "blank-draft", tileSize: 32, subcellSize: 8 },
-      runtimeBinding: { assetId: "home.island.primary", collisionIntent: "preserve" },
+      runtimeBinding: { assetId: "player.boat.primary", collisionIntent: "preserve" },
     }],
   };
   const recipeHash = sha256(Buffer.from(canonicalJson(manifest.recipes[0]), "utf8"));
@@ -89,7 +89,7 @@ async function createRepository(decision = "approved") {
     manifestSha256: productionManifestFingerprint(manifest),
     entries: [{
       id,
-      family: "island",
+      family: "vessel",
       lifecycle: "candidate",
       jobKey,
       sourceFiles: [sourceFile],
@@ -102,7 +102,7 @@ async function createRepository(decision = "approved") {
       }],
       thumbnailFile,
       collisionDraftFile,
-      runtimeBinding: { assetId: "home.island.primary", collisionIntent: "preserve" },
+      runtimeBinding: { assetId: "player.boat.primary", collisionIntent: "preserve" },
     }],
   };
   const reviews = {
@@ -127,7 +127,7 @@ async function createRepository(decision = "approved") {
     formatVersion: 1,
     pipelineVersion: PRODUCTION_PREPARATION_PIPELINE_VERSION,
     recipeId: id,
-    family: "island",
+    family: "vessel",
     lifecycle: "candidate",
     jobKey,
     recipeHash,
@@ -179,7 +179,7 @@ describe("GR-3.4 production promotion", () => {
     });
     expect(summary.budgets.passed).toBe(true);
 
-    const publicDirectory = path.join(root, "public/assets/gr3/production/production-island-test-cay");
+    const publicDirectory = path.join(root, "public/assets/gr3/production/production-ship-test-sloop");
     expect(await readFile(path.join(publicDirectory, "base.png"))).toEqual(candidateBytes);
     const publicManifest = JSON.parse(await readFile(
       path.join(root, "public/assets/gr3/production/production-assets.json"),
@@ -189,10 +189,10 @@ describe("GR-3.4 production promotion", () => {
       id,
       candidateFingerprint: jobKey,
       sources: [{ file: sourceFile, sha256: sha256(sourceBytes) }],
-      runtimeBinding: { assetId: "home.island.primary", collisionIntent: "preserve" },
+      runtimeBinding: { assetId: "player.boat.primary", collisionIntent: "preserve" },
       collision: {
         mode: "preserve-runtime",
-        runtimeAssetId: "home.island.primary",
+        runtimeAssetId: "player.boat.primary",
         candidateDraftSha256: sha256(collisionBytes),
         candidateDraftPromoted: false,
       },
@@ -229,7 +229,7 @@ describe("GR-3.4 production promotion", () => {
     await runProductionPromotion("promote", { repositoryRoot: root });
     const publicLayer = path.join(
       root,
-      "public/assets/gr3/production/production-island-test-cay/base.png",
+      "public/assets/gr3/production/production-ship-test-sloop/base.png",
     );
     await writeFile(publicLayer, Buffer.concat([candidateBytes, Buffer.from("stale")]));
     await expect(runProductionPromotion("check", { repositoryRoot: root }))

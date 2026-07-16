@@ -21,6 +21,7 @@ const TOP_LEVEL_REQUIRED = [
   "generatorVersion",
   "seed",
   "settingsProfileId",
+  "authoredIslandCatalogRevision",
   "dimensions",
   "landmarks",
   "islands",
@@ -69,6 +70,10 @@ export function validateWorldManifestV1(value: unknown): WorldManifestV1 {
   const generatorVersion = identifier(source.generatorVersion, "$.generatorVersion");
   const seed = safeInteger(source.seed, "$.seed");
   const settingsProfileId = identifier(source.settingsProfileId, "$.settingsProfileId");
+  const authoredIslandCatalogRevision = identifier(
+    source.authoredIslandCatalogRevision,
+    "$.authoredIslandCatalogRevision",
+  );
   const settingsFingerprint = source.settingsFingerprint === undefined
     ? undefined
     : identifier(source.settingsFingerprint, "$.settingsFingerprint");
@@ -81,6 +86,7 @@ export function validateWorldManifestV1(value: unknown): WorldManifestV1 {
     generatorVersion,
     seed,
     settingsProfileId,
+    authoredIslandCatalogRevision,
     ...(settingsFingerprint === undefined ? {} : { settingsFingerprint }),
     dimensions,
     landmarks,
@@ -164,6 +170,7 @@ function validateIslands(
   if (!Array.isArray(value)) fail("$.islands", "must be an array");
   const seenIds = new Set<string>();
   const seenSourceIds = new Set<number>();
+  const seenAuthoredAssetIds = new Set<string>();
   return value.map((entry, index) => {
     const path = `$.islands[${index}]`;
     const source = exactRecord(entry, path, [
@@ -178,7 +185,8 @@ function validateIslands(
       "rotation",
       "shapeSeed",
       "bounds",
-    ]);
+      "sourceKind",
+    ], ["authoredAssetId"]);
     const sourceId = safeInteger(source.sourceId, `${path}.sourceId`, 1);
     const expectedId = stableIslandId(sourceId);
     const id = stringValue(source.id, `${path}.id`);
@@ -200,7 +208,21 @@ function validateIslands(
     const rotation = finiteNumber(source.rotation, `${path}.rotation`, 0);
     if (rotation >= Math.PI * 2) fail(`${path}.rotation`, "must be less than 2π radians");
     const shapeSeed = safeInteger(source.shapeSeed, `${path}.shapeSeed`, 0, 0xffff_ffff);
-    const bounds = validateBounds(source.bounds, `${path}.bounds`, center, outerRadius, dimensions);
+    if (source.sourceKind !== "authored" && source.sourceKind !== "procedural") {
+      fail(`${path}.sourceKind`, "must be authored or procedural");
+    }
+    const sourceKind = source.sourceKind as "authored" | "procedural";
+    let authoredAssetId: string | undefined;
+    if (sourceKind === "authored") {
+      authoredAssetId = identifier(source.authoredAssetId, `${path}.authoredAssetId`);
+      if (seenAuthoredAssetIds.has(authoredAssetId)) {
+        fail(`${path}.authoredAssetId`, `duplicates authored asset ID ${authoredAssetId}`);
+      }
+      seenAuthoredAssetIds.add(authoredAssetId);
+    } else if (source.authoredAssetId !== undefined) {
+      fail(`${path}.authoredAssetId`, "is only valid for authored islands");
+    }
+    const bounds = validateBounds(source.bounds, `${path}.bounds`, center, outerRadius, dimensions, sourceKind);
     return {
       id: expectedId,
       sourceId,
@@ -213,6 +235,8 @@ function validateIslands(
       rotation,
       shapeSeed,
       bounds,
+      sourceKind,
+      ...(authoredAssetId === undefined ? {} : { authoredAssetId }),
     };
   }).sort(compareIds);
 }
@@ -223,6 +247,7 @@ function validateBounds(
   center: Readonly<{ x: number; y: number }>,
   outerRadius: number,
   dimensions: Readonly<WorldManifestDimensionsV1>,
+  sourceKind: "authored" | "procedural",
 ): WorldManifestBoundsV1 {
   const source = exactRecord(value, path, ["minX", "minY", "maxX", "maxY"]);
   const bounds = {
@@ -233,13 +258,17 @@ function validateBounds(
   };
   if (bounds.minX > bounds.maxX) fail(path, "minX must not exceed maxX");
   if (bounds.minY > bounds.maxY) fail(path, "minY must not exceed maxY");
-  const extent = Math.ceil(outerRadius);
-  if (
-    bounds.minX > center.x - extent
-    || bounds.minY > center.y - extent
-    || bounds.maxX < center.x + extent
-    || bounds.maxY < center.y + extent
-  ) fail(path, `must contain the island's outer-radius extent of ${extent} cells`);
+  if (sourceKind === "procedural") {
+    const extent = Math.ceil(outerRadius);
+    if (
+      bounds.minX > center.x - extent
+      || bounds.minY > center.y - extent
+      || bounds.maxX < center.x + extent
+      || bounds.maxY < center.y + extent
+    ) fail(path, `must contain the island's outer-radius extent of ${extent} cells`);
+  } else if (
+    center.x < bounds.minX || center.x > bounds.maxX || center.y < bounds.minY || center.y > bounds.maxY
+  ) fail(path, "must contain the authored island center");
   return bounds;
 }
 

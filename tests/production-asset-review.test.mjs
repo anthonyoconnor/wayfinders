@@ -29,13 +29,16 @@ async function createRepository() {
   await Promise.all([
     writeFile(path.join(gr3, "production-recipes.json"), JSON.stringify({
       formatVersion: 1,
-      recipes: [{ id: "production.island.zeta" }, { id: "production.island.alpha" }],
+      recipes: [
+        { id: "production.vessel.zeta", family: "vessel" },
+        { id: "production.vessel.alpha", family: "vessel" },
+      ],
     })),
     writeFile(path.join(generated, "production-index.json"), JSON.stringify({
       formatVersion: 1,
       entries: [
-        { id: "production.island.zeta", jobKey: fingerprintB },
-        { id: "production.island.alpha", jobKey: fingerprintA },
+        { id: "production.vessel.zeta", jobKey: fingerprintB },
+        { id: "production.vessel.alpha", jobKey: fingerprintA },
       ],
     })),
     writeFile(path.join(gr3, "reviews.json"), '{"formatVersion":1,"decisions":[]}\n'),
@@ -51,21 +54,21 @@ async function storedReviews(gr3) {
 describe("GR-3.3 production candidate decisions", () => {
   it("accepts only the small trusted decision envelope and canonical store", () => {
     expect(validateProductionReviewRequest({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintA,
       decision: "approved",
     })).toEqual({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintA,
       decision: "approved",
     });
     expect(() => validateProductionReviewRequest({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintA,
       decision: "pending",
     })).toThrow(/approved or rejected/);
     expect(() => validateProductionReviewRequest({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintA,
       decision: "approved",
       outputFile: "public/runtime.png",
@@ -82,19 +85,19 @@ describe("GR-3.3 production candidate decisions", () => {
   it("stores approvals and replacement rejections for the current candidate", async () => {
     const { root, gr3 } = await createRepository();
     await expect(reviewProductionCandidate({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintA,
       decision: "approved",
     }, { repositoryRoot: root })).resolves.toMatchObject({ decision: "approved" });
     await reviewProductionCandidate({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintA,
       decision: "rejected",
     }, { repositoryRoot: root });
     expect(await storedReviews(gr3)).toEqual({
       formatVersion: 1,
       decisions: [{
-        recipeId: "production.island.alpha",
+        recipeId: "production.vessel.alpha",
         candidateFingerprint: fingerprintA,
         decision: "rejected",
       }],
@@ -104,18 +107,18 @@ describe("GR-3.3 production candidate decisions", () => {
   it("sorts decisions stably by recipe ID regardless of review order", async () => {
     const { root, gr3 } = await createRepository();
     await reviewProductionCandidate({
-      recipeId: "production.island.zeta",
+      recipeId: "production.vessel.zeta",
       candidateFingerprint: fingerprintB,
       decision: "approved",
     }, { repositoryRoot: root });
     await reviewProductionCandidate({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintA,
       decision: "rejected",
     }, { repositoryRoot: root });
     expect((await storedReviews(gr3)).decisions.map(({ recipeId }) => recipeId)).toEqual([
-      "production.island.alpha",
-      "production.island.zeta",
+      "production.vessel.alpha",
+      "production.vessel.zeta",
     ]);
   });
 
@@ -123,16 +126,36 @@ describe("GR-3.3 production candidate decisions", () => {
     const { root, gr3 } = await createRepository();
     const before = await readFile(path.join(gr3, "reviews.json"));
     await expect(reviewProductionCandidate({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintB,
       decision: "approved",
     }, { repositoryRoot: root })).rejects.toThrow(/Stale candidate fingerprint/);
     await expect(reviewProductionCandidate({
-      recipeId: "production.island.unknown",
+      recipeId: "production.vessel.unknown",
       candidateFingerprint: fingerprintA,
       decision: "approved",
     }, { repositoryRoot: root })).rejects.toThrow(/Unknown production recipe/);
     expect(await readFile(path.join(gr3, "reviews.json"))).toEqual(before);
+  });
+
+  it("rejects review workflow for islands", async () => {
+    const { root, gr3 } = await createRepository();
+    const manifestPath = path.join(gr3, "production-recipes.json");
+    const indexPath = path.join(gr3, "generated", "production-index.json");
+    await writeFile(manifestPath, JSON.stringify({
+      formatVersion: 1,
+      recipes: [{ id: "production.island.alpha", family: "island", availableInGame: false }],
+    }));
+    await writeFile(indexPath, JSON.stringify({
+      formatVersion: 1,
+      entries: [{ id: "production.island.alpha", jobKey: fingerprintA }],
+    }));
+    await expect(reviewProductionCandidate({
+      recipeId: "production.island.alpha",
+      candidateFingerprint: fingerprintA,
+      decision: "approved",
+    }, { repositoryRoot: root })).rejects.toThrow(/Available in game instead of review/u);
+    expect(await storedReviews(gr3)).toEqual({ formatVersion: 1, decisions: [] });
   });
 
   it("does not mutate runtime asset files while recording a review", async () => {
@@ -140,7 +163,7 @@ describe("GR-3.3 production candidate decisions", () => {
     const runtimeFile = path.join(runtime, "runtime-sentinel.json");
     const before = await readFile(runtimeFile);
     await reviewProductionCandidate({
-      recipeId: "production.island.alpha",
+      recipeId: "production.vessel.alpha",
       candidateFingerprint: fingerprintA,
       decision: "approved",
     }, { repositoryRoot: root });

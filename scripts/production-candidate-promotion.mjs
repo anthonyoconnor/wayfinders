@@ -46,10 +46,19 @@ export function createProductionCandidatePromoter({
 
   return async (input) => {
     const request = validateProductionCandidateIdentityRequest(input);
-    const [index, reviewsInput] = await Promise.all([
+    const [manifestInput, index, reviewsInput] = await Promise.all([
+      readJson(path.join(gr3, "production-recipes.json"), "Production recipe manifest"),
       readJson(path.join(gr3, "generated", "production-index.json"), "Generated production index"),
       readJson(path.join(gr3, "reviews.json"), "Production review store"),
     ]);
+    const recipe = Array.isArray(manifestInput?.recipes)
+      ? manifestInput.recipes.find((candidate) => candidate?.id === request.recipeId)
+      : undefined;
+    if (recipe?.family === "island") {
+      throw new ProductionCandidatePromotionError(
+        `${request.recipeId} uses Available in game instead of promotion`,
+      );
+    }
     const entry = currentIndexEntry(index, request.recipeId);
     if (entry.jobKey !== request.candidateFingerprint) {
       throw new ProductionCandidatePromotionError(

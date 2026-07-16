@@ -14,6 +14,7 @@ import {
 } from "./wayfinders/assets/AssetAppMode";
 import { AssetTrialScene } from "./wayfinders/assets/AssetTrialScene";
 import { AssetViewerScene } from "./wayfinders/assets/AssetViewerScene";
+import { AVAILABLE_AUTHORED_ISLAND_CATALOG } from "./wayfinders/assets/AssetLibraryCatalog";
 import {
   resolveAssetWorkspace,
   type AssetWorkspaceId,
@@ -206,7 +207,9 @@ try {
     ? [new AssetViewerScene(initialAssetWorkspace)]
     : applicationMode === "asset-trial"
       ? [new AssetTrialScene(resolveAssetTrialApplicationRequest(window.location.search)!)]
-      : [new WayfindersScene(new GameSimulation(prototypeConfig))];
+      : [new WayfindersScene(new GameSimulation(prototypeConfig, undefined, {
+        authoredIslandCatalog: AVAILABLE_AUTHORED_ISLAND_CATALOG,
+      }))];
   wayfindersGame = createWayfindersGame(scenes);
   if (applicationMode === "assets") {
     let activeWorkspace = initialAssetWorkspace;

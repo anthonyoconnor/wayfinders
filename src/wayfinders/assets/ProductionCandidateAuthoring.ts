@@ -50,6 +50,8 @@ export interface ProductionCandidateSettings {
   readonly layers: readonly Readonly<ProductionCandidateLayerSettings>[];
   /** Null keeps the candidate independent from the three pilot runtime slots. */
   readonly runtimeBindingAssetId: AuthoredAssetId | null;
+  /** Island game-catalog membership; review and promotion are separate legacy tooling for other families. */
+  readonly availableInGame: boolean;
 }
 
 export interface ProductionCandidateAuthoredHybridMask {
@@ -200,12 +202,16 @@ export function validateProductionCandidateAuthoringRequest(
   const settingsInput = record(parsed.settings, "settings");
   exactKeys(
     settingsInput,
-    ["name", "family", "targetWidth", "targetHeight", "layers", "runtimeBindingAssetId"],
+    ["name", "family", "targetWidth", "targetHeight", "layers", "runtimeBindingAssetId", "availableInGame"],
     "settings",
   );
   const targetWidth = integer(settingsInput.targetWidth, "settings.targetWidth", 1, 4_096);
   const targetHeight = integer(settingsInput.targetHeight, "settings.targetHeight", 1, 4_096);
   const selectedFamily = family(settingsInput.family);
+  const availableInGame = boolean(settingsInput.availableInGame, "settings.availableInGame");
+  if (selectedFamily !== "island" && availableInGame) {
+    throw new RangeError("Only island candidates can be available in game");
+  }
   if (!Array.isArray(settingsInput.layers) || settingsInput.layers.length === 0 || settingsInput.layers.length > 32) {
     throw new RangeError("settings.layers must contain between 1 and 32 layers");
   }
@@ -295,6 +301,9 @@ export function validateProductionCandidateAuthoringRequest(
       grid,
       solidSubcells,
     };
+    if (selectedFamily === "island" && availableInGame && solidSubcells.length === 0) {
+      throw new RangeError("An available island must contain saved solid collision");
+    }
   } else {
     throw new RangeError("collision.kind must be hybrid-grid-draft or empty");
   }
@@ -308,6 +317,7 @@ export function validateProductionCandidateAuthoringRequest(
       targetHeight,
       layers,
       runtimeBindingAssetId: runtimeBinding(settingsInput.runtimeBindingAssetId),
+      availableInGame,
     },
     collision,
   });
@@ -376,6 +386,9 @@ export function applyProductionCandidateAuthoringRequest(
         mode: "empty" as const,
         reason: request.collision.reason,
       },
+    ...(request.settings.family === "island"
+      ? { availableInGame: request.settings.availableInGame }
+      : { availableInGame: undefined }),
     ...(request.settings.runtimeBindingAssetId
       ? {
         runtimeBinding: {

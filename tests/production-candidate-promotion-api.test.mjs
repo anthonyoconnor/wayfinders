@@ -13,7 +13,7 @@ import {
 } from "../scripts/production-candidate-promotion.mjs";
 
 const fingerprint = "a".repeat(64);
-const recipeId = "production.island.test-cay";
+const recipeId = "production.vessel.test-ship";
 const roots = [];
 const servers = [];
 
@@ -32,6 +32,10 @@ async function repository(decision = "approved") {
   roots.push(root);
   const gr3 = path.join(root, "assets-src", "gr3");
   await mkdir(path.join(gr3, "generated"), { recursive: true });
+  await writeFile(path.join(gr3, "production-recipes.json"), `${JSON.stringify({
+    formatVersion: 1,
+    recipes: [{ id: recipeId, family: "vessel" }],
+  })}\n`);
   await writeFile(path.join(gr3, "generated", "production-index.json"), `${JSON.stringify({
     formatVersion: 1,
     entries: [{ id: recipeId, jobKey: fingerprint }],
@@ -115,6 +119,21 @@ describe("GR-3.7 production candidate promotion endpoint", () => {
       promote: async () => { called = true; },
     });
     await expect(promoteCandidate(request())).rejects.toThrow(/currently approved/u);
+    expect(called).toBe(false);
+  });
+
+  it("rejects promotion workflow for islands", async () => {
+    const root = await repository();
+    await writeFile(path.join(root, "assets-src", "gr3", "production-recipes.json"), `${JSON.stringify({
+      formatVersion: 1,
+      recipes: [{ id: recipeId, family: "island", availableInGame: false }],
+    })}\n`);
+    let called = false;
+    const promoteCandidate = createProductionCandidatePromoter({
+      repositoryRoot: root,
+      promote: async () => { called = true; },
+    });
+    await expect(promoteCandidate(request())).rejects.toThrow(/Available in game instead of promotion/u);
     expect(called).toBe(false);
   });
 

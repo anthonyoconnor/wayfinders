@@ -7,6 +7,13 @@ import {
 } from "./IslandPlacementIndex";
 import { KnowledgeState, TerrainType } from "./TileData";
 import { seededValue } from "./SeededRandom";
+import {
+  EMPTY_AUTHORED_ISLAND_CATALOG,
+  validateAuthoredIslandCatalog,
+  type AuthoredIslandCatalog,
+  type AuthoredIslandCatalogEntry,
+} from "./AuthoredIslandCatalog";
+import { collisionSubcellBit } from "./CollisionMask";
 import type { WorldGrid } from "./WorldGrid";
 
 export enum IslandKind {
@@ -40,6 +47,13 @@ export interface GeneratedIsland {
   rotation: number;
   shapeSeed: number;
   bounds: IslandBounds;
+  sourceKind: "authored" | "procedural";
+  authoredAssetId?: string;
+  authoredCollision?: Readonly<{
+    gridWidth: number;
+    gridHeight: number;
+    solidSubcells: readonly Readonly<{ x: number; y: number }>[];
+  }>;
 }
 
 interface IslandProfile extends Omit<GeneratedIsland, "center" | "bounds"> {}
@@ -88,6 +102,7 @@ const PLACEMENT_NAMESPACE = 2_003;
 const PROFILE_NAMESPACE = 3_011;
 const SHAPE_NAMESPACE = 5_009;
 const TERRAIN_NAMESPACE = 7_001;
+const AUTHORED_SELECTION_NAMESPACE = 8_191;
 const TWO_PI = Math.PI * 2;
 
 function lerp(from: number, to: number, amount: number): number {
@@ -103,8 +118,14 @@ export class IslandGenerator {
   constructor(private readonly config: PrototypeConfig = prototypeConfig) {}
 
   /** Deterministically lays out descriptors without touching logical tile state. */
-  plan(grid: WorldGrid, seed: number, home: GridPoint, dock: GridPoint): GeneratedIsland[] {
-    const profiles = this.buildProfiles(seed);
+  plan(
+    grid: WorldGrid,
+    seed: number,
+    home: GridPoint,
+    dock: GridPoint,
+    authoredCatalog: Readonly<AuthoredIslandCatalog> = EMPTY_AUTHORED_ISLAND_CATALOG,
+  ): GeneratedIsland[] {
+    const profiles = this.buildProfiles(seed, validateAuthoredIslandCatalog(authoredCatalog));
     const placed: GeneratedIsland[] = [];
     const maximumOuterRadius = profiles.reduce(
       (maximum, profile) => Math.max(maximum, profile.outerRadius),
@@ -142,15 +163,41 @@ export class IslandGenerator {
     dock: GridPoint,
   ): void {
     for (const island of islands) {
-      this.paintIsland(grid, seed, island);
-      if (island.kind === IslandKind.Atoll) this.carveAtollPassage(grid, seed, island);
+      if (island.sourceKind === "authored") this.paintAuthoredIsland(grid, island);
+      else {
+        this.paintIsland(grid, seed, island);
+        if (island.kind === IslandKind.Atoll) this.carveAtollPassage(grid, seed, island);
+      }
     }
     this.assertOpenOcean(grid, dock, islands);
   }
 
-  private buildProfiles(seed: number): IslandProfile[] {
-    const profiles: IslandProfile[] = [];
-    for (let index = 0; index < this.config.islands.count; index++) {
+  private buildProfiles(seed: number, catalog: Readonly<AuthoredIslandCatalog>): IslandProfile[] {
+    const selectedAuthored = this.selectAuthoredIslands(seed, catalog.islands);
+    const profiles: IslandProfile[] = selectedAuthored.map((entry, index) => {
+      const radiusX = entry.gridWidth / 2;
+      const radiusY = entry.gridHeight / 2;
+      const major = Math.max(radiusX, radiusY);
+      return {
+        id: index + 1,
+        kind: IslandKind.LowCay,
+        size: major <= this.config.islands.minRadius ? IslandSize.Small
+          : major >= this.config.islands.maxRadius * 0.75 ? IslandSize.Large : IslandSize.Medium,
+        radiusX,
+        radiusY,
+        outerRadius: Math.hypot(Math.ceil(radiusX), Math.ceil(radiusY)) + this.config.islands.apronWidth,
+        rotation: 0,
+        shapeSeed: this.stableStringHash(entry.assetId),
+        sourceKind: "authored",
+        authoredAssetId: entry.assetId,
+        authoredCollision: {
+          gridWidth: entry.gridWidth,
+          gridHeight: entry.gridHeight,
+          solidSubcells: entry.solidSubcells,
+        },
+      };
+    });
+    for (let index = selectedAuthored.length; index < this.config.islands.count; index++) {
       const id = index + 1;
       const kind = this.chooseKind(seed, index);
       const size = this.chooseSize(seed, index, kind);
@@ -169,9 +216,36 @@ export class IslandGenerator {
         outerRadius: Math.max(majorRadius + this.config.islands.apronWidth, maximumPaintRadius),
         rotation: seededValue(seed + PROFILE_NAMESPACE, id, 7) * TWO_PI,
         shapeSeed,
+        sourceKind: "procedural",
       });
     }
     return profiles;
+  }
+
+  private selectAuthoredIslands(
+    seed: number,
+    islands: readonly Readonly<AuthoredIslandCatalogEntry>[],
+  ): readonly Readonly<AuthoredIslandCatalogEntry>[] {
+    const stable = [...islands].sort((left, right) => left.assetId.localeCompare(right.assetId, "en"));
+    if (stable.length <= this.config.islands.count) return stable;
+    return stable
+      .map((entry) => ({
+        entry,
+        rank: seededValue(seed + AUTHORED_SELECTION_NAMESPACE, this.stableStringHash(entry.assetId), 0),
+      }))
+      .sort((left, right) => left.rank - right.rank || left.entry.assetId.localeCompare(right.entry.assetId, "en"))
+      .slice(0, this.config.islands.count)
+      .map(({ entry }) => entry)
+      .sort((left, right) => left.assetId.localeCompare(right.assetId, "en"));
+  }
+
+  private stableStringHash(value: string): number {
+    let hash = 0x811c9dc5;
+    for (let index = 0; index < value.length; index++) {
+      hash ^= value.charCodeAt(index);
+      hash = Math.imul(hash, 0x01000193) >>> 0;
+    }
+    return hash;
   }
 
   private chooseKind(seed: number, index: number): IslandKind {
@@ -440,6 +514,20 @@ export class IslandGenerator {
   }
 
   private finishRecord(profile: IslandProfile, center: GridPoint): GeneratedIsland {
+    if (profile.sourceKind === "authored" && profile.authoredCollision) {
+      const minX = center.x - Math.floor(profile.authoredCollision.gridWidth / 2);
+      const minY = center.y - Math.floor(profile.authoredCollision.gridHeight / 2);
+      return {
+        ...profile,
+        center,
+        bounds: {
+          minX,
+          minY,
+          maxX: minX + profile.authoredCollision.gridWidth - 1,
+          maxY: minY + profile.authoredCollision.gridHeight - 1,
+        },
+      };
+    }
     const extent = Math.ceil(profile.outerRadius);
     return {
       ...profile,
@@ -451,6 +539,32 @@ export class IslandGenerator {
         maxY: center.y + extent,
       },
     };
+  }
+
+  private paintAuthoredIsland(grid: WorldGrid, island: GeneratedIsland): void {
+    const collision = island.authoredCollision;
+    if (!collision || !island.authoredAssetId) {
+      throw new RangeError(`Authored island ${island.id} is missing its asset collision`);
+    }
+    const masks = new Uint16Array(collision.gridWidth * collision.gridHeight);
+    for (const point of collision.solidSubcells) {
+      const cellX = Math.floor(point.x / 4);
+      const cellY = Math.floor(point.y / 4);
+      const index = cellY * collision.gridWidth + cellX;
+      masks[index] |= collisionSubcellBit(point.x % 4, point.y % 4);
+    }
+    for (let cellY = 0; cellY < collision.gridHeight; cellY++) {
+      for (let cellX = 0; cellX < collision.gridWidth; cellX++) {
+        const x = island.bounds.minX + cellX;
+        const y = island.bounds.minY + cellY;
+        if (!grid.inBounds(x, y)) throw new RangeError(`Authored island ${island.authoredAssetId} left world bounds`);
+        const mask = masks[cellY * collision.gridWidth + cellX];
+        grid.setTerrain(x, y, mask === 0 ? TerrainType.ShallowOcean : TerrainType.Land);
+        grid.setFineCollisionMask(x, y, mask);
+        grid.setIslandId(x, y, island.id);
+        grid.setKnowledge(x, y, KnowledgeState.Unknown, 0);
+      }
+    }
   }
 
   private paintIsland(grid: WorldGrid, seed: number, island: GeneratedIsland): void {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildAssetLibraryCatalog } from "../src/wayfinders/assets/AssetLibraryCatalog";
+import {
+  availableAuthoredIslandCatalog,
+  buildAssetLibraryCatalog,
+} from "../src/wayfinders/assets/AssetLibraryCatalog";
 
 describe("GR-3.6 production collision catalog", () => {
   it("keeps the shoreline seed method and warnings with the editable mask", () => {
@@ -38,6 +41,7 @@ describe("GR-3.6 production collision catalog", () => {
           }],
           animations: [],
           collision: { mode: "shoreline-seed", tileSize: 32, subcellSize: 8 },
+          availableInGame: true,
         }],
       },
       productionIndex: {
@@ -101,5 +105,16 @@ describe("GR-3.6 production collision catalog", () => {
         expect.objectContaining({ id: "warning-1", value: "Review a detached structure." }),
       ]),
     );
+    expect(availableAuthoredIslandCatalog(catalog)).toMatchObject({
+      revision: expect.stringMatching(/^catalog-/u),
+      islands: [{
+        assetId: id,
+        name: "Seeded Island",
+        revision: fingerprint,
+        gridWidth: 1,
+        gridHeight: 1,
+        solidSubcells: [{ x: 1, y: 1 }],
+      }],
+    });
   });
 });

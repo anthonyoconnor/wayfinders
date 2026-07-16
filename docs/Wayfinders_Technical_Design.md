@@ -118,10 +118,20 @@ islands, and passable ocean connected to every world edge. Island placement is
 spatially indexed and attempt-bounded; it either returns a complete deterministic
 plan or a deterministic diagnostic failure.
 
-Non-home islands have stable numeric IDs, kind, size, centre, radii, rotation,
-shape seed, and bounds. Placement, shape, terrain, dossier content, and visual
-content use separate deterministic namespaces. High Island, Low Cay, Atoll, and
-Rocky Skerry are current kinds; atolls receive a navigable passage.
+Non-home island manifests record stable numeric identity, source kind, and—when
+authored—the stable asset ID. Planning receives a validated catalog snapshot
+sorted by stable asset ID, selects authored islands deterministically without
+replacement, uses each selected asset at most once, and creates procedural
+islands only for the configured shortfall. Catalog traversal order cannot
+change selection. Authored canvas and collision bounds retain edge, home,
+starter-lane, and navigable-channel clearances.
+
+Authored island rasterization installs the complete saved `32`/`8` mask as
+collision authority; rendered pixels are not sampled. Procedural islands retain
+stable kind, size, centre, radii, rotation, shape seed, and bounds. Placement,
+shape, terrain, dossier content, and visual content use separate deterministic
+namespaces. High Island, Low Cay, Atoll, and Rocky Skerry remain procedural
+kinds; atolls receive a navigable passage.
 
 `WorldSpatialIndex` provides deterministic closed-bounds point, region, radius,
 nearby, and chunk queries. `WorldDescriptorRegistry` adapts heterogeneous
@@ -362,22 +372,28 @@ layer composition, animation, validation, fingerprints, review, promotion, or
 portable-package controls. Import fixes the family and collision semantics to
 island defaults, reads the PNG canvas, offers grid padding when needed, prepares
 the image, seeds the shoreline mask, and selects the resulting unavailable
-island. Saving an imported island commits its editable name and complete mask
-through one rollback-safe repository operation. The built-in home island keeps
+island. Saving an imported island commits its editable name, complete mask, and
+one durable `availableInGame` boolean through a rollback-safe repository
+operation. Enabling availability validates current prepared art and the exact
+mask before commit; failure leaves the island unavailable with an actionable
+error. Disabling it preserves source art, prepared output, properties,
+collision, and sea-trial access while removing the island from future world
+catalogs. Names and stable IDs remain unique. The built-in home island keeps
 its direct collision save and is always available.
 
-Ships and Fishing shoals retain the general package and candidate tools. Their
-save, validation, review, and promotion operations continue to use the narrow
-serialized repository seams until a dedicated workspace milestone replaces
-them.
+Island review, approval, promotion, and runtime binding are not lifecycle
+paths. Ships and Fishing shoals retain the general package and candidate tools;
+their save, validation, review, and promotion operations continue to use the
+narrow serialized repository seams until a dedicated workspace milestone
+replaces them.
 
-An island candidate can enter a disposable sea trial before approval. The
+An imported island can enter a disposable sea trial regardless of availability. The
 trial contains only open water, the authored player boat, and the candidate's
 actual prepared layers on a centred origin. Its isolated `WorldGrid` applies
 the exact saved `32`/`8` collision draft, exposes safe boat resets and grid and
 collision overlays, and returns directly to the same library record. It never
-constructs `GameSimulation`, persists trial state, changes the runtime world
-catalog, or promotes the candidate. Repository authoring and the trial are not
+constructs `GameSimulation`, persists trial state, or changes the runtime world
+catalog. Repository authoring and the trial are not
 gameplay saving.
 
 ## 11. Developer and event interfaces

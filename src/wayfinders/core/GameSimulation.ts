@@ -3,6 +3,7 @@ import {
   type PrototypeConfig,
 } from "../config/prototypeConfig";
 import { PILOT_COLLISION_PROFILE_REGISTRY } from "../assets/CollisionProfileRegistry";
+import type { AuthoredIslandCatalog } from "../world/AuthoredIslandCatalog";
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import type {
   ForwardGuidance,
@@ -205,6 +206,8 @@ export interface SimulationSnapshot {
 }
 
 export interface GameSimulationOptions {
+  /** Snapshot used only when creating or regenerating a world. */
+  readonly authoredIslandCatalog?: Readonly<AuthoredIslandCatalog>;
   /** Main-thread wall-clock target for one cooperative guidance slice. */
   readonly forwardGuidanceSliceBudgetMs?: number;
   /** Deterministic safety cap in addition to the wall-clock target. */
@@ -380,7 +383,7 @@ export class GameSimulation {
         config.movement,
       ),
     };
-    this.generator = new WorldGenerator(this.config);
+    this.generator = new WorldGenerator(this.config, options.authoredIslandCatalog);
     this.regenerate(this.config.world.seed);
   }
 

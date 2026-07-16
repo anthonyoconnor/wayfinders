@@ -122,6 +122,7 @@ function buildRecipe(request, image, sourceFile, manifest) {
       : request.family === "island"
         ? { mode: "shoreline-seed", tileSize: 32, subcellSize: 8 }
         : { mode: "blank-draft", tileSize: 32, subcellSize: 8 },
+    ...(request.family === "island" ? { availableInGame: false } : {}),
     ...(runtimeAssetId ? {
       runtimeBinding: { assetId: runtimeAssetId, collisionIntent: "preserve" },
     } : {}),
@@ -201,10 +202,12 @@ export function createProductionAssetIntaker({
         }
         throw error;
       }
-      onProgress("completed", "Pending candidate created");
+      onProgress("completed", request.family === "island" ? "Island imported" : "Pending candidate created");
       return {
         recipeId: request.id,
-        message: `${request.name} is prepared as one stable pending candidate`,
+        message: request.family === "island"
+          ? `${request.name} is imported and unavailable in game`
+          : `${request.name} is prepared as one stable pending candidate`,
       };
     });
   };
