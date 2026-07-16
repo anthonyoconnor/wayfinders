@@ -94,6 +94,13 @@ interface ViewerState {
   showFootprint: boolean;
 }
 
+interface AssetViewerCursorKeys {
+  readonly up: Phaser.Input.Keyboard.Key;
+  readonly down: Phaser.Input.Keyboard.Key;
+  readonly left: Phaser.Input.Keyboard.Key;
+  readonly right: Phaser.Input.Keyboard.Key;
+}
+
 interface AssetViewerDebugApi {
   snapshot(): Readonly<ViewerState>;
   select(assetId: AuthoredAssetId): boolean;
@@ -192,7 +199,7 @@ export class AssetViewerScene extends Phaser.Scene {
   private productionReviewInFlight = false;
   private collisionSaveInFlight = false;
   private controlsAbort?: AbortController;
-  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
+  private cursors?: Readonly<AssetViewerCursorKeys>;
   private zoomIn?: Phaser.Input.Keyboard.Key;
   private zoomOut?: Phaser.Input.Keyboard.Key;
   private validatedCandidate?: Readonly<AssetCandidateBundle>;
@@ -267,9 +274,14 @@ export class AssetViewerScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_UP, this.onCollisionPointerUp, this);
     this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onCollisionPointerUp, this);
     this.input.on(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
-    this.cursors = this.input.keyboard?.createCursorKeys();
-    this.zoomIn = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E);
-    this.zoomOut = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
+    this.cursors = this.input.keyboard?.addKeys({
+      up: Phaser.Input.Keyboard.KeyCodes.UP,
+      down: Phaser.Input.Keyboard.KeyCodes.DOWN,
+      left: Phaser.Input.Keyboard.KeyCodes.LEFT,
+      right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+    }, false) as AssetViewerCursorKeys | undefined;
+    this.zoomIn = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.E, false);
+    this.zoomOut = this.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.Q, false);
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.mountControls();
     this.installDebugApi();

@@ -48,4 +48,15 @@ describe("GR-2.1 asset application mode", () => {
     expect(source).toContain("data-library-thumb-src");
     expect(source).not.toContain("this.load.image(this.libraryTextureKey(entry.id)");
   });
+
+  it("leaves asset-form letters and navigation keys available to focused DOM controls", () => {
+    const source = readFileSync(
+      new URL("../src/wayfinders/assets/AssetViewerScene.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("Phaser.Input.Keyboard.KeyCodes.E, false");
+    expect(source).toContain("Phaser.Input.Keyboard.KeyCodes.Q, false");
+    expect(source).toMatch(/addKeys\(\{[\s\S]*?KeyCodes\.RIGHT,[\s\S]*?\}, false\)/u);
+  });
 });
