@@ -164,7 +164,7 @@ toolsToggle.textContent = applicationMode === "assets" ? "Asset controls" : "Dev
 const toolsTitle = document.querySelector<HTMLElement>("#developer-tools-title");
 if (toolsTitle) toolsTitle.textContent = applicationMode === "assets" ? "Asset workbench" : "Developer tools";
 const toolsEyebrow = document.querySelector<HTMLElement>(".developer-tools__header .eyebrow");
-if (toolsEyebrow) toolsEyebrow.textContent = applicationMode === "assets" ? "GR-2 tooling" : "Prototype sandbox";
+if (toolsEyebrow) toolsEyebrow.textContent = applicationMode === "assets" ? "Production tooling" : "Prototype sandbox";
 const riskLegend = document.querySelector<HTMLElement>("#risk-legend");
 if (riskLegend && applicationMode === "assets") riskLegend.hidden = true;
 if (applicationMode === "assets") setDeveloperToolsOpen(true);

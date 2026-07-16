@@ -45,41 +45,21 @@ The implemented baseline supports the prototype world and the named large-world
 profiles. Its current contracts are documented in the technical design and
 architecture map; its delivery history is archived.
 
-No next gameplay milestone is defined. The next defined production-asset work
-is the `GR-3.5` through `GR-3.8` sequence below. It closes the remaining guided
-intake, collision-draft, pending-authoring, and isolated-trial gaps without
-building a general-purpose art editor or expanding runtime world content.
+No next gameplay milestone is defined. Guided source intake is implemented.
+The next defined production-asset work is the `GR-3.6` through `GR-3.8`
+sequence below. It closes the remaining collision-draft, pending-authoring, and
+isolated-trial gaps without building a general-purpose art editor or expanding
+runtime world content.
 
 The water-system proposal is another independent candidate track. Product
 priority between it and the production-asset sequence has not been chosen.
 
 ## Production-asset workflow
 
-### GR-3.5 — Guided UI source intake and recipe creation
-
-Status: defined, not started, and not authorized.
-
-Turn every usable source/reference record into an actionable library item. A
-reference gains **Import and prepare**, and the same flow accepts a new local
-image. A compact form asks only for information that cannot be inferred safely:
-asset name and family, stable-ID confirmation, intended size, layer roles,
-passable-versus-solid collision semantics, and an optional runtime/test
-category. Family defaults remain visible before confirmation.
-
-Preparation runs through the constrained local development-server API, with
-progress, validation errors, retry, and cancellation represented in the
-library. After the development app is open, intake through promotion must not
-require an asset-production command or hand-authored JSON.
-
-Acceptance gate: starting from an existing reference or a newly selected PNG, a
-user can create one stable pending candidate without editing a file or opening a
-terminal; refresh preserves the record; re-import cannot silently duplicate or
-overwrite an identity; invalid input produces recoverable field-level errors;
-and no partial repository output remains after failure or cancellation.
-
 ### GR-3.6 — Best-effort collision seed on import
 
-Status: defined, not started, and not authorized. Depends on `GR-3.5`.
+Status: defined, not started, and not authorized. Builds on implemented
+`GR-3.5` guided intake.
 
 Generate a useful first island-collision draft from prepared transparency,
 matte boundaries, and connected shoreline geometry. Seed sparse `8`-pixel
@@ -161,8 +141,7 @@ presentation-lifetime policy or simulation clock.
 
 ```mermaid
 flowchart LR
-    B["Current implemented baseline"] --> GR35["GR-3.5 guided UI intake"]
-    GR35 --> GR36["GR-3.6 collision seed"]
+    B["Current implemented baseline through GR-3.5"] --> GR36["GR-3.6 collision seed"]
     GR36 --> GR37["GR-3.7 pending authoring"]
     GR37 --> GR38["GR-3.8 isolated sea trial"]
     B --> WTR["WTR-1 layered water proposal"]
@@ -195,6 +174,6 @@ gameplay contracts rather than fork them.
 ## Authorization boundary
 
 No milestone in this document is authorized for implementation. Starting the
-production-asset sequence, the water proposal, gameplay persistence, a new
-gameplay milestone, broad runtime content rollout, or any other deferred scope
-requires explicit user authorization.
+remaining production-asset sequence, the water proposal, gameplay persistence,
+a new gameplay milestone, broad runtime content rollout, or any other deferred
+scope requires explicit user authorization.

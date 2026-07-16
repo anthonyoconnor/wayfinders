@@ -6,29 +6,24 @@ It is intentionally a prototype workflow, not a general art or atlas tool.
 
 ## Normal workflow
 
-1. Put the selected PNG anywhere under `assets-src` and name it
-   `*-source.png`. Keep generated or AI output here; do not copy it directly
-   into `public`.
-2. Add one recipe to `assets-src/gr3/production-recipes.json`. Reuse a current
-   recipe when possible and give the asset a stable ID.
-3. Prepare one candidate:
-
-   ```powershell
-   npm.cmd run assets:prepare -- --id production.island.small-fishing-cay
-   ```
-
-   Use `--family island` for a family or omit the selector for the whole batch.
-   A broken job is reported without preventing the remaining recipes from being
-   attempted. Unchanged jobs are cache hits.
-4. Start the prototype and open the library:
+1. Start the prototype and open the library:
 
    ```powershell
    npm.cmd run dev
    ```
 
-   Open `http://127.0.0.1:5173/?mode=assets`, select the candidate in the left
-   browser, compare its source/prepared layers and collision overlay, then choose
-   **Approve for testing** or **Reject**. The review is tied to the exact
+   Open `http://127.0.0.1:5173/?mode=assets`.
+2. Select any source reference and choose **Import and prepare**, or choose
+   **Add PNG** for a new local image. Confirm the inferred family defaults,
+   asset name, stable ID, intended dimensions, layer role, collision semantics,
+   and optional runtime/test category.
+3. Choose **Prepare pending candidate**. The library reports validation,
+   repository-write and preparation phases. A failed or cancelled job keeps no
+   partial source, recipe or candidate output and can be retried from the same
+   form. When preparation completes, choose **Open pending candidate** to reload
+   the durable library record.
+4. Compare the candidate's source/prepared layers and collision overlay, then
+   choose **Approve for testing** or **Reject**. The review is tied to the exact
    candidate fingerprint.
 5. For an approved candidate with a pilot runtime binding, choose **Test in
    game**, or open:
@@ -59,6 +54,24 @@ derived output gate stale; run preparation again before promotion. Re-review
 whenever the resulting fingerprint changes. `assets:check` rejects stale
 reviews, output hashes and orphaned public production files.
 
+Promotion remains a command-line operation until the pending-candidate UI
+completion milestone. Guided intake and preparation do not require a command or
+hand-authored JSON.
+
+## Optional command-line preparation
+
+The guided library flow is normal. For scripting or deliberate batch rebuilds,
+put each source under `assets-src` with a `*-source.png` name, add or reuse its
+recipe in `assets-src/gr3/production-recipes.json`, then run:
+
+```powershell
+npm.cmd run assets:prepare -- --id production.island.small-fishing-cay
+```
+
+Use `--family island` for a family or omit the selector for the whole batch.
+A broken job is reported without preventing remaining recipes from being
+attempted; unchanged jobs are cache hits.
+
 ## Optional command-line review
 
 The asset library is the normal review surface. For scripting, read the current
@@ -75,7 +88,7 @@ npm.cmd run assets:promote -- --id $id
 
 Use `reject` instead of `approve` to keep the candidate out of public output.
 
-## Example: another island variation
+## Advanced manual recipe: another island variation
 
 Add the source PNG, then add a recipe shaped like this (names and paths are
 examples):
@@ -130,7 +143,7 @@ variation immediately testable in the home-island slot. Creating a distinct
 world island with its own final mask and placement remains an explicit runtime
 package/world-data change.
 
-## Example: passable fishing shoal variation
+## Advanced manual recipe: passable fishing shoal variation
 
 Shoals are explicitly passable. A minimal visual variation can use the same
 connected-border preparation but must declare an empty collision profile:

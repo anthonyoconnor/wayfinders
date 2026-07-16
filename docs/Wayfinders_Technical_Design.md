@@ -327,6 +327,13 @@ rendered pixels do not. Package schema, editable profile categories, source
 preparation, review, promotion, and repository transactions are documented in
 `Wayfinders_Asset_Pipeline.md`.
 
+The asset library provides guided reference and local-PNG intake. Confirmed
+family defaults and stable identity become one validated source recipe and one
+pending candidate through the constrained development-server API. Job progress,
+field validation, retry and cancellation are presentation state; rollback-safe
+repository transactions keep recipe, source, prepared output and generated
+index consistent. This authoring persistence is not gameplay saving.
+
 ## 11. Developer and event interfaces
 
 `GameEventMap` in `src/wayfinders/core/GameEvents.ts` is the source of truth for

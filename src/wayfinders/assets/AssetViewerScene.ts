@@ -76,6 +76,11 @@ import {
 import homeIslandPackage from "./packages/home-island.json";
 import playerBoatPackage from "./packages/player-boat.json";
 import fishingShoalPackage from "./packages/fishing-shoal.json";
+import {
+  mountProductionAssetIntakeUi,
+  PRODUCTION_ASSET_LIBRARY_SELECTION_KEY,
+  type ProductionAssetIntakeUi,
+} from "./ProductionAssetIntakeUi";
 
 interface ViewerState {
   assetId: AuthoredAssetId;
@@ -173,6 +178,7 @@ export class AssetViewerScene extends Phaser.Scene {
   private comparisonVisual?: Phaser.GameObjects.Image;
   private additionalStandaloneVisuals: Phaser.GameObjects.Image[] = [];
   private assetLibraryBrowser?: HTMLElement;
+  private productionIntakeUi?: ProductionAssetIntakeUi;
   private selectedLibraryAssetId: string = AUTHORED_ASSET_IDS.homeIsland;
   private readonly acceptedMetadataByAssetId = new Map<AuthoredAssetId, Readonly<AuthoredAssetMetadata>>();
   private readonly collisionDraftsByAssetId = new Map<AuthoredAssetId, RuntimeCollisionProfile>();
@@ -248,6 +254,11 @@ export class AssetViewerScene extends Phaser.Scene {
       if (metadata) this.acceptedMetadataByAssetId.set(assetId, metadata);
     }
     this.activateCollisionTarget("home-island", initialMetadata, initialMetadata, false);
+    const restoredLibraryAssetId = sessionStorage.getItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY);
+    if (restoredLibraryAssetId && assetLibraryEntryById(restoredLibraryAssetId)) {
+      this.selectedLibraryAssetId = restoredLibraryAssetId;
+    }
+    sessionStorage.removeItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY);
 
     this.cameras.main.setBounds(0, 0, STAGE.width, STAGE.height).centerOn(STAGE.centerX, STAGE.centerY);
     this.cameras.main.setZoom(this.defaultZoom());
@@ -1231,7 +1242,10 @@ export class AssetViewerScene extends Phaser.Scene {
             <h3 id="selected-asset-title" data-library="title"></h3>
             <p data-library="subtitle" class="asset-selection-subtitle"></p>
           </div>
-          <button data-library-action="fit" type="button">Fit</button>
+          <div class="asset-selection-header-actions">
+            <button data-library-action="import" type="button" hidden>Import and prepare</button>
+            <button data-library-action="fit" type="button">Fit</button>
+          </div>
         </header>
         <div class="asset-selection-nav">
           <button data-library-action="previous" type="button" aria-label="Previous asset">← Previous</button>
@@ -1451,6 +1465,7 @@ export class AssetViewerScene extends Phaser.Scene {
       : this.catalogAssets.diagnostics.map(({ assetId, message }) => `${assetId}: ${message}`).join("\n");
     this.mountCollisionWorkbench(slot, signal);
     this.mountCandidateWorkbench(slot, signal, assetSelect);
+    this.productionIntakeUi ??= mountProductionAssetIntakeUi();
     this.mountAssetLibraryBrowser(signal);
     this.mountSelectedAssetControls(slot, signal);
     this.syncSelectedAssetUi();
@@ -1504,7 +1519,10 @@ export class AssetViewerScene extends Phaser.Scene {
     browser.innerHTML = `
       <header class="asset-library-header">
         <div><p class="eyebrow">Wayfinders workshop</p><h2>Asset library</h2></div>
-        <span>${ASSET_LIBRARY_CATALOG.length} assets</span>
+        <div class="asset-library-header-actions">
+          <span>${ASSET_LIBRARY_CATALOG.length} assets</span>
+          <button data-library-intake-new type="button">Add PNG</button>
+        </div>
       </header>
       <div class="asset-library-filters">
         <label><span>Search</span><input data-library-search type="search" placeholder="Name, tag, or ID"></label>
@@ -1570,11 +1588,23 @@ export class AssetViewerScene extends Phaser.Scene {
         if (id) this.selectLibraryAsset(id);
       }, { signal });
     }
+    browser.querySelector<HTMLButtonElement>("[data-library-intake-new]")
+      ?.addEventListener("click", () => this.productionIntakeUi?.open(), { signal });
   }
 
   private mountSelectedAssetControls(slot: HTMLElement, signal: AbortSignal): void {
     slot.querySelector<HTMLButtonElement>("[data-library-action=fit]")
       ?.addEventListener("click", () => this.fitSelectedLibraryAsset(), { signal });
+    slot.querySelector<HTMLButtonElement>("[data-library-action=import]")
+      ?.addEventListener("click", () => {
+        const entry = this.selectedReferenceEntry();
+        if (!entry) return;
+        this.productionIntakeUi?.open({
+          name: entry.name,
+          repositoryPath: entry.reference.relativePath,
+          kind: entry.reference.kind,
+        });
+      }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-library-action=previous]")
       ?.addEventListener("click", () => this.stepLibrarySelection(-1), { signal });
     slot.querySelector<HTMLButtonElement>("[data-library-action=next]")
@@ -1796,6 +1826,8 @@ export class AssetViewerScene extends Phaser.Scene {
       <div class="asset-animation-row"><strong>${escapeHtml(animation.name)}</strong><span>${animation.frameCount} frames · ${animation.framesPerSecond} fps · ${animation.directionCount} direction${animation.directionCount === 1 ? "" : "s"}</span></div>`).join("");
     const productionPanel = document.querySelector<HTMLElement>("[data-production-review]");
     if (productionPanel) productionPanel.hidden = entry.entryType !== "production-candidate";
+    const importButton = document.querySelector<HTMLButtonElement>("[data-library-action=import]");
+    if (importButton) importButton.hidden = entry.entryType !== "reference-image";
     if (entry.entryType === "production-candidate") {
       const mode = this.productionPreviewModes.get(entry.id) ?? "prepared";
       const reviewState = this.productionReviewState(entry);
@@ -2666,6 +2698,8 @@ export class AssetViewerScene extends Phaser.Scene {
     this.releaseReferenceTexture();
     this.assetLibraryBrowser?.remove();
     this.assetLibraryBrowser = undefined;
+    this.productionIntakeUi?.destroy();
+    this.productionIntakeUi = undefined;
     for (const key of this.candidateTextureKeys) this.textures.remove(key);
     this.candidateTextureKeys = [];
     delete window.__WAYFINDERS_ASSET_VIEWER__;

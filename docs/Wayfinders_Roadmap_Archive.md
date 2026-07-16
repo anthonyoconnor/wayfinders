@@ -964,6 +964,28 @@ current outputs, preserves declared collision authority, and records complete
 source-to-runtime lineage. The repository gate rejects stale reviews, generated
 artifacts, hashes, and orphaned promoted files.
 
+#### GR-3.5 — Guided UI source intake and recipe creation
+
+Status: implemented and accepted on 2026-07-15.
+
+Implementation evidence: every usable reference exposes **Import and prepare**,
+while **Add PNG** accepts one new local image. The compact form keeps inferred
+family defaults visible and confirms stable identity, intended dimensions,
+layer role, collision semantics, and an optional pilot test binding. A
+same-origin development-server job reports validation, repository-write and
+preparation phases, survives a browser refresh through its job identity, and
+supports cancellation and retry.
+
+The repository-wide intake lock and nested atomic transactions create the
+source, validated recipe, prepared layers, thumbnail, collision semantics and
+production index as one recoverable operation. Existing recipe, source and
+candidate identities are never silently replaced. Contract and repository-I/O
+coverage verifies field errors, durable manifest reload, duplicate rejection,
+pre-mutation cancellation, and full cleanup after synthetic failure. An
+interactive browser pass verified both reference and local-PNG entry points,
+live field-error recovery, and a clean browser console without adding a
+production candidate.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development
@@ -1009,5 +1031,5 @@ determine whether the user-visible departure symptom remains.
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-4.1`, graphics and asset
-work through `GR-3.4`, and architecture work through `AM-6`. Upcoming, proposed,
+work through `GR-3.5`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.

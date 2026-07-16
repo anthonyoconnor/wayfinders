@@ -45,6 +45,12 @@ factories, and collision descriptors as the game. It can browse runtime
 packages, source references, and prepared production candidates without
 creating a second simulation.
 
+Every source reference exposes guided import, and **Add PNG** starts the same
+flow for a new local image. The form records only the non-inferable recipe
+fields and keeps family defaults visible. A confirmed intake creates one stable
+source recipe and pending candidate through a serialized local job; progress,
+field errors, retry, cancellation, and refresh recovery remain in the library.
+
 Full visual candidates carry metadata and PNG bindings for explicit repository
 intake and may preserve, replace, or reset collision. Collision-only candidates
 carry a target ID, base package revision, base collision fingerprint, and only
@@ -80,6 +86,13 @@ changed source, recipe, prepared output, thumbnail, or collision draft changes
 the fingerprint and invalidates review. A failed job cannot leave another job
 partially updated.
 
+Guided intake copies the selected reference or uploaded PNG under
+`assets-src/gr3/intake`, appends its validated recipe, and runs deterministic
+preparation inside the repository-wide intake lock. Identity conflicts are
+reported instead of overwriting an existing recipe, source, or candidate.
+Failure and cancellation restore the manifest and generated index and remove
+new partial output.
+
 Promotion publishes only current approved candidates. The promotion summary and
 production index record source hashes, candidate fingerprints, public layer
 URLs, review state, and preserved runtime bindings. Validation rejects stale
@@ -114,6 +127,6 @@ gate and is included in `npm.cmd run check`.
 - Keep atlas packing absent until texture or draw-call evidence justifies its
   continuing cost.
 
-UI-only intake, generated collision seeding, complete pending-candidate
-authoring, and isolated sea trials are not current capabilities. Their proposed
+Generated collision seeding, complete pending-candidate authoring, UI-native
+promotion, and isolated sea trials are not current capabilities. Their proposed
 scope and authorization state live only in `Wayfinders_Roadmap.md`.

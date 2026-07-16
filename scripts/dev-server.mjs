@@ -7,6 +7,11 @@ import {
   createCollisionSaver,
 } from "./collision-save-api.mjs";
 import { createAssetReviewMiddleware } from "./asset-review-api.mjs";
+import {
+  createAssetIntakeMiddleware,
+  createProductionAssetIntakeJobs,
+} from "./asset-intake-api.mjs";
+import { createProductionAssetIntaker } from "./production-asset-intake.mjs";
 import { reviewProductionCandidate } from "./production-asset-review.mjs";
 
 const DEFAULT_PORT = 5173;
@@ -56,12 +61,18 @@ try {
     expectedOrigin: collisionSaveOrigin(port),
     reviewCandidate: (request) => reviewProductionCandidate(request, { repositoryRoot }),
   });
+  const runAssetIntake = createProductionAssetIntaker({ repositoryRoot });
+  const assetIntakeMiddleware = createAssetIntakeMiddleware({
+    expectedOrigin: collisionSaveOrigin(port),
+    jobs: createProductionAssetIntakeJobs(runAssetIntake),
+  });
   const server = await createServer({
     plugins: [{
       name: "wayfinders-local-asset-writes",
       configureServer(viteServer) {
         viteServer.middlewares.use(collisionSaveMiddleware);
         viteServer.middlewares.use(assetReviewMiddleware);
+        viteServer.middlewares.use(assetIntakeMiddleware);
       },
     }],
     server: {
