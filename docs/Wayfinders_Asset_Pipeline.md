@@ -45,12 +45,16 @@ factories, and collision descriptors as the game. Its clean baseline contains
 the home island, player boat, and fishing shoal runtime packages. Uploaded PNGs
 add prepared production candidates without creating a second simulation.
 
-**Add PNG** starts guided intake for a new local image. The form reads the PNG's native canvas immediately
-and defaults to keeping it. A solid candidate whose native canvas is not
+**Add PNG** starts guided intake for a new local image. In the Islands
+workspace, family, layer role, solid collision semantics, and runtime category
+are fixed island defaults rather than operator fields. The form reads the PNG's
+native canvas immediately and defaults to keeping it. A solid candidate whose
+native canvas is not
 divisible by `32` receives an explicit warning and a one-action transparent-pad
 option to the next aligned canvas. Manual output dimensions remain available
 when the operator intentionally wants a different canvas. The form otherwise
-records only non-inferable recipe fields and keeps family defaults visible.
+records only non-inferable recipe fields. General-family controls remain in the
+Ship and Fishing shoal production surfaces.
 Existing recipe names and stable IDs are checked immediately and block
 submission; the serialized repository transaction repeats both checks before
 creating one stable source recipe and pending candidate. Progress, field errors,
@@ -72,11 +76,14 @@ stale revisions and fingerprints, and commit package metadata plus review data
 through rollback-safe sibling-file transactions. Collision-only changes do not
 rewrite PNGs or image bindings.
 
-Pending production candidates use a separate structured workbench. It exposes
-the supported recipe fields, ordered layer visibility and opacity, collision
-semantics, and the existing `8`/`32`-pixel collision editing tools. Stable
-identity, source paths, provenance, preparation method, and other server-owned
-recipe data are not free-form browser fields.
+Imported islands use the focused Islands workbench. The selected left-library
+record alone drives the preview and exposes only name, current availability,
+the isolated ship trial, `8`/`32`-pixel collision editing, and **Save changes**.
+One save writes the editable name and exact complete live mask through the
+existing serialized candidate transaction. Candidate fingerprints, review,
+promotion, runtime binding, dimensions, layer composition, and preparation
+details remain private to this island UI. General pending candidates in the
+other workspaces retain their structured production workbench.
 
 ## Production recipe lifecycle
 
@@ -120,7 +127,11 @@ broad geometry. This is review data: it remains editable and does not replace
 accepted runtime collision. Passable families continue to produce explicit
 empty collision.
 
-**Save candidate** validates structured settings and the complete collision
+For an imported island, **Save changes** validates the name and complete
+collision draft against the current repository record, writes recipe and
+semantic mask data, and prepares only that island under the shared lock. For
+general candidates, **Save candidate** validates structured settings and the
+complete collision
 draft against the current fingerprint, writes recipe and semantic mask data,
 and prepares only the affected candidate under the shared repository lock. The
 operation is rollback-safe. A successful save must issue a different

@@ -234,6 +234,7 @@ export class AssetViewerScene extends Phaser.Scene {
   private readonly productionReviewStates = new Map<string, ProductionReviewState>();
   private readonly productionValidationStates = new Map<string, Readonly<ProductionValidationStatus>>();
   private readonly productionLocallyDirty = new Set<string>();
+  private readonly islandNameDrafts = new Map<string, string>();
   private readonly productionAuthoringBaselines = new Map<
     string,
     Readonly<ProductionCandidateAuthoringRequest>
@@ -1437,6 +1438,10 @@ export class AssetViewerScene extends Phaser.Scene {
     this.controlsAbort = new AbortController();
     const signal = this.controlsAbort.signal;
     slot.classList.add("tool-slot--connected");
+    if (this.workspace.id === "islands") {
+      this.mountIslandControls(slot, signal);
+      return;
+    }
     slot.innerHTML = `
       <section class="asset-selection-inspector" aria-labelledby="selected-asset-title">
         <header>
@@ -1727,6 +1732,255 @@ export class AssetViewerScene extends Phaser.Scene {
     this.syncSelectedAssetUi();
   }
 
+  private mountIslandControls(slot: HTMLDivElement, signal: AbortSignal): void {
+    slot.innerHTML = `
+      <section class="island-workbench" aria-labelledby="island-workbench-title">
+        <header class="island-workbench__header">
+          <div>
+            <p class="eyebrow">Selected island</p>
+            <h3 id="island-workbench-title" data-island="title"></h3>
+            <p data-island="subtitle" class="asset-selection-subtitle"></p>
+          </div>
+          <button data-island-action="fit" type="button">Fit</button>
+        </header>
+        <form data-island="properties" class="island-properties">
+          <label>Name
+            <input data-island="name" type="text" maxlength="120" required>
+          </label>
+          <label class="island-availability">
+            <input data-island="available" type="checkbox" disabled>
+            <span>Available in game</span>
+          </label>
+          <p data-island="availability-status" class="island-availability-status"></p>
+        </form>
+        <div class="island-workbench__actions">
+          <a data-island-action="trial" class="production-test-link" href="#">View with ship</a>
+          <button data-island-action="save" type="button">Save changes</button>
+        </div>
+        <output data-island="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
+      </section>
+      <section class="island-collision-workbench" aria-labelledby="island-collision-title">
+        <header>
+          <div><p class="eyebrow">Collision mask</p><h3 id="island-collision-title">Collision editing</h3></div>
+          <button data-collision="fit" type="button">Fit</button>
+        </header>
+        <p data-collision="note" class="collision-note"></p>
+        <div class="collision-legend" aria-label="Collision overlay legend">
+          <span><i data-swatch="solid"></i>Solid</span>
+          <span><i data-swatch="coarse"></i>32 px grid</span>
+          <span><i data-swatch="fine"></i>8 px subgrid</span>
+          <span><i data-swatch="clearance"></i>Ship clearance</span>
+        </div>
+        <div class="collision-brush-toolbar">
+          <span>Brush size</span>
+          <div class="collision-segmented" role="group" aria-label="Collision brush size">
+            <button data-collision-brush="1" type="button">8 px detail</button>
+            <button data-collision-brush="4" type="button">32 px cell</button>
+          </div>
+        </div>
+        <div class="collision-tool-grid" role="group" aria-label="Collision tools">
+          <button data-collision-tool="paint" type="button">Paint</button>
+          <button data-collision-tool="erase" type="button">Erase</button>
+        </div>
+        <div class="collision-history-actions">
+          <button data-collision="undo" type="button">Undo</button>
+          <button data-collision="redo" type="button">Redo</button>
+          <button data-collision="reset" type="button">Reset edits</button>
+        </div>
+      </section>`;
+
+    slot.querySelector<HTMLButtonElement>("[data-island-action=fit]")
+      ?.addEventListener("click", () => this.fitSelectedLibraryAsset(), { signal });
+    slot.querySelector<HTMLButtonElement>("[data-collision=fit]")
+      ?.addEventListener("click", () => this.fitCollisionTarget(), { signal });
+    for (const button of slot.querySelectorAll<HTMLButtonElement>("[data-collision-tool]")) {
+      button.addEventListener("click", () => {
+        this.collisionTool = button.dataset.collisionTool as CollisionTool;
+        this.syncCollisionControls();
+        this.drawGuides();
+      }, { signal });
+    }
+    for (const button of slot.querySelectorAll<HTMLButtonElement>("[data-collision-brush]")) {
+      button.addEventListener("click", () => {
+        const brushSize = Number(button.dataset.collisionBrush);
+        if (brushSize !== 1 && brushSize !== COLLISION_SUBCELLS_PER_TILE) return;
+        this.collisionBrushSize = brushSize;
+        this.syncCollisionControls();
+        this.drawGuides();
+      }, { signal });
+    }
+    slot.querySelector<HTMLButtonElement>("[data-collision=undo]")
+      ?.addEventListener("click", () => this.afterCollisionMutation(this.collisionModel.undo()), { signal });
+    slot.querySelector<HTMLButtonElement>("[data-collision=redo]")
+      ?.addEventListener("click", () => this.afterCollisionMutation(this.collisionModel.redo()), { signal });
+    slot.querySelector<HTMLButtonElement>("[data-collision=reset]")
+      ?.addEventListener("click", () => this.afterCollisionMutation(this.collisionModel.reset()), { signal });
+    slot.querySelector<HTMLInputElement>("[data-island=name]")?.addEventListener("input", (event) => {
+      const entry = this.selectedProductionCandidate();
+      if (entry) {
+        this.islandNameDrafts.set(entry.id, (event.currentTarget as HTMLInputElement).value);
+        this.productionLocallyDirty.add(entry.id);
+      }
+      this.syncIslandWorkbench();
+    }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-island-action=save]")
+      ?.addEventListener("click", () => { void this.saveIslandChanges(); }, { signal });
+    slot.querySelector<HTMLAnchorElement>("[data-island-action=trial]")
+      ?.addEventListener("click", (event) => {
+        const link = event.currentTarget as HTMLAnchorElement;
+        if (link.getAttribute("aria-disabled") === "true") event.preventDefault();
+        else {
+          const entry = this.selectedProductionCandidate();
+          if (entry) sessionStorage.setItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY, entry.id);
+        }
+      }, { signal });
+    window.addEventListener("keydown", (event) => this.onCollisionKeyDown(event), { signal });
+    window.addEventListener("keyup", (event) => {
+      if (event.code === "Space") this.collisionSpaceHeld = false;
+    }, { signal });
+
+    this.productionIntakeUi ??= mountProductionAssetIntakeUi({
+      focusedFamily: "island",
+      existingAssets: this.workspaceCatalog
+        .filter((entry) => entry.entryType !== "reference-image")
+        .map(({ id, name }) => ({ id, name })),
+    });
+    this.mountAssetLibraryBrowser(signal);
+    this.syncSelectedAssetUi();
+    this.syncCollisionControls();
+  }
+
+  private islandCandidateAuthoringRequest(
+    entry: Readonly<ProductionCandidateLibraryEntry>,
+    name: string,
+  ): Readonly<ProductionCandidateAuthoringRequest> {
+    if (entry.recipe.family !== "island") throw new RangeError("The selected asset is not an island");
+    const dimensions = this.productionCandidateDimensions(entry);
+    return validateProductionCandidateAuthoringRequest({
+      formatVersion: PRODUCTION_CANDIDATE_AUTHORING_FORMAT_VERSION,
+      recipeId: entry.id,
+      candidateFingerprint: entry.fingerprint,
+      settings: {
+        name: name.trim(),
+        family: "island",
+        targetWidth: dimensions.width,
+        targetHeight: dimensions.height,
+        layers: entry.recipe.layers.map((layer) => ({
+          id: layer.id,
+          defaultVisible: layer.defaultVisible,
+          opacity: layer.opacity,
+        })),
+        runtimeBindingAssetId: null,
+      },
+      collision: this.productionHybridCollisionFromModel(dimensions.width, dimensions.height),
+    });
+  }
+
+  private syncIslandWorkbench(): void {
+    if (this.workspace.id !== "islands") return;
+    const entry = this.selectedLibraryEntry();
+    const title = document.querySelector<HTMLElement>("[data-island=title]");
+    const subtitle = document.querySelector<HTMLElement>("[data-island=subtitle]");
+    const name = document.querySelector<HTMLInputElement>("[data-island=name]");
+    const available = document.querySelector<HTMLInputElement>("[data-island=available]");
+    const availabilityStatus = document.querySelector<HTMLElement>("[data-island=availability-status]");
+    const trial = document.querySelector<HTMLAnchorElement>("[data-island-action=trial]");
+    const save = document.querySelector<HTMLButtonElement>("[data-island-action=save]");
+    if (title) title.textContent = entry.name;
+    if (subtitle) subtitle.textContent = entry.subtitle;
+    if (name && document.activeElement !== name) name.value = this.islandNameDrafts.get(entry.id) ?? entry.name;
+    if (name) name.disabled = entry.entryType !== "production-candidate" || this.productionAuthoringInFlight;
+    const isAvailable = entry.entryType === "authored-package";
+    if (available) available.checked = isAvailable;
+    if (availabilityStatus) availabilityStatus.textContent = isAvailable
+      ? "Available in game"
+      : "Unavailable in game";
+
+    const candidate = entry.entryType === "production-candidate" ? entry : undefined;
+    const locallyDirty = candidate !== undefined && this.productionLocallyDirty.has(candidate.id);
+    const collision = this.collisionModel.snapshot();
+    let requestError: string | undefined;
+    if (candidate && name) {
+      try { this.islandCandidateAuthoringRequest(candidate, name.value); }
+      catch (error) { requestError = this.errorMessage(error); }
+    }
+    if (save) {
+      const needsCanonicalMask = candidate?.collisionDraft.kind === "hybrid-grid-draft"
+        && candidate.recipe.collision.mode !== "mask-file";
+      const changed = candidate ? locallyDirty || needsCanonicalMask : collision.dirty;
+      save.disabled = this.productionAuthoringInFlight
+        || this.collisionSaveInFlight
+        || requestError !== undefined
+        || !changed;
+      save.textContent = this.productionAuthoringInFlight || this.collisionSaveInFlight
+        ? "Saving…"
+        : "Save changes";
+      save.title = requestError ?? (changed ? "Save island properties and collision mask" : "No unsaved changes");
+    }
+    if (trial) {
+      const canTrial = candidate !== undefined
+        && candidate.collisionDraft.kind === "hybrid-grid-draft"
+        && !locallyDirty
+        && !this.productionAuthoringInFlight;
+      if (canTrial) {
+        trial.href = assetTrialApplicationHref({
+          candidateId: candidate.id,
+          candidateFingerprint: candidate.fingerprint,
+        });
+      } else {
+        trial.removeAttribute("href");
+      }
+      trial.setAttribute("aria-disabled", String(!canTrial));
+      trial.title = candidate
+        ? canTrial ? "Open this island with the ship" : "Save changes before viewing with the ship"
+        : "The built-in home island does not need an isolated trial";
+    }
+  }
+
+  private async saveIslandChanges(): Promise<void> {
+    const entry = this.selectedLibraryEntry();
+    if (entry.entryType === "authored-package") {
+      await this.saveCollisionToLibrary();
+      this.syncIslandWorkbench();
+      return;
+    }
+    if (entry.entryType !== "production-candidate" || this.productionAuthoringInFlight) return;
+    const name = document.querySelector<HTMLInputElement>("[data-island=name]");
+    if (!name) return;
+    try {
+      const request = this.islandCandidateAuthoringRequest(entry, name.value);
+      this.productionAuthoringInFlight = true;
+      this.syncIslandWorkbench();
+      this.reportIslandStatus("Saving changes…");
+      sessionStorage.setItem(assetWorkspaceSelectionKey(this.workspace.id), entry.id);
+      sessionStorage.setItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY, entry.id);
+      const response = await fetch(PRODUCTION_CANDIDATE_SAVE_ROUTE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      const payload = await response.json().catch(() => undefined) as ProductionAuthoringResponse | undefined;
+      if (!response.ok || payload?.ok !== true || !payload.fingerprint) {
+        throw new Error(payload?.error ?? `Save failed with HTTP ${response.status}`);
+      }
+      this.productionLocallyDirty.delete(entry.id);
+      this.reportIslandStatus(payload.message ?? "Changes saved.");
+      window.location.reload();
+    } catch (error) {
+      this.reportIslandStatus(this.errorMessage(error), true);
+    } finally {
+      this.productionAuthoringInFlight = false;
+      this.syncIslandWorkbench();
+    }
+  }
+
+  private reportIslandStatus(message: string, error = false): void {
+    const status = document.querySelector<HTMLOutputElement>("[data-island=status]");
+    if (!status) return;
+    status.value = message;
+    status.dataset.state = error ? "error" : "ready";
+  }
+
   private mountAssetLibraryBrowser(signal: AbortSignal): void {
     const host = document.querySelector<HTMLElement>(".game-region");
     if (!host) return;
@@ -1734,6 +1988,7 @@ export class AssetViewerScene extends Phaser.Scene {
     browser.id = "asset-library-browser";
     browser.className = "asset-library-browser";
     browser.setAttribute("aria-label", "Asset library browser");
+    const focusedIslands = this.workspace.id === "islands";
     const groups = this.workspaceGroups.map((group) => `
       <section class="asset-library-group" data-library-group="${escapeHtml(group.id)}">
         <header><h3>${escapeHtml(group.name)}</h3><span>${group.entries.length}</span></header>
@@ -1744,8 +1999,10 @@ export class AssetViewerScene extends Phaser.Scene {
               : entry.entryType === "production-candidate"
                 ? entry.reviewState
                 : "runtime";
-            const status = entry.entryType === "authored-package"
-              ? "Runtime"
+            const status = focusedIslands
+              ? entry.entryType === "authored-package" ? "Available" : entry.entryType === "production-candidate" ? "Unavailable" : "Reference"
+              : entry.entryType === "authored-package"
+                ? "Runtime"
               : entry.entryType === "production-candidate"
                 ? entry.reviewState
                 : entry.reference.sequence === undefined
@@ -1758,12 +2015,13 @@ export class AssetViewerScene extends Phaser.Scene {
                 data-library-id="${escapeHtml(entry.id)}"
                 data-library-type="${escapeHtml(entry.entryType)}"
                 data-library-settlement="${escapeHtml(settlement)}"
+                data-library-availability="${entry.entryType === "authored-package" ? "available" : "unavailable"}"
                 data-library-search="${escapeHtml(`${entry.name} ${entry.subtitle} ${entry.id} ${entry.tags.join(" ")}`.toLowerCase())}"
               >
                 <span class="asset-library-thumb"><img loading="lazy" decoding="async" alt="" data-library-thumb-src="${escapeHtml(entry.thumbnailUrl)}"></span>
                 <span class="asset-library-item-copy">
                   <strong>${escapeHtml(entry.name)}</strong>
-                  <small>${escapeHtml(entry.subtitle)}</small>
+                  <small>${escapeHtml(focusedIslands && entry.entryType === "production-candidate" ? "Imported island" : entry.subtitle)}</small>
                 </span>
                 <span class="asset-library-status" data-status="${escapeHtml(entry.entryType)}">
                   ${escapeHtml(status)}
@@ -1774,7 +2032,7 @@ export class AssetViewerScene extends Phaser.Scene {
       </section>`).join("");
     browser.innerHTML = `
       <header class="asset-library-header">
-        <div><p class="eyebrow">Wayfinders workshop</p><h2>Asset library</h2></div>
+        <div><p class="eyebrow">Wayfinders workshop</p><h2>${focusedIslands ? "Islands" : "Asset library"}</h2></div>
         <div class="asset-library-header-actions">
           <span>${this.workspaceCatalog.length} assets</span>
           <button data-library-intake-new type="button">Add PNG</button>
@@ -1784,12 +2042,15 @@ export class AssetViewerScene extends Phaser.Scene {
         <label><span>Search</span><input data-library-search type="search" placeholder="Name, tag, or ID"></label>
         <label><span>Show</span>
           <select data-library-filter>
-            <option value="all">All assets</option>
+            <option value="all">${focusedIslands ? "All islands" : "All assets"}</option>
+            ${focusedIslands ? `
+            <option value="available">Available in game</option>
+            <option value="unavailable">Unavailable in game</option>` : `
             <option value="authored-package">Runtime packages</option>
             <option value="production-candidate">Production candidates</option>
             <option value="reference-image">Source examples</option>
             <option value="inhabited">Inhabited islands</option>
-            <option value="uninhabited">Uninhabited islands</option>
+            <option value="uninhabited">Uninhabited islands</option>`}
           </select>
         </label>
       </div>
@@ -1806,7 +2067,8 @@ export class AssetViewerScene extends Phaser.Scene {
         const matchesQuery = query.length === 0 || (item.dataset.librarySearch ?? "").includes(query);
         const matchesMode = mode === "all"
           || item.dataset.libraryType === mode
-          || item.dataset.librarySettlement === mode;
+          || item.dataset.librarySettlement === mode
+          || item.dataset.libraryAvailability === mode;
         item.hidden = !matchesQuery || !matchesMode;
       }
       for (const group of browser.querySelectorAll<HTMLElement>("[data-library-group]")) {
@@ -2551,6 +2813,7 @@ export class AssetViewerScene extends Phaser.Scene {
         return;
       }
       this.productionLocallyDirty.delete(currentCandidate.id);
+      this.islandNameDrafts.delete(currentCandidate.id);
     }
     const entry = this.workspaceEntryById(id);
     if (!entry) return;
@@ -2609,6 +2872,10 @@ export class AssetViewerScene extends Phaser.Scene {
       item.dataset.active = String(active);
       item.setAttribute("aria-current", active ? "true" : "false");
       if (active) item.scrollIntoView({ block: "nearest" });
+    }
+    if (this.workspace.id === "islands") {
+      this.syncIslandWorkbench();
+      return;
     }
     const title = document.querySelector<HTMLElement>("[data-library=title]");
     const subtitle = document.querySelector<HTMLElement>("[data-library=subtitle]");
@@ -3049,7 +3316,9 @@ export class AssetViewerScene extends Phaser.Scene {
       if (candidate) this.setProductionValidation(candidate, "error", snapshot.serializationError);
     } else if (changed && candidate && this.productionEditorCandidateId === candidate.id) {
       this.markProductionCandidateStale("Collision changed; save candidate before validation or approval.");
-      this.reportCollision("Candidate collision changed; use Save candidate to persist its canonical mask.");
+      this.reportCollision(this.workspace.id === "islands"
+        ? "Collision changed; choose Save changes when the mask is ready."
+        : "Candidate collision changed; use Save candidate to persist its canonical mask.");
     } else if (changed) {
       this.reportCollision("Collision draft changed; save it to update the runtime package.");
     }
@@ -3129,6 +3398,7 @@ export class AssetViewerScene extends Phaser.Scene {
     )) button.disabled = busy || this.productionPromotionInFlight || this.productionReviewInFlight;
     const viewer = document.querySelector<HTMLSelectElement>("[data-viewer=asset]");
     if (viewer) viewer.disabled = busy;
+    this.syncIslandWorkbench();
   }
 
   private syncPackageSelectors(): void {
@@ -3140,7 +3410,10 @@ export class AssetViewerScene extends Phaser.Scene {
 
   private reportCollision(message: string, error = false): void {
     const status = document.querySelector<HTMLOutputElement>("[data-collision=status]");
-    if (!status) return;
+    if (!status) {
+      this.reportIslandStatus(message, error);
+      return;
+    }
     status.value = message;
     status.dataset.state = error ? "error" : "ready";
   }

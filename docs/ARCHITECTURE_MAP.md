@@ -90,6 +90,10 @@ not import Phaser.
   each workspace module owns its catalog partition, collision profiles,
   namespaced selection, and scene lifetime. Stopping a workspace aborts its DOM
   listeners and Phaser bindings before another workspace starts.
+- The Islands workspace owns its focused properties, availability-status,
+  sea-trial, and collision UI. Its single save adapter projects those controls
+  onto the existing rollback-safe candidate or package collision transaction;
+  repository fingerprints and review state do not cross into the island UI.
 
 Diagnostics are distributed with their owner: simulation traces and counters
 live in `core`, presentation/resource counters in `WayfindersScene` and its

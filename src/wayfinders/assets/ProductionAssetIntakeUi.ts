@@ -61,16 +61,19 @@ export function mountProductionAssetIntakeUi({
     window.location.reload();
   },
   existingAssets = [],
+  focusedFamily,
 }: Readonly<{
   onCompleted?: (recipeId: string) => void;
   existingAssets?: readonly Readonly<{ id: string; name: string }>[];
+  focusedFamily?: ProductionAssetFamily;
 }> = {}): ProductionAssetIntakeUi {
   const dialog = document.createElement("dialog");
   dialog.className = "production-intake-dialog";
+  dialog.dataset.focusedFamily = focusedFamily ?? "";
   dialog.innerHTML = `
     <form method="dialog" class="production-intake-form">
       <header>
-        <div><p class="eyebrow">GR-3.5 guided intake</p><h2>Import and prepare</h2></div>
+        <div><p class="eyebrow">${focusedFamily === "island" ? "Island workshop" : "Guided intake"}</p><h2>${focusedFamily === "island" ? "Import island PNG" : "Import and prepare"}</h2></div>
         <button type="button" data-intake-close aria-label="Close">×</button>
       </header>
       <p data-intake-source-summary class="production-intake-source-summary"></p>
@@ -80,7 +83,7 @@ export function mountProductionAssetIntakeUi({
       </label>
       <div class="production-intake-grid">
         <label>Asset name<input name="name" required maxlength="80"><small data-field-error="name"></small></label>
-        <label>Family<select name="family">
+        <label data-intake-advanced>Family<select name="family">
           <option value="island">Island</option><option value="vessel">Vessel</option>
           <option value="shoal">Shoal</option><option value="world-feature">World feature</option>
           <option value="environment">Environment</option>
@@ -94,9 +97,9 @@ export function mountProductionAssetIntakeUi({
           <p data-intake-dimensions-warning hidden></p>
           <button type="button" data-intake-pad hidden></button>
         </div>
-        <label>Layer role<select name="layerRole"><option value="base">Base</option><option value="overlay">Overlay</option><option value="effect">Effect</option><option value="reference">Reference</option></select><small data-field-error="layerRole"></small></label>
-        <label>Collision<select name="collisionSemantics"><option value="solid">Solid draft</option><option value="passable">Explicitly passable</option></select><small data-field-error="collisionSemantics"></small></label>
-        <label class="production-intake-wide">Runtime/test category<select name="runtimeCategory">
+        <label data-intake-advanced>Layer role<select name="layerRole"><option value="base">Base</option><option value="overlay">Overlay</option><option value="effect">Effect</option><option value="reference">Reference</option></select><small data-field-error="layerRole"></small></label>
+        <label data-intake-advanced>Collision<select name="collisionSemantics"><option value="solid">Solid draft</option><option value="passable">Explicitly passable</option></select><small data-field-error="collisionSemantics"></small></label>
+        <label class="production-intake-wide" data-intake-advanced>Runtime/test category<select name="runtimeCategory">
           <option value="none">None</option><option value="home-island">Home island</option>
           <option value="player-boat">Player boat</option><option value="fishing-shoal">Fishing shoal</option>
         </select><small data-field-error="runtimeCategory"></small></label>
@@ -108,8 +111,8 @@ export function mountProductionAssetIntakeUi({
       <p data-field-error="form" class="production-intake-form-error"></p>
       <footer>
         <button type="button" data-intake-cancel hidden>Cancel job</button>
-        <button type="submit" data-intake-submit>Prepare pending candidate</button>
-        <button type="button" data-intake-open hidden>Open pending candidate</button>
+        <button type="submit" data-intake-submit>${focusedFamily === "island" ? "Import island" : "Prepare pending candidate"}</button>
+        <button type="button" data-intake-open hidden>${focusedFamily === "island" ? "Open island" : "Open pending candidate"}</button>
       </footer>
     </form>`;
   document.body.append(dialog);
@@ -262,6 +265,7 @@ export function mountProductionAssetIntakeUi({
       sessionStorage.removeItem(ACTIVE_JOB_KEY);
     } else if (job.status === "completed") {
       sessionStorage.removeItem(ACTIVE_JOB_KEY);
+      if (focusedFamily === "island" && job.recipeId) onCompleted(job.recipeId);
     }
   };
   const poll = async (jobId: string): Promise<void> => {
@@ -428,17 +432,19 @@ export function mountProductionAssetIntakeUi({
       if (progress) progress.hidden = true;
       if (submit) {
         submit.hidden = false;
-        submit.textContent = "Prepare pending candidate";
+        submit.textContent = focusedFamily === "island" ? "Import island" : "Prepare pending candidate";
       }
       if (cancel) cancel.hidden = true;
       if (openCandidate) openCandidate.hidden = true;
-      const family = familyFor(reference);
+      const family = focusedFamily ?? familyFor(reference);
       field<HTMLSelectElement>(form, "family").value = family;
       field<HTMLInputElement>(form, "name").value = reference?.name ?? "";
       applyDefaults(family, reference?.name);
       if (sourceSummary) sourceSummary.textContent = reference
-        ? `Source reference: ${reference.name} (${reference.repositoryPath})`
-        : "Choose one new local PNG. The source will be copied into the repository transaction.";
+        ? `Source reference: ${reference.name}`
+        : focusedFamily === "island"
+          ? "Choose one PNG. Its canvas size and initial collision mask are read automatically."
+          : "Choose one new local PNG. The source will be copied into the repository transaction.";
       if (uploadLabel) uploadLabel.hidden = Boolean(reference);
       updateDimensionControls();
       dialog.showModal();

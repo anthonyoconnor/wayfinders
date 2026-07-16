@@ -1073,6 +1073,30 @@ acceptance verified tab clicks and arrow navigation, Back/Forward restoration,
 workspace-specific library and collision controls, a single canvas across
 switches, independent left/right scrolling, and no console warnings or errors.
 
+#### GR-4.1 — Focused island workshop
+
+Status: implemented and accepted on 2026-07-16.
+
+The Islands tab now mounts a dedicated minimal workbench selected exclusively
+from the permanent left library. It exposes name, availability status, **View
+with ship**, fit, paint, erase, `8`/`32`-pixel brushes, undo, redo, reset, and one
+**Save changes** action. Runtime-profile, candidate lifecycle, validation,
+fingerprint, review, promotion, runtime-binding, animation, layer-composition,
+portable-package, and package-preview controls are absent from the island DOM.
+Focused intake fixes island-only defaults while retaining immediate PNG canvas
+reading, keep-original sizing, transparent grid padding, duplicate identity
+checks, deterministic shoreline seeding, and automatic selection after import.
+
+The single save adapter commits an imported island's editable name and complete
+live collision mask through the existing rollback-safe candidate authoring
+transaction. The built-in home island remains always available and uses the
+same focused surface with direct collision persistence. Ships and Fishing
+shoals retain their existing general tools. Focused contracts cover markup,
+collision-tool scope, intake focus, and the combined save request. Interactive
+browser acceptance verified the focused controls and import fields, cross-tab
+isolation, one canvas after switching, independent right-panel scrolling, and a
+clean warning/error console.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development
@@ -1118,5 +1142,5 @@ determine whether the user-visible departure symptom remains.
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-4.1`, graphics and asset
-work through `GR-4.0`, and architecture work through `AM-6`. Upcoming, proposed,
+work through `GR-4.1`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.

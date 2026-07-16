@@ -1061,6 +1061,11 @@ a:focus-visible {
   backdrop-filter: blur(2px);
 }
 
+.production-intake-dialog[data-focused-family="island"] [data-intake-advanced],
+.production-intake-dialog[data-focused-family="island"] .production-intake-defaults {
+  display: none;
+}
+
 .production-intake-form {
   display: grid;
   gap: 0.8rem;
@@ -1923,6 +1928,67 @@ html[data-application-mode="assets"] .developer-tools {
   border-width: 0 0 0 1px;
   border-radius: 0;
   box-shadow: none;
+}
+
+.island-workbench,
+.island-collision-workbench {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.9rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.65rem;
+  background: var(--shell-panel);
+}
+
+.island-workbench__header,
+.island-collision-workbench > header,
+.island-workbench__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.island-workbench__header h3,
+.island-collision-workbench h3 {
+  margin: 0.15rem 0 0;
+}
+
+.island-properties {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.island-properties > label:first-child {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.island-properties input[type="text"] {
+  width: 100%;
+}
+
+.island-availability {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 700;
+}
+
+.island-availability-status {
+  margin: -0.35rem 0 0;
+  color: var(--shell-muted);
+}
+
+.island-workbench__actions > * {
+  flex: 1;
+  text-align: center;
+}
+
+.production-test-link[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.45;
+  pointer-events: none;
 }
 
 html[data-application-mode="assets"] .shell-controls {

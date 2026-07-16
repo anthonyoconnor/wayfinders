@@ -353,15 +353,23 @@ seed from prepared alpha and retains its method and uncertainty warnings with
 the draft. Passable families remain explicitly empty, and no generated draft
 becomes runtime authority automatically.
 
-The pending-candidate workbench is the structured authoring surface for recipe
-settings, ordered layer presentation, collision semantics, and collision-mask
-editing. Save, validation, exact-fingerprint review, and promotion use narrow
-serialized repository operations. Saving prepares the affected output, issues
-a new fingerprint, and clears the prior review; stale or invalid candidates
-cannot be approved or promoted. Job progress, field validation, retry and
-cancellation are presentation state, while rollback-safe repository
-transactions keep source, recipe, authored mask, prepared output, review data,
-and generated indexes consistent.
+The Islands workspace replaces the general production surface with one focused
+workbench. Left-library selection alone chooses the preview and editor. The
+right side exposes the island name, current availability state, **View with
+ship**, fit, paint, erase, `8`/`32`-pixel brush size, undo, redo, reset, and one
+**Save changes** operation. It does not expose runtime profiles, dimensions,
+layer composition, animation, validation, fingerprints, review, promotion, or
+portable-package controls. Import fixes the family and collision semantics to
+island defaults, reads the PNG canvas, offers grid padding when needed, prepares
+the image, seeds the shoreline mask, and selects the resulting unavailable
+island. Saving an imported island commits its editable name and complete mask
+through one rollback-safe repository operation. The built-in home island keeps
+its direct collision save and is always available.
+
+Ships and Fishing shoals retain the general package and candidate tools. Their
+save, validation, review, and promotion operations continue to use the narrow
+serialized repository seams until a dedicated workspace milestone replaces
+them.
 
 An island candidate can enter a disposable sea trial before approval. The
 trial contains only open water, the authored player boat, and the candidate's

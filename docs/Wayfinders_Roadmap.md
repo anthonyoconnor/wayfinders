@@ -45,43 +45,15 @@ The implemented baseline supports the prototype world and the named large-world
 profiles. Its current contracts are documented in the technical design and
 architecture map; its delivery history is archived.
 
-The asset-workspace tab shell is implemented. The next proposed production-
-asset sequence begins with the focused island workshop below, then replaces the
-current operator-facing candidate lifecycle and makes available islands
+The asset-workspace tab shell and focused island workshop are implemented. The
+next proposed production-asset milestone replaces the remaining internal island
+lifecycle with one durable availability state, before available islands become
 deterministic world-generation inputs. The remaining sequence is proposed but
 not authorized.
 
 The water-system proposal remains a separate candidate track.
 
 ## Asset workspaces and authored-island integration
-
-### GR-4.1 — Focused island workshop
-
-Status: proposed, not started, and not authorized.
-
-Replace the general production-candidate workbench with an island-only workflow.
-The selected island in the permanent left library is the single active island;
-the right workbench must not expose another asset or runtime-profile selector.
-The right workbench contains only editable basic properties, the isolated
-**View with ship** action, the **Available in game** control, and collision-mask
-editing with fit, paint, erase, brush size, undo, redo, reset, and save.
-
-Remove operator-facing candidate, validation, fingerprint, review, approval,
-rejection, promotion, runtime-binding, animation, layer-compositing, portable
-candidate, and package-preview controls from the island workflow. Import reads
-and prepares the PNG, seeds its collision mask, and selects the new island.
-Imported islands start unavailable.
-
-Acceptance requires:
-
-- the left selection alone determines the centre preview and right workbench;
-- name and other supported island properties can be edited without exposing
-  inferred dimensions or server-owned preparation details;
-- collision seeding and manual `8`/`32`-pixel editing remain intact;
-- one **Save changes** operation persists properties and the complete collision
-  mask; and
-- the interface communicates only actionable save errors and whether the island
-  is available in game, not internal repository-transaction state.
 
 ### GR-4.2 — Single availability lifecycle
 
