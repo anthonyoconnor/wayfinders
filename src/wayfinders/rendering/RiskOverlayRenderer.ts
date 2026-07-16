@@ -227,10 +227,13 @@ export class RiskOverlayRenderer {
     this.lastSignature = signature;
     this.lastForward = forward;
     this.lastReturning = returning;
-    this.lastForwardCandidates = forward.candidateIndices;
+    // Guidance results use reusable buffers. Keep renderer-owned sparse
+    // snapshots so a released result cannot lose the indices whose pixels
+    // must be cleared when the next result publishes.
+    this.lastForwardCandidates = [...forward.candidateIndices];
     this.lastForwardLogicalRevision = forward.logicalRevision;
-    this.lastForwardPresentationCandidates = forward.presentationCandidateIndices;
-    this.lastReturnCorridor = returning.corridorIndices;
+    this.lastForwardPresentationCandidates = [...forward.presentationCandidateIndices];
+    this.lastReturnCorridor = [...returning.corridorIndices];
     this.lastVisibleIndices = [...world.getVisibleIndices()];
     this.lastForwardVisible = debug.forwardRange;
     this.lastReturnVisible = debug.returnViability;

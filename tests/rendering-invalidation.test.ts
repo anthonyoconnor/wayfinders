@@ -355,6 +355,30 @@ describe("forward frontier rendering", () => {
     expect(texture(0, 0).calls.some(({ x }) => x === 11)).toBe(true);
   });
 
+  it("clears the previous contour after its published buffer is reused", () => {
+    const world = new WorldGrid(4, 1, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const oldFrontier = world.index(1, 0);
+    const newFrontier = world.index(3, 0);
+    const previous = makeForward(world, [oldFrontier], [oldFrontier]);
+    const { renderer, texture } = makeRendererHarness("recycled-buffer-test");
+    activateAllChunks(renderer, world);
+    renderer.sync(world, previous, emptyReturn(world), debugVisibility, 1, true);
+    expect(texture(0, 0).calls.length).toBeGreaterThan(0);
+
+    // Cooperative guidance releases the old result before presentation sync;
+    // its arrays may already be cleared for reuse by the next task.
+    previous.mask[oldFrontier] = 0;
+    previous.presentationMask[oldFrontier] = 0;
+    (previous.candidateIndices as number[]).length = 0;
+    (previous.presentationCandidateIndices as number[]).length = 0;
+    const next = makeForward(world, [newFrontier], [newFrontier]);
+    renderer.sync(world, next, emptyReturn(world), debugVisibility, 2);
+
+    expect(texture(0, 0).calls).toEqual([]);
+    expect(texture(1, 0).calls.length).toBeGreaterThan(0);
+  });
+
   it("suppresses the forward contour on currently visible frontier cells", () => {
     const world = new WorldGrid(3, 3, 3);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
