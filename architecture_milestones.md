@@ -3,7 +3,7 @@
 Audit date: 2026-07-14
 Repository snapshot reviewed: Git HEAD 4c2351d, with unrelated asset-package work occurring concurrently
 Scope: architecture and test audit only; no existing source, test, configuration, or asset file was modified
-Roadmap status (2026-07-15): AM-0 through AM-4 are implemented; AM-5 is active; AM-6 remains an evidence gate; AM-7 remains deferred until gameplay persistence is explicitly authorized.
+Roadmap status (2026-07-15): AM-0 through AM-6 are implemented and acceptance-tested. AM-7 remains deferred until gameplay persistence is explicitly authorized.
 
 ## Executive conclusion
 
@@ -416,7 +416,7 @@ Exit criteria:
 
 ### AM-4 — Build a deterministic high-density world pipeline
 
-Status: implemented and acceptance-tested on 2026-07-15; commit recorded by the AM-4 implementation batch.
+Status: implemented and acceptance-tested in `582671c`.
 
 Goal: reliably generate and analyze a P2 world with hundreds of islands.
 
@@ -449,7 +449,7 @@ Implementation evidence:
 
 ### AM-5 — Activate presentation by chunk
 
-Status: implemented and acceptance-tested on 2026-07-15; commit recorded by the AM-5 implementation batch.
+Status: implemented and acceptance-tested in `91a24ce`.
 
 Goal: make renderer and asset memory follow the viewport, not total world area.
 
@@ -480,7 +480,7 @@ Implementation evidence:
 
 ### AM-6 — Add hierarchy or workers only where evidence requires them
 
-Status: active. A quiet 25-sample P2 run measured derived ForwardGuidance p95 at 12.61 ms against the 4 ms decision budget, so the gate selected a cancellable/coalesced derived-guidance optimization.
+Status: implemented and acceptance-tested in `094f388`. The decision gate selected a cooperative, cancellable ForwardGuidance task; hierarchy and workers remain deferred.
 
 Goal: retain architectural simplicity while providing an escape hatch for measured P2 costs.
 
@@ -494,11 +494,29 @@ Candidates:
 
 Each candidate requires a benchmark showing that AM-1 through AM-5 cannot meet a named budget. Results must carry revisions, be cancellable/coalesced, and be discarded when stale. Authoritative command ordering stays on the simulation thread.
 
+Decision:
+
+- The pre-AM-6 quiet P2 run measured ForwardGuidance at 12.61 ms p95, above the 4 ms main-thread decision budget. A retained 100-request paired run after implementation still measured the exact synchronous oracle at 4.44 ms p95, confirming the gate independently of the earlier sample.
+- Keep the exact bucketed search and make its cleanup, queue traversal, candidate construction, comparison, and frontier construction resumable. One bounded task slice runs per frame and builds into one of two inactive result buffers; publication is atomic.
+- GameSimulation owns request coalescing and validates request ID, monotonic world epoch, collision, knowledge, visibility, origin, and provision revisions before every slice and publication. Heading does not cancel work; the sparse frontier is clipped to the latest heading at publication so continuous steering cannot starve the task.
+- Do not introduce a worker. Keeping a worker synchronized would add world/topology/knowledge transfer protocols and would still require cooperative cancellation. Do not introduce hierarchical routing because exact total compute is already small once it is distributed safely.
+- Arbitrary developer-tuned non-integer costs retain the exact synchronous heap fallback. All named production profiles use the resumable integer-cost path.
+
 Exit criteria:
 
 - The selected optimization meets its budget.
-- Equivalence/property tests prove that hierarchy or worker boundaries do not change authoritative results.
-- Failure or worker unavailability has a deterministic fallback.
+- Equivalence/property tests prove that the optimized execution boundary does not change authoritative results.
+- Cancellation, coalescing, stale revision rejection, and buffer reuse are deterministic.
+- The compatibility path has a deterministic exact fallback.
+
+Implementation evidence:
+
+- Benchmark command: `npm run benchmark:architecture -- --profile=P2 --samples=25 --guidance-samples=100 --construction-samples=1 --warmup-crossings=5 --guidance-warmups=20` on the audit machine. The dirty flag is expected because the benchmark measured the pending AM-6 implementation.
+- P2 synchronous oracle: p50 2.80 ms, p95 4.44 ms, p99 4.75 ms. Cooperative main-thread slices: 149 samples, p50 2.67 ms, p95 3.17 ms, p99 3.29 ms; the named 4 ms p95 budget passed. Request CPU p95 was 5.20 ms, distributed across at most three slices in the measured set (two slices p95).
+- In the same report, ordinary update p95 was 0.16 ms and synchronous tile-entry p95 was 1.29 ms. No stale result or cancellation occurred in the undisturbed performance sample.
+- The scheduled AM-6 test runs 20 warmups plus 100 P2 requests, compares the cooperative result to the exact synchronous oracle, gates slice p95 below 4 ms, and guards against starvation. Fixed-world tests cover 64 randomized worlds at four slice sizes, exact costs/masks/order, obsolete-task cancellation, atomic publication, visibility-only invalidation, same-seed regeneration epochs, continuous steering, fallback, and 200-request two-buffer reuse.
+- The isolated scheduled performance command passed all 6 files and 111 tests in 69.23 seconds, including the 100-seed/500-island generation gates, P0/P1 navigation latency, active-chunk lifetime, and the P2 AM-6 sample. The command pins one worker because concurrent CPU benchmarks produce invalid timing data.
+- This local harness does not claim Phaser/GPU frame percentiles, a five-minute real-time voyage soak, or browser Worker behavior. No worker was added. Those remain reference-machine/browser acceptance rather than reasons to complicate the domain architecture now.
 
 ### AM-7 — Add persistence after the world model stabilizes
 
@@ -534,13 +552,13 @@ There are 58 direct GameSimulation constructions in tests. That makes small feat
 
 ### Current reliability findings
 
-The package has a single vitest run command. The broader check command runs asset checks, a source typecheck, the test suite, and a build; the build repeats the source TypeScript build. Tests are not included by the main tsconfig.
+The lane split is now implemented in `vitest.config.ts` and exposed through named package scripts. `npm test` is the curated agent loop; `test:contract`, `test:integration`, `test:io`, `test:all`, and `test:perf` make broader ownership explicit. Every current test file belongs to exactly one correctness or performance lane.
 
-A strict audit compile of test sources found 19 diagnostics, including stale voyage fixture/version shapes, union-narrowing issues, and missing Node test-environment types. A passing runtime suite therefore does not currently mean test code matches source types.
+The test compiler is now part of the full gate. Source and test typechecks report only the two imports of the concurrently deleted `assets-src/gr3/reviews.json`; no AM-0 through AM-6 TypeScript diagnostic remains. The repository-asset-dependent suites live in the I/O lane, so unrelated asset work cannot block domain-only feedback while the full gate still detects the missing artifact.
 
-Full-suite audit attempts took roughly 87–99 seconds under concurrent repository activity. One run reached 366 of 367 with an expedition timeout; another reached 360 of 367 with four timeouts plus three assertions affected by concurrently changed collision/package data. Navigation-focused tests passed 52 of 52. These results demonstrate why AM-0 needs a frozen snapshot and separate lanes; they are not a claim that the current branch has seven stable product defects.
+After AM-6, the quick lane passed 12 files and 49 tests in 9.36 seconds of Vitest time on the audit machine. The broader contract lane passed 37 files and 253 tests in 23.83 seconds; the integration lane passed 18 files and 144 tests in 27.70 seconds. These are development-machine observations, not portable limits.
 
-### Recommended lanes
+### Implemented lanes
 
 | Lane | Purpose | Contents | Target |
 | --- | --- | --- | ---: |
@@ -584,6 +602,8 @@ Budgets should be checked on a named reference machine and compared with trend d
 | --- | ---: |
 | Ordinary simulation update p95 | below 1 ms |
 | Tile-entry synchronous work p95 | below 4 ms |
+| P2 ForwardGuidance main-thread slice p95 | below 4 ms |
+| P2 ForwardGuidance publication | measured separately; scheduled no-starvation ceiling 24 frames |
 | Sailing frame p95 / p99 | below 16.7 ms / 33 ms |
 | Recurring long frames | none above 50 ms in five-minute soak |
 | Visible steering response | below 75 ms |
@@ -623,17 +643,17 @@ The codebase should make the answer to “where does this change belong?” obvi
 
 Avoid a full ECS, generic dependency-injection container, universal message bus, or elaborate plug-in SDK at this stage. Those abstractions make local ownership harder for agents unless the game has demonstrated runtime composition needs that justify them.
 
-## Recommended delivery order
+## Completed delivery order
 
-1. Freeze a snapshot and complete AM-0.
-2. Complete the edge cache and ForwardGuidance boundary in AM-1 before tuning feel.
-3. Introduce SessionConfig, SessionBuilder, mutation revisions, and one vertical feature slice in AM-2.
-4. Add spatial indexing and revision-driven presentation in AM-3.
-5. Design the generator density profile and WorldManifest together in AM-4.
-6. Activate presentation resources by chunk in AM-5.
-7. Re-profile P2. Approve AM-6 work only for a measured remaining budget miss.
+1. AM-0 froze the baseline and introduced named fixtures, lanes, typechecking, tracing, and architecture checks.
+2. AM-1 cached static topology and separated movement authority, return queries, and derived guidance.
+3. AM-2 introduced SessionConfig, GameSession, mutation revisions, ownership rules, and a reference feature slice.
+4. AM-3 made interaction, diagnostics, read models, and presentation revision-driven and spatial.
+5. AM-4 introduced the versioned manifest, bounded placement, shared analysis, and high-density profiles.
+6. AM-5 tied presentation and resource lifetime to one bounded active-chunk authority.
+7. AM-6 re-profiled P2 and sliced only the measured derived-guidance miss; it did not add hierarchy or workers.
 
-AM-1 and the early fixture/typecheck work in AM-0 can proceed in parallel once the baseline is frozen. AM-4 manifest contracts should be agreed before AM-5 resource keys become durable.
+AM-0 through AM-6 now form the implemented large-world foundation. Product work can build on these seams; AM-7 persistence remains a separately authorized future milestone, and real-browser voyage/frame acceptance remains a release/reference-machine check.
 
 ## Risks and explicit decisions
 
@@ -642,7 +662,7 @@ AM-1 and the early fixture/typecheck work in AM-0 can proceed in parallel once t
 | Full authoritative world streaming now | Defer | P2 logical cell count is modest; complexity is not yet justified |
 | Floating origin | Defer | A 384 by 384 world at 32 pixels per tile is not large enough to require it |
 | Full ECS rewrite | Reject for current roadmap | Migration risk and agent cognitive cost exceed demonstrated benefit |
-| Worker for all navigation | Defer behind AM-1 gate | Cache/local algorithm changes may already meet the budget |
+| Worker for all navigation | Defer after AM-6 measurement | Cooperative exact guidance meets the main-thread slice budget without a world-synchronization protocol |
 | Async return affordability | Reject | Gameplay commands require an exact current answer |
 | Version every internal type | Reject | Version manifest/persistence/external contracts only |
 | Delete most tests | Reject | Consolidate by risk and move slow coverage to appropriate lanes |
@@ -655,7 +675,8 @@ Key locations reviewed:
 - src/main.ts: eager simulation construction before Phaser startup;
 - src/wayfinders/config/prototypeConfig.ts: dimensions, movement rates, fixed-step settings, and mutable singleton behavior;
 - src/wayfinders/core/GameSimulation.ts: tile-change recalculation, feature orchestration, snapshots, and return-dependent survey rules;
-- src/wayfinders/exploration/ForwardRangeSystem.ts: forward graph search;
+- src/wayfinders/exploration/ForwardGuidance.ts and ForwardRangeSystem.ts: revisioned cooperative task contract, exact search, inactive result buffers, atomic publication, and fallback;
+- src/wayfinders/navigation/BucketedCostSearch.ts: resumable bounded integer-cost queue used by both synchronous and cooperative execution;
 - src/wayfinders/navigation/GridGraph.ts: cached and uncached edge traversal paths;
 - src/wayfinders/navigation/MovementSystem.ts: swept movement and collision response;
 - src/wayfinders/navigation/CollisionGeometry.ts: local collision queries;
@@ -665,7 +686,8 @@ Key locations reviewed:
 - knowledge/risk overlay renderers: all-loaded-chunk texture construction;
 - src/wayfinders/rendering/WayfindersScene.ts: camera follow, broad presentation synchronization, and diagnostics;
 - island dossier, survey site, fishing shoal, and wreck systems: repeated analysis and global interaction scans;
-- package.json, tsconfig.json, and tests/: test command shape, typecheck coverage, fixtures, and lifecycle duplication.
+- package.json, vitest.config.ts, tsconfig files, and tests/README.md: explicit quick, contract, integration, I/O, and scheduled performance ownership;
+- tests/forward-guidance-task.test.ts, tests/forward-guidance.test.ts, tests/performance/forward-guidance-am6.test.ts, and scripts/architecture-benchmark.ts: exact equivalence, revision/cancellation behavior, buffer plateau, and paired P2 evidence.
 
 ## Definition of architectural success
 

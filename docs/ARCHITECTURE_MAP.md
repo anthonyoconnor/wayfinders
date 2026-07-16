@@ -80,6 +80,17 @@ Features may not import Phaser.
   marker pool. Renderers expose resource telemetry but cannot independently
   widen their lifetime. The ocean backdrop is the deterministic placeholder
   while visible-first activation catches up.
+- GameSimulation is the sole ForwardGuidance scheduler and publisher. It
+  coalesces requests by revision token, advances one cooperative exact-search
+  slice per frame, rejects stale world/knowledge/visibility/origin/provision
+  inputs, reclips the sparse frontier to the latest heading, and atomically
+  swaps a completed inactive result buffer. MovementAuthority and ReturnQuery
+  remain synchronous authority; ForwardGuidance is derived presentation data.
+- ForwardRangeSystem owns the exact synchronous oracle, resumable task, and two
+  reusable inactive buffers. BucketedCostSearch owns resumable queue mechanics.
+  A guidance behavior change belongs there and in focused equivalence tests;
+  scheduling/publication policy belongs in GameSimulation. A worker or route
+  hierarchy requires a new measured budget miss and is not a default extension.
 
 ## Feature folder convention
 

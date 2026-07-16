@@ -66,14 +66,16 @@ finalize its own collision or enter a faithful isolated game test. The next
 defined graphics work is `GR-3.5` through `GR-3.8`; it removes those gaps without
 building a general-purpose art, animation or generation suite.
 
-The authorized architecture batch is in progress. `AM-0` through `AM-5` are
-implemented in dependency order. The `AM-6` gate is active because a
-25-sample P2 run measured derived ForwardGuidance p95 at 12.61 ms against its
-4 ms budget. `AM-7` remains deferred under the standing gameplay-saving policy.
+The authorized architecture batch is complete. `AM-0` through `AM-6` were
+implemented in dependency order. The AM-6 evidence gate selected an exact
+cooperative ForwardGuidance task; a 100-request paired P2 run reduced
+main-thread guidance work from a 4.44 ms synchronous-oracle p95 to a 3.17 ms
+slice p95, so hierarchy and workers remain deferred. `AM-7` remains deferred
+under the standing gameplay-saving policy.
 
 ## Architecture and scale track
 
-Status: active; `AM-0` through `AM-5` are complete and `AM-6` is in progress.
+Status: implemented; `AM-0` through `AM-6` are complete.
 The authoritative detailed plan and evidence are
 [`architecture_milestones.md`](../architecture_milestones.md).
 
@@ -132,9 +134,11 @@ coast-to-coast large-world voyage.
 
 ### AM-6 — Evidence-gated hierarchy or workers
 
-Status: active. P2 derived ForwardGuidance misses its 4 ms p95 budget, selecting
-a cancellable/coalesced derived-guidance optimization while authoritative
-movement and return ordering remain on the simulation thread.
+Status: implemented. Exact ForwardGuidance now advances as a bounded,
+cancellable/coalesced task and publishes only complete current-revision
+results. P2 slice p95 is 3.17 ms against the 4 ms gate; movement and return
+ordering remain synchronous on the simulation thread. Worker and hierarchy
+complexity were not justified by the measured result.
 
 ### AM-7 — Persistence
 
