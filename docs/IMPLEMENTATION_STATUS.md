@@ -2,13 +2,16 @@
 
 Status: current development handoff, verified 2026-07-16.
 
-The asset workflow through GR-4.3 is implemented. Focused contract and
+The asset workflow through GR-4.4 is implemented. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,
 deterministic shoreline seeding, atomic island availability, exact-mask
 round trips, duplicate identity rejection, rollback, and isolated-trial
 authority. World-generation coverage verifies deterministic authored selection
 without replacement, manifest provenance, exact collision rasterization, and
-procedural shortfall.
+procedural shortfall. Presentation coverage verifies revision-matched texture
+loading, exact collision-bounds alignment, coherent fallback, and active-chunk
+creation and destruction. Browser smoke acceptance covers the game, zoom input,
+and the simplified Islands workspace without warning or error output.
 The aggregate source gates and serial performance lane below pass against this
 current handoff tree, including world-density and island-placement coverage.
 

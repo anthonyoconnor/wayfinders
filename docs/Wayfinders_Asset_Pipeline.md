@@ -108,6 +108,15 @@ artifact. The resulting immutable game catalog is sorted by stable ID and is
 read only during world creation. Island review and promotion operations reject
 island IDs.
 
+Availability projects two revision-matched read-only snapshots from the same
+prepared records. World generation receives only stable identity, saved grid
+dimensions, and exact collision. Presentation receives prepared visible-layer
+URLs, canvas dimensions, opacity/blend metadata, and immutable texture keys.
+The renderer resolves the stable asset ID recorded by world planning and aligns
+the PNG canvas to the same bounds; neither snapshot samples pixels for gameplay
+authority. A missing or stale presentation snapshot falls back to the complete
+developer island visual.
+
 For Ships, Fishing shoals, and other general families, the lifecycle remains:
 
 ```text

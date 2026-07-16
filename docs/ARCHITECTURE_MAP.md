@@ -99,6 +99,12 @@ not import Phaser.
   composition. It owns deterministic selection without replacement, bounded
   placement, manifest provenance, exact saved-mask rasterization, and
   procedural shortfall. World code does not import asset-pipeline modules.
+- `availableAuthoredIslandPresentationCatalog` is the presentation-only sibling
+  snapshot of prepared visible layers. `WayfindersScene` preloads it and
+  `WorldRenderer` resolves manifest-recorded asset IDs, aligns layers to planned
+  collision bounds, and owns them with the island centre's active chunk.
+  Missing or revision-mismatched presentation falls back coherently to developer
+  graphics; it never changes world or navigation authority.
 
 Diagnostics are distributed with their owner: simulation traces and counters
 live in `core`, presentation/resource counters in `WayfindersScene` and its

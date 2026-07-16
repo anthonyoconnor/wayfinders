@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   availableAuthoredIslandCatalog,
+  availableAuthoredIslandPresentationCatalog,
   buildAssetLibraryCatalog,
 } from "../src/wayfinders/assets/AssetLibraryCatalog";
 
@@ -114,6 +115,21 @@ describe("GR-3.6 production collision catalog", () => {
         gridWidth: 1,
         gridHeight: 1,
         solidSubcells: [{ x: 1, y: 1 }],
+      }],
+    });
+    expect(availableAuthoredIslandPresentationCatalog(catalog)).toMatchObject({
+      revision: expect.stringMatching(/^catalog-/u),
+      islands: [{
+        assetId: id,
+        gridWidth: 1,
+        gridHeight: 1,
+        layers: [{
+          id: "layer.base",
+          url: "/base.png",
+          textureKey: expect.stringContaining(id),
+          pixelWidth: 32,
+          pixelHeight: 32,
+        }],
       }],
     });
   });

@@ -314,20 +314,29 @@ region and updates one `ActiveChunkSet`. The active set prioritizes visible
 chunks, adds a prefetch ring when capacity allows, and enforces a hard five-by-
 five (`25`) chunk resource budget. Deactivation runs before activation.
 
-Chunk-local terrain, authored home-island objects, knowledge/risk textures, and
-marker pools all consume the same active-chunk delta. Inactive presentation
-resources are destroyed or returned to bounded pools; non-creating world reads
-prevent the renderer from expanding authoritative storage. Shared package
-textures and the player-boat visual remain scene-owned. The ocean backdrop is
-the deterministic placeholder if visible demand exceeds the active budget.
+Chunk-local terrain, authored home-island objects, imported authored-island
+layers, knowledge/risk textures, and marker pools all consume the same active-
+chunk delta. Inactive presentation resources are destroyed or returned to
+bounded pools; non-creating world reads prevent the renderer from expanding
+authoritative storage. Shared package and available-island textures plus the
+player-boat visual remain scene-owned. The ocean backdrop is the deterministic
+placeholder if visible demand exceeds the active budget.
 
 Knowledge and risk overlays update only dirty chunks and required neighbours.
-Static terrain, feature markers, and authored home-island objects are
-constructed only for active chunks. The ship interpolates between fixed
-simulation steps. No texture is allocated per frame.
+Static terrain, feature markers, and authored island objects are constructed
+only for active chunks. Each imported island resolves the stable asset ID
+recorded in its manifest descriptor, positions visible prepared layers at the
+descriptor's collision-bounds origin, and scales them to the exact saved grid
+canvas. The island centre chunk owns those layers without per-update world
+scans or duplicate placement state. Retained chunks create no duplicate image;
+deactivation destroys every layer. A missing texture or catalog-revision
+disagreement uses the complete procedural developer presentation instead of a
+partial imported visual. Camera zoom changes no placement calculation. The ship
+interpolates between fixed simulation steps. No texture is allocated per frame.
 
 The runtime authored packages provide the home island, animated player boat,
-and fishing-shoal cue. Other content uses intentional developer presentation.
+and fishing-shoal cue. Available imported islands use their prepared PNG layers;
+procedural fallback and other content use intentional developer presentation.
 The game and `?mode=assets` library share package validation, texture loading,
 presentation factories, and collision descriptors. The asset route supplies
 preview coordinates only; it does not create another gameplay simulation.

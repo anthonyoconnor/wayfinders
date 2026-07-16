@@ -46,31 +46,11 @@ profiles. Its current contracts are documented in the technical design and
 architecture map; its delivery history is archived.
 
 The asset-workspace shell, focused island workshop, single island-availability
-lifecycle, and deterministic authored-island world planning are implemented.
-The next proposed production-asset milestone supplies authored runtime
-presentation through the existing active-chunk boundary.
+lifecycle, deterministic authored-island world planning, and chunk-bounded
+authored runtime presentation are implemented. No further production-asset
+milestone is currently proposed.
 
 The water-system proposal remains a separate candidate track.
-
-## Asset workspaces and authored-island integration
-
-### GR-4.4 — Authored-island runtime presentation and closure
-
-Status: proposed, not started, and not authorized.
-
-Render each planned authored island from its recorded asset ID at the exact
-world placement used by its collision mask. Authored presentation consumes the
-existing active-chunk boundary and must not create total-world scans, duplicate
-simulation state, or a second resource-lifetime policy. Procedural fallback
-islands retain their current developer presentation.
-
-Acceptance requires visual and collision alignment at every supported zoom,
-chunk activation and deactivation without leaks, deterministic reload from the
-world manifest, and unchanged navigation and exploration authority. Browser
-acceptance covers import, edit, sea trial, availability toggle, new-world
-creation, unique authored placement, procedural shortfall, and disabling an
-island for subsequent worlds. Current documentation is rewritten to the
-simplified lifecycle, and completed historical detail moves to the archive.
 
 ## Water presentation
 

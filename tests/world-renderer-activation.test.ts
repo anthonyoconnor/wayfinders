@@ -47,6 +47,7 @@ vi.mock("phaser", () => {
   return {
     default: {
       GameObjects: { Graphics },
+      BlendModes: { NORMAL: 0, ADD: 1, MULTIPLY: 2, SCREEN: 3 },
       Geom: { Rectangle },
       Scenes: { Events: { SHUTDOWN: "shutdown" } },
     },
@@ -57,12 +58,19 @@ interface FakeObject {
   x: number;
   y: number;
   destroyed: boolean;
+  textureKey?: string;
+  displayWidth?: number;
+  displayHeight?: number;
+  alpha?: number;
+  blendMode?: number;
   setOrigin(...args: unknown[]): FakeObject;
   setDepth(...args: unknown[]): FakeObject;
   setVisible(...args: unknown[]): FakeObject;
   setSize(...args: unknown[]): FakeObject;
   setPosition(x: number, y: number): FakeObject;
   setDisplaySize(...args: unknown[]): FakeObject;
+  setAlpha(value: number): FakeObject;
+  setBlendMode(value: number): FakeObject;
   destroy(): void;
 }
 
@@ -81,6 +89,8 @@ function fakeObject(x = 0, y = 0): FakeObject {
       return this;
     },
     setDisplaySize() { return this; },
+    setAlpha(value: number) { this.alpha = value; return this; },
+    setBlendMode(value: number) { this.blendMode = value; return this; },
     destroy() { this.destroyed = true; },
   };
 }
@@ -117,8 +127,14 @@ function makeScene() {
         existing.push(object);
         return object;
       },
-      image: (x: number, y: number) => {
+      image: (x: number, y: number, textureKey?: string) => {
         const image = fakeObject(x, y);
+        image.textureKey = textureKey;
+        image.setDisplaySize = (width, height) => {
+          image.displayWidth = width as number;
+          image.displayHeight = height as number;
+          return image;
+        };
         images.push(image);
         return image;
       },
@@ -235,5 +251,67 @@ describe("WorldRenderer active chunk resources", () => {
     expect(images.every(({ destroyed }) => destroyed)).toBe(true);
     expect(texts.every(({ destroyed }) => destroyed)).toBe(true);
     expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(0);
+  });
+
+  it("aligns authored island layers to manifest bounds and owns them with the active center chunk", () => {
+    const { scene, images } = makeScene();
+    const generated = generatedWorld(32, 16, 8);
+    const island = {
+      id: 7,
+      kind: "low-cay",
+      size: "small",
+      center: { x: 12, y: 4 },
+      radiusX: 2,
+      radiusY: 1,
+      outerRadius: 4,
+      rotation: 0,
+      shapeSeed: 5,
+      bounds: { minX: 10, minY: 3, maxX: 13, maxY: 4 },
+      sourceKind: "authored",
+      authoredAssetId: "production.island.test-cay",
+      authoredCollision: { gridWidth: 4, gridHeight: 2, solidSubcells: [{ x: 1, y: 1 }] },
+    } as const;
+    (generated as { islands: readonly unknown[] }).islands = [island];
+    const presentations = {
+      revision: "catalog-test",
+      diagnostics: [],
+      entry: (assetId: string) => assetId === island.authoredAssetId ? {
+        assetId,
+        name: "Test Cay",
+        revision: "revision-1",
+        gridWidth: 4,
+        gridHeight: 2,
+        layers: [
+          { id: "base", url: "/base.png", textureKey: "base", pixelWidth: 128, pixelHeight: 64, opacity: 1, blendMode: "normal" },
+          { id: "detail", url: "/detail.png", textureKey: "detail", pixelWidth: 128, pixelHeight: 64, opacity: 0.75, blendMode: "multiply" },
+        ],
+      } as const : undefined,
+    };
+    (generated as unknown as { manifest: { authoredIslandCatalogRevision: string } }).manifest = {
+      authoredIslandCatalogRevision: "catalog-test",
+    };
+    const renderer = new WorldRenderer(scene as never, undefined, presentations);
+
+    renderer.render(generated, [entry(0, 0, 0)]);
+    expect(images).toHaveLength(0);
+
+    const activated = renderer.syncActiveChunks([entry(1, 0, 0)]);
+    expect(activated.telemetry.activeAuthoredImageObjects).toBe(2);
+    expect(images).toMatchObject([
+      { x: 320, y: 96, textureKey: "base", displayWidth: 128, displayHeight: 64, alpha: 1, blendMode: 0 },
+      { x: 320, y: 96, textureKey: "detail", displayWidth: 128, displayHeight: 64, alpha: 0.75, blendMode: 2 },
+    ]);
+    const retained = renderer.syncActiveChunks([entry(1, 0, 0)]);
+    expect(retained).toMatchObject({ activated: 0, deactivated: 0, retained: 1 });
+    expect(images).toHaveLength(2);
+
+    renderer.syncActiveChunks([entry(0, 0, 0)]);
+    expect(images.every(({ destroyed }) => destroyed)).toBe(true);
+    expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(0);
+
+    renderer.syncActiveChunks([entry(1, 0, 0)]);
+    expect(images).toHaveLength(4);
+    expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(2);
+    expect(renderer.getTelemetry().peakResourceObjects).toBeLessThanOrEqual(7);
   });
 });

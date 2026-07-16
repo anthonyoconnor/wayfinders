@@ -26,6 +26,10 @@ import {
   validateAuthoredIslandCatalog,
   type AuthoredIslandCatalog,
 } from "../world/AuthoredIslandCatalog";
+import type {
+  AuthoredIslandPresentationCatalog,
+  AuthoredIslandPresentationLayer,
+} from "./AuthoredIslandPresentation";
 
 /** Stable browser sections. Their order is deliberately independent of labels. */
 export const ASSET_LIBRARY_CATEGORIES = Object.freeze([
@@ -1175,17 +1179,23 @@ function catalogRevision(entries: readonly Readonly<ProductionCandidateLibraryEn
   return `catalog-${hash.toString(16).padStart(8, "0")}`;
 }
 
-/** Read-only, stable-ID ordered game-planning input; home remains its dedicated landmark. */
-export function availableAuthoredIslandCatalog(
-  entries: readonly Readonly<AssetLibraryEntry>[] = ASSET_LIBRARY_CATALOG,
-): Readonly<AuthoredIslandCatalog> {
-  const available = entries
+function availableIslandEntries(
+  entries: readonly Readonly<AssetLibraryEntry>[],
+): readonly Readonly<ProductionCandidateLibraryEntry>[] {
+  return entries
     .filter((entry): entry is Readonly<ProductionCandidateLibraryEntry> =>
       entry.entryType === "production-candidate"
       && entry.recipe.family === "island"
       && entry.availableInGame)
     .slice()
     .sort((left, right) => left.id.localeCompare(right.id, "en"));
+}
+
+/** Read-only, stable-ID ordered game-planning input; home remains its dedicated landmark. */
+export function availableAuthoredIslandCatalog(
+  entries: readonly Readonly<AssetLibraryEntry>[] = ASSET_LIBRARY_CATALOG,
+): Readonly<AuthoredIslandCatalog> {
+  const available = availableIslandEntries(entries);
   return validateAuthoredIslandCatalog({
     revision: catalogRevision(available),
     islands: available.map((entry) => {
@@ -1205,3 +1215,52 @@ export function availableAuthoredIslandCatalog(
 }
 
 export const AVAILABLE_AUTHORED_ISLAND_CATALOG = availableAuthoredIslandCatalog();
+
+/** Presentation-only counterpart to the collision/planning catalog. */
+export function availableAuthoredIslandPresentationCatalog(
+  entries: readonly Readonly<AssetLibraryEntry>[] = ASSET_LIBRARY_CATALOG,
+): Readonly<AuthoredIslandPresentationCatalog> {
+  const available = availableIslandEntries(entries);
+  return Object.freeze({
+    revision: catalogRevision(available),
+    islands: Object.freeze(available.map((entry) => {
+      if (entry.collisionDraft.kind !== "hybrid-grid-draft") {
+        throw new RangeError(`Available island ${entry.id} requires a saved hybrid collision mask`);
+      }
+      const collisionDraft = entry.collisionDraft;
+      const layers = entry.candidateLayers
+        .filter(({ defaultVisible }) => defaultVisible)
+        .map((layer): Readonly<AuthoredIslandPresentationLayer> => {
+          if (!layer.pixelSize) throw new RangeError(`Available island ${entry.id} layer ${layer.id} has no pixel size`);
+          const expectedWidth = collisionDraft.grid.width * collisionDraft.tileSize;
+          const expectedHeight = collisionDraft.grid.height * collisionDraft.tileSize;
+          if (layer.pixelSize.width !== expectedWidth || layer.pixelSize.height !== expectedHeight) {
+            throw new RangeError(
+              `Available island ${entry.id} layer ${layer.id} must match its ${expectedWidth}x${expectedHeight} collision canvas`,
+            );
+          }
+          return Object.freeze({
+            id: layer.id,
+            url: layer.url,
+            textureKey: `wayfinders.authored-island.${entry.id}.${layer.id}.${entry.fingerprint}`,
+            pixelWidth: layer.pixelSize.width,
+            pixelHeight: layer.pixelSize.height,
+            opacity: layer.opacity,
+            blendMode: layer.blendMode,
+          });
+        });
+      if (layers.length === 0) throw new RangeError(`Available island ${entry.id} has no visible image layer`);
+      return Object.freeze({
+        assetId: entry.id,
+        name: entry.name,
+        revision: entry.fingerprint,
+        gridWidth: collisionDraft.grid.width,
+        gridHeight: collisionDraft.grid.height,
+        layers: Object.freeze(layers),
+      });
+    })),
+  });
+}
+
+export const AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG =
+  availableAuthoredIslandPresentationCatalog();

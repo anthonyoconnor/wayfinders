@@ -3,6 +3,13 @@ import { appendDeveloperLog, clearDeveloperLog } from "../../developerLog";
 import { preloadPilotAssetPackages } from "../assets/PilotAssetCatalog";
 import { createPilotAssetRuntime, type PilotAssetRuntime } from "../assets/PilotAssetRuntime";
 import {
+  createAuthoredIslandPresentationRuntime,
+  EMPTY_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+  preloadAuthoredIslandPresentations,
+  type AuthoredIslandPresentationCatalog,
+  type AuthoredIslandPresentationRuntime,
+} from "../assets/AuthoredIslandPresentation";
+import {
   onPrototypeConfigChanged,
   patchPrototypeConfig,
   prototypeConfig,
@@ -232,18 +239,32 @@ export class WayfindersScene extends Phaser.Scene {
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
   private pilotAssets!: PilotAssetRuntime;
-  constructor(simulation = new GameSimulation()) {
+  private authoredIslandPresentations!: Readonly<AuthoredIslandPresentationRuntime>;
+  constructor(
+    simulation = new GameSimulation(),
+    private readonly authoredIslandPresentationCatalog: Readonly<AuthoredIslandPresentationCatalog> =
+      EMPTY_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+  ) {
     super({ key: "WayfindersScene" });
     this.simulation = simulation;
   }
 
   preload(): void {
     preloadPilotAssetPackages(this);
+    preloadAuthoredIslandPresentations(this, this.authoredIslandPresentationCatalog);
   }
 
   create(): void {
     this.pilotAssets = createPilotAssetRuntime(this);
-    this.worldRenderer = new WorldRenderer(this, this.pilotAssets);
+    this.authoredIslandPresentations = createAuthoredIslandPresentationRuntime(
+      this,
+      this.authoredIslandPresentationCatalog,
+    );
+    this.worldRenderer = new WorldRenderer(
+      this,
+      this.pilotAssets,
+      this.authoredIslandPresentations,
+    );
     this.wreckRenderer = new WreckRenderer(this);
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
     this.riskOverlay = new RiskOverlayRenderer(this);
@@ -261,6 +282,17 @@ export class WayfindersScene extends Phaser.Scene {
     this.gameStatus = document.querySelector<HTMLElement>("#game-status") ?? undefined;
     for (const diagnostic of this.pilotAssets.diagnostics) {
       this.log(`Using developer graphics for ${diagnostic.assetId}: ${diagnostic.message}`);
+    }
+    for (const diagnostic of this.authoredIslandPresentations.diagnostics) {
+      this.log(`Using developer graphics for ${diagnostic.assetId}: ${diagnostic.message}`);
+    }
+    if (
+      this.simulation.generated.manifest.authoredIslandCatalogRevision
+      !== this.authoredIslandPresentations.revision
+    ) {
+      this.log(
+        "Using developer graphics for imported islands: presentation catalog revision does not match this world manifest",
+      );
     }
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Keyboard input is unavailable");

@@ -5,6 +5,10 @@ import {
 } from "../assets/AuthoredAssetContracts";
 import { createAuthoredHomeIslandVisual, type AuthoredHomeIslandVisual } from "../assets/AuthoredAssetPresentation";
 import type { AuthoredAssetRuntime } from "../assets/PilotAssetRuntime";
+import type {
+  AuthoredIslandPresentationEntry,
+  AuthoredIslandPresentationRuntime,
+} from "../assets/AuthoredIslandPresentation";
 import { prototypeConfig } from "../config/prototypeConfig";
 import { gridToWorld } from "../world/CoordinateSystem";
 import { IslandKind, type GeneratedIsland } from "../world/IslandGenerator";
@@ -124,7 +128,13 @@ interface ChunkView {
   layers: Partial<Record<ChunkLayerName, CameraCulledGraphics>>;
   homeStructures?: Phaser.GameObjects.Graphics;
   homeVisual?: AuthoredHomeIslandVisual;
+  authoredIslandImages?: Phaser.GameObjects.Image[];
   label?: Phaser.GameObjects.Text;
+}
+
+interface AuthoredIslandPresentationRecord {
+  readonly island: Readonly<GeneratedIsland>;
+  readonly presentation: Readonly<AuthoredIslandPresentationEntry>;
 }
 
 /** Bounded counters suitable for the runtime performance HUD and regression tests. */
@@ -163,6 +173,8 @@ export class WorldRenderer {
   private readonly chunks = new Map<string, ChunkView>();
   private generated?: GeneratedWorld;
   private islandsById: ReadonlyMap<number, GeneratedIsland> = new Map();
+  private authoredIslandPresentationsByIslandId: ReadonlyMap<number, AuthoredIslandPresentationRecord> = new Map();
+  private authoredIslandPresentationsByOwnerChunk: ReadonlyMap<string, readonly AuthoredIslandPresentationRecord[]> = new Map();
   private observedKnowledgeRevisions = new WeakMap<WorldChunk, number>();
   private updateCount = 0;
   private totalChunkActivations = 0;
@@ -178,6 +190,7 @@ export class WorldRenderer {
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly pilotAssets?: Readonly<AuthoredAssetRuntime>,
+    private readonly authoredIslandPresentations?: Readonly<AuthoredIslandPresentationRuntime>,
   ) {
     this.ocean = scene.add.rectangle(0, 0, 1, 1, COLORS.ocean, 1).setOrigin(0).setDepth(0);
     this.ocean.setVisible(false);
@@ -203,6 +216,7 @@ export class WorldRenderer {
     const size = prototypeConfig.navigation.tileSize;
     this.generated = generated;
     this.islandsById = new Map(generated.islands.map((island) => [island.id, island]));
+    this.indexAuthoredIslandPresentations(generated);
 
     this.ocean
       .setSize(grid.width * size, grid.height * size)
@@ -330,6 +344,7 @@ export class WorldRenderer {
     this.chunks.set(entry.key, chunk);
     this.renderChunk(generated, chunk);
     if (this.isHomeOwnerChunk(generated, chunk)) this.drawHome(generated, chunk);
+    this.drawAuthoredIslands(chunk);
     const worldChunk = generated.grid.getChunk(chunk.chunkX, chunk.chunkY);
     if (worldChunk) this.observedKnowledgeRevisions.set(worldChunk, worldChunk.knowledgeRevision);
     const created = this.chunkResourceCount(chunk);
@@ -343,6 +358,7 @@ export class WorldRenderer {
     for (const layer of Object.values(chunk.layers)) layer?.destroy();
     chunk.homeStructures?.destroy();
     chunk.homeVisual?.destroy();
+    for (const image of chunk.authoredIslandImages ?? []) image.destroy();
     chunk.label?.destroy();
     const worldChunk = this.generated?.grid.getChunk(chunk.chunkX, chunk.chunkY);
     if (worldChunk) this.observedKnowledgeRevisions.delete(worldChunk);
@@ -417,6 +433,8 @@ export class WorldRenderer {
         }
 
         const island = this.islandsById.get(tile.islandId);
+        const hasAuthoredPresentation = island !== undefined
+          && this.authoredIslandPresentationsByIslandId.has(island.id);
         const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
         let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
         if (tile.terrain === TerrainType.ShallowOcean) {
@@ -428,12 +446,12 @@ export class WorldRenderer {
           water.fillRect(px, py, size + 1, size + 1);
         }
 
-        if (tile.terrain === TerrainType.Land) {
+        if (!hasAuthoredPresentation && tile.terrain === TerrainType.Land) {
           const terrain = this.getLayer(chunk, "terrain");
           const variation = seededValue(seed + 401, x, y) > 0.5 ? palette.land : palette.landDark;
           terrain.fillStyle(variation, 1);
           terrain.fillRoundedRect(px + 1, py + 1, size - 2, size - 2, size * 0.18);
-        } else if (tile.terrain === TerrainType.Rock) {
+        } else if (!hasAuthoredPresentation && tile.terrain === TerrainType.Rock) {
           const terrain = this.getLayer(chunk, "terrain");
           terrain.fillStyle(palette.rock, 1);
           terrain.fillTriangle(
@@ -444,17 +462,19 @@ export class WorldRenderer {
             px + size * 0.9,
             py + size * 0.84,
           );
-        } else if (tile.terrain === TerrainType.Reef) {
+        } else if (!hasAuthoredPresentation && tile.terrain === TerrainType.Reef) {
           const terrain = this.getLayer(chunk, "terrain");
           terrain.fillStyle(palette.reef, 0.9);
           terrain.fillCircle(px + size * 0.32, py + size * 0.54, size * 0.15);
           terrain.fillCircle(px + size * 0.63, py + size * 0.42, size * 0.12);
         }
 
-        if (tile.terrain === TerrainType.Land) {
+        if (!hasAuthoredPresentation && tile.terrain === TerrainType.Land) {
           this.drawCoastTile(generated, chunk, island ? palette.coast : COLORS.sand, x, y, px, py, size);
         }
-        if (island) this.drawIslandDecoration(chunk, island, tile.terrain, x, y, px, py, size, seed);
+        if (island && !hasAuthoredPresentation) {
+          this.drawIslandDecoration(chunk, island, tile.terrain, x, y, px, py, size, seed);
+        }
 
         if ((x + y) % 2 === 0 && tile.terrain !== TerrainType.Land) {
           const waves = this.getLayer(chunk, "waves");
@@ -652,6 +672,64 @@ export class WorldRenderer {
     }).setOrigin(0.5).setDepth(10);
   }
 
+  private indexAuthoredIslandPresentations(generated: Readonly<GeneratedWorld>): void {
+    const byIslandId = new Map<number, AuthoredIslandPresentationRecord>();
+    const byOwnerChunk = new Map<string, AuthoredIslandPresentationRecord[]>();
+    if (
+      this.authoredIslandPresentations
+      && generated.manifest.authoredIslandCatalogRevision !== this.authoredIslandPresentations.revision
+    ) {
+      this.authoredIslandPresentationsByIslandId = byIslandId;
+      this.authoredIslandPresentationsByOwnerChunk = byOwnerChunk;
+      return;
+    }
+    for (const island of generated.islands) {
+      if (island.sourceKind !== "authored" || !island.authoredAssetId || !island.authoredCollision) continue;
+      const presentation = this.authoredIslandPresentations?.entry(island.authoredAssetId);
+      if (!presentation) continue;
+      if (
+        presentation.gridWidth !== island.authoredCollision.gridWidth
+        || presentation.gridHeight !== island.authoredCollision.gridHeight
+      ) {
+        throw new RangeError(`Authored island ${island.authoredAssetId} presentation does not match its collision bounds`);
+      }
+      const record = Object.freeze({ island, presentation });
+      byIslandId.set(island.id, record);
+      const key = activeChunkKey(
+        Math.floor(island.center.x / generated.grid.chunkSize),
+        Math.floor(island.center.y / generated.grid.chunkSize),
+      );
+      const records = byOwnerChunk.get(key) ?? [];
+      records.push(record);
+      byOwnerChunk.set(key, records);
+    }
+    this.authoredIslandPresentationsByIslandId = byIslandId;
+    this.authoredIslandPresentationsByOwnerChunk = byOwnerChunk;
+  }
+
+  private drawAuthoredIslands(chunk: ChunkView): void {
+    const records = this.authoredIslandPresentationsByOwnerChunk.get(chunk.entry.key);
+    if (!records || records.length === 0) return;
+    const size = prototypeConfig.navigation.tileSize;
+    const images: Phaser.GameObjects.Image[] = [];
+    for (const { island, presentation } of records) {
+      for (const [index, layer] of presentation.layers.entries()) {
+        const image = this.scene.add.image(
+          island.bounds.minX * size,
+          island.bounds.minY * size,
+          layer.textureKey,
+        )
+          .setOrigin(0)
+          .setDisplaySize(presentation.gridWidth * size, presentation.gridHeight * size)
+          .setAlpha(layer.opacity)
+          .setBlendMode(authoredIslandBlendMode(layer.blendMode))
+          .setDepth(4 + index * 0.01);
+        images.push(image);
+      }
+    }
+    chunk.authoredIslandImages = images;
+  }
+
   private isAuthoredHomeFootprint(generated: GeneratedWorld, x: number, y: number): boolean {
     const metadata = this.authoredHomeMetadata;
     if (!metadata) return false;
@@ -700,6 +778,7 @@ export class WorldRenderer {
       if (chunk.homeStructures) graphics++;
       if (chunk.label) text++;
       if (chunk.homeVisual) authoredImages += chunk.homeVisual.metadata.render.slices.length;
+      authoredImages += chunk.authoredIslandImages?.length ?? 0;
     }
     return { graphics, text, authoredImages, resources: graphics + text + authoredImages };
   }
@@ -708,7 +787,8 @@ export class WorldRenderer {
     return Object.values(chunk.layers).filter(Boolean).length
       + (chunk.homeStructures ? 1 : 0)
       + (chunk.label ? 1 : 0)
-      + (chunk.homeVisual ? chunk.homeVisual.metadata.render.slices.length : 0);
+      + (chunk.homeVisual ? chunk.homeVisual.metadata.render.slices.length : 0)
+      + (chunk.authoredIslandImages?.length ?? 0);
   }
 
   private countActiveResources(): number {
@@ -737,7 +817,18 @@ export class WorldRenderer {
     this.totalChunkDeactivations += activeCount;
     this.generated = undefined;
     this.islandsById = new Map();
+    this.authoredIslandPresentationsByIslandId = new Map();
+    this.authoredIslandPresentationsByOwnerChunk = new Map();
     this.observedKnowledgeRevisions = new WeakMap();
+  }
+}
+
+function authoredIslandBlendMode(mode: "normal" | "multiply" | "screen" | "add"): number {
+  switch (mode) {
+    case "multiply": return Phaser.BlendModes.MULTIPLY;
+    case "screen": return Phaser.BlendModes.SCREEN;
+    case "add": return Phaser.BlendModes.ADD;
+    default: return Phaser.BlendModes.NORMAL;
   }
 }
 

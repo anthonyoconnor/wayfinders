@@ -39,7 +39,10 @@ general art or atlas tool.
    the same exact recipe, prepared-output, and collision validation; a failure
    leaves the island unavailable and reports what to correct. Disabling the
    toggle preserves the island and removes it only from subsequently created
-   worlds. The built-in home island is always available.
+   worlds. A subsequently created world uses the imported PNG at the exact
+   placement of its saved collision canvas, uses each available island at most
+   once, and fills any shortfall with procedural islands. The built-in home
+   island is always available.
 7. Run the read-only repository gate after an authoring session:
 
    ```powershell

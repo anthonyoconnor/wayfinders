@@ -1135,6 +1135,30 @@ unique authored IDs, exact procedural shortfall, catalog-order independence,
 deterministic subset selection, byte-equivalent manifests, and exact fine-mask
 rasterization.
 
+#### GR-4.4 — Authored-island runtime presentation and closure
+
+Status: implemented and accepted on 2026-07-16.
+
+Available imported islands now project a separate immutable presentation
+catalog containing their prepared visible layers, collision-canvas dimensions,
+and revisioned texture keys. `WayfindersScene` preloads that snapshot and
+`WorldRenderer` resolves only the authored asset IDs recorded in the generated
+world manifest. World generation and navigation remain independent of image
+URLs and rendered pixels.
+
+Each authored visual is positioned from the planned collision bounds and
+displayed at the exact saved grid canvas. Its centre chunk owns all layer
+objects through the existing active-chunk lifecycle; retained chunks do not
+duplicate images, and deactivation destroys every layer before reactivation.
+Procedural drawing remains the coherent fallback for missing textures, catalog-
+revision disagreement, or procedural shortfall. Contract coverage verifies
+preloading, partial-load fallback, catalog/canvas agreement, manifest identity,
+placement, layer composition, and activation churn. Browser smoke acceptance
+verified game and Islands modes, zoom input, one WebGL canvas, the simplified
+workbench, and a clean warning/error console. The clean production repository
+contains no non-home imported island, so exact image alignment is exercised by
+synthetic contract fixtures rather than a retained placeholder asset.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development
@@ -1180,5 +1204,5 @@ determine whether the user-visible departure symptom remains.
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-4.1`, graphics and asset
-work through `GR-4.3`, and architecture work through `AM-6`. Upcoming, proposed,
+work through `GR-4.4`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.
