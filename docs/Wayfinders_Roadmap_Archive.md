@@ -1,8 +1,8 @@
 # Wayfinders completed roadmap archive
 
 Status: historical. This document preserves the scope, gates and acceptance
-evidence for completed `GP-0.1` through `GP-4.1` and `GR-1.1` through `GR-1.4`
-work. It does not define or authorize future work. See
+evidence for completed `GP-0.1` through `GP-4.1`, `GR-1.1` through `GR-3.4`,
+and `AM-0` through `AM-6` work. It does not define or authorize future work. See
 `Wayfinders_Roadmap.md` for the small, current forward plan.
 
 ### Saving policy
@@ -26,6 +26,9 @@ numbering system for future work. Forward planning uses three labels:
 - **Baseline** — the implemented and protected starting point;
 - **GP-x.y** — gameplay major milestones and their minor acceptance gates;
 - **GR-x.y** — graphics, asset-pipeline and production-presentation gates.
+
+The architecture record below additionally uses `AM-x` labels for its completed
+scale and development-feedback milestones.
 
 A minor milestone is complete only when its behavior, tests,
 readability and performance criteria pass and its acceptance evidence is
@@ -961,7 +964,74 @@ fingerprint-protected loopback transaction that updates package collision
 metadata without replacing art. The accepted home-island mask was subsequently
 loaded and verified in gameplay.
 
+### GR-3 — Production-asset prototype
+
+The `GR-3.1` through `GR-3.4` batch established a deterministic source-to-review
+prototype without expanding runtime world-placement authority.
+
+#### GR-3.1 — Production recipe manifest
+
+Status: implemented and accepted.
+
+Implementation evidence: a strict version-one recipe manifest describes the
+pilot runtime bindings and selected island sources with stable identities,
+provenance, preparation settings, collision intent, and bounded layer data.
+
+#### GR-3.2 — Deterministic preparation
+
+Status: implemented and accepted.
+
+Implementation evidence: isolated preparation jobs produce bounded runtime
+images, thumbnails, collision drafts, fingerprints, reports, and cache records.
+Identical inputs are cacheable and failures do not prevent independent jobs.
+
+#### GR-3.3 — Review workbench
+
+Status: implemented and accepted.
+
+Implementation evidence: the asset library compares source and prepared layers,
+collision, provenance, and exact fingerprints. Review decisions bind to the
+fingerprint, and pilot bindings can be previewed in their existing game slots
+without replacing accepted gameplay metadata.
+
+#### GR-3.4 — Promotion and readiness gate
+
+Status: implemented and accepted.
+
+Implementation evidence: exact-review promotion publishes only approved,
+current outputs, preserves declared collision authority, and records complete
+source-to-runtime lineage. The repository gate rejects stale reviews, generated
+artifacts, hashes, and orphaned promoted files.
+
+## Architecture and scale track
+
+The architecture batch established the current large-world and agent-development
+foundation. Detailed investigation history remains available in version
+control; current contracts live in `ARCHITECTURE_MAP.md`,
+`Wayfinders_Technical_Design.md`, `AGENTS.md`, and `tests/README.md`.
+
+| Milestone | Durable outcome | Implementation |
+| --- | --- | --- |
+| AM-0 | Named scale fixtures, explicit test lanes, test typechecking, and subsystem tracing | `5e01ffd` |
+| AM-1 | Cached collision topology and revisioned derived forward guidance | `0796763`, `bbe5c8a` |
+| AM-2 | Explicit simulation composition and enforceable feature ownership | `17c3f10` |
+| AM-3 | Spatially local, revision-driven interaction and presentation work | `61e27de` |
+| AM-4 | Versioned world manifests, bounded placement, and shared world analysis | `582671c` |
+| AM-5 | Presentation resource lifetime bounded by the shared active-chunk set | `91a24ce` |
+| AM-6 | Exact cooperative forward guidance with bounded slices and atomic publication | `094f388` |
+
+Status: implemented and accepted on 2026-07-15. The normal scale profile is a
+deterministic `384 x 384` world with at least 300 islands, and the stress
+fixtures cover 500 islands. Cooperative guidance met its main-thread slice
+budget without requiring a worker or route hierarchy.
+
+Post-milestone consolidation removed transition-only wrappers, compatibility
+paths, test scaffolding, and duplicate runtime authority in `3080c2d`,
+`c86c1de`, `94e50da`, and `3dbaef7`. The associated transition-only tests were
+removed in `0ea2d7a`.
+
 ## Archive boundary
 
-This archive ends with the accepted `GR-2.5` milestone. Authorized, proposed
-and deferred work is maintained in `Wayfinders_Roadmap.md`.
+This archive includes completed gameplay through `GP-4.1`, graphics and asset
+work through `GR-3.4`, and architecture work through `AM-6`. Upcoming, proposed,
+and deferred work is maintained only in `Wayfinders_Roadmap.md`.
