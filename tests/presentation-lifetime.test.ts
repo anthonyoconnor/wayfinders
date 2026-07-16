@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  ChunkActivatedViewPool,
-  ReferenceCountedResourceCache,
-  presentationChunksForWorldBounds,
-} from "../src/wayfinders/rendering/lifetime";
+import { ChunkActivatedViewPool } from "../src/wayfinders/rendering/lifetime";
 
 interface RecordFixture {
   readonly id: string;
@@ -94,74 +90,5 @@ describe("chunk-activated presentation lifetime", () => {
       poolEvictions: 1,
     });
     expect(destroyed).toEqual([0]);
-  });
-
-  it("maps camera bounds to stable inclusive chunk coordinates", () => {
-    expect(presentationChunksForWorldBounds({
-      minX: 1023,
-      minY: 0,
-      maxX: 2047,
-      maxY: 1023,
-    }, 1024)).toEqual([
-      { x: 0, y: 0 },
-      { x: 1, y: 0 },
-    ]);
-  });
-});
-
-describe("reference-counted presentation resources", () => {
-  it("never evicts a leased resource and exposes a placeholder path when pinned", () => {
-    const disposed: string[] = [];
-    const cache = new ReferenceCountedResourceCache<string, { id: string }>({
-      maxEntries: 1,
-      maxWeight: 10,
-      dispose: ({ id }) => disposed.push(id),
-    });
-    const first = cache.tryAcquire("island-a", 8, () => ({ id: "island-a" }));
-    expect(first?.resource.id).toBe("island-a");
-    expect(cache.tryAcquire("island-b", 8, () => ({ id: "island-b" }))).toBeUndefined();
-    expect(disposed).toEqual([]);
-    expect(cache.getTelemetry()).toMatchObject({ activeLeases: 1, deniedAcquisitions: 1 });
-
-    first?.release();
-    first?.release();
-    const second = cache.tryAcquire("island-b", 8, () => ({ id: "island-b" }));
-    expect(second?.resource.id).toBe("island-b");
-    expect(disposed).toEqual(["island-a"]);
-    expect(cache.getTelemetry()).toMatchObject({
-      entries: 1,
-      activeLeases: 1,
-      evictions: 1,
-      deniedAcquisitions: 1,
-    });
-  });
-
-  it("shares one resource across leases and evicts idle entries by deterministic LRU", () => {
-    const disposed: string[] = [];
-    let creates = 0;
-    const cache = new ReferenceCountedResourceCache<string, string>({
-      maxEntries: 2,
-      maxWeight: 20,
-      dispose: (resource) => disposed.push(resource),
-    });
-    const a1 = cache.tryAcquire("a", 10, () => { creates++; return "a"; });
-    const a2 = cache.tryAcquire("a", 10, () => { creates++; return "duplicate"; });
-    expect(a2?.resource).toBe("a");
-    expect(creates).toBe(1);
-    a1?.release();
-    a2?.release();
-    const b = cache.tryAcquire("b", 10, () => "b");
-    b?.release();
-    cache.tryAcquire("c", 10, () => "c");
-
-    expect(disposed).toEqual(["a"]);
-    expect(cache.getTelemetry()).toMatchObject({
-      entries: 2,
-      retainedWeight: 20,
-      cacheHits: 1,
-      cacheMisses: 3,
-      peakEntries: 2,
-      peakWeight: 20,
-    });
   });
 });

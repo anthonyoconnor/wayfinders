@@ -57,10 +57,6 @@ export class WorldDescriptorRegistry {
     return this.index.has(entry.id) ? this.index.update(entry) : this.index.add(entry);
   }
 
-  remove(kind: WorldDescriptorKind, domainId: string | number): SpatialIndexMutation<string> {
-    return this.index.remove(worldDescriptorKey(kind, domainId));
-  }
-
   queryNear(point: Readonly<SpatialPoint>, radius: number): {
     readonly candidates: WorldDescriptorCandidates;
     readonly query: SpatialQueryResult<WorldDescriptorEntry>;

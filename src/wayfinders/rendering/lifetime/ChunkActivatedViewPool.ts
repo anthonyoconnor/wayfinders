@@ -132,10 +132,6 @@ export class ChunkActivatedViewPool<
     this.updatePeaks();
   }
 
-  clearActiveChunks(): void {
-    this.setActiveChunks([]);
-  }
-
   getTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
     return Object.freeze({
       records: this.recordsById.size,
@@ -228,34 +224,8 @@ export class ChunkActivatedViewPool<
   }
 }
 
-export function presentationChunkKey(chunkX: number, chunkY: number): string {
+function presentationChunkKey(chunkX: number, chunkY: number): string {
   return `${chunkX},${chunkY}`;
-}
-
-/** Inclusive chunk coordinates intersecting pixel-space bounds. */
-export function presentationChunksForWorldBounds(
-  bounds: Readonly<{ minX: number; minY: number; maxX: number; maxY: number }>,
-  chunkPixelSize: number,
-): readonly Readonly<PresentationChunkCoordinate>[] {
-  if (!Number.isFinite(chunkPixelSize) || chunkPixelSize <= 0) {
-    throw new RangeError("chunkPixelSize must be positive and finite");
-  }
-  for (const [label, value] of Object.entries(bounds)) {
-    if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
-  }
-  if (bounds.minX > bounds.maxX || bounds.minY > bounds.maxY) {
-    throw new RangeError("world bounds minimums cannot exceed maximums");
-  }
-
-  const minChunkX = Math.floor(bounds.minX / chunkPixelSize);
-  const minChunkY = Math.floor(bounds.minY / chunkPixelSize);
-  const maxChunkX = Math.floor(bounds.maxX / chunkPixelSize);
-  const maxChunkY = Math.floor(bounds.maxY / chunkPixelSize);
-  const chunks: PresentationChunkCoordinate[] = [];
-  for (let y = minChunkY; y <= maxChunkY; y++) {
-    for (let x = minChunkX; x <= maxChunkX; x++) chunks.push(Object.freeze({ x, y }));
-  }
-  return Object.freeze(chunks);
 }
 
 function assertChunkCoordinate(coordinate: Readonly<PresentationChunkCoordinate>): void {

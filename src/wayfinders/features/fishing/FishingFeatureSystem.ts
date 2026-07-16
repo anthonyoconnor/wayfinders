@@ -1,12 +1,10 @@
-import { prototypeConfig, type PrototypeConfig } from "../../config/prototypeConfig";
+import type { PrototypeConfig } from "../../config/prototypeConfig";
 import type { GridPoint } from "../../core/types";
 import { generateFishingShoalCatalog } from "../../exploration/FishingShoalCatalog";
 import type {
   FishingShoalDefinition,
   FishingShoalId,
-  FishingShoalInteractionCommandV1,
   FishingShoalInteractionReadModel,
-  FishingShoalInteractionResultV1,
   FishingShoalProvisionalRecordV1,
   FishingShoalReadModel,
   FishingShoalReturnedRecordV1,
@@ -24,27 +22,21 @@ import type {
   FishingCommandContext,
   FishingCommandResult,
   FishingFeatureDependencies,
-  FishingFeatureState,
   FishingMutation,
-  FishingPresentationReadModel,
-  FishingPresentationRevision,
-  FishingPresentationSource,
 } from "./FishingFeatureContracts";
-import { createFishingFeatureState } from "./FishingFeatureState";
-import { createFishingPresentationReadModel } from "./FishingPresentationAdapter";
 
 /**
  * Feature-owned facade. It delegates gameplay authority to FishingShoalSystem
- * while giving new callers command, state and presentation boundaries.
+ * while owning the public command, query, and lifecycle boundary.
  */
-export class FishingFeatureSystem implements FishingPresentationSource {
+export class FishingFeatureSystem {
   private readonly system: FishingShoalSystem;
 
   constructor(
     private readonly world: WorldGrid,
     readonly definitions: readonly Readonly<FishingShoalDefinition>[],
     homeReturnTile: Readonly<GridPoint>,
-    config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
+    config: Pick<PrototypeConfig, "navigation" | "movement">,
   ) {
     this.system = new FishingShoalSystem(world, definitions, homeReturnTile, config);
   }
@@ -69,15 +61,6 @@ export class FishingFeatureSystem implements FishingPresentationSource {
     return this.system.recordsRevision;
   }
 
-  get presentationRevision(): Readonly<FishingPresentationRevision> {
-    return Object.freeze({
-      records: this.system.recordsRevision,
-      knowledge: this.world.knowledgeVersion,
-      visibility: this.world.visibilityVersion,
-      supportedTopology: this.world.supportedTopologyVersion,
-    });
-  }
-
   definitionFor(id: string): Readonly<FishingShoalDefinition> | undefined {
     return this.system.definitionFor(id);
   }
@@ -90,7 +73,7 @@ export class FishingFeatureSystem implements FishingPresentationSource {
     return this.system.interactionNear(tile, surveyBudget, candidateIds);
   }
 
-  /** New command boundary with typed mutation effects. */
+  /** Command boundary with typed mutation effects. */
   execute(command: Readonly<FishingCommand>, context: Readonly<FishingCommandContext>): FishingCommandResult {
     const beforeRevision = this.system.recordsRevision;
     const outcome = this.system.applyInteraction(
@@ -111,25 +94,6 @@ export class FishingFeatureSystem implements FishingPresentationSource {
       changedShoalIds,
     });
     return Object.freeze({ outcome: Object.freeze({ ...outcome }), mutation });
-  }
-
-  stateSnapshot(): Readonly<FishingFeatureState> {
-    return createFishingFeatureState(this);
-  }
-
-  createPresentationReadModel(): Readonly<FishingPresentationReadModel> {
-    return createFishingPresentationReadModel(this.presentationRevision, this.system.readModels());
-  }
-
-  // Compatibility delegates keep GameSimulation migration mechanical and recoverable.
-  applyInteraction(
-    command: Readonly<FishingShoalInteractionCommandV1>,
-    shipTile: Readonly<GridPoint>,
-    expeditionId: number,
-    generation: number,
-    surveyBudget: Readonly<SurveyBudgetReadModel>,
-  ): FishingShoalInteractionResultV1 {
-    return this.system.applyInteraction(command, shipTile, expeditionId, generation, surveyBudget);
   }
 
   observeCurrentSight(
@@ -164,7 +128,7 @@ export function createFishingFeature(dependencies: FishingFeatureDependencies): 
     dependencies.world,
     dependencies.definitions,
     dependencies.homeReturnTile,
-    dependencies.config ?? prototypeConfig,
+    dependencies.config,
   );
 }
 
@@ -172,7 +136,7 @@ export interface GeneratedFishingFeatureDependencies {
   readonly world: WorldGrid;
   readonly seed: number;
   readonly homeReturnTile: Readonly<GridPoint>;
-  readonly config?: Pick<PrototypeConfig, "navigation" | "movement">;
+  readonly config: Pick<PrototypeConfig, "navigation" | "movement">;
   readonly analysis?: WorldAnalysisIndex;
 }
 
@@ -180,7 +144,7 @@ export interface GeneratedFishingFeatureDependencies {
 export function createGeneratedFishingFeature(
   dependencies: GeneratedFishingFeatureDependencies,
 ): FishingFeatureSystem {
-  const config = dependencies.config ?? prototypeConfig;
+  const config = dependencies.config;
   const definitions = generateFishingShoalCatalog(
     dependencies.world,
     dependencies.seed,

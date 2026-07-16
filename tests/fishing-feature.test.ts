@@ -2,19 +2,14 @@ import { describe, expect, it } from "vitest";
 import { createSurveyBudget } from "../src/wayfinders/exploration/SurveyContracts";
 import {
   FISHING_SHOAL_CONTENT_VERSION,
-  FishingPresentationAdapter,
   createFishingFeature,
   createFishingShoalId,
-  selectFishingDefinition,
-  selectFishingPresentation,
-  selectReturnedFishingSurveys,
   surveyFishingShoal,
-  type FishingPresentationPort,
-  type FishingPresentationReadModel,
   type FishingShoalDefinition,
 } from "../src/wayfinders/features/fishing";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import { makeConfig } from "./helpers";
 
 function definition(
   ordinal: number,
@@ -36,16 +31,8 @@ function definition(
   });
 }
 
-class RecordingFishingPort implements FishingPresentationPort {
-  readonly models: FishingPresentationReadModel[] = [];
-
-  syncFishing(model: Readonly<FishingPresentationReadModel>): void {
-    this.models.push(model);
-  }
-}
-
 describe("fishing feature vertical slice", () => {
-  it("handles a survey through commands and exposes immutable state through selectors", () => {
+  it("handles a survey through the command boundary and returns typed mutation effects", () => {
     const world = new WorldGrid(5, 2, 5);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const definitions = Object.freeze([
@@ -56,6 +43,7 @@ describe("fishing feature vertical slice", () => {
       world,
       definitions,
       homeReturnTile: { x: 0, y: 0 },
+      config: makeConfig(),
     });
 
     const first = definitions[0];
@@ -66,11 +54,6 @@ describe("fishing feature vertical slice", () => {
       expeditionId: 7,
       generation: 3,
     }]);
-
-    const before = feature.stateSnapshot();
-    expect(Object.isFrozen(before)).toBe(true);
-    expect(Object.isFrozen(before.provisional[0])).toBe(true);
-    expect(selectFishingDefinition(before, first.id)).toMatchObject({ quality: "rich" });
 
     const budget = createSurveyBudget(2, 12, 3);
     expect(feature.interactionNear(first.tile, budget)).toMatchObject({
@@ -112,44 +95,9 @@ describe("fishing feature vertical slice", () => {
     });
 
     expect(feature.commitExpedition(7).surveys).toHaveLength(1);
-    const returned = feature.stateSnapshot();
-    expect(selectReturnedFishingSurveys(returned)).toEqual([expect.objectContaining({
+    expect(feature.returned).toEqual([expect.objectContaining({
       id: first.id,
       state: "survey",
     })]);
-  });
-
-  it("updates a renderer-neutral port only when presentation revisions change", () => {
-    const world = new WorldGrid(5, 2, 5);
-    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
-    const target = definition(0, 2, "lean");
-    const feature = createFishingFeature({
-      world,
-      definitions: [target],
-      homeReturnTile: { x: 0, y: 0 },
-    });
-    const adapter = new FishingPresentationAdapter();
-    const port = new RecordingFishingPort();
-
-    expect(adapter.sync(feature, port)).toBe(true);
-    expect(adapter.sync(feature, port)).toBe(false);
-    expect(port.models).toHaveLength(1);
-    expect(port.models[0].shoals).toHaveLength(0);
-
-    const targetIndex = world.index(target.tile.x, target.tile.y);
-    world.setVisibleNowAtIndex(targetIndex, true);
-    feature.observeCurrentSight(2, 1, [targetIndex]);
-
-    expect(adapter.sync(feature, port)).toBe(true);
-    expect(port.models).toHaveLength(2);
-    const presented = selectFishingPresentation(port.models[1], target.id);
-    expect(presented).toMatchObject({ state: "sighted", clue: target.clue });
-    expect(presented).not.toHaveProperty("quality");
-    expect(Object.isFrozen(port.models[1])).toBe(true);
-    expect(Object.isFrozen(presented)).toBe(true);
-
-    adapter.invalidate();
-    expect(adapter.sync(feature, port)).toBe(true);
-    expect(port.models).toHaveLength(3);
   });
 });

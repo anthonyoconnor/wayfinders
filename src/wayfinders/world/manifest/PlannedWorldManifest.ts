@@ -2,9 +2,7 @@ import type { GridPoint } from "../../core/types";
 import {
   stableIslandId,
   stableLandmarkId,
-  type StableIslandId,
   type WorldManifestBoundsV1,
-  type WorldManifestFeatureV1,
   type WorldManifestIslandKind,
   type WorldManifestIslandSize,
   type WorldManifestIslandV1,
@@ -50,7 +48,6 @@ export interface PlannedWorldManifestMetadataV1 {
   readonly generatorVersion: string;
   readonly settingsProfileId: string;
   readonly settingsFingerprint?: string;
-  readonly features?: readonly Readonly<WorldManifestFeatureV1>[];
 }
 
 /**
@@ -76,11 +73,10 @@ export function createManifestFromPlannedWorldV1(
     },
     landmarks: landmarkDescriptors(world.landmarks),
     islands: world.islands.map(islandDescriptor),
-    features: metadata.features ?? [],
   });
 }
 
-export function islandDescriptor(island: Readonly<PlannedIslandFactsV1>): WorldManifestIslandV1 {
+function islandDescriptor(island: Readonly<PlannedIslandFactsV1>): WorldManifestIslandV1 {
   return {
     id: stableIslandId(island.id),
     sourceId: island.id,
@@ -96,7 +92,7 @@ export function islandDescriptor(island: Readonly<PlannedIslandFactsV1>): WorldM
   };
 }
 
-export function landmarkDescriptors(
+function landmarkDescriptors(
   landmarks: Readonly<PlannedLandmarkFactsV1>,
 ): WorldManifestLandmarkV1[] {
   return [
@@ -118,8 +114,4 @@ function landmarkDescriptor<K extends WorldManifestLandmarkV1["kind"]>(
     kind,
     position: { ...position },
   } as WorldManifestLandmarkV1 & { readonly id: `landmark:${K}`; readonly kind: K };
-}
-
-export function manifestIslandId(sourceId: number): StableIslandId {
-  return stableIslandId(sourceId);
 }

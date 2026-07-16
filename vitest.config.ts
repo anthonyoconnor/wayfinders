@@ -11,7 +11,6 @@ const quickTests = [
   "tests/navigation-collision-edges.test.ts",
   "tests/navigation-topology-cache.test.ts",
   "tests/presentation-lifetime.test.ts",
-  "tests/session-config.test.ts",
   "tests/viewport-chunk-region.test.ts",
   "tests/world-analysis-index.test.ts",
   "tests/world-manifest.test.ts",
@@ -36,7 +35,6 @@ const integrationTests = [
   "tests/expedition.test.ts",
   "tests/fishing-shoals.test.ts",
   "tests/forward-guidance.test.ts",
-  "tests/game-session.test.ts",
   "tests/game-simulation-spatial.test.ts",
   "tests/game-simulation.test.ts",
   "tests/idol-locations-integration.test.ts",
@@ -82,12 +80,6 @@ export default defineConfig({
         test: {
           name: "performance",
           include: ["tests/performance/**/*.test.ts"],
-          // Timing gates are meaningless when independent CPU-heavy seed
-          // sweeps compete in the same process. Keep test cases intact, but
-          // isolate performance files from one another.
-          fileParallelism: false,
-          maxWorkers: 1,
-          minWorkers: 1,
         },
       },
     ],

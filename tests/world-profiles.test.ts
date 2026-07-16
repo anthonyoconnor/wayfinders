@@ -18,7 +18,7 @@ describe("architecture world profiles", () => {
       expect(profile.config.world.width).toBe(width);
       expect(profile.config.world.height).toBe(height);
       expect(profile.config.islands.count).toBe(islandCount);
-      expect(profile.targetIslandCount).toBe(islandCount);
+      expect(profile.density.islandCount).toBe(islandCount);
       expect(profile.areaMultiplier).toBe(areaMultiplier);
     },
   );

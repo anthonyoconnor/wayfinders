@@ -26,7 +26,7 @@
     "test:contract": "vitest --configLoader runner run --project contract",
     "test:integration": "vitest --configLoader runner run --project integration",
     "test:io": "vitest --configLoader runner run --project io",
-    "test:perf": "vitest --configLoader runner run --project performance --no-file-parallelism --maxWorkers=1",
+    "test:perf": "vitest --configLoader runner run --project performance --no-file-parallelism",
     "test:watch": "vitest --configLoader runner --project quick",
     "check:quick": "npm run check:architecture && npm run test:quick",
     "check": "npm run assets:check && npm run typecheck && npm run typecheck:test && npm run check:quick && npm run test:contract && npm run test:integration && npm run test:io && npm run build:bundle"

@@ -1,12 +1,7 @@
 import {
   prototypeConfig,
-  type DeepReadonly,
   type PrototypeConfig,
 } from "../config/prototypeConfig";
-import {
-  materializeSessionConfig,
-  type SessionConfig,
-} from "../config/SessionConfig";
 import { PILOT_COLLISION_PROFILE_REGISTRY } from "../assets/CollisionProfileRegistry";
 import { ForwardRangeSystem, type ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import type {
@@ -362,7 +357,7 @@ export class GameSimulation {
   });
 
   constructor(
-    config: DeepReadonly<PrototypeConfig> = prototypeConfig,
+    config: PrototypeConfig = prototypeConfig,
     trace?: SimulationTraceSink,
     options: Readonly<GameSimulationOptions> = {},
   ) {
@@ -386,16 +381,10 @@ export class GameSimulation {
     }
     this.forwardGuidanceNow = options.forwardGuidanceNow
       ?? (() => globalThis.performance?.now() ?? Date.now());
-    // Immutable GameSession inputs receive a private compatibility view. The
-    // mutable prototype object remains a temporary live-tuning adapter until
-    // the developer panel migrates behind GameSession.
-    const runtimeConfig = Object.isFrozen(config)
-      ? materializeSessionConfig(config as SessionConfig)
-      : config as PrototypeConfig;
     this.config = {
-      ...runtimeConfig,
+      ...config,
       movement: PILOT_COLLISION_PROFILE_REGISTRY.createAuthoritativeMovementView(
-        runtimeConfig.movement,
+        config.movement,
       ),
     };
     this.generator = new WorldGenerator(this.config);
@@ -836,10 +825,7 @@ export class GameSimulation {
     this.interactionCandidateCache = undefined;
     this.visibleCandidateCache = undefined;
     this.riskResultsInitialized = false;
-    measureSimulationPhase(this.trace, "feature-catalogs", () => measureSimulationPhase(
-      this.trace,
-      "feature-seeding",
-      () => {
+    measureSimulationPhase(this.trace, "feature-seeding", () => {
         this.islandDossierSystem = new IslandDossierSystem(
           this.world,
           generateIslandDossierCatalog(
@@ -881,8 +867,7 @@ export class GameSimulation {
           analysis: this.generated.analysis,
         });
         this.rebuildDescriptorRegistry();
-      },
-    ));
+    });
     measureSimulationPhase(this.trace, "playable-region", () => {
       this.visibility.updateAt(this.generated.landmarks.dock);
       this.recalculateRiskOverlays();
@@ -1147,10 +1132,15 @@ export class GameSimulation {
     }
     this.interactionTransactionActive = true;
     try {
-      const result = this.fishingFeature.applyInteraction(command, {
-        x: this.ship.currentTileX,
-        y: this.ship.currentTileY,
-      }, this.expeditionId, this.generation, this.surveyBudget);
+      const { outcome: result } = this.fishingFeature.execute(command, {
+        shipTile: {
+          x: this.ship.currentTileX,
+          y: this.ship.currentTileY,
+        },
+        expeditionId: this.expeditionId,
+        generation: this.generation,
+        surveyBudget: this.surveyBudget,
+      });
       if (result.status !== "surveyed") return result;
 
       const expeditionStarted = !this.activeExpedition;

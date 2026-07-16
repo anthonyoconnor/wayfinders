@@ -4,7 +4,6 @@ import type { ShipwreckState } from "../core/types";
 import type { WorldGrid } from "../world/WorldGrid";
 import {
   ChunkActivatedViewPool,
-  presentationChunksForWorldBounds,
   type ChunkActivatedViewTelemetry,
   type PresentationChunkCoordinate,
 } from "./lifetime";
@@ -55,17 +54,6 @@ export class WreckRenderer {
     chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
   ): void {
     this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
-  }
-
-  updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
-    const margin = prototypeConfig.navigation.tileSize * 3;
-    const cameraView = camera.worldView;
-    this.views.setActiveChunks(presentationChunksForWorldBounds({
-      minX: cameraView.left - margin,
-      minY: cameraView.top - margin,
-      maxX: cameraView.right + margin,
-      maxY: cameraView.bottom + margin,
-    }, prototypeConfig.navigation.tileSize * prototypeConfig.navigation.chunkSize));
   }
 
   getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {

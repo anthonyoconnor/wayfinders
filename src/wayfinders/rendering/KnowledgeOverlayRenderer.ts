@@ -16,7 +16,6 @@ interface MaskChunkView {
 
 /** Lightweight counters for the renderer-owned decoded presentation resources. */
 export interface KnowledgeOverlayResourceTelemetry {
-  readonly activeChunkLifecycle: boolean;
   readonly chunkCapacity: number;
   readonly activeChunks: number;
   readonly activeTextures: number;
@@ -58,7 +57,6 @@ export class KnowledgeOverlayRenderer {
   private lastVisibilityVersion = -1;
   private lastRevealedIslandsRevision = -1;
   private observedRevisions = new WeakMap<WorldChunk, number>();
-  private activeChunkLifecycle = false;
   private chunkCapacity = 0;
   private peakActiveTextures = 0;
   private totalTextureAllocations = 0;
@@ -81,7 +79,6 @@ export class KnowledgeOverlayRenderer {
    */
   applyActiveChunkDelta(world: WorldGrid, delta: Readonly<ActiveChunkDelta>): void {
     this.prepareWorld(world);
-    this.activeChunkLifecycle = true;
     this.chunkCapacity = delta.telemetry.capacity;
     if (delta.active.length > this.chunkCapacity) {
       throw new RangeError(
@@ -114,7 +111,6 @@ export class KnowledgeOverlayRenderer {
       estimatedTextureBytes += texture.width * texture.height * 4;
     }
     return Object.freeze({
-      activeChunkLifecycle: this.activeChunkLifecycle,
       chunkCapacity: this.chunkCapacity,
       activeChunks: this.views.size,
       activeTextures: this.views.size,
@@ -133,6 +129,9 @@ export class KnowledgeOverlayRenderer {
     revealedIslandIds: ReadonlySet<number> = NO_REVEALED_ISLANDS,
     revealedIslandsRevision = 0,
   ): void {
+    if (this.chunkCapacity === 0) {
+      throw new Error("Knowledge overlay requires an ActiveChunkSet delta before sync");
+    }
     const worldChanged = this.prepareWorld(world);
     const signature = [
       prototypeConfig.overlays.fogBlend,
@@ -191,7 +190,6 @@ export class KnowledgeOverlayRenderer {
     this.lastRevealedIslandsRevision = -1;
     this.activeEntries.clear();
     this.pendingActivationKeys.clear();
-    this.activeChunkLifecycle = false;
     this.chunkCapacity = 0;
   }
 
@@ -260,7 +258,6 @@ export class KnowledgeOverlayRenderer {
   }
 
   private presentationChunks(world: WorldGrid): readonly WorldChunk[] {
-    if (!this.activeChunkLifecycle) return world.getLoadedChunks();
     const chunks: WorldChunk[] = [];
     for (const entry of this.activeEntries.values()) {
       const chunk = world.getChunk(entry.coordinate.x, entry.coordinate.y);
@@ -270,7 +267,6 @@ export class KnowledgeOverlayRenderer {
   }
 
   private sampledChunks(world: WorldGrid, activeChunks: readonly WorldChunk[]): readonly WorldChunk[] {
-    if (!this.activeChunkLifecycle) return activeChunks;
     const sampled = new Map<string, WorldChunk>();
     const chunkRadius = Math.ceil(MASK_PADDING_TILES / world.chunkSize);
     for (const active of activeChunks) {
@@ -285,7 +281,7 @@ export class KnowledgeOverlayRenderer {
   }
 
   private assertResourceCap(): void {
-    if (this.activeChunkLifecycle && this.views.size > this.chunkCapacity) {
+    if (this.views.size > this.chunkCapacity) {
       throw new Error(`Knowledge overlay texture cap exceeded: ${this.views.size}/${this.chunkCapacity}`);
     }
   }

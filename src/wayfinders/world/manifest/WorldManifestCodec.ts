@@ -5,12 +5,8 @@ import {
   WORLD_MANIFEST_SCHEMA_VERSION,
   stableIslandId,
   stableLandmarkId,
-  type ManifestJsonObject,
-  type ManifestJsonValue,
-  type StableIslandId,
   type WorldManifestBoundsV1,
   type WorldManifestDimensionsV1,
-  type WorldManifestFeatureV1,
   type WorldManifestInputV1,
   type WorldManifestIslandKind,
   type WorldManifestIslandSize,
@@ -28,12 +24,9 @@ const TOP_LEVEL_REQUIRED = [
   "dimensions",
   "landmarks",
   "islands",
-  "features",
 ] as const;
 
 const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/u;
-const FEATURE_KIND_PATTERN = /^[a-z][a-z0-9-]*$/u;
-const STABLE_ISLAND_ID_PATTERN = /^island:[0-9]{6,}$/u;
 
 const islandKinds = new Set<string>(WORLD_MANIFEST_ISLAND_KINDS);
 const islandSizes = new Set<string>(WORLD_MANIFEST_ISLAND_SIZES);
@@ -54,7 +47,6 @@ export function createWorldManifestV1(input: WorldManifestInputV1): WorldManifes
   return validateWorldManifestV1({
     ...input,
     schemaVersion: WORLD_MANIFEST_SCHEMA_VERSION,
-    features: input.features ?? [],
   });
 }
 
@@ -82,9 +74,7 @@ export function validateWorldManifestV1(value: unknown): WorldManifestV1 {
     : identifier(source.settingsFingerprint, "$.settingsFingerprint");
   const dimensions = validateDimensions(source.dimensions);
   const islands = validateIslands(source.islands, dimensions);
-  const islandIds = new Set<StableIslandId>(islands.map(({ id }) => id));
   const landmarks = validateLandmarks(source.landmarks, dimensions);
-  const features = validateFeatures(source.features, dimensions, islandIds);
 
   return deepFreeze({
     schemaVersion: WORLD_MANIFEST_SCHEMA_VERSION,
@@ -95,7 +85,6 @@ export function validateWorldManifestV1(value: unknown): WorldManifestV1 {
     dimensions,
     landmarks,
     islands,
-    features,
   });
 }
 
@@ -254,51 +243,6 @@ function validateBounds(
   return bounds;
 }
 
-function validateFeatures(
-  value: unknown,
-  dimensions: Readonly<WorldManifestDimensionsV1>,
-  islandIds: ReadonlySet<StableIslandId>,
-): WorldManifestFeatureV1[] {
-  if (!Array.isArray(value)) fail("$.features", "must be an array");
-  const seen = new Set<string>();
-  return value.map((entry, index) => {
-    const path = `$.features[${index}]`;
-    const source = exactRecord(entry, path, ["id", "kind"], ["position", "islandId", "facts"]);
-    const kind = stringValue(source.kind, `${path}.kind`);
-    if (!FEATURE_KIND_PATTERN.test(kind)) {
-      fail(`${path}.kind`, "must be a lowercase kebab-case identifier");
-    }
-    const id = stringValue(source.id, `${path}.id`);
-    if (!id.startsWith(`feature:${kind}:`) || !/^feature:[a-z][a-z0-9-]*:[a-z0-9][a-z0-9._-]*$/u.test(id)) {
-      fail(`${path}.id`, `must use feature:${kind}:<stable-local-id>`);
-    }
-    if (seen.has(id)) fail(`${path}.id`, `duplicates stable ID ${id}`);
-    seen.add(id);
-    const position = source.position === undefined
-      ? undefined
-      : point(source.position, `${path}.position`, dimensions);
-    let islandId: StableIslandId | undefined;
-    if (source.islandId !== undefined) {
-      const candidate = stringValue(source.islandId, `${path}.islandId`);
-      if (!STABLE_ISLAND_ID_PATTERN.test(candidate)) {
-        fail(`${path}.islandId`, "must be a stable island ID such as island:000001");
-      }
-      islandId = candidate as StableIslandId;
-      if (!islandIds.has(islandId)) fail(`${path}.islandId`, `references missing island ${islandId}`);
-    }
-    const facts = source.facts === undefined
-      ? undefined
-      : cloneJsonObject(source.facts, `${path}.facts`);
-    return {
-      id: id as WorldManifestFeatureV1["id"],
-      kind,
-      ...(position === undefined ? {} : { position }),
-      ...(islandId === undefined ? {} : { islandId }),
-      ...(facts === undefined ? {} : { facts }),
-    };
-  }).sort(compareIds);
-}
-
 function point(
   value: unknown,
   path: string,
@@ -309,37 +253,6 @@ function point(
     x: safeInteger(source.x, `${path}.x`, 0, dimensions.width - 1),
     y: safeInteger(source.y, `${path}.y`, 0, dimensions.height - 1),
   };
-}
-
-function cloneJsonObject(value: unknown, path: string): ManifestJsonObject {
-  const active = new WeakSet<object>();
-  const cloned = cloneJson(value, path, active);
-  if (cloned === null || Array.isArray(cloned) || typeof cloned !== "object") {
-    fail(path, "must be a JSON object");
-  }
-  return cloned as ManifestJsonObject;
-}
-
-function cloneJson(value: unknown, path: string, active: WeakSet<object>): ManifestJsonValue {
-  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) fail(path, "must contain only finite JSON numbers");
-    return Object.is(value, -0) ? 0 : value;
-  }
-  if (typeof value !== "object") fail(path, `contains non-JSON value ${typeof value}`);
-  if (active.has(value)) fail(path, "must not contain a reference cycle");
-  active.add(value);
-  try {
-    if (Array.isArray(value)) {
-      return value.map((entry, index) => cloneJson(entry, `${path}[${index}]`, active));
-    }
-    const source = plainRecord(value, path);
-    const result: Record<string, ManifestJsonValue> = {};
-    for (const key of Object.keys(source)) result[key] = cloneJson(source[key], `${path}.${key}`, active);
-    return result;
-  } finally {
-    active.delete(value);
-  }
 }
 
 function canonicalJson(value: unknown): string {

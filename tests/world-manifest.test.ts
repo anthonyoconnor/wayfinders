@@ -7,12 +7,9 @@ import {
   encodeWorldManifestV1,
   parseWorldManifestV1,
   serializeWorldManifestV1,
-  stableFeatureId,
-  stableIslandId,
   validateWorldManifestV1,
   type PlannedIslandFactsV1,
   type PlannedWorldFactsV1,
-  type WorldManifestFeatureV1,
   type WorldManifestV1,
 } from "../src/wayfinders/world/manifest";
 
@@ -60,35 +57,13 @@ function plannedWorld(islands: readonly PlannedIslandFactsV1[]): PlannedWorldFac
   };
 }
 
-function featureDescriptors(reverseFacts = false): WorldManifestFeatureV1[] {
-  const dossier = {
-    id: stableFeatureId("island-dossier", "main"),
-    kind: "island-dossier",
-    islandId: stableIslandId(2),
-    facts: reverseFacts
-      ? { reward: { title: "North Star", rank: 2 }, name: "Aster Reach" }
-      : { name: "Aster Reach", reward: { rank: 2, title: "North Star" } },
-  } as const;
-  const shoal = {
-    id: stableFeatureId("fishing-shoal", 7),
-    kind: "fishing-shoal",
-    position: { x: 24, y: 16 },
-    facts: reverseFacts
-      ? { table: ["silverfin", "tuna"], difficulty: 3 }
-      : { difficulty: 3, table: ["silverfin", "tuna"] },
-  } as const;
-  return reverseFacts ? [dossier, shoal] : [shoal, dossier];
-}
-
 function manifest(
   islands: readonly PlannedIslandFactsV1[] = [ISLAND_TWO, ISLAND_ONE],
-  features = featureDescriptors(),
 ): WorldManifestV1 {
   return createManifestFromPlannedWorldV1(plannedWorld(islands), {
     generatorVersion: "islands-v1",
     settingsProfileId: "P2-normal",
     settingsFingerprint: "sha256-a1b2c3",
-    features,
   });
 }
 
@@ -98,15 +73,11 @@ function mutableClone(value: WorldManifestV1): Record<string, unknown> {
 
 describe("WorldManifest v1", () => {
   it("produces byte-equivalent output for equivalent facts in different input orders", () => {
-    const first = manifest([ISLAND_TWO, ISLAND_ONE], featureDescriptors());
-    const second = manifest([ISLAND_ONE, ISLAND_TWO], featureDescriptors(true));
+    const first = manifest([ISLAND_TWO, ISLAND_ONE]);
+    const second = manifest([ISLAND_ONE, ISLAND_TWO]);
 
     expect(first.schemaVersion).toBe(WORLD_MANIFEST_SCHEMA_VERSION);
     expect(first.islands.map(({ id }) => id)).toEqual(["island:000001", "island:000002"]);
-    expect(first.features.map(({ id }) => id)).toEqual([
-      "feature:fishing-shoal:000007",
-      "feature:island-dossier:main",
-    ]);
     expect(serializeWorldManifestV1(first)).toBe(serializeWorldManifestV1(second));
     expect([...encodeWorldManifestV1(first)]).toEqual([...encodeWorldManifestV1(second)]);
   });
@@ -120,7 +91,7 @@ describe("WorldManifest v1", () => {
     expect(encodeWorldManifestV1(replay)).toEqual(bytes);
     expect(Object.isFrozen(replay)).toBe(true);
     expect(Object.isFrozen(replay.islands)).toBe(true);
-    expect(Object.isFrozen(replay.features[0].facts)).toBe(true);
+    expect(Object.isFrozen(replay.islands[0].bounds)).toBe(true);
   });
 
   it("reports schema, stable-ID, geometry, and reference errors at precise paths", () => {
@@ -144,11 +115,5 @@ describe("WorldManifest v1", () => {
       "$.islands[0].bounds: must contain the island's outer-radius extent",
     );
 
-    const missingReference = mutableClone(manifest());
-    const features = missingReference.features as Array<Record<string, unknown>>;
-    features[1].islandId = "island:000099";
-    expect(() => validateWorldManifestV1(missingReference)).toThrow(
-      "$.features[1].islandId: references missing island island:000099",
-    );
   });
 });

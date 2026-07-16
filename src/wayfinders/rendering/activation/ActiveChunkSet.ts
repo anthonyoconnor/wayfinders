@@ -102,29 +102,6 @@ export class ActiveChunkSet {
     });
   }
 
-  clear(): Readonly<ActiveChunkDelta> {
-    return this.update(null);
-  }
-
-  isActive(chunkX: number, chunkY: number): boolean {
-    assertSafeInteger(chunkX, "chunkX");
-    assertSafeInteger(chunkY, "chunkY");
-    const key = activeChunkKey(chunkX, chunkY);
-    return this.active.some((entry) => entry.key === key);
-  }
-
-  getActive(): readonly Readonly<ActiveChunkEntry>[] {
-    return this.active;
-  }
-
-  getDeferred(): readonly Readonly<ActiveChunkEntry>[] {
-    return this.deferred;
-  }
-
-  getVisibleRegion(): Readonly<ChunkRegion> | null {
-    return this.visibleRegion;
-  }
-
   getTelemetry(): Readonly<ActiveChunkTelemetry> {
     const visibleActiveChunks = this.active.filter(({ band }) => band === "visible").length;
     const visibleBudgetDeferredChunks = this.deferred.filter(({ band }) => band === "visible").length;

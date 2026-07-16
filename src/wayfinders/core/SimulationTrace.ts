@@ -3,7 +3,6 @@ export type SimulationPhase =
   | "manifest-generation"
   | "logical-rasterization"
   | "world-analysis"
-  | "feature-catalogs"
   | "feature-seeding"
   | "playable-region"
   | "movement"

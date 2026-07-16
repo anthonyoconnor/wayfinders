@@ -108,16 +108,6 @@ export class GridGraph {
     return this.topology.stats();
   }
 
-  /** Raw topology only; callers must deliberately choose this over collision edges. */
-  forEachCardinalNeighbor(index: number, visitor: NeighborVisitor): void {
-    const x = index % this.world.width;
-    const y = Math.floor(index / this.world.width);
-    if (x > 0) visitor(index - 1, x - 1, y);
-    if (x + 1 < this.world.width) visitor(index + 1, x + 1, y);
-    if (y > 0) visitor(index - this.world.width, x, y - 1);
-    if (y + 1 < this.world.height) visitor(index + this.world.width, x, y + 1);
-  }
-
   private edgeDirection(from: number, to: number): number {
     if (
       !Number.isInteger(from)

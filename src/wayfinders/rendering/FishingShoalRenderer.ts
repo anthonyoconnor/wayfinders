@@ -10,7 +10,6 @@ import { createFishingShoalId, type FishingShoalReadModel } from "../exploration
 import { gridToChunk, gridToWorld } from "../world/CoordinateSystem";
 import {
   ChunkActivatedViewPool,
-  presentationChunksForWorldBounds,
   type ChunkActivatedViewTelemetry,
   type PresentationChunkCoordinate,
 } from "./lifetime";
@@ -123,17 +122,6 @@ export class FishingShoalRenderer {
     chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
   ): void {
     this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
-  }
-
-  updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
-    const margin = prototypeConfig.navigation.tileSize * 3;
-    const viewport = camera.worldView;
-    this.views.setActiveChunks(presentationChunksForWorldBounds({
-      minX: viewport.left - margin,
-      minY: viewport.top - margin,
-      maxX: viewport.right + margin,
-      maxY: viewport.bottom + margin,
-    }, prototypeConfig.navigation.tileSize * prototypeConfig.navigation.chunkSize));
   }
 
   getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {

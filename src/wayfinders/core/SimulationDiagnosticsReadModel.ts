@@ -99,8 +99,4 @@ export class SimulationDiagnosticsAdapter {
     this.cached = next;
     return next;
   }
-
-  invalidate(): void {
-    this.cached = undefined;
-  }
 }

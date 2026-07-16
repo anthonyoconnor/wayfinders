@@ -98,6 +98,20 @@ function makeHarness(key = "island-fog-test") {
   };
 }
 
+function activateAllChunks(renderer: KnowledgeOverlayRenderer, world: WorldGrid): void {
+  const maxX = Math.ceil(world.width / world.chunkSize) - 1;
+  const maxY = Math.ceil(world.height / world.chunkSize) - 1;
+  const activeChunks = new ActiveChunkSet({
+    worldBounds: { minX: 0, minY: 0, maxX, maxY },
+    prefetchRing: 0,
+    maxActiveChunks: (maxX + 1) * (maxY + 1),
+  });
+  renderer.applyActiveChunkDelta(
+    world,
+    activeChunks.update({ minX: 0, minY: 0, maxX, maxY }),
+  );
+}
+
 afterEach(() => vi.unstubAllGlobals());
 
 describe("exact island dossier fog reveal", () => {
@@ -168,6 +182,7 @@ describe("exact island dossier fog reveal", () => {
     const knowledgeBefore = [0, 1, 2, 3].map((x) => world.getKnowledge(x, 0));
     const visibilityBefore = [0, 1, 2, 3].map((x) => world.isVisibleNow(x, 0));
     const { renderer, scratchCalls, filteredClearCalls, texture } = makeHarness();
+    activateAllChunks(renderer, world);
 
     renderer.sync(world, 17, true);
     const firstRefreshCount = texture().refreshCount;

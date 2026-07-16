@@ -21,9 +21,9 @@ import { SimulationClock } from "../core/SimulationClock";
 import { SimulationDiagnosticsAdapter } from "../core/SimulationDiagnosticsReadModel";
 import type { GridPoint, MovementInput } from "../core/types";
 import {
-  FISHING_SHOAL_CONTRACT_VERSION,
   type FishingShoalInteractionResultV1,
 } from "../exploration/FishingShoalContracts";
+import { surveyFishingShoal } from "../features/fishing";
 import {
   ISLAND_DOSSIER_CONTRACT_VERSION,
   type IslandDossierInteractionResultV1,
@@ -1203,11 +1203,7 @@ export class WayfindersScene extends Phaser.Scene {
   private performFishingShoalSurvey(): FishingShoalInteractionResultV1 | undefined {
     const interaction = this.simulation.fishingShoalInteraction;
     if (!interaction) return undefined;
-    const result = this.simulation.interactWithFishingShoal({
-      contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
-      type: "survey",
-      id: interaction.id,
-    });
+    const result = this.simulation.interactWithFishingShoal(surveyFishingShoal(interaction.id));
     if (result.status === "surveyed") {
       this.updateRecordsOutputs();
     } else if (result.status === "rejected") {

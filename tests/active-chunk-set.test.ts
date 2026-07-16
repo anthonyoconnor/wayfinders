@@ -137,13 +137,12 @@ describe("ActiveChunkSet", () => {
     const clipped = chunks.update({ minX: -2, minY: -2, maxX: 0, maxY: 0 });
     expect(clipped.visibleRegion).toEqual({ minX: 0, minY: 0, maxX: 0, maxY: 0 });
     expect(keys(clipped.active)).toEqual(["0,0", "1,0", "0,1", "1,1"]);
-    expect(chunks.isActive(0, 0)).toBe(true);
 
-    const cleared = chunks.clear();
+    const cleared = chunks.update(null);
     expect(cleared.active).toEqual([]);
     expect(cleared.deactivated).toHaveLength(4);
     expect(cleared.deactivated.every(({ reason }) => reason === "outside-prefetch")).toBe(true);
-    expect(chunks.getVisibleRegion()).toBeNull();
+    expect(cleared.visibleRegion).toBeNull();
 
     expect(() => new ActiveChunkSet({
       worldBounds: { minX: 2, minY: 0, maxX: 1, maxY: 0 },

@@ -20,7 +20,6 @@ interface OverlayChunkView {
 
 /** Lightweight counters for renderer-owned decoded presentation resources. */
 export interface RiskOverlayResourceTelemetry {
-  readonly activeChunkLifecycle: boolean;
   readonly chunkCapacity: number;
   readonly activeChunks: number;
   readonly activeTextures: number;
@@ -63,7 +62,6 @@ export class RiskOverlayRenderer {
   private lastVisibleIndices: readonly number[] = [];
   private lastForwardVisible?: boolean;
   private lastReturnVisible?: boolean;
-  private activeChunkLifecycle = false;
   private chunkCapacity = 0;
   private peakActiveTextures = 0;
   private totalTextureAllocations = 0;
@@ -80,7 +78,6 @@ export class RiskOverlayRenderer {
    */
   applyActiveChunkDelta(world: WorldGrid, delta: Readonly<ActiveChunkDelta>): void {
     this.prepareWorld(world);
-    this.activeChunkLifecycle = true;
     this.chunkCapacity = delta.telemetry.capacity;
     if (delta.active.length > this.chunkCapacity) {
       throw new RangeError(
@@ -117,7 +114,6 @@ export class RiskOverlayRenderer {
     }
     const activeTextures = this.views.size * 2;
     return Object.freeze({
-      activeChunkLifecycle: this.activeChunkLifecycle,
       chunkCapacity: this.chunkCapacity,
       activeChunks: this.views.size,
       activeTextures,
@@ -137,6 +133,9 @@ export class RiskOverlayRenderer {
     revision: number,
     force = false,
   ): void {
+    if (this.chunkCapacity === 0) {
+      throw new Error("Risk overlay requires an ActiveChunkSet delta before sync");
+    }
     const worldChanged = this.prepareWorld(world);
 
     const chunks = this.presentationChunks(world);
@@ -255,7 +254,6 @@ export class RiskOverlayRenderer {
     this.lastReturnVisible = undefined;
     this.activeEntries.clear();
     this.pendingActivationKeys.clear();
-    this.activeChunkLifecycle = false;
     this.chunkCapacity = 0;
   }
 
@@ -403,7 +401,6 @@ export class RiskOverlayRenderer {
   }
 
   private presentationChunks(world: WorldGrid): readonly WorldChunk[] {
-    if (!this.activeChunkLifecycle) return world.getLoadedChunks();
     const chunks: WorldChunk[] = [];
     for (const entry of this.activeEntries.values()) {
       const chunk = world.getChunk(entry.coordinate.x, entry.coordinate.y);
@@ -418,7 +415,7 @@ export class RiskOverlayRenderer {
   }
 
   private assertResourceCap(): void {
-    if (this.activeChunkLifecycle && this.views.size > this.chunkCapacity) {
+    if (this.views.size > this.chunkCapacity) {
       throw new Error(`Risk overlay texture cap exceeded: ${this.views.size * 2}/${this.chunkCapacity * 2}`);
     }
   }

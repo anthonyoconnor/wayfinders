@@ -29,18 +29,8 @@ export type {
   FishingCommandContext,
   FishingCommandResult,
   FishingFeatureDependencies,
-  FishingFeatureState,
   FishingMutation,
-  FishingPresentationPort,
-  FishingPresentationReadModel,
-  FishingPresentationRevision,
-  FishingPresentationSource,
 } from "./FishingFeatureContracts";
-export {
-  FishingPresentationAdapter,
-  createFishingPresentationReadModel,
-  sameFishingPresentationRevision,
-} from "./FishingPresentationAdapter";
 export {
   FishingFeatureSystem,
   createFishingFeature,
@@ -48,8 +38,3 @@ export {
   type GeneratedFishingFeatureDependencies,
 } from "./FishingFeatureSystem";
 export { surveyFishingShoal } from "./FishingCommands";
-export {
-  selectFishingDefinition,
-  selectFishingPresentation,
-  selectReturnedFishingSurveys,
-} from "./FishingSelectors";

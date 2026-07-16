@@ -30,17 +30,6 @@ export type WorldManifestIslandSize = typeof WORLD_MANIFEST_ISLAND_SIZES[number]
 
 export type StableIslandId = `island:${string}`;
 export type StableLandmarkId = `landmark:${WorldManifestLandmarkKind}`;
-export type StableFeatureId = `feature:${string}`;
-
-export type ManifestJsonPrimitive = string | number | boolean | null;
-export type ManifestJsonValue =
-  | ManifestJsonPrimitive
-  | readonly ManifestJsonValue[]
-  | ManifestJsonObject;
-
-export interface ManifestJsonObject {
-  readonly [key: string]: ManifestJsonValue;
-}
 
 export interface WorldManifestDimensionsV1 {
   readonly width: number;
@@ -78,18 +67,6 @@ export interface WorldManifestIslandV1 {
   readonly bounds: Readonly<WorldManifestBoundsV1>;
 }
 
-/**
- * Extensible durable feature descriptor. New feature kinds can add canonical
- * JSON facts without coupling the manifest package to their runtime systems.
- */
-export interface WorldManifestFeatureV1 {
-  readonly id: StableFeatureId;
-  readonly kind: string;
-  readonly position?: Readonly<GridPoint>;
-  readonly islandId?: StableIslandId;
-  readonly facts?: ManifestJsonObject;
-}
-
 export interface WorldManifestV1 {
   readonly schemaVersion: typeof WORLD_MANIFEST_SCHEMA_VERSION;
   /** Version of the deterministic generation algorithm, independent of schema. */
@@ -102,12 +79,9 @@ export interface WorldManifestV1 {
   readonly dimensions: Readonly<WorldManifestDimensionsV1>;
   readonly landmarks: readonly Readonly<WorldManifestLandmarkV1>[];
   readonly islands: readonly Readonly<WorldManifestIslandV1>[];
-  readonly features: readonly Readonly<WorldManifestFeatureV1>[];
 }
 
-export type WorldManifestInputV1 = Omit<WorldManifestV1, "schemaVersion" | "features"> & {
-  readonly features?: readonly Readonly<WorldManifestFeatureV1>[];
-};
+export type WorldManifestInputV1 = Omit<WorldManifestV1, "schemaVersion">;
 
 export function stableIslandId(sourceId: number): StableIslandId {
   if (!Number.isSafeInteger(sourceId) || sourceId <= 0) {
@@ -118,24 +92,4 @@ export function stableIslandId(sourceId: number): StableIslandId {
 
 export function stableLandmarkId(kind: WorldManifestLandmarkKind): StableLandmarkId {
   return `landmark:${kind}`;
-}
-
-export function stableFeatureId(kind: string, localId: string | number): StableFeatureId {
-  if (!/^[a-z][a-z0-9-]*$/u.test(kind)) {
-    throw new RangeError(`Feature kind must be a lowercase kebab-case identifier; received ${kind}`);
-  }
-  const suffix = typeof localId === "number"
-    ? stableNumericFeatureSuffix(localId)
-    : localId;
-  if (!/^[a-z0-9][a-z0-9._-]*$/u.test(suffix)) {
-    throw new RangeError(`Feature local ID must be a stable identifier; received ${suffix}`);
-  }
-  return `feature:${kind}:${suffix}`;
-}
-
-function stableNumericFeatureSuffix(localId: number): string {
-  if (!Number.isSafeInteger(localId) || localId < 0) {
-    throw new RangeError(`Feature numeric local ID must be a non-negative safe integer; received ${String(localId)}`);
-  }
-  return localId.toString().padStart(6, "0");
 }

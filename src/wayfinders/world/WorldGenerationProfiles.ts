@@ -9,14 +9,10 @@ export type WorldGenerationProfileId = "P0" | "P1" | "P2" | "P2-500";
 
 export interface WorldGenerationProfile {
   readonly id: WorldGenerationProfileId;
-  /** Compatibility label used in benchmark reports. */
-  readonly name: WorldGenerationProfileId;
   readonly purpose: string;
   readonly areaMultiplier: number;
   readonly dimensions: Readonly<{ width: number; height: number }>;
   readonly density: Readonly<{ islandCount: number; islandsPerTenThousandTiles: number }>;
-  /** Compatibility alias retained for benchmark/test fixture readers. */
-  readonly targetIslandCount: number;
   readonly islandSize: Readonly<{ minRadius: number; maxRadius: number }>;
   readonly archipelago: Readonly<{ clusters: number; radius: number; bias: number }>;
   readonly minimumChannel: Readonly<{ width: number; edgeMargin: number; homeClearance: number }>;
@@ -52,7 +48,6 @@ function createProfile(
   const tileCount = config.world.width * config.world.height;
   return Object.freeze({
     id,
-    name: id,
     purpose,
     areaMultiplier,
     dimensions: Object.freeze({ width: config.world.width, height: config.world.height }),
@@ -60,7 +55,6 @@ function createProfile(
       islandCount: config.islands.count,
       islandsPerTenThousandTiles: config.islands.count * 10_000 / tileCount,
     }),
-    targetIslandCount: config.islands.count,
     islandSize: Object.freeze({
       minRadius: config.islands.minRadius,
       maxRadius: config.islands.maxRadius,

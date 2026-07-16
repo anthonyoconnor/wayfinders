@@ -119,6 +119,20 @@ function makeForward(
   };
 }
 
+function activateAllChunks(renderer: RiskOverlayRenderer, world: WorldGrid): void {
+  const maxX = Math.ceil(world.width / world.chunkSize) - 1;
+  const maxY = Math.ceil(world.height / world.chunkSize) - 1;
+  const activeChunks = new ActiveChunkSet({
+    worldBounds: { minX: 0, minY: 0, maxX, maxY },
+    prefetchRing: 0,
+    maxActiveChunks: (maxX + 1) * (maxY + 1),
+  });
+  renderer.applyActiveChunkDelta(
+    world,
+    activeChunks.update({ minX: 0, minY: 0, maxX, maxY }),
+  );
+}
+
 function emptyReturn(world: WorldGrid): ReturnPathResult {
   return {
     risk: new Uint8Array(world.tileCount),
@@ -261,6 +275,7 @@ describe("forward frontier rendering", () => {
       [center],
     );
     const { renderer, texture } = makeRendererHarness();
+    activateAllChunks(renderer, world);
 
     renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
 
@@ -283,6 +298,7 @@ describe("forward frontier rendering", () => {
     const row = [0, 1, 2, 3].map((x) => world.index(x, 1));
     const forward = makeForward(world, row, [row[1], row[2]]);
     const { renderer, texture } = makeRendererHarness("seam-test");
+    activateAllChunks(renderer, world);
 
     renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
 
@@ -302,6 +318,7 @@ describe("forward frontier rendering", () => {
     const seamNeighbour = world.index(2, 0);
     const first = makeForward(world, [frontier, seamNeighbour], [frontier]);
     const { renderer, texture } = makeRendererHarness("topology-test");
+    activateAllChunks(renderer, world);
     renderer.sync(world, first, emptyReturn(world), debugVisibility, 1, true);
     const leftRefreshes = texture(0, 0).refreshCount;
     const rightRefreshes = texture(1, 0).refreshCount;
@@ -323,6 +340,7 @@ describe("forward frontier rendering", () => {
     const replacement = world.index(3, 0);
     const forward = makeForward(world, [frontier, oldNeighbour], [frontier]);
     const { renderer, texture } = makeRendererHarness("reuse-topology-test");
+    activateAllChunks(renderer, world);
     renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
     const leftRefreshes = texture(0, 0).refreshCount;
     expect(texture(0, 0).calls.some(({ x }) => x === 11)).toBe(false);
@@ -344,6 +362,7 @@ describe("forward frontier rendering", () => {
     world.setVisibleNowAtIndex(center, true);
     const forward = makeForward(world, [center], [center]);
     const { renderer, texture } = makeRendererHarness("visibility-test");
+    activateAllChunks(renderer, world);
 
     renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
 
@@ -358,6 +377,7 @@ describe("forward frontier rendering", () => {
     const forward = makeForward(world, [], []);
     world.setVisibleNowAtIndex(center, true);
     const { renderer } = makeRendererHarness("return-sight-test");
+    activateAllChunks(renderer, world);
 
     renderer.sync(world, forward, returning, debugVisibility, 1, true);
     const presented = (renderer as unknown as { returnPresented: Uint8Array }).returnPresented;
@@ -375,6 +395,7 @@ describe("forward frontier rendering", () => {
     const right = world.index(2, 0);
     const forward = makeForward(world, [left, right], [left]);
     const { renderer } = makeRendererHarness("heading-test");
+    activateAllChunks(renderer, world);
     renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1, true);
     const reachableDiff = vi.spyOn(
       renderer as unknown as { updateForwardReachableIndices: (...args: unknown[]) => void },

@@ -102,12 +102,6 @@ function angularDistance(a: number, b: number): number {
 export class IslandGenerator {
   constructor(private readonly config: PrototypeConfig = prototypeConfig) {}
 
-  generate(grid: WorldGrid, seed: number, home: GridPoint, dock: GridPoint): GeneratedIsland[] {
-    const islands = this.plan(grid, seed, home, dock);
-    this.rasterize(grid, seed, islands, dock);
-    return islands;
-  }
-
   /** Deterministically lays out descriptors without touching logical tile state. */
   plan(grid: WorldGrid, seed: number, home: GridPoint, dock: GridPoint): GeneratedIsland[] {
     const profiles = this.buildProfiles(seed);
@@ -121,11 +115,11 @@ export class IslandGenerator {
       this.config.islands.minimumChannelWidth,
     );
 
-    const legacyProfile = profiles.find(({ id }) => id === 1);
-    if (!legacyProfile) throw new RangeError("Scattered island generation requires island profile 1");
-    const legacyIsland = this.placeLegacyIsland(grid, seed, home, dock, legacyProfile, placementIndex);
-    placed.push(legacyIsland);
-    placementIndex.add(legacyIsland);
+    const starterProfile = profiles.find(({ id }) => id === 1);
+    if (!starterProfile) throw new RangeError("Scattered island generation requires starter island profile 1");
+    const starterIsland = this.placeStarterIsland(grid, seed, home, dock, starterProfile, placementIndex);
+    placed.push(starterIsland);
+    placementIndex.add(starterIsland);
 
     const remaining = profiles
       .filter(({ id }) => id !== 1)
@@ -254,7 +248,7 @@ export class IslandGenerator {
     return { radiusX: major, radiusY: Math.max(1.25, major * minorScale) };
   }
 
-  private placeLegacyIsland(
+  private placeStarterIsland(
     grid: WorldGrid,
     seed: number,
     home: GridPoint,
