@@ -206,7 +206,7 @@ function resourceEstimate(simulation: GameSimulation): ProfileResult["resources"
     modeledTextureCount: activeChunks * 3,
     modeledTextureBytes: activeChunks * bytesPerChunk,
     modeledFullWorldTextureBytes: chunks * bytesPerChunk,
-    model: "AM-5 active window: one knowledge and two risk RGBA canvases per active chunk; terrain commands and GPU copies excluded.",
+    model: "Active window: one knowledge and two risk RGBA canvases per active chunk; terrain commands and GPU copies excluded.",
   };
 }
 
@@ -278,9 +278,7 @@ function benchmarkProfile(
     let simulation: GameSimulation | undefined;
     for (let sample = 0; sample < constructionSamples; sample++) {
       const startedAt = performance.now();
-      simulation = new GameSimulation(createWorldProfileConfig(profileName), trace, {
-        deferredForwardGuidance: true,
-      });
+      simulation = new GameSimulation(createWorldProfileConfig(profileName), trace);
       constructionDurations.push(performance.now() - startedAt);
     }
     if (!simulation) throw new Error("Construction produced no simulation");

@@ -118,6 +118,15 @@ describe("prototype configuration", () => {
     expect(prototypeConfig.provisions.unknownCost).toBe(0);
   });
 
+  it("keeps travel costs exactly scalable for cooperative guidance", () => {
+    expect(() => patchPrototypeConfig({ provisions: { unknownCost: Math.PI } })).toThrow(
+      "provision travel costs must use at most four decimal places",
+    );
+    expect(prototypeConfig.provisions.unknownCost).toBe(
+      DEFAULT_PROTOTYPE_CONFIG.provisions.unknownCost,
+    );
+  });
+
   it("uses a configurable positive-integer two-bundle survey cost", () => {
     expect(DEFAULT_PROTOTYPE_CONFIG.provisions.surveyCost).toBe(2);
     patchPrototypeConfig({ provisions: { surveyCost: 3 } });

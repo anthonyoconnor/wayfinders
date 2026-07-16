@@ -174,9 +174,6 @@ export interface ReferenceImageLibraryEntry extends AssetLibraryEntryBase {
   }>;
 }
 
-/** Backwards-compatible name retained for the viewer while references expand beyond islands. */
-export type IslandReferenceLibraryEntry = ReferenceImageLibraryEntry;
-
 export type AssetLibraryEntry =
   | AuthoredPackageLibraryEntry
   | ProductionCandidateLibraryEntry

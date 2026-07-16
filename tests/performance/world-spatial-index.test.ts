@@ -8,7 +8,7 @@ interface StressDescriptor extends SpatialEntityDescriptor<string> {
   readonly ordinal: number;
 }
 
-describe("AM-3 WorldSpatialIndex bounded nearby work", () => {
+describe("WorldSpatialIndex bounded nearby work", () => {
   it("keeps local-query work independent of a 500-descriptor world total", () => {
     const descriptors: StressDescriptor[] = [];
     for (let row = 0; row < 20; row++) {

@@ -39,12 +39,10 @@ function drainForwardGuidance(simulation: GameSimulation, maximumSlices = 2_000)
   throw new Error(`Forward guidance did not publish within ${maximumSlices} slices`);
 }
 
-describe("AM-1 navigation latency budget", () => {
+describe("navigation latency budget", () => {
   for (const profile of ["P0", "P1"] as const satisfies readonly WorldProfileName[]) {
-    it(`${profile} keeps synchronous tile-entry p95 below 4 ms`, () => {
-      const simulation = new GameSimulation(createWorldProfileConfig(profile), undefined, {
-        deferredForwardGuidance: true,
-      });
+    it(`${profile} keeps authoritative tile-entry p95 below 4 ms`, () => {
+      const simulation = new GameSimulation(createWorldProfileConfig(profile));
       const warmups = 6;
       const samples = 24;
       const start = findEastboundRun(simulation, warmups + samples + 1);

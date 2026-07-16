@@ -75,10 +75,10 @@ describe("feature import boundaries", () => {
     );
   });
 
-  it("does not impose the new convention on unmigrated legacy folders", async () => {
+  it("limits feature ownership rules to feature packages", async () => {
     const root = await fixture({
-      "src/wayfinders/exploration/LegacySystem.ts": "import Phaser from 'phaser';\n",
-      "src/wayfinders/rendering/LegacyRenderer.ts": "import { legacy } from '../exploration/LegacySystem';\n",
+      "src/wayfinders/exploration/SharedSystem.ts": "import Phaser from 'phaser';\n",
+      "src/wayfinders/rendering/SharedRenderer.ts": "import { shared } from '../exploration/SharedSystem';\n",
     });
 
     expect(await checkFeatureBoundaries(root)).toEqual([]);

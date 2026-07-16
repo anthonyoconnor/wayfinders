@@ -349,6 +349,17 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   nonNegative(config.provisions.personalCost, "provisions.personalCost");
   // All travel costs may be zero for developer testing sessions.
   nonNegative(config.provisions.unknownCost, "provisions.unknownCost");
+  const travelCosts = [
+    config.provisions.supportedCost,
+    config.provisions.personalCost,
+    config.provisions.unknownCost,
+  ];
+  const hasExactGuidanceScale = [1, 10, 100, 1_000, 10_000].some((scale) => (
+    travelCosts.every((cost) => Math.abs(cost * scale - Math.round(cost * scale)) <= 1e-9)
+  ));
+  if (!hasExactGuidanceScale) {
+    throw new RangeError("provision travel costs must use at most four decimal places");
+  }
 
   nonNegative(config.returnRisk.comfortable, "returnRisk.comfortable");
   nonNegative(config.returnRisk.warning, "returnRisk.warning");

@@ -128,20 +128,15 @@ describe("cooperative ForwardGuidance task", () => {
     expectEquivalent(actual, expected);
   });
 
-  it("retains an exact deterministic fallback for arbitrary non-integer costs", () => {
+  it("rejects costs that cannot honor the cooperative task contract", () => {
     const world = makeWorld(99);
     const config = makeConfig({
       movement: { shipCollisionHalfExtent: 1 },
       provisions: { supportedCost: 0, personalCost: 0.1, unknownCost: Math.PI },
     });
-    const system = new ForwardRangeSystem(world, config);
-    const published = system.calculate(shipAt(1, 1));
-    const ship = shipAt(7, 5);
-    const expected = new ForwardRangeSystem(world, config).calculate(ship);
-    const step = system.beginTask(published, ship).step({ maxWorkUnits: 1 });
-
-    expect(step.status).toBe("complete");
-    if (step.status === "complete") expectEquivalent(step.result, expected);
+    expect(() => new ForwardRangeSystem(world, config)).toThrow(
+      "Provision travel costs must use at most four decimal places",
+    );
   });
 
   it("reuses two inactive result buffers across sustained request churn", () => {

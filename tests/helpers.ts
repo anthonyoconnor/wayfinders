@@ -4,6 +4,7 @@ import {
   type PrototypeConfig,
   type PrototypeConfigSection,
 } from "../src/wayfinders/config/prototypeConfig.ts";
+import type { GameSimulation } from "../src/wayfinders/core/GameSimulation.ts";
 import type { ShipState, TravelSegment } from "../src/wayfinders/core/types.ts";
 
 export function makeConfig(patch: DeepPartial<PrototypeConfig> = {}): PrototypeConfig {
@@ -23,6 +24,21 @@ export function makeConfig(patch: DeepPartial<PrototypeConfig> = {}): PrototypeC
     if (sectionPatch !== undefined) Object.assign(config[section], sectionPatch);
   }
   return config;
+}
+
+/** Advances derived guidance to a published result for tests that assert it directly. */
+export function drainForwardGuidance(
+  simulation: GameSimulation,
+  maximumSlices = 2_000,
+): number {
+  for (let slice = 1; slice <= maximumSlices; slice++) {
+    if (simulation.advanceForwardGuidance()) return slice;
+    if (!simulation.forwardGuidanceStatus.pending) break;
+  }
+  throw new Error(
+    `Forward guidance did not publish within ${maximumSlices} slices: `
+      + JSON.stringify(simulation.forwardGuidanceStatus),
+  );
 }
 
 export function makeShip(provisions = 5, provisionAccumulator = 0): ShipState {

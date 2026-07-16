@@ -37,14 +37,12 @@ function assertEquivalent(
   });
 }
 
-describe("AM-6 cooperative ForwardGuidance budget", () => {
+describe("cooperative ForwardGuidance budget", () => {
   it("P2 keeps each main-thread slice below the 4 ms p95 gate", () => {
     const profile = "P2";
     const warmups = 20;
     const samples = 100;
-    const simulation = new GameSimulation(createWorldProfileConfig(profile), undefined, {
-      deferredForwardGuidance: true,
-    });
+    const simulation = new GameSimulation(createWorldProfileConfig(profile));
     const oracle = new ForwardRangeSystem(simulation.world, simulation.config);
     let expected = oracle.calculate(simulation.ship);
     const sliceDurations: number[] = [];
@@ -95,11 +93,11 @@ describe("AM-6 cooperative ForwardGuidance budget", () => {
 
     expect(
       slices.p95,
-      `AM-6 budget miss: ${JSON.stringify(evidence)}`,
+      `ForwardGuidance budget miss: ${JSON.stringify(evidence)}`,
     ).toBeLessThan(4);
     expect(
       frameSlices.p95,
-      `AM-6 starvation guard: ${JSON.stringify(evidence)}`,
+      `ForwardGuidance starvation guard: ${JSON.stringify(evidence)}`,
     ).toBeLessThanOrEqual(24);
     expect(simulation.forwardGuidanceStatus.telemetry.staleResultsDiscarded).toBe(0);
   }, 120_000);

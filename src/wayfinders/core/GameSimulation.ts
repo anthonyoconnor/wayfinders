@@ -205,11 +205,6 @@ export interface SimulationSnapshot {
 }
 
 export interface GameSimulationOptions {
-  /**
-   * Coalesces expensive forward-overlay recalculation until
-   * `advanceForwardGuidance`. Movement and return safety remain synchronous.
-   */
-  readonly deferredForwardGuidance?: boolean;
   /** Main-thread wall-clock target for one cooperative guidance slice. */
   readonly forwardGuidanceSliceBudgetMs?: number;
   /** Deterministic safety cap in addition to the wall-clock target. */
@@ -318,7 +313,6 @@ export class GameSimulation {
   private interactionTransactionActive = false;
   private riskResultsInitialized = false;
   private readonly trace: SimulationTraceSink | undefined;
-  private readonly deferForwardGuidance: boolean;
   private readonly forwardGuidanceSliceBudgetMs: number;
   private readonly forwardGuidanceWorkUnitsPerSlice: number;
   private readonly forwardGuidanceNow: () => number;
@@ -362,7 +356,6 @@ export class GameSimulation {
     options: Readonly<GameSimulationOptions> = {},
   ) {
     this.trace = trace;
-    this.deferForwardGuidance = options.deferredForwardGuidance === true;
     this.forwardGuidanceSliceBudgetMs = options.forwardGuidanceSliceBudgetMs
       ?? DEFAULT_FORWARD_GUIDANCE_SLICE_BUDGET_MS;
     if (
@@ -397,7 +390,6 @@ export class GameSimulation {
 
   get forwardGuidanceStatus(): ForwardGuidanceStatus {
     return {
-      deferred: this.deferForwardGuidance,
       pending: this.forwardGuidancePending,
       requestedId: this.forwardGuidanceRequestId,
       appliedId: this.forwardGuidanceAppliedRequestId,
@@ -1303,7 +1295,7 @@ export class GameSimulation {
    * invoke this once per frame, before authoritative simulation updates.
    */
   advanceForwardGuidance(): boolean {
-    if (!this.deferForwardGuidance || !this.forwardGuidancePending || !this.riskResultsInitialized) {
+    if (!this.forwardGuidancePending || !this.riskResultsInitialized) {
       return false;
     }
 
@@ -2154,15 +2146,7 @@ export class GameSimulation {
 
   private recalculateRiskOverlays(): void {
     if (this.riskResultsInitialized) {
-      if (this.deferForwardGuidance) {
-        this.requestForwardGuidance();
-      } else {
-        this.forwardRange = measureSimulationPhase(
-          this.trace,
-          "forward-guidance",
-          () => this.forwardRanges.recalculate(this.forwardRange, this.ship),
-        );
-      }
+      this.requestForwardGuidance();
       this.returnPaths = measureSimulationPhase(
         this.trace,
         "return-query",

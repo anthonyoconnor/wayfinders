@@ -149,8 +149,8 @@ function violation(repositoryRoot, file, dependency, code, message) {
 }
 
 /**
- * Enforce prospective boundaries under src/wayfinders/features. Existing
- * legacy folders remain outside this check until moved behind a feature API.
+ * Enforce ownership boundaries for packages under src/wayfinders/features.
+ * The other top-level folders are stable shared layers, not feature packages.
  */
 export async function checkFeatureBoundaries(
   repositoryRoot,

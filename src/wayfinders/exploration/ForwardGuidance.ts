@@ -38,7 +38,6 @@ export interface ForwardGuidanceSource {
 }
 
 export interface ForwardGuidanceStatus {
-  readonly deferred: boolean;
   readonly pending: boolean;
   readonly requestedId: number;
   readonly appliedId: number;

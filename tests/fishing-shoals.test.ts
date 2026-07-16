@@ -13,6 +13,7 @@ import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask"
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
+import { drainForwardGuidance } from "./helpers";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
@@ -374,6 +375,7 @@ describe("provision-funded fishing-shoal survey action", () => {
     expect(simulation.teleport(target.tile)).toBe(true);
     simulation.ship.provisionAccumulator = 0.375;
     simulation.refreshRiskOverlays();
+    drainForwardGuidance(simulation);
 
     const budgetBefore = simulation.forwardRange.budget;
     const returnMarginBefore = simulation.returnPaths.returnMargin;

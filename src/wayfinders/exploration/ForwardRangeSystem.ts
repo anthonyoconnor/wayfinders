@@ -104,7 +104,7 @@ export class ForwardRangeSystem implements ForwardGuidance {
   private readonly searchWorkspace = new DijkstraWorkspace();
   private readonly bucketedSearchWorkspace = new BucketedCostSearchWorkspace();
   private incrementalSearchWorkspace = new BucketedCostSearchWorkspace();
-  private readonly integerCostScale: number | undefined;
+  private integerCostScale = 1;
   private readonly integerTravelCosts = new Int32Array(3);
   private candidateStamps = new Uint32Array(0);
   private candidateStamp = 0;
@@ -145,18 +145,7 @@ export class ForwardRangeSystem implements ForwardGuidance {
     private readonly config: PrototypeConfig = prototypeConfig,
   ) {
     this.graph = new GridGraph(world, config);
-    this.integerCostScale = this.resolveIntegerCostScale();
-    if (this.integerCostScale !== undefined) {
-      this.integerTravelCosts[KnowledgeState.Unknown] = Math.round(
-        knowledgeTravelCost(KnowledgeState.Unknown, config) * this.integerCostScale,
-      );
-      this.integerTravelCosts[KnowledgeState.Personal] = Math.round(
-        knowledgeTravelCost(KnowledgeState.Personal, config) * this.integerCostScale,
-      );
-      this.integerTravelCosts[KnowledgeState.Supported] = Math.round(
-        knowledgeTravelCost(KnowledgeState.Supported, config) * this.integerCostScale,
-      );
-    }
+    this.refreshIntegerTravelCosts();
     this.prewarmIncrementalResources();
   }
 
@@ -170,10 +159,12 @@ export class ForwardRangeSystem implements ForwardGuidance {
     this.incrementalSearchWorkspace = new BucketedCostSearchWorkspace();
     this.incrementalBufferPool.length = 0;
     this.incrementalBuffersAllocated = 0;
+    this.refreshIntegerTravelCosts();
     this.prewarmIncrementalResources();
   }
 
   calculate(ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">): ForwardRangeResult {
+    this.refreshIntegerTravelCosts();
     return this.calculateResult(ship);
   }
 
@@ -186,6 +177,7 @@ export class ForwardRangeSystem implements ForwardGuidance {
     result: ForwardRangeResult,
     ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">,
   ): ForwardRangeResult {
+    this.refreshIntegerTravelCosts();
     if (!this.budgetCaches.has(result)) {
       throw new Error("Forward range result was not calculated by this system");
     }
@@ -201,6 +193,7 @@ export class ForwardRangeSystem implements ForwardGuidance {
     ship: ForwardGuidanceShip,
   ): ForwardGuidanceTask {
     this.cancelActiveIncrementalTask();
+    this.refreshIntegerTravelCosts();
     if (!this.world.inBounds(ship.currentTileX, ship.currentTileY)) {
       throw new RangeError("Ship tile is outside the world");
     }
@@ -212,28 +205,6 @@ export class ForwardRangeSystem implements ForwardGuidance {
       provisions: ship.provisions,
       provisionAccumulator: ship.provisionAccumulator,
     });
-
-    // Arbitrary developer-tuned costs retain the exact heap implementation as
-    // a deterministic compatibility fallback. Production profiles all use the
-    // resumable integer-cost path selected by AM-6.
-    if (this.integerCostScale === undefined) {
-      let cancelled = false;
-      let completed = false;
-      return {
-        cancel: () => {
-          cancelled = true;
-        },
-        step: (_budget: ForwardGuidanceWorkBudget): ForwardGuidanceTaskStep => {
-          if (cancelled) return { status: "cancelled", workUnits: 0 };
-          if (completed) throw new Error("Forward guidance task is already complete");
-          completed = true;
-          const result = this.calculate(snapshot);
-          result.logicalRevision = published.logicalRevision
-            + (this.sameLogicalMask(published, result) ? 0 : 1);
-          return { status: "complete", workUnits: 1, result };
-        },
-      };
-    }
 
     const buffer = this.acquireIncrementalBuffer();
     const budget = availableProvisionUnits(snapshot);
@@ -852,7 +823,6 @@ export class ForwardRangeSystem implements ForwardGuidance {
   }
 
   private prewarmIncrementalResources(): void {
-    if (this.integerCostScale === undefined) return;
     const initialMaxCostUnits = Math.min(
       1_000_000,
       Math.max(
@@ -866,31 +836,22 @@ export class ForwardRangeSystem implements ForwardGuidance {
     }
   }
 
-  private sameLogicalMask(left: ForwardRangeResult, right: ForwardRangeResult): boolean {
-    if (left.reachableCount !== right.reachableCount) return false;
-    for (const index of left.candidateIndices) {
-      if (right.mask[index] === 0) return false;
-    }
-    return true;
-  }
-
   private search(budget: number): Pick<
     BucketedCostSearchResult,
     "costs" | "settledIndices" | "settledCount"
   > {
-    if (this.integerCostScale !== undefined) {
-      const maxCostUnits = Math.floor(budget * this.integerCostScale + 1e-9);
-      // Protect developer tuning from constructing an unexpectedly giant
-      // bucket array. The generic heap remains exact for larger horizons.
-      if (maxCostUnits <= 1_000_000) {
-        return this.bucketedSearchWorkspace.search({
-          nodeCount: this.world.tileCount,
-          start: this.startNodes[0],
-          maxCostUnits,
-          unitScale: this.integerCostScale,
-          forEachNeighbor: this.forEachIntegerSearchNeighbor,
-        });
-      }
+    const maxCostUnits = Math.floor(budget * this.integerCostScale + 1e-9);
+    // Protect developer tuning from constructing an unexpectedly giant
+    // bucket array. The generic heap remains the synchronous exact oracle for
+    // unusually large horizons.
+    if (maxCostUnits <= 1_000_000) {
+      return this.bucketedSearchWorkspace.search({
+        nodeCount: this.world.tileCount,
+        start: this.startNodes[0],
+        maxCostUnits,
+        unitScale: this.integerCostScale,
+        forEachNeighbor: this.forEachIntegerSearchNeighbor,
+      });
     }
     return dijkstra({
       nodeCount: this.world.tileCount,
@@ -901,7 +862,20 @@ export class ForwardRangeSystem implements ForwardGuidance {
     });
   }
 
-  private resolveIntegerCostScale(): number | undefined {
+  private refreshIntegerTravelCosts(): void {
+    this.integerCostScale = this.resolveIntegerCostScale();
+    this.integerTravelCosts[KnowledgeState.Unknown] = Math.round(
+      knowledgeTravelCost(KnowledgeState.Unknown, this.config) * this.integerCostScale,
+    );
+    this.integerTravelCosts[KnowledgeState.Personal] = Math.round(
+      knowledgeTravelCost(KnowledgeState.Personal, this.config) * this.integerCostScale,
+    );
+    this.integerTravelCosts[KnowledgeState.Supported] = Math.round(
+      knowledgeTravelCost(KnowledgeState.Supported, this.config) * this.integerCostScale,
+    );
+  }
+
+  private resolveIntegerCostScale(): number {
     const costs = [
       knowledgeTravelCost(KnowledgeState.Unknown, this.config),
       knowledgeTravelCost(KnowledgeState.Personal, this.config),
@@ -912,6 +886,6 @@ export class ForwardRangeSystem implements ForwardGuidance {
         return scale;
       }
     }
-    return undefined;
+    throw new RangeError("Provision travel costs must use at most four decimal places");
   }
 }

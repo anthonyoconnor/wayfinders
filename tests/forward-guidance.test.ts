@@ -6,7 +6,7 @@ import { dijkstra } from "../src/wayfinders/navigation/Dijkstra.ts";
 import { GridGraph } from "../src/wayfinders/navigation/GridGraph.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
-import { makeConfig, makeShip } from "./helpers.ts";
+import { drainForwardGuidance, makeConfig, makeShip } from "./helpers.ts";
 
 function deterministicRandom(seed: number): () => number {
   let state = seed >>> 0;
@@ -31,29 +31,15 @@ function passableDestinations(simulation: GameSimulation, count: number) {
   return destinations;
 }
 
-function drainForwardGuidance(simulation: GameSimulation, maximumSlices = 2_000): number {
-  for (let slice = 1; slice <= maximumSlices; slice++) {
-    if (simulation.advanceForwardGuidance()) return slice;
-    if (!simulation.forwardGuidanceStatus.pending) break;
-  }
-  throw new Error(
-    `Forward guidance did not publish within ${maximumSlices} slices: `
-      + JSON.stringify(simulation.forwardGuidanceStatus),
-  );
-}
-
 describe("ForwardGuidance boundary", () => {
   it("coalesces requests, rejects stale sources, and applies only the newest origin", () => {
-    const simulation = new GameSimulation(undefined, undefined, {
-      deferredForwardGuidance: true,
-    });
+    const simulation = new GameSimulation();
     const [first, second] = passableDestinations(simulation, 2);
 
     expect(simulation.teleport(first)).toBe(true);
     const firstRequest = simulation.forwardGuidanceStatus.requestedId;
     expect(simulation.teleport(second)).toBe(true);
     expect(simulation.forwardGuidanceStatus).toMatchObject({
-      deferred: true,
       pending: true,
       appliedId: 0,
       source: { originX: second.x, originY: second.y },
@@ -84,20 +70,8 @@ describe("ForwardGuidance boundary", () => {
     expect(simulation.advanceForwardGuidance()).toBe(false);
   });
 
-  it("keeps synchronous guidance as the compatibility default", () => {
-    const simulation = new GameSimulation();
-    const [destination] = passableDestinations(simulation, 1);
-
-    expect(simulation.teleport(destination)).toBe(true);
-    expect(simulation.forwardGuidanceStatus.pending).toBe(false);
-    expect(simulation.forwardRange.costs[
-      simulation.world.index(destination.x, destination.y)
-    ]).toBe(0);
-  });
-
   it("invalidates visibility-only work and publishes the newest revision", () => {
     const simulation = new GameSimulation(undefined, undefined, {
-      deferredForwardGuidance: true,
       forwardGuidanceWorkUnitsPerSlice: 64,
       forwardGuidanceNow: () => 0,
     });
@@ -131,7 +105,6 @@ describe("ForwardGuidance boundary", () => {
 
   it("does not let steering starve a task and clips the result to the latest heading", () => {
     const simulation = new GameSimulation(undefined, undefined, {
-      deferredForwardGuidance: true,
       forwardGuidanceWorkUnitsPerSlice: 64,
       forwardGuidanceNow: () => 0,
     });
@@ -151,7 +124,6 @@ describe("ForwardGuidance boundary", () => {
 
   it("uses a monotonic world epoch across same-seed regeneration", () => {
     const simulation = new GameSimulation(undefined, undefined, {
-      deferredForwardGuidance: true,
       forwardGuidanceWorkUnitsPerSlice: 64,
       forwardGuidanceNow: () => 0,
     });
@@ -170,6 +142,28 @@ describe("ForwardGuidance boundary", () => {
       telemetry: { jobsCancelled: 1 },
     });
     expect(simulation.forwardGuidanceStatus.source.worldEpoch).toBe(previousEpoch + 1);
+  });
+
+  it("refreshes cached travel-cost units after live tuning", () => {
+    const config = makeConfig({
+      provisions: { supportedCost: 0, personalCost: 0.5, unknownCost: 1 },
+    });
+    const simulation = new GameSimulation(config, undefined, {
+      forwardGuidanceWorkUnitsPerSlice: 64,
+      forwardGuidanceNow: () => 0,
+    });
+    const [destination] = passableDestinations(simulation, 1);
+    expect(simulation.teleport(destination)).toBe(true);
+    drainForwardGuidance(simulation);
+
+    config.provisions.personalCost = 0.75;
+    config.provisions.unknownCost = 1.25;
+    simulation.refreshRiskOverlays();
+    drainForwardGuidance(simulation);
+
+    const expected = new ForwardRangeSystem(simulation.world, config).calculate(simulation.ship);
+    expect(simulation.forwardRange.mask).toEqual(expected.mask);
+    expect(simulation.forwardRange.costs).toEqual(expected.costs);
   });
 });
 

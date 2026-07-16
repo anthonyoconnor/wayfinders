@@ -37,8 +37,9 @@ export type BucketedCostSearchStep =
 
 /**
  * Reusable decrease-key Dial queue for bounded non-negative integer costs.
- * Forward guidance uses this only when all configured provision costs have an
- * exact small integer scale; arbitrary costs retain the generic Dijkstra path.
+ * Forward guidance validates an exact small integer scale before starting a
+ * cooperative task. Synchronous oracle queries may still use generic Dijkstra
+ * for unusually large cost horizons.
  */
 export class BucketedCostSearchWorkspace {
   private costUnits = new Int32Array(0);
