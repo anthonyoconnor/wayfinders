@@ -18,7 +18,7 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
 ## Runnable surfaces
 
 - The default browser route starts a fresh playable voyage.
-- `?mode=assets` opens the asset library, guided reference/local-PNG intake,
+- `?mode=assets` opens the asset library, guided local-PNG intake,
   structured pending-candidate authoring, validation, exact-fingerprint review
   and promotion, runtime-package inspection, and supported collision authoring.
 - An island candidate can launch a disposable open-water sea trial from its

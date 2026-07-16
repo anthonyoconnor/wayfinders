@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import productionIndex from "../assets-src/gr3/generated/production-index.json";
 import productionRecipes from "../assets-src/gr3/production-recipes.json";
 import { AUTHORED_ASSET_IDS } from "../src/wayfinders/assets/AuthoredAssetContracts";
 import {
@@ -11,137 +10,19 @@ import {
   conceptShoalReferenceEntry,
   islandReferenceEntry,
   waterReferenceEntry,
-  type ReferenceImageLibraryEntry,
 } from "../src/wayfinders/assets/AssetLibraryCatalog";
 
 const ESTABLISHED_IDS = [
   AUTHORED_ASSET_IDS.homeIsland,
   AUTHORED_ASSET_IDS.playerBoat,
   AUTHORED_ASSET_IDS.fishingShoal,
-  "reference.island.01.crescent-cay",
-  "reference.island.02.fishhook-village",
-  "reference.island.03.volcanic-spearhead",
-  "reference.island.04.river-delta",
-  "reference.island.05.dumbbell-shrine",
-  "reference.island.06.star-atoll",
-  "reference.island.07.lightning-ridge",
-  "reference.island.08.horseshoe-port",
-  "reference.island.09.triangle-pastures",
-  "reference.island.10.comet-archipelago",
-  "reference.island.11.mangrove-hand",
-  "reference.island.12.lighthouse-teardrop",
-  "reference.island.13.boomerang-oasis",
-  "reference.island.14.maze-marsh",
-  "reference.island.15.terrace-fortress",
-  "reference.island.16.bone-rock",
-  "reference.island.17.spiral-outpost",
-  "reference.island.18.antler-wilderness",
-  "reference.island.19.trident-capital",
-  "reference.island.20.rock-shard",
 ] as const;
 
 describe("asset library catalog", () => {
-  it("keeps the established 23 identities and adds production and concept previews once", () => {
-    expect(ASSET_LIBRARY_CATALOG).toHaveLength(46);
-    expect(ASSET_LIBRARY_CATALOG.filter((entry) => entry.entryType === "authored-package"))
-      .toHaveLength(3);
-
-    for (const id of ESTABLISHED_IDS) {
-      expect(ASSET_LIBRARY_CATALOG.filter((entry) => entry.id === id), id).toHaveLength(1);
-    }
-
-    const referenceEntries = ASSET_LIBRARY_CATALOG.filter(
-      (entry): entry is Readonly<ReferenceImageLibraryEntry> => entry.entryType === "reference-image",
-    );
-    const examples = referenceEntries.filter((entry) =>
-      entry.reference.collectionId === "gr1-island-examples");
-    expect(examples).toHaveLength(20);
-    expect(examples.map((entry) => entry.reference.sequence)).toEqual(
-      Array.from({ length: 20 }, (_, index) => index + 1),
-    );
-    expect(examples.every((entry) => entry.reference.runtimeStatus === "reference-only")).toBe(true);
-
-    const candidates = ASSET_LIBRARY_CATALOG.filter((entry) => entry.entryType === "production-candidate");
-    expect(candidates).toHaveLength(6);
-    expect(new Set(candidates.map((entry) => entry.id)).size).toBe(6);
-    expect(candidates.every((entry) => entry.recipe.lifecycle === "source")).toBe(true);
-
-    const conceptReferences = referenceEntries.filter((entry) =>
-      entry.reference.collectionId.startsWith("concept-example-"));
-    expect(conceptReferences).toHaveLength(16);
-    expect(conceptReferences.filter((entry) => entry.reference.kind === "island")).toHaveLength(12);
-    expect(conceptReferences.filter((entry) => entry.reference.kind === "shoal")).toHaveLength(4);
-    expect(ASSET_LIBRARY_CATALOG.filter((entry) =>
-      entry.entryType === "reference-image" && entry.reference.kind === "environment")).toHaveLength(1);
-  });
-
-  it("joins each source recipe to its prepared layers, thumbnail and collision draft", () => {
-    const candidate = assetLibraryEntryById("production.island.small-fishing-cay");
-    expect(candidate).toMatchObject({
-      entryType: "production-candidate",
-      lifecycle: "candidate",
-      reviewState: "pending",
-      categoryId: "islands",
-      recipe: {
-        id: "production.island.small-fishing-cay",
-        lifecycle: "source",
-        provenance: { sourceFile: "assets-src/gr1/island-small-fishing-cay-source.png" },
-      },
-      collisionDraftFile: expect.stringMatching(/collision-draft\.json$/u),
-      collisionDraft: {
-        kind: "hybrid-grid-draft",
-        tileSize: 32,
-        subcellSize: 8,
-        method: "prepared-alpha-connected-shoreline-v1",
-        grid: { width: 15, height: 15, subcellColumns: 60, subcellRows: 60 },
-      },
-    });
-    if (candidate?.entryType !== "production-candidate") throw new Error("Expected production candidate");
-    expect(candidate.thumbnailUrl).toMatch(/thumbnail\.png/u);
-    expect(candidate.sourceLayers).toEqual([expect.objectContaining({
-      id: "source.base",
-      url: expect.stringMatching(/island-small-fishing-cay-source\.png/u),
-    })]);
-    expect(candidate.candidateLayers).toEqual([expect.objectContaining({
-      id: "layer.base",
-      url: expect.stringMatching(/base\.png/u),
-      pixelSize: { width: 480, height: 480 },
-    })]);
-    expect(candidate.layers).toEqual(candidate.candidateLayers);
-    if (candidate.collisionDraft.kind !== "hybrid-grid-draft") {
-      throw new Error("Expected hybrid-grid collision draft");
-    }
-    expect(candidate.collisionDraft.solidSubcells.length).toBeGreaterThan(0);
-    expect(candidate.fingerprint).toBe(
-      productionIndex.entries.find((entry) => entry.id === candidate.id)?.jobKey,
-    );
-  });
-
-  it("shows only a decision for the candidate's current fingerprint", () => {
-    const prepared = productionIndex.entries[0];
-    const approved = buildAssetLibraryCatalog({}, {
-      productionReviews: {
-        formatVersion: 1,
-        decisions: [{
-          recipeId: prepared.id,
-          candidateFingerprint: prepared.jobKey,
-          decision: "approved",
-        }],
-      },
-    });
-    expect(approved.find((entry) => entry.id === prepared.id)).toMatchObject({ reviewState: "approved" });
-
-    const stale = buildAssetLibraryCatalog({}, {
-      productionReviews: {
-        formatVersion: 1,
-        decisions: [{
-          recipeId: prepared.id,
-          candidateFingerprint: "0".repeat(64),
-          decision: "rejected",
-        }],
-      },
-    });
-    expect(stale.find((entry) => entry.id === prepared.id)).toMatchObject({ reviewState: "stale" });
+  it("starts with only the three runtime packages", () => {
+    expect(ASSET_LIBRARY_CATALOG).toHaveLength(3);
+    expect(ASSET_LIBRARY_CATALOG.every((entry) => entry.entryType === "authored-package")).toBe(true);
+    expect(ASSET_LIBRARY_CATALOG.map((entry) => entry.id)).toEqual(ESTABLISHED_IDS);
   });
 
   it("previews a passable multi-layer shoal candidate from a non-island source path", () => {
@@ -354,9 +235,9 @@ describe("asset library catalog", () => {
       "reference.island.20.rock-shard",
     ]);
     expect(ASSET_LIBRARY_GROUPS.map((group) => [group.id, group.entries.length])).toEqual([
-      ["islands", 39],
+      ["islands", 1],
       ["vessels", 1],
-      ["world-features", 6],
+      ["world-features", 1],
     ]);
   });
 
@@ -373,19 +254,9 @@ describe("asset library catalog", () => {
     })).toThrow(/Duplicate asset library ID/u);
   });
 
-  it("rejects malformed recipe/index joins and duplicate prepared candidates", () => {
+  it("rejects a malformed recipe manifest", () => {
     expect(() => buildAssetLibraryCatalog({}, {
       productionRecipeManifest: { ...productionRecipes, formatVersion: 999 },
     })).toThrow(/formatVersion/u);
-
-    const duplicateIndex = structuredClone(productionIndex);
-    duplicateIndex.entries.push(structuredClone(duplicateIndex.entries[0]));
-    expect(() => buildAssetLibraryCatalog({}, { productionIndex: duplicateIndex }))
-      .toThrow(/Duplicate production index ID/u);
-
-    const orphanedIndex = structuredClone(productionIndex);
-    orphanedIndex.entries[0].id = "production.island.not-in-recipes";
-    expect(() => buildAssetLibraryCatalog({}, { productionIndex: orphanedIndex }))
-      .toThrow(/no source recipe/u);
   });
 });

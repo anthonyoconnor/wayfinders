@@ -187,11 +187,6 @@ export interface AssetLibraryGroup {
   readonly entries: readonly Readonly<AssetLibraryEntry>[];
 }
 
-const ISLAND_EXAMPLE_IMAGE_URLS = import.meta.glob<string>(
-  "../../../assets-src/gr1/island-examples/*.png",
-  { eager: true, query: "?url", import: "default" },
-);
-
 const PRODUCTION_SOURCE_IMAGE_URLS = import.meta.glob<string>(
   "../../../assets-src/**/*-source.png",
   { eager: true, query: "?url", import: "default" },
@@ -205,21 +200,6 @@ const PRODUCTION_CANDIDATE_IMAGE_URLS = import.meta.glob<string>(
 const PRODUCTION_COLLISION_DRAFTS = import.meta.glob<unknown>(
   "../../../assets-src/gr3/candidates/*/collision-draft.json",
   { eager: true, import: "default" },
-);
-
-const CONCEPT_ISLAND_IMAGE_URLS = import.meta.glob<string>(
-  "../../../concept_art/example assets/islands/*.png",
-  { eager: true, query: "?url", import: "default" },
-);
-
-const CONCEPT_SHOAL_IMAGE_URLS = import.meta.glob<string>(
-  "../../../concept_art/example assets/shoals/*.png",
-  { eager: true, query: "?url", import: "default" },
-);
-
-const WATER_REFERENCE_IMAGE_URLS = import.meta.glob<string>(
-  "../../../assets-src/gr1/water/runtime/water-contact-sheet.png",
-  { eager: true, query: "?url", import: "default" },
 );
 
 const VALIDATED_AUTHORED_METADATA = Object.freeze([
@@ -1120,7 +1100,7 @@ export function compareAssetLibraryEntries(
 }
 
 export function buildAssetLibraryCatalog(
-  islandExampleImages: Readonly<Record<string, string>> = ISLAND_EXAMPLE_IMAGE_URLS,
+  islandExampleImages: Readonly<Record<string, string>> = {},
   dependencies: Readonly<AssetLibraryCatalogDependencies> = {},
 ): readonly Readonly<AssetLibraryEntry>[] {
   const examples = Object.entries(islandExampleImages)
@@ -1133,11 +1113,11 @@ export function buildAssetLibraryCatalog(
     dependencies.productionCandidateImages ?? PRODUCTION_CANDIDATE_IMAGE_URLS,
     dependencies.productionCollisionDrafts ?? PRODUCTION_COLLISION_DRAFTS,
   );
-  const conceptIslands = Object.entries(dependencies.conceptIslandImages ?? CONCEPT_ISLAND_IMAGE_URLS)
+  const conceptIslands = Object.entries(dependencies.conceptIslandImages ?? {})
     .map(([path, url]) => conceptIslandReferenceEntry(path, url));
-  const conceptShoals = Object.entries(dependencies.conceptShoalImages ?? CONCEPT_SHOAL_IMAGE_URLS)
+  const conceptShoals = Object.entries(dependencies.conceptShoalImages ?? {})
     .map(([path, url]) => conceptShoalReferenceEntry(path, url));
-  const waterReferences = Object.entries(dependencies.waterReferenceImages ?? WATER_REFERENCE_IMAGE_URLS)
+  const waterReferences = Object.entries(dependencies.waterReferenceImages ?? {})
     .map(([path, url]) => waterReferenceEntry(path, url));
   const entries = [
     ...authoredEntries(),

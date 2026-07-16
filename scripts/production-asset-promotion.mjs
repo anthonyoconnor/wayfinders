@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readdir, readFile, rm, stat } from "node:fs/promises";
+import { readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -18,7 +18,6 @@ export const PRODUCTION_PROMOTION_PIPELINE_VERSION = 1;
 
 const moduleRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SHA256 = /^[a-f0-9]{64}$/u;
-const MINIMUM_REFERENCE_ISLANDS = 20;
 const MAX_THUMBNAIL_PAYLOAD_BYTES = 2 * 1024 * 1024;
 const MAX_SELECTED_DECODED_BYTES = 16 * 1024 * 1024;
 
@@ -158,20 +157,6 @@ function publicSlug(recipeId) {
   return recipeId.replaceAll(".", "-");
 }
 
-async function referenceBenchmark(repositoryRoot) {
-  const directory = path.join(repositoryRoot, "assets-src", "gr1", "island-examples");
-  let filenames;
-  try {
-    filenames = (await readdir(directory)).filter((filename) => filename.toLowerCase().endsWith(".png")).sort();
-  } catch (error) {
-    if (isRecord(error) && error.code === "ENOENT") filenames = [];
-    else throw error;
-  }
-  let sourceBytes = 0;
-  for (const filename of filenames) sourceBytes += (await stat(path.join(directory, filename))).size;
-  return { count: filenames.length, sourceBytes };
-}
-
 async function candidateArtifacts(repositoryRoot, recipe, entry) {
   const reportFile = path.posix.join(path.posix.dirname(entry.collisionDraftFile), "preparation-report.json");
   const report = await readJson(
@@ -282,11 +267,10 @@ function exactPreserveBinding(recipe, entry) {
 
 async function createPromotionPlan(repositoryRoot, selectedId) {
   const gr3 = path.join(repositoryRoot, "assets-src", "gr3");
-  const [manifestInput, indexInput, reviewsInput, benchmark] = await Promise.all([
+  const [manifestInput, indexInput, reviewsInput] = await Promise.all([
     readJson(path.join(gr3, "production-recipes.json"), "Production recipe manifest"),
     readJson(path.join(gr3, "generated", "production-index.json"), "Generated production index"),
     readJson(path.join(gr3, "reviews.json"), "Production review store"),
-    referenceBenchmark(repositoryRoot),
   ]);
   const manifest = validateProductionAssetRecipeManifest(manifestInput);
   const entries = validateIndex(indexInput, manifest);
@@ -394,11 +378,6 @@ async function createPromotionPlan(repositoryRoot, selectedId) {
     published: publicEntries.length,
   };
   const budgets = {
-    referenceIslandCount: {
-      value: benchmark.count,
-      minimum: MINIMUM_REFERENCE_ISLANDS,
-      passed: benchmark.count >= MINIMUM_REFERENCE_ISLANDS,
-    },
     candidateThumbnailPayloadBytes: {
       value: thumbnailBytes,
       maximum: MAX_THUMBNAIL_PAYLOAD_BYTES,
@@ -417,8 +396,6 @@ async function createPromotionPlan(repositoryRoot, selectedId) {
     counts,
     queue,
     evidence: {
-      referenceIslandSourceCount: benchmark.count,
-      referenceIslandSourceBytes: benchmark.sourceBytes,
       preparedCandidateCount: entries.size,
       candidateThumbnailBytes: thumbnailBytes,
       maxSelectedCandidateDecodedBytes: maxSelectedDecodedBytes,

@@ -14,8 +14,9 @@ general art or atlas tool.
    ```
 
    Open `http://127.0.0.1:5173/?mode=assets`.
-2. Select any source reference and choose **Import and prepare**, or choose
-   **Add PNG** for a new local image. The form reads the PNG canvas immediately
+2. Choose **Add PNG** for a new local image. The clean baseline library contains
+   only the home island, player boat, and fishing shoal runtime packages; new
+   production candidates appear after they are imported. The form reads the PNG canvas immediately
    and keeps **Keep original PNG dimensions** selected by default. Review the
    inferred family, asset name, stable ID, layer role, collision semantics, and
    optional runtime/test category. Name and stable-ID conflicts are shown
@@ -70,7 +71,7 @@ put each source under `assets-src` with a `*-source.png` name, add or reuse its
 recipe in `assets-src/gr3/production-recipes.json`, then run:
 
 ```powershell
-npm.cmd run assets:prepare -- --id production.island.small-fishing-cay
+npm.cmd run assets:prepare -- --id <recipe-id>
 ```
 
 Use `--family island` for a family or omit the selector for the whole batch.
@@ -84,7 +85,7 @@ The asset library is the normal review surface. For scripting, read the current
 same exact decision through the CLI:
 
 ```powershell
-$id = "production.island.small-fishing-cay"
+$id = "<recipe-id>"
 $entry = (Get-Content assets-src/gr3/generated/production-index.json | ConvertFrom-Json).entries |
   Where-Object id -eq $id
 npm.cmd run assets:review -- approve $id $entry.jobKey

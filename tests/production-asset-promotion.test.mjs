@@ -149,16 +149,11 @@ async function createRepository(decision = "approved") {
   await Promise.all([
     mkdir(path.dirname(path.join(root, sourceFile)), { recursive: true }),
     mkdir(path.dirname(path.join(root, layerFile)), { recursive: true }),
-    mkdir(path.join(root, "assets-src/gr1/island-examples"), { recursive: true }),
   ]);
   await Promise.all([
     writeFile(path.join(root, sourceFile), sourceBytes),
     writeFile(path.join(root, layerFile), candidateBytes),
     writeFile(path.join(root, thumbnailFile), thumbnailBytes),
-    ...Array.from({ length: 20 }, (_, indexNumber) => writeFile(
-      path.join(root, "assets-src/gr1/island-examples", `island-${indexNumber + 1}.png`),
-      `reference-${indexNumber + 1}`,
-    )),
   ]);
   return { root, id, jobKey, candidateBytes, sourceFile, sourceBytes, collisionBytes };
 }

@@ -16,13 +16,13 @@ function validIslandRecipe() {
     tags: ["island", "small", "source"],
     provenance: {
       kind: "selected-source",
-      sourceFile: "assets-src/gr1/island-small-fishing-cay-source.png",
+      sourceFile: "assets-src/gr3/intake/production-island-test-cay-source.png",
     },
     layers: [{
       id: "base",
       name: "Base island",
       role: "base",
-      sourceFile: "assets-src/gr1/island-small-fishing-cay-source.png",
+      sourceFile: "assets-src/gr3/intake/production-island-test-cay-source.png",
       defaultVisible: true,
       opacity: 1,
       blendMode: "normal",
@@ -44,25 +44,16 @@ function validIslandRecipe() {
 }
 
 describe("production asset recipe manifest", () => {
-  it("tracks the three pilot bindings and current prepared island sources", () => {
+  it("starts from the three runtime packages with no preloaded production sources", () => {
     const manifest = validateProductionAssetRecipeManifest(productionRecipes);
-    expect(manifest.recipes).toHaveLength(9);
+    expect(manifest.recipes).toHaveLength(3);
     expect(manifest.recipes.filter((recipe) => recipe.lifecycle === "runtime").map((recipe) => recipe.id))
       .toEqual([
         AUTHORED_ASSET_IDS.homeIsland,
         AUTHORED_ASSET_IDS.playerBoat,
         AUTHORED_ASSET_IDS.fishingShoal,
       ]);
-    const sources = manifest.recipes.filter((recipe) => recipe.lifecycle === "source");
-    expect(sources.map((recipe) => recipe.id)).toEqual([
-      "production.island.colossal-wilderness",
-      "production.island.large-fortified-port",
-      "production.island.medium-abandoned-atoll",
-      "production.island.small-fishing-cay",
-      "production.island.tiny-volcanic-stack",
-      "production.island.volcano",
-    ]);
-    expect(sources.every((recipe) => recipe.collision.mode === "shoreline-seed")).toBe(true);
+    expect(manifest.recipes.filter((recipe) => recipe.lifecycle === "source")).toEqual([]);
   });
 
   it("validates and freezes a lightweight island source recipe", () => {

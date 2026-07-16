@@ -36,10 +36,9 @@ The proposal is based on the current repository and these art references:
   aligned to a `15 x 15` navigation-cell package. It already includes turquoise
   shallows, an irregular shorewash/foam edge, harbor water, rocks, sand, and a
   transparent exterior.
-- `assets-src/gr1/island-examples` contains twenty `1254 x 1254` RGB style
-  references. Their magenta backgrounds are generation/review aids, not a
-  runtime transparency contract. They must never be sampled, keyed, or loaded by
-  the game.
+- The retained `assets-src/gr1/water` pack contains the current water reference
+  material and provenance notes. It remains source material only and must never
+  be sampled, keyed, or loaded by the game.
 - The art style uses dense but readable top-down pixel clusters, warm sand and
   foliage, broken rather than continuous highlights, organic scalloped
   coastlines, and a turquoise-to-navy depth ramp. Water must support the islands,

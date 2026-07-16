@@ -327,7 +327,7 @@ rendered pixels do not. Package schema, editable profile categories, source
 preparation, review, promotion, and repository transactions are documented in
 `Wayfinders_Asset_Pipeline.md`.
 
-The asset library provides guided reference and local-PNG intake. It reads the
+The asset library provides guided local-PNG intake. It reads the
 PNG canvas dimensions as soon as the source is selected and keeps them as the
 default output dimensions. When a solid asset is not aligned to the `32`-pixel
 navigation grid, the form warns before submission and offers transparent canvas

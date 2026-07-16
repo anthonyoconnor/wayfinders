@@ -433,7 +433,9 @@ export function selectProductionRecipes(manifest, args) {
   if (id) recipes = recipes.filter((recipe) => recipe.id === id);
   else if (family) recipes = recipes.filter((recipe) => recipe.family === family);
   else recipes = recipes.filter((recipe) => recipe.lifecycle !== "runtime" && recipe.lifecycle !== "reference");
-  if (recipes.length === 0) throw new RangeError(`No production recipes matched ${id ?? family ?? "the preparable set"}`);
+  if (recipes.length === 0 && (id !== undefined || family !== undefined)) {
+    throw new RangeError(`No production recipes matched ${id ?? family}`);
+  }
   return recipes;
 }
 

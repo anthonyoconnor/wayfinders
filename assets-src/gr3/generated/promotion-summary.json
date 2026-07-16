@@ -1,79 +1,29 @@
 {
   "formatVersion": 1,
   "pipelineVersion": 1,
-  "manifestSha256": "d9c79252e3b349ffe854eeb371b9f2c4ce8ed9e175d26dada1620f016dfcd8b2",
+  "manifestSha256": "a07394ce2f6ccfb2f5aa13a9ee96ab489872141b5c5dd36046d56976e5807bdf",
   "counts": {
-    "candidates": 6,
+    "candidates": 0,
     "approved": 0,
     "rejected": 0,
-    "pending": 6,
+    "pending": 0,
     "published": 0
   },
-  "queue": [
-    {
-      "id": "production.island.colossal-wilderness",
-      "family": "island",
-      "candidateFingerprint": "5f7f587c4fa433207e588bf9f8151a1fcd065c760bb418a92d99a6207451f143",
-      "reviewState": "pending",
-      "promotionState": "waiting-for-review"
-    },
-    {
-      "id": "production.island.large-fortified-port",
-      "family": "island",
-      "candidateFingerprint": "ee16ef9797803fe9048c0599d8601d6550e0c018160b30c3565e5302170c81f3",
-      "reviewState": "pending",
-      "promotionState": "waiting-for-review"
-    },
-    {
-      "id": "production.island.medium-abandoned-atoll",
-      "family": "island",
-      "candidateFingerprint": "ab93bee081ce4b84b072daf976aba531a1795aa464e6ed277cc4b1fbd57ad537",
-      "reviewState": "pending",
-      "promotionState": "waiting-for-review"
-    },
-    {
-      "id": "production.island.small-fishing-cay",
-      "family": "island",
-      "candidateFingerprint": "57aea3b83793a83b772cacc19664cdb9458ab8086bdb28ac97605ea587581c23",
-      "reviewState": "pending",
-      "promotionState": "waiting-for-review"
-    },
-    {
-      "id": "production.island.tiny-volcanic-stack",
-      "family": "island",
-      "candidateFingerprint": "3a6c0b41eb6fa1f596206bc019b7ef3aafbd86be25826cdfe7210329701edd0a",
-      "reviewState": "pending",
-      "promotionState": "waiting-for-review"
-    },
-    {
-      "id": "production.island.volcano",
-      "family": "island",
-      "candidateFingerprint": "b1eebd1d105e8c9cae9f8eab70a590355147a6777a0536aedc1dc3c6837e4950",
-      "reviewState": "pending",
-      "promotionState": "waiting-for-review"
-    }
-  ],
+  "queue": [],
   "evidence": {
-    "referenceIslandSourceCount": 20,
-    "referenceIslandSourceBytes": 40864133,
-    "preparedCandidateCount": 6,
-    "candidateThumbnailBytes": 500010,
-    "maxSelectedCandidateDecodedBytes": 921600,
+    "preparedCandidateCount": 0,
+    "candidateThumbnailBytes": 0,
+    "maxSelectedCandidateDecodedBytes": 0,
     "promotedPayloadBytes": 0
   },
   "budgets": {
-    "referenceIslandCount": {
-      "value": 20,
-      "minimum": 20,
-      "passed": true
-    },
     "candidateThumbnailPayloadBytes": {
-      "value": 500010,
+      "value": 0,
       "maximum": 2097152,
       "passed": true
     },
     "maxSelectedCandidateDecodedBytes": {
-      "value": 921600,
+      "value": 0,
       "maximum": 16777216,
       "passed": true
     },

@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import productionIndex from "../assets-src/gr3/generated/production-index.json";
 import productionRecipes from "../assets-src/gr3/production-recipes.json";
 import {
   canonicalJson,
@@ -33,18 +33,11 @@ describe("GR-3.2 production preparation pipeline", () => {
       .toBe(canonicalJson({ a: { x: 3, y: 2 }, z: 1 }));
   });
 
-  it("selects a stable preparable set or one explicit recipe/family", () => {
-    expect(selectProductionRecipes(manifest, []).map((recipe) => recipe.id)).toEqual([
-      "production.island.colossal-wilderness",
-      "production.island.large-fortified-port",
-      "production.island.medium-abandoned-atoll",
-      "production.island.small-fishing-cay",
-      "production.island.tiny-volcanic-stack",
-      "production.island.volcano",
-    ]);
-    expect(selectProductionRecipes(manifest, ["--id", "production.island.small-fishing-cay"]))
+  it("accepts an empty preparable set and can select a runtime recipe explicitly", () => {
+    expect(selectProductionRecipes(manifest, [])).toEqual([]);
+    expect(selectProductionRecipes(manifest, ["--id", "home.island.primary"]))
       .toHaveLength(1);
-    expect(selectProductionRecipes(manifest, ["--family=island"])).toHaveLength(7);
+    expect(selectProductionRecipes(manifest, ["--family=island"])).toHaveLength(1);
     expect(() => selectProductionRecipes(manifest, ["--id", "missing.asset"]))
       .toThrow(/No production recipes matched/);
   });
@@ -82,28 +75,12 @@ describe("GR-3.2 production preparation pipeline", () => {
     expect(empty).toMatchObject({ kind: "empty", passable: true });
   });
 
-  it("keeps every generated island candidate pending with a seeded editable mask", async () => {
-    const index = JSON.parse(await readFile(
-      new URL("../assets-src/gr3/generated/production-index.json", import.meta.url),
-      "utf8",
-    ));
-    expect(index).toMatchObject({ formatVersion: 1, pipelineVersion: 2 });
-    expect(index.entries).toHaveLength(6);
-    for (const entry of index.entries) {
-      expect(entry.lifecycle).toBe("candidate");
-      expect(entry.layers).toHaveLength(1);
-      const draft = JSON.parse(await readFile(new URL(`../${entry.collisionDraftFile}`, import.meta.url), "utf8"));
-      expect(draft).toMatchObject({
-        recipeId: entry.id,
-        candidateFingerprint: entry.jobKey,
-        kind: "hybrid-grid-draft",
-        tileSize: 32,
-        subcellSize: 8,
-        method: "prepared-alpha-connected-shoreline-v1",
-      });
-      expect(draft.solidSubcells.length, entry.id).toBeGreaterThan(0);
-      expect(Array.isArray(draft.warnings)).toBe(true);
-    }
+  it("records the clean baseline with no generated candidates", () => {
+    expect(productionIndex).toMatchObject({
+      formatVersion: 1,
+      pipelineVersion: 2,
+      entries: [],
+    });
   });
 
   it("continues a batch after one isolated recipe failure", async () => {

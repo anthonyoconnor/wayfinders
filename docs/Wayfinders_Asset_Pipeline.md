@@ -41,12 +41,11 @@ not a migration adapter.
 ## Asset library and candidate types
 
 The `?mode=assets` library uses the same catalog, texture loader, Phaser
-factories, and collision descriptors as the game. It can browse runtime
-packages, source references, and prepared production candidates without
-creating a second simulation.
+factories, and collision descriptors as the game. Its clean baseline contains
+the home island, player boat, and fishing shoal runtime packages. Uploaded PNGs
+add prepared production candidates without creating a second simulation.
 
-Every source reference exposes guided import, and **Add PNG** starts the same
-flow for a new local image. The form reads the PNG's native canvas immediately
+**Add PNG** starts guided intake for a new local image. The form reads the PNG's native canvas immediately
 and defaults to keeping it. A solid candidate whose native canvas is not
 divisible by `32` receives an explicit warning and a one-action transparent-pad
 option to the next aligned canvas. Manual output dimensions remain available
@@ -105,7 +104,7 @@ invalidates review. A modified or missing prepared output, thumbnail, or
 generated collision draft makes the derived output stale without changing the
 input fingerprint. A failed job cannot leave another job partially updated.
 
-Guided intake copies the selected reference or uploaded PNG under
+Guided intake copies the uploaded PNG under
 `assets-src/gr3/intake`, appends its validated recipe, and runs deterministic
 preparation inside the repository-wide intake lock. Duplicate names and stable
 IDs are reported instead of overwriting an existing recipe, source, or candidate.

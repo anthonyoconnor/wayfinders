@@ -8,11 +8,7 @@
       "lifecycle": "runtime",
       "collection": "Runtime assets",
       "sortOrder": 0,
-      "tags": [
-        "island",
-        "home",
-        "runtime"
-      ],
+      "tags": ["island", "home", "runtime"],
       "provenance": {
         "kind": "runtime-package",
         "sourceFile": "public/assets/gr1/images/home-island.png"
@@ -35,9 +31,7 @@
         }
       ],
       "animations": [],
-      "collision": {
-        "mode": "preserve"
-      },
+      "collision": {"mode": "preserve"},
       "runtimeBinding": {
         "assetId": "home.island.primary",
         "collisionIntent": "preserve"
@@ -50,12 +44,7 @@
       "lifecycle": "runtime",
       "collection": "Runtime assets",
       "sortOrder": 0,
-      "tags": [
-        "vessel",
-        "player",
-        "runtime",
-        "animated"
-      ],
+      "tags": ["vessel", "player", "runtime", "animated"],
       "provenance": {
         "kind": "runtime-package",
         "sourceFile": "public/assets/gr1/images/player-boat.png"
@@ -116,9 +105,7 @@
           "directionCount": 1
         }
       ],
-      "collision": {
-        "mode": "preserve"
-      },
+      "collision": {"mode": "preserve"},
       "runtimeBinding": {
         "assetId": "player.boat.primary",
         "collisionIntent": "preserve"
@@ -131,12 +118,7 @@
       "lifecycle": "runtime",
       "collection": "Runtime assets",
       "sortOrder": 0,
-      "tags": [
-        "shoal",
-        "fishing",
-        "runtime",
-        "passable"
-      ],
+      "tags": ["shoal", "fishing", "runtime", "passable"],
       "provenance": {
         "kind": "runtime-package",
         "sourceFile": "public/assets/gr1/images/fishing-shoal.png"
@@ -159,329 +141,9 @@
         }
       ],
       "animations": [],
-      "collision": {
-        "mode": "preserve"
-      },
+      "collision": {"mode": "preserve"},
       "runtimeBinding": {
         "assetId": "shoal.fishing.primary",
-        "collisionIntent": "preserve"
-      }
-    },
-    {
-      "id": "production.island.colossal-wilderness",
-      "name": "Colossal Wilderness",
-      "family": "island",
-      "lifecycle": "source",
-      "collection": "Island production sources",
-      "sortOrder": 10,
-      "tags": [
-        "island",
-        "colossal",
-        "wilderness",
-        "source"
-      ],
-      "provenance": {
-        "kind": "selected-source",
-        "sourceFile": "assets-src/gr1/island-colossal-wilderness-source.png"
-      },
-      "layers": [
-        {
-          "id": "base",
-          "name": "Base island",
-          "role": "base",
-          "sourceFile": "assets-src/gr1/island-colossal-wilderness-source.png",
-          "defaultVisible": true,
-          "opacity": 1,
-          "blendMode": "normal",
-          "preparation": {
-            "mode": "connected-border",
-            "targetWidth": 480,
-            "targetHeight": 480,
-            "thumbnailMaximum": 192,
-            "matteColor": [
-              255,
-              0,
-              255
-            ],
-            "innerTolerance": 48,
-            "outerTolerance": 104,
-            "trimAlphaThreshold": 8,
-            "padding": 8
-          }
-        }
-      ],
-      "animations": [],
-      "collision": {
-        "mode": "shoreline-seed",
-        "tileSize": 32,
-        "subcellSize": 8
-      },
-      "runtimeBinding": {
-        "assetId": "home.island.primary",
-        "collisionIntent": "preserve"
-      }
-    },
-    {
-      "id": "production.island.large-fortified-port",
-      "name": "Large Fortified Port",
-      "family": "island",
-      "lifecycle": "source",
-      "collection": "Island production sources",
-      "sortOrder": 20,
-      "tags": [
-        "island",
-        "large",
-        "fortified",
-        "port",
-        "source"
-      ],
-      "provenance": {
-        "kind": "selected-source",
-        "sourceFile": "assets-src/gr1/island-large-fortified-port-source.png"
-      },
-      "layers": [
-        {
-          "id": "base",
-          "name": "Base island",
-          "role": "base",
-          "sourceFile": "assets-src/gr1/island-large-fortified-port-source.png",
-          "defaultVisible": true,
-          "opacity": 1,
-          "blendMode": "normal",
-          "preparation": {
-            "mode": "connected-border",
-            "targetWidth": 480,
-            "targetHeight": 480,
-            "thumbnailMaximum": 192,
-            "matteColor": [
-              255,
-              0,
-              255
-            ],
-            "innerTolerance": 48,
-            "outerTolerance": 104,
-            "trimAlphaThreshold": 8,
-            "padding": 8
-          }
-        }
-      ],
-      "animations": [],
-      "collision": {
-        "mode": "shoreline-seed",
-        "tileSize": 32,
-        "subcellSize": 8
-      },
-      "runtimeBinding": {
-        "assetId": "home.island.primary",
-        "collisionIntent": "preserve"
-      }
-    },
-    {
-      "id": "production.island.medium-abandoned-atoll",
-      "name": "Medium Abandoned Atoll",
-      "family": "island",
-      "lifecycle": "source",
-      "collection": "Island production sources",
-      "sortOrder": 30,
-      "tags": [
-        "island",
-        "medium",
-        "abandoned",
-        "atoll",
-        "source"
-      ],
-      "provenance": {
-        "kind": "selected-source",
-        "sourceFile": "assets-src/gr1/island-medium-abandoned-atoll-source.png"
-      },
-      "layers": [
-        {
-          "id": "base",
-          "name": "Base island",
-          "role": "base",
-          "sourceFile": "assets-src/gr1/island-medium-abandoned-atoll-source.png",
-          "defaultVisible": true,
-          "opacity": 1,
-          "blendMode": "normal",
-          "preparation": {
-            "mode": "connected-border",
-            "targetWidth": 480,
-            "targetHeight": 480,
-            "thumbnailMaximum": 192,
-            "matteColor": [
-              255,
-              0,
-              255
-            ],
-            "innerTolerance": 48,
-            "outerTolerance": 104,
-            "trimAlphaThreshold": 8,
-            "padding": 8
-          }
-        }
-      ],
-      "animations": [],
-      "collision": {
-        "mode": "shoreline-seed",
-        "tileSize": 32,
-        "subcellSize": 8
-      },
-      "runtimeBinding": {
-        "assetId": "home.island.primary",
-        "collisionIntent": "preserve"
-      }
-    },
-    {
-      "id": "production.island.small-fishing-cay",
-      "name": "Small Fishing Cay",
-      "family": "island",
-      "lifecycle": "source",
-      "collection": "Island production sources",
-      "sortOrder": 40,
-      "tags": [
-        "island",
-        "small",
-        "fishing",
-        "cay",
-        "source"
-      ],
-      "provenance": {
-        "kind": "selected-source",
-        "sourceFile": "assets-src/gr1/island-small-fishing-cay-source.png"
-      },
-      "layers": [
-        {
-          "id": "base",
-          "name": "Base island",
-          "role": "base",
-          "sourceFile": "assets-src/gr1/island-small-fishing-cay-source.png",
-          "defaultVisible": true,
-          "opacity": 1,
-          "blendMode": "normal",
-          "preparation": {
-            "mode": "connected-border",
-            "targetWidth": 480,
-            "targetHeight": 480,
-            "thumbnailMaximum": 192,
-            "matteColor": [
-              255,
-              0,
-              255
-            ],
-            "innerTolerance": 48,
-            "outerTolerance": 104,
-            "trimAlphaThreshold": 8,
-            "padding": 8
-          }
-        }
-      ],
-      "animations": [],
-      "collision": {
-        "mode": "shoreline-seed",
-        "tileSize": 32,
-        "subcellSize": 8
-      },
-      "runtimeBinding": {
-        "assetId": "home.island.primary",
-        "collisionIntent": "preserve"
-      }
-    },
-    {
-      "id": "production.island.tiny-volcanic-stack",
-      "name": "Tiny Volcanic Stack",
-      "family": "island",
-      "lifecycle": "source",
-      "collection": "Island production sources",
-      "sortOrder": 50,
-      "tags": [
-        "island",
-        "tiny",
-        "volcanic",
-        "stack",
-        "source"
-      ],
-      "provenance": {
-        "kind": "selected-source",
-        "sourceFile": "assets-src/gr1/island-tiny-volcanic-stack-source.png"
-      },
-      "layers": [
-        {
-          "id": "base",
-          "name": "Base island",
-          "role": "base",
-          "sourceFile": "assets-src/gr1/island-tiny-volcanic-stack-source.png",
-          "defaultVisible": true,
-          "opacity": 1,
-          "blendMode": "normal",
-          "preparation": {
-            "mode": "connected-border",
-            "targetWidth": 480,
-            "targetHeight": 480,
-            "thumbnailMaximum": 192,
-            "matteColor": [
-              255,
-              0,
-              255
-            ],
-            "innerTolerance": 48,
-            "outerTolerance": 104,
-            "trimAlphaThreshold": 8,
-            "padding": 8
-          }
-        }
-      ],
-      "animations": [],
-      "collision": {
-        "mode": "shoreline-seed",
-        "tileSize": 32,
-        "subcellSize": 8
-      },
-      "runtimeBinding": {
-        "assetId": "home.island.primary",
-        "collisionIntent": "preserve"
-      }
-    },
-    {
-      "id": "production.island.volcano",
-      "name": "volcano",
-      "family": "island",
-      "lifecycle": "source",
-      "collection": "island production sources",
-      "sortOrder": 60,
-      "tags": [
-        "island",
-        "volcano",
-        "source"
-      ],
-      "provenance": {
-        "kind": "selected-source",
-        "sourceFile": "assets-src/gr3/intake/production-island-volcano-source.png"
-      },
-      "layers": [
-        {
-          "id": "base",
-          "name": "Base visual",
-          "role": "base",
-          "sourceFile": "assets-src/gr3/intake/production-island-volcano-source.png",
-          "defaultVisible": true,
-          "opacity": 1,
-          "blendMode": "normal",
-          "preparation": {
-            "mode": "preserve",
-            "targetWidth": 480,
-            "targetHeight": 480,
-            "thumbnailMaximum": 192
-          }
-        }
-      ],
-      "animations": [],
-      "collision": {
-        "mode": "shoreline-seed",
-        "tileSize": 32,
-        "subcellSize": 8
-      },
-      "runtimeBinding": {
-        "assetId": "home.island.primary",
         "collisionIntent": "preserve"
       }
     }
