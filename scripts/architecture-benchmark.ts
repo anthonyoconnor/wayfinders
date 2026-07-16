@@ -304,13 +304,13 @@ function benchmarkProfile(
     let baselineResult = baselineGuidance.calculate(simulation.ship);
     const start = findEastboundRun(simulation, warmupCrossings + updateSamples + 1);
     if (!simulation.teleport(start)) throw new Error("Tile-entry fixture teleport was rejected");
-    baselineResult = baselineGuidance.recalculate(baselineResult, simulation.ship);
+    baselineResult = baselineGuidance.calculate(simulation.ship);
     drainForwardGuidance(simulation);
     assertEquivalentGuidance(simulation, baselineResult);
     for (let warmup = 0; warmup < warmupCrossings; warmup++) {
       const movement = simulation.update({ turn: 0, throttle: 1 }, 0.4);
       if (!movement.tileChanged) throw new Error("Tile-entry warmup did not cross a tile");
-      baselineResult = baselineGuidance.recalculate(baselineResult, simulation.ship);
+      baselineResult = baselineGuidance.calculate(simulation.ship);
       drainForwardGuidance(simulation);
       assertEquivalentGuidance(simulation, baselineResult);
     }
@@ -322,7 +322,7 @@ function benchmarkProfile(
       if (!movement.tileChanged) throw new Error("Tile-entry fixture did not cross a tile");
       tileTrace.appendFrom(trace);
       trace.clear();
-      baselineResult = baselineGuidance.recalculate(baselineResult, simulation.ship);
+      baselineResult = baselineGuidance.calculate(simulation.ship);
       drainForwardGuidance(simulation);
       assertEquivalentGuidance(simulation, baselineResult);
       tileTrace.appendFrom(trace);
@@ -332,7 +332,7 @@ function benchmarkProfile(
     for (let requestIndex = 0; requestIndex < guidanceWarmups + guidanceSamples; requestIndex++) {
       simulation.refreshRiskOverlays();
       const baselineStartedAt = performance.now();
-      baselineResult = baselineGuidance.recalculate(baselineResult, simulation.ship);
+      baselineResult = baselineGuidance.calculate(simulation.ship);
       const baselineDuration = performance.now() - baselineStartedAt;
       const request = drainForwardGuidance(
         simulation,

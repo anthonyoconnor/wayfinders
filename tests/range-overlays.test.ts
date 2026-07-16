@@ -146,29 +146,6 @@ it("clears stale Unknown cells when an expanded search sees a changed knowledge 
   expect(result.frontierCount).toBe(countMask(result.presentationMask));
 });
 
-it("reuses its world-sized masks when recalculating after a tile crossing", () => {
-  const world = new WorldGrid(9, 3, 4);
-  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
-  world.setKnowledge(0, 1, KnowledgeState.Supported);
-  const ship = shipAt(1, 1, 4);
-  const system = new ForwardRangeSystem(world, makeConfig());
-  const result = system.calculate(ship);
-  const mask = result.mask;
-  const presentationMask = result.presentationMask;
-
-  world.setKnowledge(1, 1, KnowledgeState.Personal, 1);
-  ship.currentTileX = 2;
-  const recalculated = system.recalculate(result, ship);
-  const fresh = new ForwardRangeSystem(world, makeConfig()).calculate(ship);
-
-  expect(recalculated).toBe(result);
-  expect(recalculated.mask).toBe(mask);
-  expect(recalculated.presentationMask).toBe(presentationMask);
-  expect(recalculated.mask).toEqual(fresh.mask);
-  expect(recalculated.presentationMask).toEqual(fresh.presentationMask);
-  expect(recalculated.candidateIndices).toEqual(fresh.candidateIndices);
-});
-
 it("stops at known blockers without leaking hidden terrain into Unknown cost", () => {
   const config = makeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } });
   const world = new WorldGrid(5, 1, 3);

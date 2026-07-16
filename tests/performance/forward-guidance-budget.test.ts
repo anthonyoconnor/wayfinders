@@ -44,17 +44,13 @@ describe("cooperative ForwardGuidance budget", () => {
     const samples = 100;
     const simulation = new GameSimulation(createWorldProfileConfig(profile));
     const oracle = new ForwardRangeSystem(simulation.world, simulation.config);
-    let expected = oracle.calculate(simulation.ship);
+    const expected = oracle.calculate(simulation.ship);
     const sliceDurations: number[] = [];
-    const baselineDurations: number[] = [];
     const requestCpuDurations: number[] = [];
     const slicesPerRequest: number[] = [];
 
     for (let request = 0; request < warmups + samples; request++) {
       simulation.refreshRiskOverlays();
-      const baselineStartedAt = performance.now();
-      expected = oracle.recalculate(expected, simulation.ship);
-      const baselineDuration = performance.now() - baselineStartedAt;
       let requestCpu = 0;
       let slices = 0;
       for (; slices < 1_000; slices++) {
@@ -67,7 +63,6 @@ describe("cooperative ForwardGuidance budget", () => {
       }
       if (slices >= 1_000) throw new Error(`${profile} guidance failed to drain`);
       if (request >= warmups) {
-        baselineDurations.push(baselineDuration);
         requestCpuDurations.push(requestCpu);
         slicesPerRequest.push(slices + 1);
       }
@@ -77,13 +72,11 @@ describe("cooperative ForwardGuidance budget", () => {
     }
 
     const slices = distribution(sliceDurations);
-    const baseline = distribution(baselineDurations);
     const requestCpu = distribution(requestCpuDurations);
     const frameSlices = distribution(slicesPerRequest);
     const evidence = {
       profile,
       samples,
-      baselineSynchronousMs: baseline,
       mainThreadSliceMs: slices,
       requestCpuMs: requestCpu,
       slicesPerRequest: frameSlices,

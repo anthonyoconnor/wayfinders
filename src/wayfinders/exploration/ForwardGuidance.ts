@@ -11,7 +11,6 @@ export type ForwardGuidanceShip = Pick<
 export interface ForwardGuidance {
   setWorld(world: WorldGrid): void;
   calculate(ship: ForwardGuidanceShip): ForwardRangeResult;
-  recalculate(result: ForwardRangeResult, ship: ForwardGuidanceShip): ForwardRangeResult;
   beginTask(
     published: ForwardRangeResult,
     ship: ForwardGuidanceShip,

@@ -106,8 +106,6 @@ export class ForwardRangeSystem implements ForwardGuidance {
   private incrementalSearchWorkspace = new BucketedCostSearchWorkspace();
   private integerCostScale = 1;
   private readonly integerTravelCosts = new Int32Array(3);
-  private candidateStamps = new Uint32Array(0);
-  private candidateStamp = 0;
   private readonly startNodes = [0];
   private activeIncrementalTask?: IncrementalForwardState;
   private readonly incrementalBufferPool: ForwardResultBuffers[] = [];
@@ -154,8 +152,6 @@ export class ForwardRangeSystem implements ForwardGuidance {
     this.world = world;
     this.graph = new GridGraph(world, this.config);
     this.budgetCaches = new WeakMap();
-    this.candidateStamps = new Uint32Array(0);
-    this.candidateStamp = 0;
     this.incrementalSearchWorkspace = new BucketedCostSearchWorkspace();
     this.incrementalBufferPool.length = 0;
     this.incrementalBuffersAllocated = 0;
@@ -166,22 +162,6 @@ export class ForwardRangeSystem implements ForwardGuidance {
   calculate(ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">): ForwardRangeResult {
     this.refreshIntegerTravelCosts();
     return this.calculateResult(ship);
-  }
-
-  /**
-   * Recalculates after a tile/knowledge change while retaining the two
-   * world-sized masks. This is the hot-path counterpart to `calculate` for
-   * long-lived simulations.
-   */
-  recalculate(
-    result: ForwardRangeResult,
-    ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">,
-  ): ForwardRangeResult {
-    this.refreshIntegerTravelCosts();
-    if (!this.budgetCaches.has(result)) {
-      throw new Error("Forward range result was not calculated by this system");
-    }
-    return this.calculateResult(ship, result);
   }
 
   /**
@@ -275,7 +255,6 @@ export class ForwardRangeSystem implements ForwardGuidance {
 
   private calculateResult(
     ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">,
-    reusable?: ForwardRangeResult,
   ): ForwardRangeResult {
     if (!this.world.inBounds(ship.currentTileX, ship.currentTileY)) {
       throw new RangeError("Ship tile is outside the world");
@@ -289,27 +268,13 @@ export class ForwardRangeSystem implements ForwardGuidance {
     this.startNodes[0] = this.world.index(ship.currentTileX, ship.currentTileY);
     const result = this.search(budget);
 
-    const mask = reusable?.mask.length === this.world.tileCount
-      ? reusable.mask
-      : new Uint8Array(this.world.tileCount);
-    const presentationMask = reusable?.presentationMask.length === this.world.tileCount
-      ? reusable.presentationMask
-      : new Uint8Array(this.world.tileCount);
-    if (reusable && presentationMask === reusable.presentationMask) {
-      for (const index of reusable.presentationCandidateIndices) presentationMask[index] = 0;
-    }
-    const existingCache = reusable ? this.budgetCaches.get(reusable) : undefined;
-    const previousCandidateIndices = reusable?.candidateIndices;
-    const candidateIndices = existingCache?.spareCandidateIndices ?? [];
-    candidateIndices.length = 0;
-    const groupCosts = existingCache?.groupCosts ?? [];
-    const groupEnds = existingCache?.groupEnds ?? [];
-    groupCosts.length = 0;
-    groupEnds.length = 0;
-    const stamp = this.nextCandidateStamp();
+    const mask = new Uint8Array(this.world.tileCount);
+    const presentationMask = new Uint8Array(this.world.tileCount);
+    const candidateIndices: number[] = [];
+    const groupCosts: number[] = [];
+    const groupEnds: number[] = [];
     let reachableCount = 0;
     let previousCost: number | undefined;
-    let logicalChanged = reusable === undefined;
     for (let settled = 0; settled < result.settledCount; settled++) {
       const index = result.settledIndices[settled];
       if (this.world.getKnowledgeAtIndex(index) !== KnowledgeState.Unknown) continue;
@@ -321,21 +286,12 @@ export class ForwardRangeSystem implements ForwardGuidance {
         groupCosts.push(cost);
         previousCost = cost;
       }
-      if (mask[index] === 0) logicalChanged = true;
       mask[index] = 1;
-      this.candidateStamps[index] = stamp;
       candidateIndices.push(index);
       reachableCount++;
     }
     if (previousCost !== undefined) groupEnds.push(candidateIndices.length);
-    if (reusable && mask === reusable.mask) {
-      for (const index of reusable.candidateIndices) {
-        if (this.candidateStamps[index] === stamp) continue;
-        mask[index] = 0;
-        logicalChanged = true;
-      }
-    }
-    const nextValues: ForwardRangeResult = {
+    const forwardResult: ForwardRangeResult = {
       mask,
       presentationMask,
       costs: result.costs,
@@ -346,12 +302,8 @@ export class ForwardRangeSystem implements ForwardGuidance {
       coneHalfAngleDegrees: this.config.overlays.forwardConeHalfAngleDegrees,
       candidateIndices,
       presentationCandidateIndices: [],
-      logicalRevision: reusable
-        ? reusable.logicalRevision + (logicalChanged ? 1 : 0)
-        : 1,
+      logicalRevision: 1,
     };
-    const forwardResult = reusable ?? nextValues;
-    if (reusable) Object.assign(reusable, nextValues);
     const radians = presentationHeading * Math.PI / 180;
     this.budgetCaches.set(forwardResult, {
       groupCosts,
@@ -364,10 +316,8 @@ export class ForwardRangeSystem implements ForwardGuidance {
       headingCosine: Math.cos(radians),
       headingSine: Math.sin(radians),
       coneCosine: Math.cos(this.config.overlays.forwardConeHalfAngleDegrees * Math.PI / 180),
-      spareCandidateIndices: previousCandidateIndices
-        ? previousCandidateIndices as number[]
-        : [],
-      sparePresentationIndices: existingCache?.sparePresentationIndices ?? [],
+      spareCandidateIndices: [],
+      sparePresentationIndices: [],
     });
     this.refreshPresentationFrontier(forwardResult, this.budgetCaches.get(forwardResult)!);
     return forwardResult;
@@ -575,19 +525,6 @@ export class ForwardRangeSystem implements ForwardGuidance {
   private normalizeHeading(heading: number): number {
     if (!Number.isFinite(heading)) throw new RangeError("Ship heading must be finite");
     return ((heading % 360) + 360) % 360;
-  }
-
-  private nextCandidateStamp(): number {
-    if (this.candidateStamps.length !== this.world.tileCount) {
-      this.candidateStamps = new Uint32Array(this.world.tileCount);
-      this.candidateStamp = 0;
-    }
-    this.candidateStamp++;
-    if (this.candidateStamp === 0xffff_ffff) {
-      this.candidateStamps.fill(0);
-      this.candidateStamp = 1;
-    }
-    return this.candidateStamp;
   }
 
   private stepIncrementalTask(
