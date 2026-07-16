@@ -1,13 +1,14 @@
 # Wayfinders architecture map
 
 This map is the first stop for agents deciding where a change belongs. It
-describes current ownership and the dependency direction being introduced by
-the AM architecture track. Detailed implemented gameplay contracts remain in
-Wayfinders_Technical_Design.md.
+describes the settled ownership and dependency direction after AM-0 through
+AM-6 and their consolidation pass. Detailed implemented gameplay contracts
+remain in Wayfinders_Technical_Design.md.
 
 ## Startup order
 
-1. src/main.ts resolves application mode and creates the session configuration.
+1. src/main.ts resolves application mode and supplies the validated prototype
+   tuning configuration.
 2. GameSimulation plans a versioned WorldManifest, rasterizes logical tiles,
    builds one WorldAnalysisIndex, and seeds features from that shared index.
 3. WayfindersScene creates Phaser presentation and translates input into
@@ -20,7 +21,7 @@ Wayfinders_Technical_Design.md.
 
 | Area | Owns | Must not own |
 | --- | --- | --- |
-| config | validation and immutable session values | live gameplay state |
+| config | validated prototype tuning values and change notifications | live gameplay state |
 | world | logical tiles, generation, manifests and spatial indexes | Phaser objects |
 | navigation | movement authority, topology and route/range queries | feature rewards or UI |
 | exploration/features | feature state, commands, selectors and mutation results | scene lifecycle |
@@ -48,19 +49,19 @@ cross from assets into navigation, through an explicit registered contract.
 Presentation may import public domain contracts but never private feature state.
 Features may not import Phaser.
 
-## Current compatibility seams
+## Settled runtime seams
 
-- GameSession is the command/read-model boundary. It returns typed
-  SessionMutation revision flags and retains `compatibilitySimulation` only so
-  presentation can migrate incrementally.
-- GameSimulation remains the gameplay composition facade. New feature code is
-  registered through a feature public barrel; fishing is the reference slice.
-- SessionConfig is an immutable, isolated startup value. SessionBuilder and
-  tests/support/TestSessionBuilder are the supported construction paths.
-- prototypeConfig remains only as the live developer-panel compatibility
-  input. GameSimulation no longer changes it during regeneration.
-- WorldGrid chunks are storage units, not presentation activation. AM-3 and AM-5
-  separate descriptor lookup from the later active-chunk lifecycle boundary.
+- GameSimulation is the gameplay composition root and public command/read-model
+  surface. It owns deterministic cross-feature ordering. Feature-specific
+  behavior is registered through a public feature barrel; fishing is the
+  reference slice.
+- prototypeConfig is the deliberate live developer-tuning store. Validation is
+  transactional through `patchPrototypeConfig`; tests use isolated values from
+  `makeConfig`. World-shape changes take effect through explicit regeneration,
+  and systems that support live tuning refresh their derived values.
+- WorldGrid chunks are compact authoritative storage units, not presentation
+  activation. Descriptor lookup and the active-chunk presentation lifecycle are
+  separate concerns.
 - WorldSpatialIndex is the reusable deterministic chunk-bucket index.
   WorldDescriptorRegistry is the composition-owned heterogeneous adapter;
   feature systems still perform exact sight, range, state and approach checks.
@@ -86,15 +87,17 @@ Features may not import Phaser.
   inputs, reclips the sparse frontier to the latest heading, and atomically
   swaps a completed inactive result buffer. MovementAuthority and ReturnQuery
   remain synchronous authority; ForwardGuidance is derived presentation data.
-- ForwardRangeSystem owns the exact synchronous oracle, resumable task, and two
-  reusable inactive buffers. BucketedCostSearch owns resumable queue mechanics.
+- ForwardRangeSystem owns the exact synchronous query, the sole resumable
+  runtime task, and two reusable inactive buffers. Provision travel costs are
+  validated to an exact integer scale of at most four decimal places;
+  BucketedCostSearch owns resumable queue mechanics.
   A guidance behavior change belongs there and in focused equivalence tests;
   scheduling/publication policy belongs in GameSimulation. A worker or route
   hierarchy requires a new measured budget miss and is not a default extension.
 
 ## Feature folder convention
 
-Each migrated feature lives under `src/wayfinders/features/<feature>` and has
+Each feature package lives under `src/wayfinders/features/<feature>` and has
 one public `index.ts`. Contracts and renderer-neutral presentation adapters are
 public seams. Commands, selectors, state and system modules are private details
 re-exported deliberately from the public index when needed. Feature unit tests

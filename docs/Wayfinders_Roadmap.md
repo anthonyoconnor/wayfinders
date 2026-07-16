@@ -73,6 +73,11 @@ main-thread guidance work from a 4.44 ms synchronous-oracle p95 to a 3.17 ms
 slice p95, so hierarchy and workers remain deferred. `AM-7` remains deferred
 under the standing gameplay-saving policy.
 
+The post-milestone consolidation removed the unused session wrapper stack,
+renderer/overlay migration shims, test-only future resource cache, and the
+ForwardGuidance synchronous/deferred switch. The architecture track therefore
+has no active transition facade or dual runtime path.
+
 ## Architecture and scale track
 
 Status: implemented; `AM-0` through `AM-6` are complete.
@@ -104,9 +109,10 @@ tile-entry and rendered-frame budgets before changing camera or shoreline feel.
 
 Status: implemented.
 
-Introduce immutable session configuration, small command/read-model contracts,
-typed mutation effects and one representative feature extraction while keeping
-compatibility facades around the current simulation and scene.
+Keep GameSimulation as the explicit composition and command/read-model boundary,
+pass configuration explicitly to extracted systems, add typed mutation effects,
+and establish the fishing feature's public ownership contract. The consolidation
+removed unused wrapper facades after those stable seams were proven.
 
 ### AM-3 — Local-change scaling
 
@@ -134,11 +140,11 @@ coast-to-coast large-world voyage.
 
 ### AM-6 — Evidence-gated hierarchy or workers
 
-Status: implemented. Exact ForwardGuidance now advances as a bounded,
-cancellable/coalesced task and publishes only complete current-revision
-results. P2 slice p95 is 3.17 ms against the 4 ms gate; movement and return
-ordering remain synchronous on the simulation thread. Worker and hierarchy
-complexity were not justified by the measured result.
+Status: implemented and consolidated. Exact ForwardGuidance now advances as the
+sole bounded, cancellable/coalesced task and publishes only complete
+current-revision results. P2 slice p95 is 3.17 ms against the 4 ms gate;
+movement and return ordering remain synchronous on the simulation thread.
+Worker and hierarchy complexity were not justified by the measured result.
 
 ### AM-7 — Persistence
 
@@ -555,7 +561,7 @@ flowchart LR
     AM2 --> AM3["AM-3 local-change scaling"]
     AM3 --> AM4["AM-4 high-density world pipeline"]
     AM4 --> AM5["AM-5 active-chunk presentation"]
-    AM5 -. "only if measured" .-> AM6["AM-6 hierarchy or workers"]
+    AM5 --> AM6["AM-6 cooperative guidance"]
     GR34 --> GR35["GR-3.5 guided UI intake"]
     GR35 --> GR36["GR-3.6 collision seed"]
     GR36 --> GR37["GR-3.7 pending candidate authoring"]
@@ -593,10 +599,9 @@ serialized gate; isolated tooling must not fork rendering or gameplay rules.
 
 ## Active authorization boundary
 
-The user authorized `GR-3.1` through `GR-3.4` as one ordered implementation
-batch. `GR-2.6` is skipped for now. A new gameplay minor, automatic broad
-runtime rollout, new world-placement authority or scope beyond this prototype
-still requires explicit authorization. The `AM-0` through `AM-5` architecture
-sequence is recorded as upcoming work, not as work already started; its detailed
-scope and gates are owned by `architecture_milestones.md`. `AM-6` remains
-evidence-gated and `AM-7` remains deferred.
+The user authorized and completed `GR-3.1` through `GR-3.4` and `AM-0` through
+`AM-6` as ordered implementation batches. `GR-2.6` is skipped for now. A new
+gameplay minor, `GR-3.5` through `GR-3.8`, automatic broad runtime rollout, new
+world-placement authority, or scope beyond this prototype still requires
+explicit authorization. `AM-7` remains deferred under the standing
+gameplay-saving policy.

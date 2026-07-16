@@ -10,9 +10,9 @@ surface; other files in this folder are feature-private implementation details.
 
 The application composition root constructs the feature once with
 `createGeneratedFishingFeature({ world, seed, homeReturnTile, config })`, where
-`config` is session-owned. Tests and tools can use `createFishingFeature` with
-small explicit definitions and do not need a generated world or
-`GameSimulation`.
+`config` is supplied by the composition root. Tests and tools can use
+`createFishingFeature` with small explicit definitions and do not need a
+generated world or `GameSimulation`.
 
 Queries and expedition lifecycle methods are part of the stable feature API.
 Player actions use `execute`, whose result includes typed mutation effects for
