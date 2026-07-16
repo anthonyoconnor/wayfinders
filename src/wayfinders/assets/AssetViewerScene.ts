@@ -22,7 +22,7 @@ import {
   assetLibraryEntryById,
   type AssetLibraryEntry,
   type AssetLibraryImageLayer,
-  type IslandReferenceLibraryEntry,
+  type ReferenceImageLibraryEntry,
   type ProductionCandidateLibraryEntry,
 } from "./AssetLibraryCatalog";
 import {
@@ -133,7 +133,7 @@ const AUTHORITATIVE_SHIP_HALF_EXTENT = PLAYER_PROFILE.kind === "box"
 const COLLISION_SAVE_ROUTE = "/__wayfinders/collision/save";
 const ASSET_REVIEW_ROUTE = "/__wayfinders/assets/review";
 
-type StandaloneLibraryEntry = IslandReferenceLibraryEntry | ProductionCandidateLibraryEntry;
+type StandaloneLibraryEntry = ReferenceImageLibraryEntry | ProductionCandidateLibraryEntry;
 type ProductionPreviewMode = "source" | "prepared" | "compare";
 type ProductionReviewState = "pending" | "approved" | "rejected";
 
@@ -311,7 +311,7 @@ export class AssetViewerScene extends Phaser.Scene {
     return entry;
   }
 
-  private selectedReferenceEntry(): Readonly<IslandReferenceLibraryEntry> | undefined {
+  private selectedReferenceEntry(): Readonly<ReferenceImageLibraryEntry> | undefined {
     const entry = this.selectedLibraryEntry();
     return entry.entryType === "reference-image" ? entry : undefined;
   }

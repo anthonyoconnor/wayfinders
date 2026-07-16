@@ -499,7 +499,7 @@ function authoredEntries(): AuthoredPackageLibraryEntry[] {
 }
 
 /** Converts a Vite glob result into a strictly reference-only island entry. */
-export function islandReferenceEntry(path: string, url: string): IslandReferenceLibraryEntry {
+export function islandReferenceEntry(path: string, url: string): ReferenceImageLibraryEntry {
   const normalizedPath = path.replaceAll("\\", "/");
   const fileName = normalizedPath.split("/").at(-1) ?? normalizedPath;
   const match = /^island-(\d+)-(.+)-(uninhabited|inhabited)\.png$/u.exec(fileName);
