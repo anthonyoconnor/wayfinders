@@ -9,7 +9,13 @@ import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState } from "../world/TileData";
 import { WorldGrid } from "../world/WorldGrid";
 import { availableProvisionUnits, knowledgeTravelCost } from "./ProvisionSystem";
-import type { ForwardGuidance } from "./ForwardGuidance";
+import type {
+  ForwardGuidance,
+  ForwardGuidanceShip,
+  ForwardGuidanceTask,
+  ForwardGuidanceTaskStep,
+  ForwardGuidanceWorkBudget,
+} from "./ForwardGuidance";
 
 export interface ForwardRangeResult {
   /** 1 only for reachable cells which are currently Unknown. */
@@ -48,16 +54,65 @@ interface ForwardBudgetCache {
   sparePresentationIndices: number[];
 }
 
+interface ForwardResultBuffers {
+  mask: Uint8Array;
+  presentationMask: Uint8Array;
+  costs: Float64Array;
+  candidateIndices: number[];
+  presentationCandidateIndices: number[];
+  finiteCostIndices: number[];
+}
+
+type IncrementalForwardStage =
+  | "clear-mask"
+  | "clear-presentation"
+  | "clear-costs"
+  | "search"
+  | "collect"
+  | "compare-previous"
+  | "frontier"
+  | "complete";
+
+interface IncrementalForwardState {
+  readonly published: ForwardRangeResult;
+  readonly ship: ForwardGuidanceShip;
+  readonly buffer: ForwardResultBuffers;
+  readonly budget: number;
+  readonly presentationHeading: number;
+  readonly groupCosts: number[];
+  readonly groupEnds: number[];
+  stage: IncrementalForwardStage;
+  cancelled: boolean;
+  bufferReleased: boolean;
+  maskClearPosition: number;
+  presentationClearPosition: number;
+  costClearPosition: number;
+  collectPosition: number;
+  comparePosition: number;
+  frontierPosition: number;
+  frontierEnd: number;
+  previousCost?: number;
+  logicalChanged: boolean;
+  searchResult?: Pick<BucketedCostSearchResult, "costs" | "settledIndices" | "settledCount">;
+  cache?: ForwardBudgetCache;
+  result?: ForwardRangeResult;
+}
+
 export class ForwardRangeSystem implements ForwardGuidance {
   private graph: GridGraph;
   private budgetCaches = new WeakMap<ForwardRangeResult, ForwardBudgetCache>();
   private readonly searchWorkspace = new DijkstraWorkspace();
   private readonly bucketedSearchWorkspace = new BucketedCostSearchWorkspace();
+  private incrementalSearchWorkspace = new BucketedCostSearchWorkspace();
   private readonly integerCostScale: number | undefined;
   private readonly integerTravelCosts = new Int32Array(3);
   private candidateStamps = new Uint32Array(0);
   private candidateStamp = 0;
   private readonly startNodes = [0];
+  private activeIncrementalTask?: IncrementalForwardState;
+  private readonly incrementalBufferPool: ForwardResultBuffers[] = [];
+  private readonly resultBuffers = new WeakMap<ForwardRangeResult, ForwardResultBuffers>();
+  private incrementalBuffersAllocated = 0;
   private relaxNeighbor: (neighbor: number, traversalCost: number) => void = () => undefined;
   private readonly visitGraphNeighbor = (neighbor: number): void => {
     const knowledge = this.world.getKnowledgeAtIndex(neighbor);
@@ -102,14 +157,20 @@ export class ForwardRangeSystem implements ForwardGuidance {
         knowledgeTravelCost(KnowledgeState.Supported, config) * this.integerCostScale,
       );
     }
+    this.prewarmIncrementalResources();
   }
 
   setWorld(world: WorldGrid): void {
+    this.cancelActiveIncrementalTask();
     this.world = world;
     this.graph = new GridGraph(world, this.config);
     this.budgetCaches = new WeakMap();
     this.candidateStamps = new Uint32Array(0);
     this.candidateStamp = 0;
+    this.incrementalSearchWorkspace = new BucketedCostSearchWorkspace();
+    this.incrementalBufferPool.length = 0;
+    this.incrementalBuffersAllocated = 0;
+    this.prewarmIncrementalResources();
   }
 
   calculate(ship: Pick<ShipState, "currentTileX" | "currentTileY" | "heading" | "provisions" | "provisionAccumulator">): ForwardRangeResult {
@@ -129,6 +190,116 @@ export class ForwardRangeSystem implements ForwardGuidance {
       throw new Error("Forward range result was not calculated by this system");
     }
     return this.calculateResult(ship, result);
+  }
+
+  /**
+   * Starts exact forward guidance in an inactive buffer. The published result
+   * is read-only until a completed task is atomically adopted by the caller.
+   */
+  beginTask(
+    published: ForwardRangeResult,
+    ship: ForwardGuidanceShip,
+  ): ForwardGuidanceTask {
+    this.cancelActiveIncrementalTask();
+    if (!this.world.inBounds(ship.currentTileX, ship.currentTileY)) {
+      throw new RangeError("Ship tile is outside the world");
+    }
+    this.validateCone();
+    const snapshot: ForwardGuidanceShip = Object.freeze({
+      currentTileX: ship.currentTileX,
+      currentTileY: ship.currentTileY,
+      heading: ship.heading,
+      provisions: ship.provisions,
+      provisionAccumulator: ship.provisionAccumulator,
+    });
+
+    // Arbitrary developer-tuned costs retain the exact heap implementation as
+    // a deterministic compatibility fallback. Production profiles all use the
+    // resumable integer-cost path selected by AM-6.
+    if (this.integerCostScale === undefined) {
+      let cancelled = false;
+      let completed = false;
+      return {
+        cancel: () => {
+          cancelled = true;
+        },
+        step: (_budget: ForwardGuidanceWorkBudget): ForwardGuidanceTaskStep => {
+          if (cancelled) return { status: "cancelled", workUnits: 0 };
+          if (completed) throw new Error("Forward guidance task is already complete");
+          completed = true;
+          const result = this.calculate(snapshot);
+          result.logicalRevision = published.logicalRevision
+            + (this.sameLogicalMask(published, result) ? 0 : 1);
+          return { status: "complete", workUnits: 1, result };
+        },
+      };
+    }
+
+    const buffer = this.acquireIncrementalBuffer();
+    const budget = availableProvisionUnits(snapshot);
+    const state: IncrementalForwardState = {
+      published,
+      ship: snapshot,
+      buffer,
+      budget,
+      presentationHeading: this.normalizeHeading(snapshot.heading),
+      groupCosts: [],
+      groupEnds: [],
+      stage: "clear-mask",
+      cancelled: false,
+      bufferReleased: false,
+      maskClearPosition: 0,
+      presentationClearPosition: 0,
+      costClearPosition: 0,
+      collectPosition: 0,
+      comparePosition: 0,
+      frontierPosition: 0,
+      frontierEnd: 0,
+      logicalChanged: false,
+    };
+    this.startNodes[0] = this.world.index(snapshot.currentTileX, snapshot.currentTileY);
+    this.incrementalSearchWorkspace.begin({
+      nodeCount: this.world.tileCount,
+      start: this.startNodes[0],
+      maxCostUnits: Math.floor(budget * this.integerCostScale + 1e-9),
+      unitScale: this.integerCostScale,
+      forEachNeighbor: this.forEachIntegerSearchNeighbor,
+    });
+    this.activeIncrementalTask = state;
+    return {
+      cancel: () => this.cancelIncrementalTask(state),
+      step: (workBudget) => this.stepIncrementalTask(state, workBudget),
+    };
+  }
+
+  /** Returns an obsolete, unpublished buffer to the bounded two-slot pool. */
+  releaseResult(result: ForwardRangeResult): void {
+    const buffer = this.resultBuffers.get(result);
+    if (!buffer) return;
+    this.resultBuffers.delete(result);
+    if (
+      buffer.mask.length !== this.world.tileCount
+      || buffer.costs.length !== this.world.tileCount
+      || buffer.presentationMask.length !== this.world.tileCount
+      || result.mask !== buffer.mask
+      || result.presentationMask !== buffer.presentationMask
+      || result.costs !== buffer.costs
+      || result.candidateIndices !== buffer.candidateIndices
+      || result.presentationCandidateIndices !== buffer.presentationCandidateIndices
+    ) return;
+    this.releaseIncrementalBuffer(buffer);
+  }
+
+  incrementalResourceStats(): {
+    readonly buffersAllocated: number;
+    readonly pooledBuffers: number;
+    readonly taskActive: boolean;
+  } {
+    return {
+      buffersAllocated: this.incrementalBuffersAllocated,
+      pooledBuffers: this.incrementalBufferPool.length,
+      taskActive: this.activeIncrementalTask !== undefined,
+    };
   }
 
   private calculateResult(
@@ -446,6 +617,261 @@ export class ForwardRangeSystem implements ForwardGuidance {
       this.candidateStamp = 1;
     }
     return this.candidateStamp;
+  }
+
+  private stepIncrementalTask(
+    state: IncrementalForwardState,
+    budget: ForwardGuidanceWorkBudget,
+  ): ForwardGuidanceTaskStep {
+    if (!Number.isSafeInteger(budget.maxWorkUnits) || budget.maxWorkUnits <= 0) {
+      throw new RangeError("maxWorkUnits must be a positive safe integer");
+    }
+    if (state.cancelled) return { status: "cancelled", workUnits: 0 };
+    if (state.stage === "complete") {
+      if (!state.result) throw new Error("Completed guidance task has no result");
+      return { status: "complete", workUnits: 0, result: state.result };
+    }
+    if (this.activeIncrementalTask !== state) {
+      return { status: "cancelled", workUnits: 0 };
+    }
+
+    let workUnits = 0;
+    const shouldStop = (): boolean => (
+      workUnits >= budget.maxWorkUnits
+      || (workUnits > 0 && workUnits % 32 === 0 && budget.shouldYield?.() === true)
+    );
+
+    while (!shouldStop()) {
+      if (state.stage === "clear-mask") {
+        if (state.maskClearPosition < state.buffer.candidateIndices.length) {
+          state.buffer.mask[state.buffer.candidateIndices[state.maskClearPosition++]] = 0;
+          workUnits++;
+          continue;
+        }
+        state.buffer.candidateIndices.length = 0;
+        state.stage = "clear-presentation";
+        continue;
+      }
+
+      if (state.stage === "clear-presentation") {
+        if (
+          state.presentationClearPosition
+          < state.buffer.presentationCandidateIndices.length
+        ) {
+          state.buffer.presentationMask[
+            state.buffer.presentationCandidateIndices[state.presentationClearPosition++]
+          ] = 0;
+          workUnits++;
+          continue;
+        }
+        state.buffer.presentationCandidateIndices.length = 0;
+        state.stage = "clear-costs";
+        continue;
+      }
+
+      if (state.stage === "clear-costs") {
+        if (state.costClearPosition < state.buffer.finiteCostIndices.length) {
+          state.buffer.costs[
+            state.buffer.finiteCostIndices[state.costClearPosition++]
+          ] = Number.POSITIVE_INFINITY;
+          workUnits++;
+          continue;
+        }
+        state.buffer.finiteCostIndices.length = 0;
+        state.stage = "search";
+        continue;
+      }
+
+      if (state.stage === "search") {
+        const searchStep = this.incrementalSearchWorkspace.step({
+          maxWorkUnits: budget.maxWorkUnits - workUnits,
+          shouldYield: budget.shouldYield,
+        });
+        workUnits += searchStep.workUnits;
+        if (searchStep.status === "pending") {
+          return { status: "pending", workUnits };
+        }
+        state.searchResult = searchStep.result;
+        state.stage = "collect";
+        if (shouldStop()) return { status: "pending", workUnits };
+        continue;
+      }
+
+      if (state.stage === "collect") {
+        const search = state.searchResult;
+        if (!search) throw new Error("Guidance search completed without a result");
+        if (state.collectPosition < search.settledCount) {
+          const index = search.settledIndices[state.collectPosition++];
+          const cost = search.costs[index];
+          state.buffer.costs[index] = cost;
+          state.buffer.finiteCostIndices.push(index);
+          if (this.world.getKnowledgeAtIndex(index) === KnowledgeState.Unknown) {
+            if (state.previousCost !== undefined && cost !== state.previousCost) {
+              state.groupEnds.push(state.buffer.candidateIndices.length);
+            }
+            if (state.previousCost === undefined || cost !== state.previousCost) {
+              state.groupCosts.push(cost);
+              state.previousCost = cost;
+            }
+            if (state.published.mask[index] === 0) state.logicalChanged = true;
+            state.buffer.mask[index] = 1;
+            state.buffer.candidateIndices.push(index);
+          }
+          workUnits++;
+          continue;
+        }
+        if (state.previousCost !== undefined) {
+          state.groupEnds.push(state.buffer.candidateIndices.length);
+        }
+        if (state.published.reachableCount !== state.buffer.candidateIndices.length) {
+          state.logicalChanged = true;
+        }
+        state.stage = "compare-previous";
+        continue;
+      }
+
+      if (state.stage === "compare-previous") {
+        if (state.comparePosition < state.published.candidateIndices.length) {
+          const index = state.published.candidateIndices[state.comparePosition++];
+          if (state.buffer.mask[index] === 0) state.logicalChanged = true;
+          workUnits++;
+          continue;
+        }
+        const radians = state.presentationHeading * Math.PI / 180;
+        const cache: ForwardBudgetCache = {
+          groupCosts: state.groupCosts,
+          groupEnds: state.groupEnds,
+          activeGroupCount: state.groupCosts.length,
+          maximumComputedBudget: state.budget,
+          originX: state.ship.currentTileX,
+          originY: state.ship.currentTileY,
+          presentationHeading: state.presentationHeading,
+          headingCosine: Math.cos(radians),
+          headingSine: Math.sin(radians),
+          coneCosine: Math.cos(
+            this.config.overlays.forwardConeHalfAngleDegrees * Math.PI / 180,
+          ),
+          spareCandidateIndices: [],
+          sparePresentationIndices: [],
+        };
+        state.cache = cache;
+        const minimumCost = state.budget - this.config.provisions.unknownCost;
+        let lower = 0;
+        let upper = cache.activeGroupCount;
+        while (lower < upper) {
+          const middle = (lower + upper) >>> 1;
+          if (cache.groupCosts[middle] <= minimumCost) lower = middle + 1;
+          else upper = middle;
+        }
+        state.frontierPosition = lower === 0 ? 0 : cache.groupEnds[lower - 1];
+        state.frontierEnd = cache.activeGroupCount === 0
+          ? 0
+          : cache.groupEnds[cache.activeGroupCount - 1];
+        state.stage = "frontier";
+        continue;
+      }
+
+      if (state.stage === "frontier") {
+        const cache = state.cache;
+        if (!cache) throw new Error("Guidance frontier has no cache");
+        if (state.frontierPosition < state.frontierEnd) {
+          const index = state.buffer.candidateIndices[state.frontierPosition++];
+          if (this.isInsidePresentationCone(index, cache)) {
+            state.buffer.presentationMask[index] = 1;
+            state.buffer.presentationCandidateIndices.push(index);
+          }
+          workUnits++;
+          continue;
+        }
+
+        const result: ForwardRangeResult = {
+          mask: state.buffer.mask,
+          presentationMask: state.buffer.presentationMask,
+          costs: state.buffer.costs,
+          budget: state.budget,
+          reachableCount: state.buffer.candidateIndices.length,
+          frontierCount: state.buffer.presentationCandidateIndices.length,
+          presentationHeading: state.presentationHeading,
+          coneHalfAngleDegrees: this.config.overlays.forwardConeHalfAngleDegrees,
+          candidateIndices: state.buffer.candidateIndices,
+          presentationCandidateIndices: state.buffer.presentationCandidateIndices,
+          logicalRevision: state.published.logicalRevision + (state.logicalChanged ? 1 : 0),
+        };
+        state.result = result;
+        state.stage = "complete";
+        this.budgetCaches.set(result, cache);
+        this.resultBuffers.set(result, state.buffer);
+        this.activeIncrementalTask = undefined;
+        return { status: "complete", workUnits, result };
+      }
+    }
+
+    return { status: "pending", workUnits };
+  }
+
+  private cancelActiveIncrementalTask(): void {
+    if (this.activeIncrementalTask) this.cancelIncrementalTask(this.activeIncrementalTask);
+  }
+
+  private cancelIncrementalTask(state: IncrementalForwardState): void {
+    if (state.cancelled || state.stage === "complete") return;
+    state.cancelled = true;
+    if (this.activeIncrementalTask === state) {
+      this.incrementalSearchWorkspace.cancel();
+      this.activeIncrementalTask = undefined;
+    }
+    if (!state.bufferReleased) {
+      state.bufferReleased = true;
+      this.releaseIncrementalBuffer(state.buffer);
+    }
+  }
+
+  private acquireIncrementalBuffer(): ForwardResultBuffers {
+    return this.incrementalBufferPool.pop() ?? this.createIncrementalBuffer();
+  }
+
+  private releaseIncrementalBuffer(buffer: ForwardResultBuffers): void {
+    if (this.incrementalBufferPool.includes(buffer)) return;
+    // Two alternating result slots are sufficient for one published and one
+    // in-flight result. A third can appear only after exceptional misuse.
+    if (this.incrementalBufferPool.length < 2) this.incrementalBufferPool.push(buffer);
+  }
+
+  private createIncrementalBuffer(): ForwardResultBuffers {
+    this.incrementalBuffersAllocated++;
+    const costs = new Float64Array(this.world.tileCount);
+    costs.fill(Number.POSITIVE_INFINITY);
+    return {
+      mask: new Uint8Array(this.world.tileCount),
+      presentationMask: new Uint8Array(this.world.tileCount),
+      costs,
+      candidateIndices: [],
+      presentationCandidateIndices: [],
+      finiteCostIndices: [],
+    };
+  }
+
+  private prewarmIncrementalResources(): void {
+    if (this.integerCostScale === undefined) return;
+    const initialMaxCostUnits = Math.min(
+      1_000_000,
+      Math.max(
+        0,
+        Math.ceil(this.config.provisions.startingBundles * this.integerCostScale),
+      ),
+    );
+    this.incrementalSearchWorkspace.reserve(this.world.tileCount, initialMaxCostUnits);
+    while (this.incrementalBufferPool.length < 2) {
+      this.incrementalBufferPool.push(this.createIncrementalBuffer());
+    }
+  }
+
+  private sameLogicalMask(left: ForwardRangeResult, right: ForwardRangeResult): boolean {
+    if (left.reachableCount !== right.reachableCount) return false;
+    for (const index of left.candidateIndices) {
+      if (right.mask[index] === 0) return false;
+    }
+    return true;
   }
 
   private search(budget: number): Pick<

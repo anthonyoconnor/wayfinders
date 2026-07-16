@@ -1,9 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { hostname, platform, release } from "node:os";
+import { cpus, hostname, platform, release } from "node:os";
 import { dirname, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation.ts";
+import { ForwardRangeSystem } from "../src/wayfinders/exploration/ForwardRangeSystem.ts";
+import type { ForwardGuidanceTelemetry } from "../src/wayfinders/exploration/ForwardGuidance.ts";
 import type {
   SimulationPhase,
   SimulationTraceSink,
@@ -16,10 +18,11 @@ import {
   type WorldProfileName,
 } from "../tests/fixtures/worldProfiles.ts";
 
-const RESULT_VERSION = 3;
+const RESULT_VERSION = 4;
 const DEFAULT_UPDATE_SAMPLES = 25;
 const DEFAULT_CONSTRUCTION_SAMPLES = 3;
 const DEFAULT_WARMUP_CROSSINGS = 5;
+const DEFAULT_GUIDANCE_WARMUPS = 20;
 
 interface Distribution {
   readonly samples: number;
@@ -27,6 +30,14 @@ interface Distribution {
   readonly p95Ms: number;
   readonly p99Ms: number;
   readonly maxMs: number;
+}
+
+interface CountDistribution {
+  readonly samples: number;
+  readonly p50: number;
+  readonly p95: number;
+  readonly p99: number;
+  readonly max: number;
 }
 
 interface ProfileResult {
@@ -41,7 +52,15 @@ interface ProfileResult {
   readonly construction?: Distribution;
   readonly ordinaryUpdate?: Distribution;
   readonly tileEntryUpdate?: Distribution;
-  readonly derivedGuidance?: Distribution;
+  readonly guidance?: {
+    readonly baselineSynchronous: Distribution;
+    readonly mainThreadSlice: Distribution;
+    readonly requestCpu: Distribution;
+    readonly slicesPerRequest: CountDistribution;
+    readonly sliceP95BudgetMs: number;
+    readonly sliceBudgetPassed: boolean;
+    readonly telemetry: Readonly<ForwardGuidanceTelemetry>;
+  };
   readonly phases: Partial<Record<SimulationPhase, Distribution>>;
   readonly resources?: {
     readonly loadedChunks: number;
@@ -102,6 +121,21 @@ function distribution(values: readonly number[]): Distribution {
     p95Ms: at(0.95),
     p99Ms: at(0.99),
     maxMs: Number(sorted[sorted.length - 1].toFixed(4)),
+  };
+}
+
+function countDistribution(values: readonly number[]): CountDistribution {
+  if (values.length === 0) return { samples: 0, p50: 0, p95: 0, p99: 0, max: 0 };
+  const sorted = [...values].sort((left, right) => left - right);
+  const at = (percentile: number): number => (
+    sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * percentile) - 1))]
+  );
+  return {
+    samples: sorted.length,
+    p50: at(0.5),
+    p95: at(0.95),
+    p99: at(0.99),
+    max: sorted[sorted.length - 1],
   };
 }
 
@@ -176,11 +210,57 @@ function resourceEstimate(simulation: GameSimulation): ProfileResult["resources"
   };
 }
 
+function drainForwardGuidance(
+  simulation: GameSimulation,
+  sliceDurations?: number[],
+): { readonly cpuMs: number; readonly slices: number } {
+  let cpuMs = 0;
+  for (let slices = 1; slices <= 10_000; slices++) {
+    const startedAt = performance.now();
+    const applied = simulation.advanceForwardGuidance();
+    const duration = performance.now() - startedAt;
+    cpuMs += duration;
+    sliceDurations?.push(duration);
+    if (applied) return { cpuMs, slices };
+    if (!simulation.forwardGuidanceStatus.pending) {
+      throw new Error("Forward guidance stopped without publishing a result");
+    }
+  }
+  throw new Error("Forward guidance exceeded 10,000 cooperative slices");
+}
+
+function assertEquivalentGuidance(
+  simulation: GameSimulation,
+  reference: ReturnType<ForwardRangeSystem["calculate"]>,
+): void {
+  const actual = simulation.forwardRange;
+  if (
+    actual.budget !== reference.budget
+    || actual.reachableCount !== reference.reachableCount
+    || actual.frontierCount !== reference.frontierCount
+    || actual.presentationHeading !== reference.presentationHeading
+    || actual.candidateIndices.length !== reference.candidateIndices.length
+  ) {
+    throw new Error("Cooperative guidance summary differs from the synchronous oracle");
+  }
+  for (let index = 0; index < simulation.world.tileCount; index++) {
+    if (
+      actual.mask[index] !== reference.mask[index]
+      || actual.presentationMask[index] !== reference.presentationMask[index]
+      || actual.costs[index] !== reference.costs[index]
+    ) {
+      throw new Error(`Cooperative guidance differs from the synchronous oracle at tile ${index}`);
+    }
+  }
+}
+
 function benchmarkProfile(
   profileName: WorldProfileName,
   updateSamples: number,
   constructionSamples: number,
   warmupCrossings: number,
+  guidanceSamples: number,
+  guidanceWarmups: number,
 ): ProfileResult {
   const profile = WORLD_PROFILES[profileName];
   const configSummary = {
@@ -217,17 +297,24 @@ function benchmarkProfile(
     const ordinaryPhases = trace.snapshot();
 
     const tileEntryDurations: number[] = [];
-    const derivedGuidanceDurations: number[] = [];
+    const baselineGuidanceDurations: number[] = [];
+    const guidanceSliceDurations: number[] = [];
+    const guidanceRequestCpuDurations: number[] = [];
+    const guidanceSlicesPerRequest: number[] = [];
     const tileTrace = new TraceCollector();
+    const baselineGuidance = new ForwardRangeSystem(simulation.world, simulation.config);
+    let baselineResult = baselineGuidance.calculate(simulation.ship);
     const start = findEastboundRun(simulation, warmupCrossings + updateSamples + 1);
     if (!simulation.teleport(start)) throw new Error("Tile-entry fixture teleport was rejected");
-    simulation.advanceForwardGuidance();
+    baselineResult = baselineGuidance.recalculate(baselineResult, simulation.ship);
+    drainForwardGuidance(simulation);
+    assertEquivalentGuidance(simulation, baselineResult);
     for (let warmup = 0; warmup < warmupCrossings; warmup++) {
       const movement = simulation.update({ turn: 0, throttle: 1 }, 0.4);
       if (!movement.tileChanged) throw new Error("Tile-entry warmup did not cross a tile");
-      if (!simulation.advanceForwardGuidance()) {
-        throw new Error("Tile-entry warmup did not apply derived guidance");
-      }
+      baselineResult = baselineGuidance.recalculate(baselineResult, simulation.ship);
+      drainForwardGuidance(simulation);
+      assertEquivalentGuidance(simulation, baselineResult);
     }
     trace.clear();
     for (let sample = 0; sample < updateSamples; sample++) {
@@ -237,11 +324,33 @@ function benchmarkProfile(
       if (!movement.tileChanged) throw new Error("Tile-entry fixture did not cross a tile");
       tileTrace.appendFrom(trace);
       trace.clear();
-      const guidanceStartedAt = performance.now();
-      if (!simulation.advanceForwardGuidance()) {
-        throw new Error("Tile-entry fixture did not apply derived guidance");
+      baselineResult = baselineGuidance.recalculate(baselineResult, simulation.ship);
+      drainForwardGuidance(simulation);
+      assertEquivalentGuidance(simulation, baselineResult);
+      tileTrace.appendFrom(trace);
+      trace.clear();
+    }
+
+    for (let requestIndex = 0; requestIndex < guidanceWarmups + guidanceSamples; requestIndex++) {
+      simulation.refreshRiskOverlays();
+      const baselineStartedAt = performance.now();
+      baselineResult = baselineGuidance.recalculate(baselineResult, simulation.ship);
+      const baselineDuration = performance.now() - baselineStartedAt;
+      const request = drainForwardGuidance(
+        simulation,
+        requestIndex >= guidanceWarmups ? guidanceSliceDurations : undefined,
+      );
+      if (requestIndex >= guidanceWarmups) {
+        baselineGuidanceDurations.push(baselineDuration);
+        guidanceRequestCpuDurations.push(request.cpuMs);
+        guidanceSlicesPerRequest.push(request.slices);
       }
-      derivedGuidanceDurations.push(performance.now() - guidanceStartedAt);
+      if (
+        requestIndex === guidanceWarmups - 1
+        || requestIndex === guidanceWarmups + guidanceSamples - 1
+      ) {
+        assertEquivalentGuidance(simulation, baselineResult);
+      }
       tileTrace.appendFrom(trace);
       trace.clear();
     }
@@ -254,7 +363,15 @@ function benchmarkProfile(
       construction: distribution(constructionDurations),
       ordinaryUpdate: distribution(ordinaryDurations),
       tileEntryUpdate: distribution(tileEntryDurations),
-      derivedGuidance: distribution(derivedGuidanceDurations),
+      guidance: {
+        baselineSynchronous: distribution(baselineGuidanceDurations),
+        mainThreadSlice: distribution(guidanceSliceDurations),
+        requestCpu: distribution(guidanceRequestCpuDurations),
+        slicesPerRequest: countDistribution(guidanceSlicesPerRequest),
+        sliceP95BudgetMs: 4,
+        sliceBudgetPassed: distribution(guidanceSliceDurations).p95Ms < 4,
+        telemetry: simulation.forwardGuidanceStatus.telemetry,
+      },
       phases,
       resources,
       heapDeltaBytes: process.memoryUsage().heapUsed - heapBefore,
@@ -283,10 +400,19 @@ const constructionSamples = positiveIntegerArgument(
   DEFAULT_CONSTRUCTION_SAMPLES,
 );
 const warmupCrossings = positiveIntegerArgument("warmup-crossings", DEFAULT_WARMUP_CROSSINGS);
+const guidanceSamples = positiveIntegerArgument("guidance-samples", updateSamples);
+const guidanceWarmups = positiveIntegerArgument("guidance-warmups", DEFAULT_GUIDANCE_WARMUPS);
 const commit = gitValue(["rev-parse", "HEAD"]);
 const dirty = gitValue(["status", "--porcelain"]) !== "";
 const results = requestedProfiles().map((profile) => (
-  benchmarkProfile(profile, updateSamples, constructionSamples, warmupCrossings)
+  benchmarkProfile(
+    profile,
+    updateSamples,
+    constructionSamples,
+    warmupCrossings,
+    guidanceSamples,
+    guidanceWarmups,
+  )
 ));
 const report = {
   version: RESULT_VERSION,
@@ -299,10 +425,13 @@ const report = {
     node: process.version,
     platform: platform(),
     release: release(),
+    logicalCpus: cpus().length,
   },
   updateSamples,
   constructionSamples,
   warmupCrossings,
+  guidanceSamples,
+  guidanceWarmups,
   results,
 };
 const output = resolve(

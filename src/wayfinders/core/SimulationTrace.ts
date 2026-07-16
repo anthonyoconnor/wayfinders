@@ -9,6 +9,7 @@ export type SimulationPhase =
   | "movement"
   | "observation"
   | "forward-guidance"
+  | "forward-guidance-slice"
   | "return-query";
 
 export interface SimulationTraceSink {

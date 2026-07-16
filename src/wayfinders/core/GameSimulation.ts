@@ -13,6 +13,8 @@ import type {
   ForwardGuidance,
   ForwardGuidanceSource,
   ForwardGuidanceStatus,
+  ForwardGuidanceTask,
+  ForwardGuidanceTelemetry,
 } from "../exploration/ForwardGuidance";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
@@ -213,7 +215,16 @@ export interface GameSimulationOptions {
    * `advanceForwardGuidance`. Movement and return safety remain synchronous.
    */
   readonly deferredForwardGuidance?: boolean;
+  /** Main-thread wall-clock target for one cooperative guidance slice. */
+  readonly forwardGuidanceSliceBudgetMs?: number;
+  /** Deterministic safety cap in addition to the wall-clock target. */
+  readonly forwardGuidanceWorkUnitsPerSlice?: number;
+  /** Injectable monotonic clock for deterministic scheduler tests. */
+  readonly forwardGuidanceNow?: () => number;
 }
+
+const DEFAULT_FORWARD_GUIDANCE_SLICE_BUDGET_MS = 3;
+const DEFAULT_FORWARD_GUIDANCE_WORK_UNITS = 32_768;
 
 const NO_MOVEMENT: MovementResult = {
   movedDistancePixels: 0,
@@ -313,13 +324,38 @@ export class GameSimulation {
   private riskResultsInitialized = false;
   private readonly trace: SimulationTraceSink | undefined;
   private readonly deferForwardGuidance: boolean;
+  private readonly forwardGuidanceSliceBudgetMs: number;
+  private readonly forwardGuidanceWorkUnitsPerSlice: number;
+  private readonly forwardGuidanceNow: () => number;
   private forwardGuidancePending = false;
   private forwardGuidanceRequestId = 0;
   private forwardGuidanceAppliedRequestId = 0;
+  private forwardGuidanceWorldEpoch = 0;
+  private forwardGuidanceTask?: {
+    readonly requestId: number;
+    readonly source: ForwardGuidanceSource;
+    readonly task: ForwardGuidanceTask;
+    slices: number;
+  };
+  private readonly forwardGuidanceTelemetryValue = {
+    requests: 0,
+    jobsStarted: 0,
+    jobsCompleted: 0,
+    jobsCancelled: 0,
+    requestsCoalesced: 0,
+    staleResultsDiscarded: 0,
+    slices: 0,
+    lastSliceWorkUnits: 0,
+    maxSliceWorkUnits: 0,
+    lastRequestSlices: 0,
+    maxRequestSlices: 0,
+  } satisfies Record<keyof ForwardGuidanceTelemetry, number>;
   private forwardGuidanceSourceValue: ForwardGuidanceSource = Object.freeze({
     requestId: 0,
+    worldEpoch: 0,
     worldRevision: 0,
     knowledgeRevision: 0,
+    visibilityRevision: 0,
     originX: 0,
     originY: 0,
     provisionUnits: 0,
@@ -332,6 +368,24 @@ export class GameSimulation {
   ) {
     this.trace = trace;
     this.deferForwardGuidance = options.deferredForwardGuidance === true;
+    this.forwardGuidanceSliceBudgetMs = options.forwardGuidanceSliceBudgetMs
+      ?? DEFAULT_FORWARD_GUIDANCE_SLICE_BUDGET_MS;
+    if (
+      !Number.isFinite(this.forwardGuidanceSliceBudgetMs)
+      || this.forwardGuidanceSliceBudgetMs <= 0
+    ) {
+      throw new RangeError("forwardGuidanceSliceBudgetMs must be finite and positive");
+    }
+    this.forwardGuidanceWorkUnitsPerSlice = options.forwardGuidanceWorkUnitsPerSlice
+      ?? DEFAULT_FORWARD_GUIDANCE_WORK_UNITS;
+    if (
+      !Number.isSafeInteger(this.forwardGuidanceWorkUnitsPerSlice)
+      || this.forwardGuidanceWorkUnitsPerSlice <= 0
+    ) {
+      throw new RangeError("forwardGuidanceWorkUnitsPerSlice must be a positive safe integer");
+    }
+    this.forwardGuidanceNow = options.forwardGuidanceNow
+      ?? (() => globalThis.performance?.now() ?? Date.now());
     // Immutable GameSession inputs receive a private compatibility view. The
     // mutable prototype object remains a temporary live-tuning adapter until
     // the developer panel migrates behind GameSession.
@@ -358,6 +412,8 @@ export class GameSimulation {
       pending: this.forwardGuidancePending,
       requestedId: this.forwardGuidanceRequestId,
       appliedId: this.forwardGuidanceAppliedRequestId,
+      activeId: this.forwardGuidanceTask?.requestId,
+      telemetry: { ...this.forwardGuidanceTelemetryValue },
       source: this.forwardGuidanceSourceValue,
     };
   }
@@ -726,6 +782,8 @@ export class GameSimulation {
 
   regenerate(seed = this.config.world.seed): void {
     if (this.interactionTransactionActive) return;
+    this.cancelForwardGuidanceTask();
+    this.forwardGuidanceWorldEpoch++;
     PILOT_COLLISION_PROFILE_REGISTRY.assertMovementConfigCompatible(this.config);
     const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
     this.generated = measureSimulationPhase(
@@ -766,6 +824,7 @@ export class GameSimulation {
     this.forwardGuidancePending = false;
     this.forwardGuidanceRequestId = 0;
     this.forwardGuidanceAppliedRequestId = 0;
+    this.forwardGuidanceTask = undefined;
     this.forwardGuidanceSourceValue = this.captureForwardGuidanceSource(0);
     this.movement = new MovementSystem(this.world, this.config);
     this.visibility = new VisibilitySystem(this.world, this.config);
@@ -1264,17 +1323,75 @@ export class GameSimulation {
       return false;
     }
 
-    const requestId = source.requestId;
-    const result = measureSimulationPhase(
-      this.trace,
-      "forward-guidance",
-      () => this.forwardRanges.recalculate(this.forwardRange, this.ship),
-    );
-    if (requestId !== this.forwardGuidanceRequestId) return false;
+    const startedAt = this.forwardGuidanceNow();
+    const deadline = startedAt + this.forwardGuidanceSliceBudgetMs;
+    if (!this.forwardGuidanceTask) {
+      this.forwardGuidanceTask = {
+        requestId: source.requestId,
+        source,
+        task: this.forwardRanges.beginTask(this.forwardRange, this.ship),
+        slices: 0,
+      };
+      this.forwardGuidanceTelemetryValue.jobsStarted++;
+    }
 
-    this.forwardRange = result;
-    this.forwardGuidanceAppliedRequestId = requestId;
+    const active = this.forwardGuidanceTask;
+    if (
+      active.requestId !== source.requestId
+      || !this.sameForwardGuidanceSource(active.source, source)
+    ) {
+      this.cancelForwardGuidanceTask();
+      return false;
+    }
+
+    const step = measureSimulationPhase(
+      this.trace,
+      "forward-guidance-slice",
+      () => active.task.step({
+        maxWorkUnits: this.forwardGuidanceWorkUnitsPerSlice,
+        shouldYield: () => this.forwardGuidanceNow() >= deadline,
+      }),
+    );
+    active.slices++;
+    this.forwardGuidanceTelemetryValue.slices++;
+    this.forwardGuidanceTelemetryValue.lastSliceWorkUnits = step.workUnits;
+    this.forwardGuidanceTelemetryValue.maxSliceWorkUnits = Math.max(
+      this.forwardGuidanceTelemetryValue.maxSliceWorkUnits,
+      step.workUnits,
+    );
+    if (step.status !== "complete") return false;
+
+    this.forwardGuidanceTelemetryValue.jobsCompleted++;
+    if (
+      this.forwardGuidanceTask !== active
+      || active.requestId !== this.forwardGuidanceRequestId
+      || !this.sameForwardGuidanceSource(active.source, this.forwardGuidanceSourceValue)
+      || !this.isCurrentForwardGuidanceSource(active.source)
+    ) {
+      this.forwardRanges.releaseResult(step.result);
+      this.forwardGuidanceTelemetryValue.staleResultsDiscarded++;
+      if (this.forwardGuidanceTask === active) this.forwardGuidanceTask = undefined;
+      if (!this.isCurrentForwardGuidanceSource(this.forwardGuidanceSourceValue)) {
+        this.requestForwardGuidance();
+      }
+      return false;
+    }
+
+    // Heading is deliberately not a cancellation input: continuous steering
+    // cannot starve the logical search. Reclip the sparse terminal band just
+    // before atomic publication instead.
+    this.forwardRanges.updateHeading(step.result, this.ship);
+    const previous = this.forwardRange;
+    this.forwardRange = step.result;
+    this.forwardRanges.releaseResult(previous);
+    this.forwardGuidanceAppliedRequestId = active.requestId;
     this.forwardGuidancePending = false;
+    this.forwardGuidanceTask = undefined;
+    this.forwardGuidanceTelemetryValue.lastRequestSlices = active.slices;
+    this.forwardGuidanceTelemetryValue.maxRequestSlices = Math.max(
+      this.forwardGuidanceTelemetryValue.maxRequestSlices,
+      active.slices,
+    );
     this.overlaysRevision++;
     this.events.emit("returnStateChanged", undefined);
     return true;
@@ -2098,7 +2215,12 @@ export class GameSimulation {
   }
 
   private requestForwardGuidance(): void {
+    if (this.forwardGuidancePending) {
+      this.forwardGuidanceTelemetryValue.requestsCoalesced++;
+    }
+    this.cancelForwardGuidanceTask();
     this.forwardGuidanceRequestId++;
+    this.forwardGuidanceTelemetryValue.requests++;
     this.forwardGuidanceSourceValue = this.captureForwardGuidanceSource(
       this.forwardGuidanceRequestId,
     );
@@ -2108,8 +2230,10 @@ export class GameSimulation {
   private captureForwardGuidanceSource(requestId: number): ForwardGuidanceSource {
     return Object.freeze({
       requestId,
+      worldEpoch: this.forwardGuidanceWorldEpoch,
       worldRevision: this.world.collisionVersion,
       knowledgeRevision: this.world.knowledgeVersion,
+      visibilityRevision: this.world.visibilityVersion,
       originX: this.ship.currentTileX,
       originY: this.ship.currentTileY,
       provisionUnits: availableProvisionUnits(this.ship),
@@ -2117,10 +2241,34 @@ export class GameSimulation {
   }
 
   private isCurrentForwardGuidanceSource(source: ForwardGuidanceSource): boolean {
-    return source.worldRevision === this.world.collisionVersion
+    return source.worldEpoch === this.forwardGuidanceWorldEpoch
+      && source.worldRevision === this.world.collisionVersion
       && source.knowledgeRevision === this.world.knowledgeVersion
+      && source.visibilityRevision === this.world.visibilityVersion
       && source.originX === this.ship.currentTileX
       && source.originY === this.ship.currentTileY
       && source.provisionUnits === availableProvisionUnits(this.ship);
+  }
+
+  private sameForwardGuidanceSource(
+    left: ForwardGuidanceSource,
+    right: ForwardGuidanceSource,
+  ): boolean {
+    return left.requestId === right.requestId
+      && left.worldEpoch === right.worldEpoch
+      && left.worldRevision === right.worldRevision
+      && left.knowledgeRevision === right.knowledgeRevision
+      && left.visibilityRevision === right.visibilityRevision
+      && left.originX === right.originX
+      && left.originY === right.originY
+      && left.provisionUnits === right.provisionUnits;
+  }
+
+  private cancelForwardGuidanceTask(): void {
+    const active = this.forwardGuidanceTask;
+    if (!active) return;
+    active.task.cancel();
+    this.forwardGuidanceTask = undefined;
+    this.forwardGuidanceTelemetryValue.jobsCancelled++;
   }
 }

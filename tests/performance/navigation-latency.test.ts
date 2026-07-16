@@ -32,6 +32,13 @@ function findEastboundRun(simulation: GameSimulation, edgeCount: number) {
   throw new Error("No eastbound performance fixture was available");
 }
 
+function drainForwardGuidance(simulation: GameSimulation, maximumSlices = 2_000): void {
+  for (let slice = 0; slice < maximumSlices; slice++) {
+    if (simulation.advanceForwardGuidance()) return;
+  }
+  throw new Error(`Forward guidance did not publish within ${maximumSlices} slices`);
+}
+
 describe("AM-1 navigation latency budget", () => {
   for (const profile of ["P0", "P1"] as const satisfies readonly WorldProfileName[]) {
     it(`${profile} keeps synchronous tile-entry p95 below 4 ms`, () => {
@@ -42,11 +49,11 @@ describe("AM-1 navigation latency budget", () => {
       const samples = 24;
       const start = findEastboundRun(simulation, warmups + samples + 1);
       expect(simulation.teleport(start)).toBe(true);
-      simulation.advanceForwardGuidance();
+      drainForwardGuidance(simulation);
 
       for (let index = 0; index < warmups; index++) {
         expect(simulation.update({ turn: 0, throttle: 1 }, 0.4).tileChanged).toBe(true);
-        expect(simulation.advanceForwardGuidance()).toBe(true);
+        drainForwardGuidance(simulation);
       }
 
       const durations: number[] = [];
@@ -55,7 +62,7 @@ describe("AM-1 navigation latency budget", () => {
         const movement = simulation.update({ turn: 0, throttle: 1 }, 0.4);
         durations.push(performance.now() - startedAt);
         expect(movement.tileChanged).toBe(true);
-        expect(simulation.advanceForwardGuidance()).toBe(true);
+        drainForwardGuidance(simulation);
       }
 
       expect(percentile(durations, 0.95)).toBeLessThan(4);

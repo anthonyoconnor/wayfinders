@@ -31,6 +31,17 @@ function passableDestinations(simulation: GameSimulation, count: number) {
   return destinations;
 }
 
+function drainForwardGuidance(simulation: GameSimulation, maximumSlices = 2_000): number {
+  for (let slice = 1; slice <= maximumSlices; slice++) {
+    if (simulation.advanceForwardGuidance()) return slice;
+    if (!simulation.forwardGuidanceStatus.pending) break;
+  }
+  throw new Error(
+    `Forward guidance did not publish within ${maximumSlices} slices: `
+      + JSON.stringify(simulation.forwardGuidanceStatus),
+  );
+}
+
 describe("ForwardGuidance boundary", () => {
   it("coalesces requests, rejects stale sources, and applies only the newest origin", () => {
     const simulation = new GameSimulation(undefined, undefined, {
@@ -64,7 +75,7 @@ describe("ForwardGuidance boundary", () => {
     expect(simulation.advanceForwardGuidance()).toBe(false);
     expect(simulation.forwardGuidanceStatus.requestedId).toBe(staleRequest + 1);
 
-    expect(simulation.advanceForwardGuidance()).toBe(true);
+    expect(drainForwardGuidance(simulation)).toBeGreaterThan(1);
     expect(simulation.forwardGuidanceStatus).toMatchObject({
       pending: false,
       requestedId: simulation.forwardGuidanceStatus.appliedId,
@@ -82,6 +93,83 @@ describe("ForwardGuidance boundary", () => {
     expect(simulation.forwardRange.costs[
       simulation.world.index(destination.x, destination.y)
     ]).toBe(0);
+  });
+
+  it("invalidates visibility-only work and publishes the newest revision", () => {
+    const simulation = new GameSimulation(undefined, undefined, {
+      deferredForwardGuidance: true,
+      forwardGuidanceWorkUnitsPerSlice: 64,
+      forwardGuidanceNow: () => 0,
+    });
+    const [destination] = passableDestinations(simulation, 1);
+    expect(simulation.teleport(destination)).toBe(true);
+    expect(simulation.advanceForwardGuidance()).toBe(false);
+    const activeId = simulation.forwardGuidanceStatus.activeId;
+    const requestedId = simulation.forwardGuidanceStatus.requestedId;
+    const visibilityIndex = simulation.world.index(0, 0);
+    simulation.world.setVisibleNowAtIndex(
+      visibilityIndex,
+      !simulation.world.isVisibleNowAtIndex(visibilityIndex),
+    );
+
+    expect(simulation.advanceForwardGuidance()).toBe(false);
+    expect(simulation.forwardGuidanceStatus).toMatchObject({
+      pending: true,
+      requestedId: requestedId + 1,
+      activeId: undefined,
+      telemetry: {
+        jobsStarted: 1,
+        jobsCancelled: 1,
+      },
+    });
+    expect(activeId).toBe(requestedId);
+    drainForwardGuidance(simulation);
+    expect(simulation.forwardGuidanceStatus.source.visibilityRevision).toBe(
+      simulation.world.visibilityVersion,
+    );
+  });
+
+  it("does not let steering starve a task and clips the result to the latest heading", () => {
+    const simulation = new GameSimulation(undefined, undefined, {
+      deferredForwardGuidance: true,
+      forwardGuidanceWorkUnitsPerSlice: 64,
+      forwardGuidanceNow: () => 0,
+    });
+    const [destination] = passableDestinations(simulation, 1);
+    expect(simulation.teleport(destination)).toBe(true);
+    expect(simulation.advanceForwardGuidance()).toBe(false);
+    const requestId = simulation.forwardGuidanceStatus.requestedId;
+
+    simulation.update({ turn: 1, throttle: 0 }, 0.25);
+    const latestHeading = simulation.ship.heading;
+    expect(simulation.forwardGuidanceStatus.requestedId).toBe(requestId);
+    drainForwardGuidance(simulation);
+
+    expect(simulation.forwardRange.presentationHeading).toBe(latestHeading);
+    expect(simulation.forwardGuidanceStatus.telemetry.jobsCancelled).toBe(0);
+  });
+
+  it("uses a monotonic world epoch across same-seed regeneration", () => {
+    const simulation = new GameSimulation(undefined, undefined, {
+      deferredForwardGuidance: true,
+      forwardGuidanceWorkUnitsPerSlice: 64,
+      forwardGuidanceNow: () => 0,
+    });
+    const [destination] = passableDestinations(simulation, 1);
+    expect(simulation.teleport(destination)).toBe(true);
+    expect(simulation.advanceForwardGuidance()).toBe(false);
+    const previousEpoch = simulation.forwardGuidanceStatus.source.worldEpoch;
+    const seed = simulation.generated.seed;
+
+    simulation.regenerate(seed);
+
+    expect(simulation.forwardGuidanceStatus).toMatchObject({
+      pending: false,
+      requestedId: 0,
+      appliedId: 0,
+      telemetry: { jobsCancelled: 1 },
+    });
+    expect(simulation.forwardGuidanceStatus.source.worldEpoch).toBe(previousEpoch + 1);
   });
 });
 
