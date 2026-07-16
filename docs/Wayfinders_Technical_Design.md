@@ -334,10 +334,17 @@ navigation grid, the form warns before submission and offers transparent canvas
 padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
-The asset-library route reserves permanent left and right columns for the
-library and structured workbench. The Phaser preview is sized to the centre
-column and cannot render behind those controls. Existing recipe names and stable
-IDs are checked in the form and again under the repository lock; conflicts block
+The asset-library route provides persistent **Islands**, **Ships**, and
+**Fishing shoals** tabs above permanent left-library, centre-preview, and right-
+workbench regions. The active workspace is URL-addressable and follows browser
+history; accessible arrow-key navigation uses roving focus. A typed registry
+partitions catalog entries and collision profiles, while separate scene
+instances namespace selection and unsaved editor state. Workspace shutdown
+aborts its DOM listeners and Phaser bindings before the next workspace mounts.
+The left and right columns scroll independently, and the Phaser preview is
+sized to the centre column so it cannot render behind those controls. Existing
+recipe names and stable IDs are checked in the form and again under the
+repository lock; conflicts block
 intake without a separate confirmation step. Validated family defaults and
 identity become one source recipe and one pending candidate through the
 constrained development-server API. Island preparation creates a deterministic,

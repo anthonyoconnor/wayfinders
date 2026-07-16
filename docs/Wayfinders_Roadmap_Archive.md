@@ -1054,6 +1054,25 @@ pending review support, exact mask transfer, safe resets, bounded content, and
 direct-return selection. Trial state is disposable and has no persistence,
 review, promotion, or runtime-catalog mutation path.
 
+#### GR-4.0 — Isolated asset-workspace tabs
+
+Status: implemented and accepted on 2026-07-16.
+
+The asset library now has persistent **Islands**, **Ships**, and **Fishing
+shoals** tabs backed by a small typed registry. Each workspace owns exactly one
+catalog partition and collision-profile partition, a namespaced selection key,
+and a separately retained Phaser scene. The shared shell owns only accessible
+tab navigation, stable URL and browser-history behavior, and the permanent
+three-column mount layout. Scene shutdown aborts workspace DOM listeners and
+Phaser bindings before the next workspace starts.
+
+Contract coverage verifies stable registry order, complete and exclusive asset
+and collision ownership, direct-link resolution, wrapping keyboard navigation,
+namespaced state, and the stop/start lifecycle seam. Interactive browser
+acceptance verified tab clicks and arrow navigation, Back/Forward restoration,
+workspace-specific library and collision controls, a single canvas across
+switches, independent left/right scrolling, and no console warnings or errors.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development
@@ -1099,5 +1118,5 @@ determine whether the user-visible departure symptom remains.
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-4.1`, graphics and asset
-work through `GR-3.8`, and architecture work through `AM-6`. Upcoming, proposed,
+work through `GR-4.0`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.

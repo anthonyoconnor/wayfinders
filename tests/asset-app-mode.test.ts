@@ -124,6 +124,8 @@ describe("GR-2.1 asset application mode", () => {
     const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
 
     expect(styles).toContain('html[data-application-mode="assets"] .app-shell');
+    expect(styles).toContain("grid-template-rows: auto minmax(0, 1fr)");
+    expect(styles).toContain(".asset-workspace-tabs__inner");
     expect(styles).toContain("grid-template-columns: minmax(0, 1fr) var(--asset-inspector-width)");
     expect(styles).toMatch(/data-application-mode="assets"\] \.app-shell[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden/u);
     expect(styles).toMatch(/data-application-mode="assets"\] \.game-region[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden/u);

@@ -14,6 +14,15 @@ import {
 } from "./wayfinders/assets/AssetAppMode";
 import { AssetTrialScene } from "./wayfinders/assets/AssetTrialScene";
 import { AssetViewerScene } from "./wayfinders/assets/AssetViewerScene";
+import {
+  resolveAssetWorkspace,
+  type AssetWorkspaceId,
+} from "./wayfinders/assets/AssetWorkspaceRegistry";
+import {
+  mountAssetWorkspaceTabs,
+  type AssetWorkspaceTabs,
+} from "./wayfinders/assets/AssetWorkspaceTabs";
+import { assetWorkspaceSceneKey } from "./wayfinders/assets/workspaces/AssetWorkspace";
 import { GameSimulation } from "./wayfinders/core/GameSimulation";
 import { WayfindersScene } from "./wayfinders/rendering/WayfindersScene";
 import "./styles.css";
@@ -49,8 +58,11 @@ const developerLogFeedback = requireElement<HTMLOutputElement>("#developer-log-f
 const rendererStatus = requireElement<HTMLElement>("#renderer-status");
 const phaserVersion = requireElement<HTMLElement>("#phaser-version");
 const assetModeLink = requireElement<HTMLAnchorElement>("#asset-mode-link");
+const appShell = requireElement<HTMLDivElement>("#app");
+const assetWorkspaceTabsRoot = requireElement<HTMLElement>("#asset-workspace-tabs");
 let suppressEscapeUntilKeyUp = false;
 const applicationMode = resolveWayfindersApplicationMode(window.location.search);
+const initialAssetWorkspace = resolveAssetWorkspace(window.location.search);
 const permanentAssetTools = applicationMode === "assets";
 
 function setDeveloperToolsOpen(open: boolean): void {
@@ -191,14 +203,37 @@ document.documentElement.dataset.appReady = "true";
 document.documentElement.dataset.applicationMode = applicationMode;
 
 export let wayfindersGame: Phaser.Game | undefined;
+let assetWorkspaceTabs: AssetWorkspaceTabs | undefined;
 
 try {
   const scenes = applicationMode === "assets"
-    ? [new AssetViewerScene()]
+    ? [new AssetViewerScene(initialAssetWorkspace)]
     : applicationMode === "asset-trial"
       ? [new AssetTrialScene(resolveAssetTrialApplicationRequest(window.location.search)!)]
       : [new WayfindersScene(new GameSimulation(prototypeConfig))];
   wayfindersGame = createWayfindersGame(scenes);
+  if (applicationMode === "assets") {
+    let activeWorkspace = initialAssetWorkspace;
+    const registeredWorkspaceIds = new Set<AssetWorkspaceId>([
+      initialAssetWorkspace.id as AssetWorkspaceId,
+    ]);
+    assetWorkspaceTabs = mountAssetWorkspaceTabs(
+      assetWorkspaceTabsRoot,
+      appShell,
+      initialAssetWorkspace,
+      (workspace) => {
+        const previousKey = assetWorkspaceSceneKey(activeWorkspace.id);
+        const nextKey = assetWorkspaceSceneKey(workspace.id);
+        wayfindersGame!.scene.stop(previousKey);
+        if (!registeredWorkspaceIds.has(workspace.id as AssetWorkspaceId)) {
+          wayfindersGame!.scene.add(nextKey, new AssetViewerScene(workspace), false);
+          registeredWorkspaceIds.add(workspace.id as AssetWorkspaceId);
+        }
+        wayfindersGame!.scene.start(nextKey);
+        activeWorkspace = workspace;
+      },
+    );
+  }
   window.dispatchEvent(
     new CustomEvent("wayfinders:shell-ready", {
       detail: { shell: wayfindersShell, game: wayfindersGame },
@@ -212,5 +247,8 @@ try {
 }
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => wayfindersGame?.destroy(true));
+  import.meta.hot.dispose(() => {
+    assetWorkspaceTabs?.destroy();
+    wayfindersGame?.destroy(true);
+  });
 }

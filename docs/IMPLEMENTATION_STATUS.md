@@ -2,7 +2,7 @@
 
 Status: current development handoff, verified 2026-07-16.
 
-The asset workflow through GR-3.8 is implemented. Focused contract and
+The asset workflow through GR-4.0 is implemented. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,
 deterministic shoreline seeding, structured candidate save/validation/review/
 promotion, fingerprint invalidation, rollback, and isolated-trial authority.
@@ -18,7 +18,8 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
 ## Runnable surfaces
 
 - The default browser route starts a fresh playable voyage.
-- `?mode=assets` opens the asset library, guided local-PNG intake,
+- `?mode=assets` opens URL-addressable Islands, Ships, and Fishing shoals
+  workspaces in the asset library, plus guided local-PNG intake,
   structured pending-candidate authoring, validation, exact-fingerprint review
   and promotion, runtime-package inspection, and supported collision authoring.
 - An island candidate can launch a disposable open-water sea trial from its

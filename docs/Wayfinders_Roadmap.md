@@ -45,61 +45,15 @@ The implemented baseline supports the prototype world and the named large-world
 profiles. Its current contracts are documented in the technical design and
 architecture map; its delivery history is archived.
 
-The next proposed production-asset sequence establishes an asset-workspace tab
-shell, then delivers the authored-island track below. It replaces the current
-operator-facing candidate lifecycle with a focused island workshop and makes
-available islands deterministic world-generation inputs. The sequence is
-proposed but not authorized.
+The asset-workspace tab shell is implemented. The next proposed production-
+asset sequence begins with the focused island workshop below, then replaces the
+current operator-facing candidate lifecycle and makes available islands
+deterministic world-generation inputs. The remaining sequence is proposed but
+not authorized.
 
 The water-system proposal remains a separate candidate track.
 
 ## Asset workspaces and authored-island integration
-
-### GR-4.0 — Isolated asset-workspace tabs
-
-Status: proposed, not started, and not authorized.
-
-Add a persistent tab strip above the asset-library columns with initial
-**Islands**, **Ships**, and **Fishing shoals** workspaces. The shared asset shell
-owns only tab navigation and the permanent left-library, centre-preview, and
-right-workbench mount points. Each asset type owns its content, state, event
-bindings, and preview adapter inside a dedicated workspace module. Switching
-tabs replaces all three workspace regions together; controls from one asset
-type must never remain active or visible in another.
-
-Use a small typed workspace registry rather than a general plug-in framework.
-Adding another asset type requires one registry entry and one owned workspace
-module, without editing the markup, selectors, handlers, or state contracts of
-existing workspaces. Shared controls must be intentionally promoted to the
-shell instead of copied between workspace implementations. Workspace selectors
-are scoped to their mount roots, listeners are disposed on unmount, and stored
-UI state is namespaced by workspace ID so separate feature work can proceed
-without global selector or state collisions.
-
-The active workspace has a stable URL value so refresh, direct links, and
-browser navigation restore the same tab. The tab strip uses accessible
-`tablist`, `tab`, and `tabpanel` semantics with arrow-key navigation and visible
-focus. It remains fixed above the three-column workspace and does not overlap
-or reduce independent scrolling in the left and right columns.
-
-Acceptance requires:
-
-- Islands, Ships, and Fishing shoals can each be selected directly and through
-  browser navigation;
-- each tab renders only its own library entries, centre preview, and workbench;
-- switching tabs tears down the prior workspace's DOM listeners and Phaser
-  bindings without leaking resources or duplicating commands;
-- workspace-local selection and unsaved-edit handling cannot affect another
-  workspace;
-- adding a test workspace changes only the registry and the new workspace
-  module; and
-- existing ship, shoal, and island capabilities are assigned to their owning
-  tabs without adding new editing features at this gate.
-
-This track applies to non-home islands created with a world. The dedicated home
-island package remains outside this sequence. The configured island count stays
-authoritative: authored islands replace procedural islands within that count;
-they do not add extra islands.
 
 ### GR-4.1 — Focused island workshop
 

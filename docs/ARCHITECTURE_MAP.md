@@ -12,9 +12,10 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
    `WorldGrid`, builds one `WorldAnalysisIndex`, and composes gameplay features.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
-4. The asset-library mode starts `AssetViewerScene` without gameplay
-   simulation. The trial mode starts `AssetTrialScene` with one isolated open-
-   water `WorldGrid`, movement authority, and selected candidate.
+4. The asset-library mode resolves a typed asset-workspace registry and starts
+   one workspace-scoped `AssetViewerScene` without gameplay simulation. The
+   trial mode starts `AssetTrialScene` with one isolated open-water `WorldGrid`,
+   movement authority, and selected candidate.
 5. Presentation controllers and renderers consume read models, revisions, and
    the shared active-chunk delta where applicable.
 6. Diagnostics and development tools consume bounded read models and counters;
@@ -30,7 +31,7 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 | `exploration` / `features` | feature state, commands, selectors, and mutation results | scene lifecycle |
 | `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering | feature-specific presentation rules |
 | `rendering` | Phaser lifecycle, resource activation, and read-model adaptation | authoritative gameplay decisions |
-| `assets` | semantic package and candidate contracts, loading, preparation, local authoring, review, promotion, and isolated trials | navigation authority outside declared collision metadata or gameplay-session state |
+| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, review, promotion, and isolated trials | navigation authority outside declared collision metadata or gameplay-session state |
 
 ## Dependency direction
 
@@ -84,6 +85,11 @@ not import Phaser.
   open-water `WorldGrid`, movement authority, and candidate presentation; it
   does not create `GameSimulation`, mutate the runtime world catalog, or add a
   gameplay-persistence seam.
+- `AssetWorkspaceRegistry` is the asset-library composition seam. The shell owns
+  accessible tab navigation, URL history, and the three permanent mount regions;
+  each workspace module owns its catalog partition, collision profiles,
+  namespaced selection, and scene lifetime. Stopping a workspace aborts its DOM
+  listeners and Phaser bindings before another workspace starts.
 
 Diagnostics are distributed with their owner: simulation traces and counters
 live in `core`, presentation/resource counters in `WayfindersScene` and its

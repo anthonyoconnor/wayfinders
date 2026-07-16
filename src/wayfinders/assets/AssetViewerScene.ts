@@ -18,8 +18,7 @@ import {
 } from "./AssetCandidate";
 import {
   ASSET_LIBRARY_CATALOG,
-  ASSET_LIBRARY_GROUPS,
-  assetLibraryEntryById,
+  groupAssetLibraryEntries,
   type AssetLibraryEntry,
   type AssetLibraryImageLayer,
   type ReferenceImageLibraryEntry,
@@ -63,7 +62,6 @@ import {
 import { validateExactCollisionPackageSet } from "./ExactCollisionValidation";
 import {
   PILOT_COLLISION_PROFILE_REGISTRY,
-  RUNTIME_COLLISION_OBJECT_KINDS,
   type RuntimeCollisionObjectKind,
   type RuntimeCollisionProfile,
 } from "./CollisionProfileRegistry";
@@ -92,6 +90,11 @@ import {
   type ProductionCandidateAuthoredCollision,
   type ProductionCandidateAuthoringRequest,
 } from "./ProductionCandidateAuthoring";
+import {
+  assetWorkspaceSceneKey,
+  assetWorkspaceSelectionKey,
+  type AssetWorkspaceModule,
+} from "./workspaces/AssetWorkspace";
 
 interface ViewerState {
   assetId: AuthoredAssetId;
@@ -201,19 +204,12 @@ function collisionDraftMethodLabel(method: string): string {
 }
 
 export class AssetViewerScene extends Phaser.Scene {
+  private readonly workspaceCatalog: readonly Readonly<AssetLibraryEntry>[];
+  private readonly workspaceGroups;
+  private readonly authoredAssetIds: readonly AuthoredAssetId[];
   private catalogAssets!: PilotAssetRuntime;
   private previewAssets!: AuthoredAssetRuntime;
-  private state: ViewerState = {
-    assetId: AUTHORED_ASSET_IDS.homeIsland,
-    heading: 0,
-    speed: 48,
-    seed: 71_041,
-    animate: true,
-    showFog: false,
-    showPersonalOverlay: false,
-    showOrigin: true,
-    showFootprint: true,
-  };
+  private state: ViewerState;
   private guideGraphics!: Phaser.GameObjects.Graphics;
   private collisionGraphics!: Phaser.GameObjects.Graphics;
   private developerVisualGraphics!: Phaser.GameObjects.Graphics;
@@ -228,7 +224,7 @@ export class AssetViewerScene extends Phaser.Scene {
   private additionalStandaloneVisuals: Phaser.GameObjects.Image[] = [];
   private assetLibraryBrowser?: HTMLElement;
   private productionIntakeUi?: ProductionAssetIntakeUi;
-  private selectedLibraryAssetId: string = AUTHORED_ASSET_IDS.homeIsland;
+  private selectedLibraryAssetId: string;
   private readonly acceptedMetadataByAssetId = new Map<AuthoredAssetId, Readonly<AuthoredAssetMetadata>>();
   private readonly collisionDraftsByAssetId = new Map<AuthoredAssetId, RuntimeCollisionProfile>();
   private referenceLoadRevision = 0;
@@ -276,8 +272,28 @@ export class AssetViewerScene extends Phaser.Scene {
   private collisionPanGesture?: Readonly<CollisionPanGesture>;
   private collisionSpaceHeld = false;
 
-  constructor() {
-    super({ key: "AssetViewerScene" });
+  constructor(private readonly workspace: Readonly<AssetWorkspaceModule>) {
+    super({ key: assetWorkspaceSceneKey(workspace.id) });
+    this.workspaceCatalog = Object.freeze(ASSET_LIBRARY_CATALOG.filter((entry) => workspace.accepts(entry)));
+    this.workspaceGroups = groupAssetLibraryEntries(this.workspaceCatalog);
+    this.authoredAssetIds = Object.freeze(this.workspaceCatalog
+      .filter((entry) => entry.entryType === "authored-package")
+      .map((entry) => entry.id as AuthoredAssetId));
+    if (!this.workspaceCatalog.some((entry) => entry.id === workspace.initialAssetId)) {
+      throw new RangeError(`Asset workspace ${workspace.id} has no initial asset ${workspace.initialAssetId}`);
+    }
+    this.state = {
+      assetId: workspace.initialAssetId,
+      heading: 0,
+      speed: 48,
+      seed: 71_041,
+      animate: true,
+      showFog: false,
+      showPersonalOverlay: false,
+      showOrigin: true,
+      showFootprint: true,
+    };
+    this.selectedLibraryAssetId = workspace.initialAssetId;
   }
 
   preload(): void {
@@ -311,15 +327,21 @@ export class AssetViewerScene extends Phaser.Scene {
       strokeThickness: 4,
     }).setDepth(90);
 
-    const initialMetadata = this.catalogAssets.metadata(AUTHORED_ASSET_IDS.homeIsland);
-    if (!initialMetadata) throw new Error("The home-island package is unavailable to collision authoring");
+    const initialMetadata = this.catalogAssets.metadata(this.state.assetId);
+    if (!initialMetadata) throw new Error(`${this.state.assetId} is unavailable to collision authoring`);
     for (const assetId of ASSET_IDS) {
       const metadata = this.catalogAssets.metadata(assetId);
       if (metadata) this.acceptedMetadataByAssetId.set(assetId, metadata);
     }
-    this.activateCollisionTarget("home-island", initialMetadata, initialMetadata, false);
-    const restoredLibraryAssetId = sessionStorage.getItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY);
-    if (restoredLibraryAssetId && assetLibraryEntryById(restoredLibraryAssetId)) {
+    this.activateCollisionTarget(
+      this.collisionObjectKindForAsset(this.state.assetId),
+      initialMetadata,
+      initialMetadata,
+      false,
+    );
+    const restoredLibraryAssetId = sessionStorage.getItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY)
+      ?? sessionStorage.getItem(assetWorkspaceSelectionKey(this.workspace.id));
+    if (restoredLibraryAssetId && this.workspaceEntryById(restoredLibraryAssetId)) {
       this.selectedLibraryAssetId = restoredLibraryAssetId;
     }
     sessionStorage.removeItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY);
@@ -394,9 +416,13 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private selectedLibraryEntry(): Readonly<AssetLibraryEntry> {
-    const entry = assetLibraryEntryById(this.selectedLibraryAssetId);
+    const entry = this.workspaceEntryById(this.selectedLibraryAssetId);
     if (!entry) throw new RangeError(`Unknown asset library entry ${this.selectedLibraryAssetId}`);
     return entry;
+  }
+
+  private workspaceEntryById(id: string): Readonly<AssetLibraryEntry> | undefined {
+    return this.workspaceCatalog.find((entry) => entry.id === id);
   }
 
   private selectedReferenceEntry(): Readonly<ReferenceImageLibraryEntry> | undefined {
@@ -1458,7 +1484,7 @@ export class AssetViewerScene extends Phaser.Scene {
               <label>Test binding
                 <select data-production-authoring="runtime-binding">
                   <option value="">No runtime binding</option>
-                  ${ASSET_IDS.map((assetId) => `<option value="${escapeHtml(assetId)}">${escapeHtml(assetId)}</option>`).join("")}
+                  ${this.authoredAssetIds.map((assetId) => `<option value="${escapeHtml(assetId)}">${escapeHtml(assetId)}</option>`).join("")}
                 </select>
               </label>
             </div>
@@ -1645,7 +1671,7 @@ export class AssetViewerScene extends Phaser.Scene {
       </details>`;
     const assetSelect = slot.querySelector<HTMLSelectElement>("[data-viewer=asset]");
     if (!assetSelect) return;
-    for (const assetId of ASSET_IDS) assetSelect.add(new Option(assetId, assetId));
+    for (const assetId of this.authoredAssetIds) assetSelect.add(new Option(assetId, assetId));
     assetSelect.value = this.state.assetId;
     const heading = slot.querySelector<HTMLInputElement>("[data-viewer=heading]");
     const speed = slot.querySelector<HTMLInputElement>("[data-viewer=speed]");
@@ -1672,7 +1698,7 @@ export class AssetViewerScene extends Phaser.Scene {
     };
     syncOutputs();
     assetSelect.addEventListener("change", () => {
-      if (ASSET_IDS.includes(assetSelect.value as AuthoredAssetId)) {
+      if (this.authoredAssetIds.includes(assetSelect.value as AuthoredAssetId)) {
         this.previewAssets = this.catalogAssets;
         this.selectCatalogCollisionTarget(assetSelect.value as AuthoredAssetId);
       }
@@ -1687,12 +1713,12 @@ export class AssetViewerScene extends Phaser.Scene {
     fog.addEventListener("change", () => { this.state.showFog = fog.checked; this.drawContrast(); }, { signal });
     const diagnostics = slot.querySelector<HTMLOutputElement>("[data-viewer-output=diagnostics]");
     if (diagnostics) diagnostics.value = this.catalogAssets.diagnostics.length === 0
-      ? `${ASSET_IDS.length} packages loaded with complete textures.`
+      ? `${this.authoredAssetIds.length} packages loaded with complete textures.`
       : this.catalogAssets.diagnostics.map(({ assetId, message }) => `${assetId}: ${message}`).join("\n");
     this.mountCollisionWorkbench(slot, signal);
     this.mountCandidateWorkbench(slot, signal, assetSelect);
     this.productionIntakeUi ??= mountProductionAssetIntakeUi({
-      existingAssets: ASSET_LIBRARY_CATALOG
+      existingAssets: this.workspaceCatalog
         .filter((entry) => entry.entryType !== "reference-image")
         .map(({ id, name }) => ({ id, name })),
     });
@@ -1708,7 +1734,7 @@ export class AssetViewerScene extends Phaser.Scene {
     browser.id = "asset-library-browser";
     browser.className = "asset-library-browser";
     browser.setAttribute("aria-label", "Asset library browser");
-    const groups = ASSET_LIBRARY_GROUPS.map((group) => `
+    const groups = this.workspaceGroups.map((group) => `
       <section class="asset-library-group" data-library-group="${escapeHtml(group.id)}">
         <header><h3>${escapeHtml(group.name)}</h3><span>${group.entries.length}</span></header>
         <div class="asset-library-list">
@@ -1750,7 +1776,7 @@ export class AssetViewerScene extends Phaser.Scene {
       <header class="asset-library-header">
         <div><p class="eyebrow">Wayfinders workshop</p><h2>Asset library</h2></div>
         <div class="asset-library-header-actions">
-          <span>${ASSET_LIBRARY_CATALOG.length} assets</span>
+          <span>${this.workspaceCatalog.length} assets</span>
           <button data-library-intake-new type="button">Add PNG</button>
         </div>
       </header>
@@ -2238,7 +2264,7 @@ export class AssetViewerScene extends Phaser.Scene {
     });
     let runtimeBindingAssetId: AuthoredAssetId | null = null;
     if (binding.value !== "") {
-      if (!ASSET_IDS.includes(binding.value as AuthoredAssetId)) {
+      if (!this.authoredAssetIds.includes(binding.value as AuthoredAssetId)) {
         throw new RangeError("Test binding must name a current pilot runtime asset");
       }
       runtimeBindingAssetId = binding.value as AuthoredAssetId;
@@ -2526,11 +2552,12 @@ export class AssetViewerScene extends Phaser.Scene {
       }
       this.productionLocallyDirty.delete(currentCandidate.id);
     }
-    const entry = assetLibraryEntryById(id);
+    const entry = this.workspaceEntryById(id);
     if (!entry) return;
     if (!currentCandidate) this.stashCurrentCollisionDraft();
     this.referenceLoadRevision++;
     this.selectedLibraryAssetId = entry.id;
+    sessionStorage.setItem(assetWorkspaceSelectionKey(this.workspace.id), entry.id);
     this.previewAssets = this.catalogAssets;
     if (entry.entryType === "authored-package") {
       this.productionEditorCandidateId = undefined;
@@ -2733,12 +2760,13 @@ export class AssetViewerScene extends Phaser.Scene {
     ) return;
 
     for (const target of createCollisionAuthoringTargets()) {
+      if (!this.workspace.collisionObjectKinds.includes(target.objectKind)) continue;
       targetSelect.add(new Option(`${target.label} · ${target.objectKind}`, target.objectKind));
     }
     targetSelect.addEventListener("change", () => {
       if (this.collisionSaveInFlight) return;
       const objectKind = targetSelect.value as RuntimeCollisionObjectKind;
-      if (!RUNTIME_COLLISION_OBJECT_KINDS.includes(objectKind)) return;
+      if (!this.workspace.collisionObjectKinds.includes(objectKind)) return;
       try {
         const assetId = authoredAssetIdForCollisionObject(objectKind);
         if (assetId) this.selectCatalogCollisionTarget(assetId);
@@ -3219,7 +3247,7 @@ export class AssetViewerScene extends Phaser.Scene {
 
     const filesByImageId = new Map<string, File>();
     let requirements: readonly Readonly<CandidateImageRequirement>[] = [];
-    for (const assetId of ASSET_IDS) kind.add(new Option(assetId, assetId));
+    for (const assetId of this.authoredAssetIds) kind.add(new Option(assetId, assetId));
     kind.value = this.state.assetId;
 
     const report = (message: string, error = false) => {
@@ -3454,7 +3482,7 @@ export class AssetViewerScene extends Phaser.Scene {
     window.__WAYFINDERS_ASSET_VIEWER__ = {
       snapshot: () => Object.freeze({ ...this.state }),
       select: (assetId) => {
-        if (this.collisionSaveInFlight || !ASSET_IDS.includes(assetId)) return false;
+        if (this.collisionSaveInFlight || !this.authoredAssetIds.includes(assetId)) return false;
         this.selectCatalogCollisionTarget(assetId);
         return true;
       },
@@ -3466,7 +3494,7 @@ export class AssetViewerScene extends Phaser.Scene {
       },
       diagnostics: () => this.catalogAssets.diagnostics.map(({ assetId, message }) => `${assetId}: ${message}`),
       selectCollisionTarget: (objectKind) => {
-        if (this.collisionSaveInFlight || !RUNTIME_COLLISION_OBJECT_KINDS.includes(objectKind)) return false;
+        if (this.collisionSaveInFlight || !this.workspace.collisionObjectKinds.includes(objectKind)) return false;
         const assetId = authoredAssetIdForCollisionObject(objectKind);
         if (assetId) this.selectCatalogCollisionTarget(assetId);
         else {
