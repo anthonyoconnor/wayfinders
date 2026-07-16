@@ -51,14 +51,18 @@ const phaserVersion = requireElement<HTMLElement>("#phaser-version");
 const assetModeLink = requireElement<HTMLAnchorElement>("#asset-mode-link");
 let suppressEscapeUntilKeyUp = false;
 const applicationMode = resolveWayfindersApplicationMode(window.location.search);
+const permanentAssetTools = applicationMode === "assets";
 
 function setDeveloperToolsOpen(open: boolean): void {
-  toolsPanel.hidden = !open;
-  toolsToggle.setAttribute("aria-expanded", String(open));
-  document.documentElement.dataset.developerTools = open ? "open" : "closed";
+  const effectiveOpen = permanentAssetTools || open;
+  toolsPanel.hidden = !effectiveOpen;
+  toolsToggle.setAttribute("aria-expanded", String(effectiveOpen));
+  document.documentElement.dataset.developerTools = effectiveOpen ? "open" : "closed";
 
-  if (open) toolsClose.focus();
-  else toolsToggle.focus();
+  if (!permanentAssetTools) {
+    if (effectiveOpen) toolsClose.focus();
+    else toolsToggle.focus();
+  }
 }
 
 function setStatus(message: string, state: ShellState = "ready"): void {
@@ -87,8 +91,8 @@ export function createWayfindersGame(
   return new Phaser.Game({
     type: Phaser.WEBGL,
     parent: gameHost,
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: gameHost.clientWidth || window.innerWidth,
+    height: gameHost.clientHeight || window.innerHeight,
     backgroundColor: "#061923",
     transparent: false,
     antialias: true,
@@ -144,7 +148,7 @@ developerLogCopy.addEventListener("click", () => {
 gameHost.addEventListener("pointerdown", () => gameHost.focus({ preventScroll: true }));
 
 window.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") return;
+  if (event.key !== "Escape" || permanentAssetTools) return;
   if (!toolsPanel.hidden) {
     suppressEscapeUntilKeyUp = true;
     setDeveloperToolsOpen(false);
@@ -167,6 +171,8 @@ assetModeLink.href = applicationModeHref(applicationMode);
 assetModeLink.textContent = applicationMode === "assets"
   ? "Back to game"
   : applicationMode === "asset-trial" ? "Return to asset tools" : "Asset tools";
+toolsToggle.hidden = permanentAssetTools;
+toolsClose.hidden = permanentAssetTools;
 toolsToggle.textContent = applicationMode === "assets"
   ? "Asset controls"
   : applicationMode === "asset-trial" ? "Trial controls" : "Developer tools";

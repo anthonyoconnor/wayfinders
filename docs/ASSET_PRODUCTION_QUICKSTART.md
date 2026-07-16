@@ -16,9 +16,11 @@ general art or atlas tool.
    Open `http://127.0.0.1:5173/?mode=assets`.
 2. Select any source reference and choose **Import and prepare**, or choose
    **Add PNG** for a new local image. The form reads the PNG canvas immediately
-   and keeps **Keep original PNG dimensions** selected by default. Confirm the
+   and keeps **Keep original PNG dimensions** selected by default. Review the
    inferred family, asset name, stable ID, layer role, collision semantics, and
-   optional runtime/test category. If a solid canvas is not divisible by `32`,
+   optional runtime/test category. Name and stable-ID conflicts are shown
+   immediately and block preparation; no identity-confirmation checkbox is
+   required. If a solid canvas is not divisible by `32`,
    use the offered transparent-padding action; turn off keep-original only when
    you deliberately want another output canvas.
 3. Choose **Prepare pending candidate**. The library reports validation,

@@ -159,6 +159,9 @@ export function createProductionAssetIntaker({
       if (manifest.recipes.some((recipe) => recipe.id === request.id)) {
         throw identityError("id", `Stable ID ${request.id} already exists; choose a new ID`);
       }
+      if (manifest.recipes.some((recipe) => recipe.name.toLowerCase() === request.name.toLowerCase())) {
+        throw identityError("name", `Asset name ${request.name} already exists; choose a different name`);
+      }
       const sourceFile = `assets-src/gr3/intake/${request.id.replaceAll(".", "-")}-source.png`;
       const sourcePath = path.join(repositoryRoot, sourceFile);
       const candidateDirectory = path.join(

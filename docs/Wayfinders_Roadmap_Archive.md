@@ -971,8 +971,9 @@ Status: implemented and accepted on 2026-07-16.
 
 Implementation evidence: every usable reference exposes **Import and prepare**,
 while **Add PNG** accepts one new local image. The compact form keeps inferred
-family defaults visible and confirms stable identity, layer role, collision
-semantics, and an optional pilot test binding. It reads the selected PNG's
+family defaults visible and validates unique names and stable IDs automatically
+alongside layer role, collision semantics, and an optional pilot test binding.
+It reads the selected PNG's
 native canvas immediately, keeps original dimensions by default, and offers
 transparent padding to the next `32`-pixel boundary with a warning when solid
 collision requires it. A same-origin development-server job reports

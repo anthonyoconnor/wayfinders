@@ -51,10 +51,15 @@ and defaults to keeping it. A solid candidate whose native canvas is not
 divisible by `32` receives an explicit warning and a one-action transparent-pad
 option to the next aligned canvas. Manual output dimensions remain available
 when the operator intentionally wants a different canvas. The form otherwise
-records only non-inferable recipe fields and keeps family defaults visible. A
-confirmed intake creates one stable source recipe and pending candidate through
-a serialized local job; progress, field errors, retry, cancellation, and
-refresh recovery remain in the library.
+records only non-inferable recipe fields and keeps family defaults visible.
+Existing recipe names and stable IDs are checked immediately and block
+submission; the serialized repository transaction repeats both checks before
+creating one stable source recipe and pending candidate. Progress, field errors,
+retry, cancellation, and refresh recovery remain in the library.
+
+In asset-library mode, the library and workbench are permanent left and right
+columns. The Phaser preview owns only the centre column, so camera zoom and pan
+cannot render underneath either authoring surface.
 
 Full visual candidates carry metadata and PNG bindings for explicit repository
 intake and may preserve, replace, or reset collision. Collision-only candidates
@@ -102,8 +107,8 @@ input fingerprint. A failed job cannot leave another job partially updated.
 
 Guided intake copies the selected reference or uploaded PNG under
 `assets-src/gr3/intake`, appends its validated recipe, and runs deterministic
-preparation inside the repository-wide intake lock. Identity conflicts are
-reported instead of overwriting an existing recipe, source, or candidate.
+preparation inside the repository-wide intake lock. Duplicate names and stable
+IDs are reported instead of overwriting an existing recipe, source, or candidate.
 Failure and cancellation restore the manifest and generated index and remove
 new partial output.
 

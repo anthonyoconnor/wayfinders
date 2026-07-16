@@ -1173,20 +1173,6 @@ a:focus-visible {
   line-height: 1.45;
 }
 
-.production-intake-confirm {
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-}
-
-.production-intake-confirm input {
-  width: 1.1rem;
-  min-height: 1.1rem;
-}
-
-.production-intake-confirm small {
-  grid-column: 1 / -1;
-}
-
 .production-intake-form small[data-field-error],
 .production-intake-form-error {
   min-height: 0.9rem;
@@ -1834,13 +1820,59 @@ a:focus-visible {
   padding-bottom: 0.6rem;
 }
 
+html[data-application-mode="assets"] {
+  --asset-library-width: clamp(15rem, 20vw, 18rem);
+  --asset-inspector-width: clamp(23rem, 31vw, 29rem);
+}
+
+html[data-application-mode="assets"] .app-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--asset-inspector-width);
+}
+
+html[data-application-mode="assets"] .game-region {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: var(--asset-library-width) minmax(0, 1fr);
+}
+
+html[data-application-mode="assets"] .game-host {
+  min-width: 0;
+  grid-column: 2;
+  grid-row: 1;
+}
+
+html[data-application-mode="assets"] .asset-library-browser {
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: 100%;
+  grid-column: 1;
+  grid-row: 1;
+  border-width: 0 1px 0 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 html[data-application-mode="assets"] .developer-tools {
-  inset: 4rem max(0.75rem, env(safe-area-inset-right)) max(0.75rem, env(safe-area-inset-bottom)) auto;
-  width: min(29rem, calc(100vw - 1.5rem));
+  position: relative;
+  inset: auto;
+  width: auto;
+  height: 100%;
+  border-width: 0 0 0 1px;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 html[data-application-mode="assets"] .shell-controls {
-  right: max(30rem, env(safe-area-inset-right));
+  position: absolute;
+  right: 0.75rem;
+  left: calc(var(--asset-library-width) + 0.75rem);
+}
+
+html[data-application-mode="assets"] #developer-tools-toggle,
+html[data-application-mode="assets"] #developer-tools-close {
+  display: none;
 }
 
 .developer-tools {
@@ -2331,67 +2363,16 @@ html[data-application-mode="assets"] .shell-controls {
 }
 
 @media (max-width: 70rem) {
-  .asset-library-browser {
-    width: 14rem;
-  }
-
-  html[data-application-mode="assets"] .developer-tools {
-    width: min(24rem, calc(100vw - 1.5rem));
-  }
-
-  html[data-application-mode="assets"] .shell-controls {
-    right: max(25rem, env(safe-area-inset-right));
+  html[data-application-mode="assets"] {
+    --asset-library-width: 14rem;
+    --asset-inspector-width: 24rem;
   }
 }
 
 @media (max-width: 64rem) {
-  .asset-library-browser {
-    inset: 3.8rem 0.5rem auto;
-    width: auto;
-    height: 10.5rem;
-    grid-template-columns: minmax(10rem, 0.42fr) minmax(14rem, 0.58fr);
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-
-  .asset-library-header {
-    grid-column: 1;
-  }
-
-  .asset-library-filters {
-    grid-column: 1;
-    grid-row: 2;
-    align-content: start;
-    border-bottom: 0;
-  }
-
-  .asset-library-groups {
-    display: flex;
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    gap: 0.7rem;
-    overflow: auto;
-  }
-
-  .asset-library-group {
-    min-width: 13rem;
-    margin: 0;
-  }
-
-  html[data-application-mode="assets"] .developer-tools {
-    inset: auto 0.5rem 0.5rem;
-    width: auto;
-    height: min(40dvh, 26rem);
-  }
-
-  html[data-application-mode="assets"] .shell-controls {
-    top: 0.5rem;
-    right: 0.5rem;
-    left: 0.5rem;
-    justify-content: flex-end;
-  }
-
-  html[data-application-mode="assets"] .game-status {
-    margin-right: auto;
+  html[data-application-mode="assets"] {
+    --asset-library-width: 13rem;
+    --asset-inspector-width: 20rem;
   }
 }
 

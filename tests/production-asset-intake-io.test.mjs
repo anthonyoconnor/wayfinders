@@ -37,7 +37,6 @@ function request(id = "production.island.test-cay") {
     source: { kind: "upload", fileName: "test-cay.png", pngBase64: png().toString("base64") },
     name: "Test Cay",
     id,
-    idConfirmed: true,
     family: "island",
     targetWidth: 32,
     targetHeight: 32,
@@ -81,7 +80,7 @@ describe("GR-3.5 repository intake transaction", () => {
     expect(await readFile(path.join(root, manifest.recipes[0].provenance.sourceFile))).toEqual(png());
   });
 
-  it("rejects re-import without changing the original identity or source", async () => {
+  it("rejects duplicate stable IDs and display names without changing the original source", async () => {
     const root = await repository();
     const intake = createProductionAssetIntaker({ repositoryRoot: root, prepareRecipe: async () => undefined });
     await intake(request());
@@ -90,6 +89,12 @@ describe("GR-3.5 repository intake transaction", () => {
 
     await expect(intake(request())).rejects.toMatchObject({
       fieldErrors: { id: expect.stringMatching(/already exists/u) },
+    });
+    await expect(intake({
+      ...request("production.island.other-cay"),
+      name: "test cay",
+    })).rejects.toMatchObject({
+      fieldErrors: { name: expect.stringMatching(/already exists/u) },
     });
     expect(await readFile(manifestPath)).toEqual(before);
   });

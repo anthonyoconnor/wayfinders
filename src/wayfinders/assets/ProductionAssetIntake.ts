@@ -23,7 +23,6 @@ export interface ProductionAssetIntakeRequest {
   readonly source: ProductionAssetIntakeSource;
   readonly name: string;
   readonly id: string;
-  readonly idConfirmed: true;
   readonly family: ProductionAssetFamily;
   readonly targetWidth: number;
   readonly targetHeight: number;
@@ -195,7 +194,6 @@ export function validateProductionAssetIntakeRequest(input: unknown): Readonly<P
   if (name.length < 2 || name.length > 80) errors.name = "Enter an asset name from 2 to 80 characters";
   const id = typeof parsed.id === "string" ? parsed.id.trim() : "";
   if (!STABLE_ID.test(id) || id.length > 96) errors.id = "Use a lowercase stable ID with dots or hyphens";
-  if (parsed.idConfirmed !== true) errors.idConfirmed = "Confirm that this stable ID is intentional";
 
   const family = typeof parsed.family === "string" && FAMILIES.has(parsed.family as ProductionAssetFamily)
     ? parsed.family as ProductionAssetFamily
@@ -270,7 +268,6 @@ export function validateProductionAssetIntakeRequest(input: unknown): Readonly<P
     source: Object.freeze(source),
     name,
     id,
-    idConfirmed: true,
     family,
     targetWidth,
     targetHeight,

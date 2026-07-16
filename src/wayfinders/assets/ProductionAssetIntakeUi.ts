@@ -60,7 +60,11 @@ export function mountProductionAssetIntakeUi({
     sessionStorage.setItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY, recipeId);
     window.location.reload();
   },
-}: Readonly<{ onCompleted?: (recipeId: string) => void }> = {}): ProductionAssetIntakeUi {
+  existingAssets = [],
+}: Readonly<{
+  onCompleted?: (recipeId: string) => void;
+  existingAssets?: readonly Readonly<{ id: string; name: string }>[];
+}> = {}): ProductionAssetIntakeUi {
   const dialog = document.createElement("dialog");
   dialog.className = "production-intake-dialog";
   dialog.innerHTML = `
@@ -98,7 +102,6 @@ export function mountProductionAssetIntakeUi({
         </select><small data-field-error="runtimeCategory"></small></label>
       </div>
       <p data-intake-defaults class="production-intake-defaults"></p>
-      <label class="production-intake-confirm"><input name="idConfirmed" type="checkbox"> I confirm this stable ID; import must never silently replace it.<small data-field-error="idConfirmed"></small></label>
       <div class="production-intake-progress" data-intake-progress hidden>
         <progress max="4" value="0"></progress><output></output>
       </div>
@@ -131,6 +134,9 @@ export function mountProductionAssetIntakeUi({
   let sourceDimensions: Readonly<ProductionAssetDimensions> | undefined;
   let canvasSizing: ProductionAssetCanvasSizing = "native";
   let dimensionReadRevision = 0;
+  let sourceReadPending = false;
+  const existingIds = new Set(existingAssets.map(({ id }) => id));
+  const existingNames = new Set(existingAssets.map(({ name }) => name.trim().toLowerCase()));
 
   const clearErrors = () => {
     for (const output of form.querySelectorAll<HTMLElement>("[data-field-error]")) output.textContent = "";
@@ -141,6 +147,19 @@ export function mountProductionAssetIntakeUi({
       const output = form.querySelector<HTMLElement>(`[data-field-error="${CSS.escape(name)}"]`);
       if (output) output.textContent = message;
     }
+  };
+  const updateIdentityAvailability = (jobActive = false): boolean => {
+    const name = field<HTMLInputElement>(form, "name").value.trim();
+    const id = field<HTMLInputElement>(form, "id").value.trim();
+    const duplicateName = existingNames.has(name.toLowerCase());
+    const duplicateId = existingIds.has(id);
+    const nameError = form.querySelector<HTMLElement>('[data-field-error="name"]');
+    const idError = form.querySelector<HTMLElement>('[data-field-error="id"]');
+    if (nameError) nameError.textContent = duplicateName ? `Asset name ${name} is already in use` : "";
+    if (idError) idError.textContent = duplicateId ? `Stable ID ${id} is already in use` : "";
+    const available = !duplicateName && !duplicateId;
+    if (submit) submit.disabled = jobActive || sourceReadPending || !available;
+    return available;
   };
   const targetDimensions = (): ProductionAssetDimensions => ({
     width: Number(field<HTMLInputElement>(form, "targetWidth").value),
@@ -210,10 +229,10 @@ export function mountProductionAssetIntakeUi({
     field<HTMLSelectElement>(form, "layerRole").value = selected.layerRole;
     field<HTMLSelectElement>(form, "collisionSemantics").value = selected.collisionSemantics;
     field<HTMLSelectElement>(form, "runtimeCategory").value = selected.runtimeCategory;
-    if (defaults) defaults.textContent = `Family defaults: ${selected.summary}. You can adjust them before confirmation.`;
+    if (defaults) defaults.textContent = `Family defaults: ${selected.summary}. You can adjust them before preparation.`;
     const assetName = name ?? field<HTMLInputElement>(form, "name").value;
     field<HTMLInputElement>(form, "id").value = suggestedProductionAssetId(assetName, family);
-    field<HTMLInputElement>(form, "idConfirmed").checked = false;
+    updateIdentityAvailability();
     updateDimensionControls();
   };
   const renderJob = (job: IntakeJob) => {
@@ -231,6 +250,7 @@ export function mountProductionAssetIntakeUi({
     for (const control of form.elements) {
       if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) control.disabled = active;
     }
+    updateIdentityAvailability(active);
     updateDimensionControls(active);
     if (job.status === "failed") {
       showErrors(job.fieldErrors ?? { form: job.message });
@@ -268,11 +288,13 @@ export function mountProductionAssetIntakeUi({
     sourceDimensions = undefined;
     const sourceFile = (event.currentTarget as HTMLInputElement).files?.[0];
     if (!sourceFile) {
-      if (submit) submit.disabled = false;
+      sourceReadPending = false;
+      updateIdentityAvailability();
       updateDimensionControls();
       return;
     }
-    if (submit) submit.disabled = true;
+    sourceReadPending = true;
+    updateIdentityAvailability();
     void sourceFile.arrayBuffer()
       .then((bytes) => readSourceDimensions(bytes, revision))
       .catch((error) => {
@@ -281,7 +303,10 @@ export function mountProductionAssetIntakeUi({
         updateDimensionControls();
       })
       .finally(() => {
-        if (revision === dimensionReadRevision && submit) submit.disabled = false;
+        if (revision === dimensionReadRevision) {
+          sourceReadPending = false;
+          updateIdentityAvailability();
+        }
       });
   });
   field<HTMLInputElement>(form, "keepOriginalDimensions").addEventListener("change", (event) => {
@@ -318,11 +343,9 @@ export function mountProductionAssetIntakeUi({
   field<HTMLInputElement>(form, "name").addEventListener("input", () => {
     const family = field<HTMLSelectElement>(form, "family").value as ProductionAssetFamily;
     field<HTMLInputElement>(form, "id").value = suggestedProductionAssetId(field<HTMLInputElement>(form, "name").value, family);
-    field<HTMLInputElement>(form, "idConfirmed").checked = false;
+    updateIdentityAvailability();
   });
-  field<HTMLInputElement>(form, "id").addEventListener("input", () => {
-    field<HTMLInputElement>(form, "idConfirmed").checked = false;
-  });
+  field<HTMLInputElement>(form, "id").addEventListener("input", () => updateIdentityAvailability());
   close?.addEventListener("click", () => dialog.close());
   cancel?.addEventListener("click", () => {
     if (!currentJob) return;
@@ -336,6 +359,7 @@ export function mountProductionAssetIntakeUi({
     event.preventDefault();
     void (async () => {
       clearErrors();
+      if (!updateIdentityAvailability()) return;
       const sourceFile = field<HTMLInputElement>(form, "sourceFile").files?.[0];
       if (!reference && !sourceFile) {
         showErrors({ source: "Choose a local PNG" });
@@ -360,7 +384,6 @@ export function mountProductionAssetIntakeUi({
             source,
             name: field<HTMLInputElement>(form, "name").value,
             id: field<HTMLInputElement>(form, "id").value,
-            idConfirmed: field<HTMLInputElement>(form, "idConfirmed").checked,
             family: field<HTMLSelectElement>(form, "family").value,
             targetWidth: Number(field<HTMLInputElement>(form, "targetWidth").value),
             targetHeight: Number(field<HTMLInputElement>(form, "targetHeight").value),
@@ -381,7 +404,7 @@ export function mountProductionAssetIntakeUi({
       } catch (error) {
         showErrors({ form: error instanceof Error ? error.message : "Asset intake could not start" });
       } finally {
-        if (submit) submit.disabled = false;
+        updateIdentityAvailability();
       }
     })();
   });
@@ -398,6 +421,7 @@ export function mountProductionAssetIntakeUi({
       const revision = ++dimensionReadRevision;
       sourceDimensions = undefined;
       canvasSizing = "native";
+      sourceReadPending = false;
       form.reset();
       clearErrors();
       currentJob = undefined;

@@ -16,7 +16,6 @@ const valid = {
   },
   name: "Crescent Cay",
   id: "production.island.crescent-cay",
-  idConfirmed: true,
   family: "island",
   targetWidth: 480,
   targetHeight: 480,
@@ -55,7 +54,7 @@ describe("GR-3.5 guided production asset intake", () => {
       .toBe("production.island.shell-masons");
   });
 
-  it("normalizes a confirmed reference recipe request", () => {
+  it("normalizes a reference recipe request without a manual identity confirmation", () => {
     expect(validateProductionAssetIntakeRequest(valid)).toEqual(valid);
   });
 
@@ -63,7 +62,6 @@ describe("GR-3.5 guided production asset intake", () => {
     expect(() => validateProductionAssetIntakeRequest({
       ...valid,
       id: "Bad ID",
-      idConfirmed: false,
       targetWidth: 481,
       collisionSemantics: "solid",
       family: "shoal",
@@ -74,7 +72,6 @@ describe("GR-3.5 guided production asset intake", () => {
       validateProductionAssetIntakeRequest({
         ...valid,
         id: "Bad ID",
-        idConfirmed: false,
         targetWidth: 481,
         family: "shoal",
         collisionSemantics: "solid",
@@ -85,7 +82,6 @@ describe("GR-3.5 guided production asset intake", () => {
       expect(error).toBeInstanceOf(ProductionAssetIntakeValidationError);
       expect((error as ProductionAssetIntakeValidationError).fieldErrors).toMatchObject({
         id: expect.any(String),
-        idConfirmed: expect.any(String),
         targetWidth: expect.any(String),
         collisionSemantics: expect.any(String),
         runtimeCategory: expect.any(String),

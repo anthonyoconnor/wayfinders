@@ -1691,7 +1691,11 @@ export class AssetViewerScene extends Phaser.Scene {
       : this.catalogAssets.diagnostics.map(({ assetId, message }) => `${assetId}: ${message}`).join("\n");
     this.mountCollisionWorkbench(slot, signal);
     this.mountCandidateWorkbench(slot, signal, assetSelect);
-    this.productionIntakeUi ??= mountProductionAssetIntakeUi();
+    this.productionIntakeUi ??= mountProductionAssetIntakeUi({
+      existingAssets: ASSET_LIBRARY_CATALOG
+        .filter((entry) => entry.entryType !== "reference-image")
+        .map(({ id, name }) => ({ id, name })),
+    });
     this.mountAssetLibraryBrowser(signal);
     this.mountSelectedAssetControls(slot, signal);
     this.syncSelectedAssetUi();

@@ -334,9 +334,14 @@ navigation grid, the form warns before submission and offers transparent canvas
 padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
-Confirmed family defaults and stable identity become one validated source
-recipe and one pending candidate through the constrained development-server
-API. Island preparation creates a deterministic, editable `8`-pixel shoreline
+The asset-library route reserves permanent left and right columns for the
+library and structured workbench. The Phaser preview is sized to the centre
+column and cannot render behind those controls. Existing recipe names and stable
+IDs are checked in the form and again under the repository lock; conflicts block
+intake without a separate confirmation step. Validated family defaults and
+identity become one source recipe and one pending candidate through the
+constrained development-server API. Island preparation creates a deterministic,
+editable `8`-pixel shoreline
 seed from prepared alpha and retains its method and uncertainty warnings with
 the draft. Passable families remain explicitly empty, and no generated draft
 becomes runtime authority automatically.

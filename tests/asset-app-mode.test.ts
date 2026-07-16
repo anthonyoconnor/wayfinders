@@ -118,4 +118,30 @@ describe("GR-2.1 asset application mode", () => {
     expect(source).toContain("productionAssetPngDimensions");
     expect(source).toContain("Pad transparently to");
   });
+
+  it("keeps asset-library sidebars permanent and reserves the center column for Phaser", () => {
+    const styles = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+    const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+
+    expect(styles).toContain('html[data-application-mode="assets"] .app-shell');
+    expect(styles).toContain("grid-template-columns: minmax(0, 1fr) var(--asset-inspector-width)");
+    expect(styles).toMatch(/data-application-mode="assets"\] \.game-host[\s\S]*?grid-column: 2/u);
+    expect(styles).toMatch(/data-application-mode="assets"\] \.asset-library-browser[\s\S]*?position: relative/u);
+    expect(styles).toMatch(/data-application-mode="assets"\] \.developer-tools[\s\S]*?position: relative/u);
+    expect(main).toContain('const permanentAssetTools = applicationMode === "assets"');
+    expect(main).toContain("const effectiveOpen = permanentAssetTools || open");
+    expect(main).toContain("gameHost.clientWidth || window.innerWidth");
+  });
+
+  it("checks intake name and stable-ID availability without a confirmation checkbox", () => {
+    const source = readFileSync(
+      new URL("../src/wayfinders/assets/ProductionAssetIntakeUi.ts", import.meta.url),
+      "utf8",
+    );
+
+    expect(source).toContain("existingNames");
+    expect(source).toContain("existingIds");
+    expect(source).toContain("updateIdentityAvailability");
+    expect(source).not.toContain("idConfirmed");
+  });
 });
