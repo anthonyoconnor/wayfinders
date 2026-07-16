@@ -1,4 +1,8 @@
 import Phaser from "phaser";
+import {
+  AUTHORED_ASSET_IDS,
+  type AuthoredHomeIslandMetadata,
+} from "../assets/AuthoredAssetContracts";
 import { createAuthoredHomeIslandVisual, type AuthoredHomeIslandVisual } from "../assets/AuthoredAssetPresentation";
 import type { AuthoredAssetRuntime } from "../assets/PilotAssetRuntime";
 import { prototypeConfig } from "../config/prototypeConfig";
@@ -8,6 +12,11 @@ import { seededValue } from "../world/SeededRandom";
 import { KnowledgeState, TerrainType } from "../world/TileData";
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import type { WorldChunk } from "../world/WorldChunk";
+import { activeChunkKey } from "./activation/ActiveChunkSet";
+import type {
+  ActiveChunkDelta,
+  ActiveChunkEntry,
+} from "./activation/ActiveChunkContracts";
 
 const COLORS = {
   ocean: 0x082f40,
@@ -106,162 +115,177 @@ class CameraCulledGraphics extends Phaser.GameObjects.Graphics {
 }
 
 interface ChunkView {
+  entry: Readonly<ActiveChunkEntry>;
   chunkX: number;
   chunkY: number;
   originX: number;
   originY: number;
   bounds: Phaser.Geom.Rectangle;
   layers: Partial<Record<ChunkLayerName, CameraCulledGraphics>>;
-  renderers: CameraCulledGraphics[];
+  homeStructures?: Phaser.GameObjects.Graphics;
+  homeVisual?: AuthoredHomeIslandVisual;
+  label?: Phaser.GameObjects.Text;
+}
+
+/** Bounded counters suitable for the runtime performance HUD and regression tests. */
+export interface WorldRendererTelemetry {
+  readonly updateCount: number;
+  readonly activeChunks: number;
+  readonly activeChunkKeys: readonly string[];
+  readonly activeGraphicsObjects: number;
+  readonly activeTextObjects: number;
+  readonly activeAuthoredImageObjects: number;
+  /** Per-chunk Phaser objects, excluding the constant ocean backdrop. */
+  readonly activeResourceObjects: number;
+  readonly sharedObjects: number;
+  readonly totalObjects: number;
+  readonly totalChunkActivations: number;
+  readonly totalChunkDeactivations: number;
+  readonly totalResourceObjectsCreated: number;
+  readonly totalResourceObjectsDestroyed: number;
+  readonly peakActiveChunks: number;
+  readonly peakResourceObjects: number;
+  readonly tilesVisitedLastUpdate: number;
+  readonly totalTilesVisited: number;
+}
+
+export interface WorldRendererActivationResult {
+  readonly activated: number;
+  readonly deactivated: number;
+  readonly retained: number;
+  readonly telemetry: Readonly<WorldRendererTelemetry>;
 }
 
 /** Developer-art renderer. Gameplay terrain remains owned by WorldGrid. */
 export class WorldRenderer {
   private readonly ocean: Phaser.GameObjects.Rectangle;
-  private readonly homeStructures: Phaser.GameObjects.Graphics;
-  private readonly homeVisual?: AuthoredHomeIslandVisual;
-  private readonly labels: Phaser.GameObjects.Text[] = [];
-  private chunks: ChunkView[] = [];
-  private lastWorld?: GeneratedWorld["grid"];
+  private readonly authoredHomeMetadata?: Readonly<AuthoredHomeIslandMetadata>;
+  private readonly chunks = new Map<string, ChunkView>();
+  private generated?: GeneratedWorld;
+  private islandsById: ReadonlyMap<number, GeneratedIsland> = new Map();
   private observedKnowledgeRevisions = new WeakMap<WorldChunk, number>();
+  private updateCount = 0;
+  private totalChunkActivations = 0;
+  private totalChunkDeactivations = 0;
+  private totalResourceObjectsCreated = 0;
+  private totalResourceObjectsDestroyed = 0;
+  private peakActiveChunks = 0;
+  private peakResourceObjects = 0;
+  private tilesVisitedLastUpdate = 0;
+  private totalTilesVisited = 0;
   private destroyed = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
-    pilotAssets?: Readonly<AuthoredAssetRuntime>,
+    private readonly pilotAssets?: Readonly<AuthoredAssetRuntime>,
   ) {
     this.ocean = scene.add.rectangle(0, 0, 1, 1, COLORS.ocean, 1).setOrigin(0).setDepth(0);
-    // Home structures are a constant-size overlay. Keeping them separate avoids
-    // coupling their cross-chunk dock geometry to a single chunk's visibility.
-    this.homeStructures = scene.add.graphics().setDepth(5.5);
-    this.homeVisual = pilotAssets
-      ? createAuthoredHomeIslandVisual(scene, pilotAssets)
+    this.ocean.setVisible(false);
+    const homeMetadata = pilotAssets?.metadata(AUTHORED_ASSET_IDS.homeIsland);
+    this.authoredHomeMetadata = homeMetadata?.kind === "home-island"
+      && homeMetadata.render.slices.every(({ imageId }) => pilotAssets?.textureKey(imageId) !== undefined)
+      ? homeMetadata
       : undefined;
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
   }
 
-  render(generated: GeneratedWorld): void {
-    if (this.destroyed) return;
-    const { grid, landmarks, seed } = generated;
+  /**
+   * Binds a generated world and presents only the explicitly supplied chunks.
+   * Passing no chunks intentionally creates no terrain presentation resources.
+   */
+  render(
+    generated: GeneratedWorld,
+    activeChunks: readonly Readonly<ActiveChunkEntry>[] = [],
+  ): Readonly<WorldRendererActivationResult> {
+    if (this.destroyed) return this.activationResult(0, 0, 0);
+    this.clearWorld();
+    const { grid } = generated;
     const size = prototypeConfig.navigation.tileSize;
-    const islandsById = new Map(generated.islands.map((island) => [island.id, island]));
-    this.clear();
-    this.lastWorld = grid;
-    this.observedKnowledgeRevisions = new WeakMap();
+    this.generated = generated;
+    this.islandsById = new Map(generated.islands.map((island) => [island.id, island]));
 
     this.ocean
       .setSize(grid.width * size, grid.height * size)
       .setPosition(0, 0)
-      .setVisible(true);
-    this.chunks = this.createChunkViews(generated);
-    const chunkColumns = Math.ceil(grid.width / grid.chunkSize);
+      .setVisible(false);
+    return this.syncActiveChunks(activeChunks);
+  }
 
-    grid.forEachTile((x, y) => {
-      const tile = grid.getTile(x, y);
-      const chunk = this.chunks[
-        Math.floor(y / grid.chunkSize) * chunkColumns + Math.floor(x / grid.chunkSize)
-      ];
-      const px = (x - chunk.chunkX * grid.chunkSize) * size;
-      const py = (y - chunk.chunkY * grid.chunkSize) * size;
-      const supported = tile.knowledge === KnowledgeState.Supported;
-      if (this.isAuthoredHomeFootprint(generated, x, y)) {
-        if (supported) {
-          const water = this.getLayer(chunk, "water");
-          water.fillStyle(COLORS.supported, 1);
-          water.fillRect(px, py, size + 1, size + 1);
-        }
-        return;
-      }
-      const island = islandsById.get(tile.islandId);
-      const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
+  /** Applies the bounded ActiveChunkSet result without scanning non-active world tiles. */
+  applyActiveChunks(delta: Readonly<ActiveChunkDelta>): Readonly<WorldRendererActivationResult> {
+    return this.syncActiveChunks(delta.active);
+  }
 
-      let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
-      if (tile.terrain === TerrainType.ShallowOcean) {
-        waterColor = supported ? palette.shallowSupported : palette.shallow;
-      }
-      if (waterColor !== COLORS.ocean) {
-        const water = this.getLayer(chunk, "water");
-        water.fillStyle(waterColor, 1);
-        water.fillRect(px, py, size + 1, size + 1);
-      }
+  /**
+   * Reconciles presentation resources to an explicit active set. Missing chunks
+   * are destroyed before new chunks are built in load-priority order.
+   */
+  syncActiveChunks(
+    entries: readonly Readonly<ActiveChunkEntry>[],
+  ): Readonly<WorldRendererActivationResult> {
+    if (this.destroyed || !this.generated) return this.activationResult(0, 0, 0);
+    this.updateCount++;
+    this.tilesVisitedLastUpdate = 0;
 
-      if (tile.terrain === TerrainType.Land) {
-        const terrain = this.getLayer(chunk, "terrain");
-        const variation = seededValue(seed + 401, x, y) > 0.5 ? palette.land : palette.landDark;
-        terrain.fillStyle(variation, 1);
-        terrain.fillRoundedRect(px + 1, py + 1, size - 2, size - 2, size * 0.18);
-      } else if (tile.terrain === TerrainType.Rock) {
-        const terrain = this.getLayer(chunk, "terrain");
-        terrain.fillStyle(palette.rock, 1);
-        terrain.fillTriangle(
-          px + size * 0.12,
-          py + size * 0.84,
-          px + size * 0.52,
-          py + size * 0.12,
-          px + size * 0.9,
-          py + size * 0.84,
-        );
-      } else if (tile.terrain === TerrainType.Reef) {
-        const terrain = this.getLayer(chunk, "terrain");
-        terrain.fillStyle(palette.reef, 0.9);
-        terrain.fillCircle(px + size * 0.32, py + size * 0.54, size * 0.15);
-        terrain.fillCircle(px + size * 0.63, py + size * 0.42, size * 0.12);
-      }
-
-      if (tile.terrain === TerrainType.Land) {
-        this.drawCoastTile(generated, chunk, island ? palette.coast : COLORS.sand, x, y, px, py, size);
-      }
-      if (island) this.drawIslandDecoration(chunk, island, tile.terrain, x, y, px, py, size, seed);
-
-      if ((x + y) % 2 === 0 && tile.terrain !== TerrainType.Land) {
-        const waves = this.getLayer(chunk, "waves");
-        const waveOffset = seededValue(seed + 503, x, y) * size * 0.24;
-        waves.lineStyle(1, COLORS.wave, supported ? 0.2 : 0.12);
-        waves.beginPath();
-        waves.moveTo(px + size * 0.2 + waveOffset, py + size * 0.52);
-        waves.lineTo(px + size * 0.45 + waveOffset, py + size * 0.46);
-        waves.lineTo(px + size * 0.7 + waveOffset, py + size * 0.52);
-        waves.strokePath();
-      }
-
-    });
-
-    this.drawHome(generated);
-
-    const labelAt = gridToWorld({ x: landmarks.homeCenter.x, y: landmarks.homeCenter.y - prototypeConfig.world.homeIslandRadius - 2 });
-    const label = this.scene.add.text(labelAt.x, labelAt.y, "HOME ISLAND", {
-      color: "#f5e4b3",
-      fontFamily: "ui-monospace, monospace",
-      fontSize: "14px",
-      fontStyle: "bold",
-      stroke: "#10242a",
-      strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(10);
-    this.labels.push(label);
-    for (const chunk of grid.getLoadedChunks()) {
-      this.observedKnowledgeRevisions.set(chunk, chunk.knowledgeRevision);
+    const desired = new Map<string, Readonly<ActiveChunkEntry>>();
+    for (const entry of entries) {
+      this.assertValidChunkEntry(entry);
+      if (desired.has(entry.key)) throw new RangeError(`Duplicate active chunk ${entry.key}`);
+      desired.set(entry.key, entry);
     }
+
+    let deactivated = 0;
+    for (const key of [...this.chunks.keys()]) {
+      if (desired.has(key)) continue;
+      this.deactivateChunk(key);
+      deactivated++;
+    }
+
+    let activated = 0;
+    let retained = 0;
+    const ordered = [...desired.values()].sort(compareActiveChunkEntry);
+    for (const entry of ordered) {
+      const existing = this.chunks.get(entry.key);
+      if (existing) {
+        existing.entry = entry;
+        retained++;
+        continue;
+      }
+      this.activateChunk(entry);
+      activated++;
+    }
+
+    this.totalChunkActivations += activated;
+    this.totalChunkDeactivations += deactivated;
+    this.peakActiveChunks = Math.max(this.peakActiveChunks, this.chunks.size);
+    const activeResources = this.countActiveResources();
+    this.peakResourceObjects = Math.max(this.peakResourceObjects, activeResources);
+    this.ocean.setVisible(this.chunks.size > 0);
+    return this.activationResult(activated, deactivated, retained);
   }
 
   /** Repaints only water layers whose authoritative knowledge changed since the last world render. */
   refreshKnowledge(generated: GeneratedWorld): number {
     if (this.destroyed) return 0;
-    if (this.lastWorld !== generated.grid) {
+    if (this.generated?.grid !== generated.grid) {
       this.render(generated);
-      return this.chunks.length;
+      return 0;
     }
 
-    const islandsById = new Map(generated.islands.map((island) => [island.id, island]));
-    const columns = Math.ceil(generated.grid.width / generated.grid.chunkSize);
+    this.generated = generated;
     let refreshed = 0;
-    for (const worldChunk of generated.grid.getLoadedChunks()) {
+    for (const view of this.chunks.values()) {
+      const worldChunk = generated.grid.getChunk(view.chunkX, view.chunkY);
+      if (!worldChunk) continue;
       if (this.observedKnowledgeRevisions.get(worldChunk) === worldChunk.knowledgeRevision) continue;
-      const view = this.chunks[worldChunk.chunkY * columns + worldChunk.chunkX];
-      if (!view) continue;
-      this.redrawWaterLayer(generated, view, islandsById);
+      const resourcesBefore = this.chunkResourceCount(view);
+      this.redrawWaterLayer(generated, view, this.islandsById);
+      const resourcesCreated = this.chunkResourceCount(view) - resourcesBefore;
+      this.totalResourceObjectsCreated += resourcesCreated;
       this.observedKnowledgeRevisions.set(worldChunk, worldChunk.knowledgeRevision);
       refreshed++;
     }
+    this.peakResourceObjects = Math.max(this.peakResourceObjects, this.countActiveResources());
     return refreshed;
   }
 
@@ -269,45 +293,92 @@ export class WorldRenderer {
     if (this.destroyed) return;
     this.destroyed = true;
     this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
-    this.clear();
+    this.clearWorld();
     this.ocean.destroy();
-    this.homeStructures.destroy();
-    this.homeVisual?.destroy();
   }
 
-  private createChunkViews(generated: GeneratedWorld): ChunkView[] {
+  getTelemetry(): Readonly<WorldRendererTelemetry> {
+    const counts = this.objectCounts();
+    const activeChunkKeys = [...this.chunks.values()]
+      .sort((left, right) => compareActiveChunkEntry(left.entry, right.entry))
+      .map(({ entry }) => entry.key);
+    return Object.freeze({
+      updateCount: this.updateCount,
+      activeChunks: this.chunks.size,
+      activeChunkKeys: Object.freeze(activeChunkKeys),
+      activeGraphicsObjects: counts.graphics,
+      activeTextObjects: counts.text,
+      activeAuthoredImageObjects: counts.authoredImages,
+      activeResourceObjects: counts.resources,
+      sharedObjects: this.destroyed ? 0 : 1,
+      totalObjects: counts.resources + (this.destroyed ? 0 : 1),
+      totalChunkActivations: this.totalChunkActivations,
+      totalChunkDeactivations: this.totalChunkDeactivations,
+      totalResourceObjectsCreated: this.totalResourceObjectsCreated,
+      totalResourceObjectsDestroyed: this.totalResourceObjectsDestroyed,
+      peakActiveChunks: this.peakActiveChunks,
+      peakResourceObjects: this.peakResourceObjects,
+      tilesVisitedLastUpdate: this.tilesVisitedLastUpdate,
+      totalTilesVisited: this.totalTilesVisited,
+    });
+  }
+
+  private activateChunk(entry: Readonly<ActiveChunkEntry>): void {
+    const generated = this.generated;
+    if (!generated) throw new Error("A world must be bound before chunks can be activated");
+    const chunk = this.createChunkView(generated, entry);
+    this.chunks.set(entry.key, chunk);
+    this.renderChunk(generated, chunk);
+    if (this.isHomeOwnerChunk(generated, chunk)) this.drawHome(generated, chunk);
+    const worldChunk = generated.grid.getChunk(chunk.chunkX, chunk.chunkY);
+    if (worldChunk) this.observedKnowledgeRevisions.set(worldChunk, worldChunk.knowledgeRevision);
+    const created = this.chunkResourceCount(chunk);
+    this.totalResourceObjectsCreated += created;
+  }
+
+  private deactivateChunk(key: string): void {
+    const chunk = this.chunks.get(key);
+    if (!chunk) return;
+    const destroyed = this.chunkResourceCount(chunk);
+    for (const layer of Object.values(chunk.layers)) layer?.destroy();
+    chunk.homeStructures?.destroy();
+    chunk.homeVisual?.destroy();
+    chunk.label?.destroy();
+    const worldChunk = this.generated?.grid.getChunk(chunk.chunkX, chunk.chunkY);
+    if (worldChunk) this.observedKnowledgeRevisions.delete(worldChunk);
+    this.chunks.delete(key);
+    this.totalResourceObjectsDestroyed += destroyed;
+  }
+
+  private createChunkView(
+    generated: GeneratedWorld,
+    entry: Readonly<ActiveChunkEntry>,
+  ): ChunkView {
     const { grid } = generated;
     const tileSize = prototypeConfig.navigation.tileSize;
     const padding = Math.max(2, tileSize * 0.12);
-    const columns = Math.ceil(grid.width / grid.chunkSize);
-    const rows = Math.ceil(grid.height / grid.chunkSize);
-    const chunks: ChunkView[] = [];
-
-    for (let chunkY = 0; chunkY < rows; chunkY++) {
-      for (let chunkX = 0; chunkX < columns; chunkX++) {
-        const startX = chunkX * grid.chunkSize;
-        const startY = chunkY * grid.chunkSize;
-        const originX = startX * tileSize;
-        const originY = startY * tileSize;
-        const width = Math.min(grid.chunkSize, grid.width - startX) * tileSize;
-        const height = Math.min(grid.chunkSize, grid.height - startY) * tileSize;
-        chunks.push({
-          chunkX,
-          chunkY,
-          originX,
-          originY,
-          bounds: new Phaser.Geom.Rectangle(
-            originX - padding,
-            originY - padding,
-            width + padding * 2,
-            height + padding * 2,
-          ),
-          layers: {},
-          renderers: [],
-        });
-      }
-    }
-    return chunks;
+    const chunkX = entry.coordinate.x;
+    const chunkY = entry.coordinate.y;
+    const startX = chunkX * grid.chunkSize;
+    const startY = chunkY * grid.chunkSize;
+    const originX = startX * tileSize;
+    const originY = startY * tileSize;
+    const width = Math.min(grid.chunkSize, grid.width - startX) * tileSize;
+    const height = Math.min(grid.chunkSize, grid.height - startY) * tileSize;
+    return {
+      entry,
+      chunkX,
+      chunkY,
+      originX,
+      originY,
+      bounds: new Phaser.Geom.Rectangle(
+        originX - padding,
+        originY - padding,
+        width + padding * 2,
+        height + padding * 2,
+      ),
+      layers: {},
+    };
   }
 
   private getLayer(chunk: ChunkView, name: ChunkLayerName): CameraCulledGraphics {
@@ -317,8 +388,86 @@ export class WorldRenderer {
       .setPosition(chunk.originX, chunk.originY)
       .setDepth(CHUNK_LAYER_DEPTHS[name]);
     chunk.layers[name] = layer;
-    chunk.renderers.push(layer);
     return layer;
+  }
+
+  private renderChunk(generated: GeneratedWorld, chunk: ChunkView): void {
+    const { grid, seed } = generated;
+    const size = prototypeConfig.navigation.tileSize;
+    const startX = chunk.chunkX * grid.chunkSize;
+    const startY = chunk.chunkY * grid.chunkSize;
+    const endX = Math.min(grid.width, startX + grid.chunkSize);
+    const endY = Math.min(grid.height, startY + grid.chunkSize);
+
+    for (let y = startY; y < endY; y++) {
+      for (let x = startX; x < endX; x++) {
+        this.tilesVisitedLastUpdate++;
+        this.totalTilesVisited++;
+        const tile = grid.getTile(x, y);
+        const px = (x - startX) * size;
+        const py = (y - startY) * size;
+        const supported = tile.knowledge === KnowledgeState.Supported;
+        if (this.isAuthoredHomeFootprint(generated, x, y)) {
+          if (supported) {
+            const water = this.getLayer(chunk, "water");
+            water.fillStyle(COLORS.supported, 1);
+            water.fillRect(px, py, size + 1, size + 1);
+          }
+          continue;
+        }
+
+        const island = this.islandsById.get(tile.islandId);
+        const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
+        let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
+        if (tile.terrain === TerrainType.ShallowOcean) {
+          waterColor = supported ? palette.shallowSupported : palette.shallow;
+        }
+        if (waterColor !== COLORS.ocean) {
+          const water = this.getLayer(chunk, "water");
+          water.fillStyle(waterColor, 1);
+          water.fillRect(px, py, size + 1, size + 1);
+        }
+
+        if (tile.terrain === TerrainType.Land) {
+          const terrain = this.getLayer(chunk, "terrain");
+          const variation = seededValue(seed + 401, x, y) > 0.5 ? palette.land : palette.landDark;
+          terrain.fillStyle(variation, 1);
+          terrain.fillRoundedRect(px + 1, py + 1, size - 2, size - 2, size * 0.18);
+        } else if (tile.terrain === TerrainType.Rock) {
+          const terrain = this.getLayer(chunk, "terrain");
+          terrain.fillStyle(palette.rock, 1);
+          terrain.fillTriangle(
+            px + size * 0.12,
+            py + size * 0.84,
+            px + size * 0.52,
+            py + size * 0.12,
+            px + size * 0.9,
+            py + size * 0.84,
+          );
+        } else if (tile.terrain === TerrainType.Reef) {
+          const terrain = this.getLayer(chunk, "terrain");
+          terrain.fillStyle(palette.reef, 0.9);
+          terrain.fillCircle(px + size * 0.32, py + size * 0.54, size * 0.15);
+          terrain.fillCircle(px + size * 0.63, py + size * 0.42, size * 0.12);
+        }
+
+        if (tile.terrain === TerrainType.Land) {
+          this.drawCoastTile(generated, chunk, island ? palette.coast : COLORS.sand, x, y, px, py, size);
+        }
+        if (island) this.drawIslandDecoration(chunk, island, tile.terrain, x, y, px, py, size, seed);
+
+        if ((x + y) % 2 === 0 && tile.terrain !== TerrainType.Land) {
+          const waves = this.getLayer(chunk, "waves");
+          const waveOffset = seededValue(seed + 503, x, y) * size * 0.24;
+          waves.lineStyle(1, COLORS.wave, supported ? 0.2 : 0.12);
+          waves.beginPath();
+          waves.moveTo(px + size * 0.2 + waveOffset, py + size * 0.52);
+          waves.lineTo(px + size * 0.45 + waveOffset, py + size * 0.46);
+          waves.lineTo(px + size * 0.7 + waveOffset, py + size * 0.52);
+          waves.strokePath();
+        }
+      }
+    }
   }
 
   private redrawWaterLayer(
@@ -337,6 +486,7 @@ export class WorldRenderer {
 
     for (let y = startY; y < endY; y++) {
       for (let x = startX; x < endX; x++) {
+        this.totalTilesVisited++;
         const tile = grid.getTile(x, y);
         const supported = tile.knowledge === KnowledgeState.Supported;
         if (this.isAuthoredHomeFootprint(generated, x, y)) {
@@ -437,54 +587,74 @@ export class WorldRenderer {
     }
   }
 
-  private drawHome(generated: GeneratedWorld): void {
+  private drawHome(generated: GeneratedWorld, chunk: ChunkView): void {
     const { homeCenter, harbour, dock } = generated.landmarks;
     const size = prototypeConfig.navigation.tileSize;
-    if (this.homeVisual) {
-      const topLeftX = homeCenter.x - this.homeVisual.metadata.anchors.homeCenter.x;
-      const topLeftY = homeCenter.y - this.homeVisual.metadata.anchors.homeCenter.y;
-      this.homeVisual.setPosition(topLeftX * size, topLeftY * size);
-      this.homeVisual.setVisible(true);
-      this.homeStructures.clear();
-      return;
-    }
-    const center = gridToWorld(homeCenter);
-    const harbourWorld = gridToWorld(harbour);
-    const dockWorld = gridToWorld(dock);
-
-    // A flag and simple huts make the home readable without production art.
-    this.homeStructures.lineStyle(3, COLORS.timber, 1);
-    this.homeStructures.lineBetween(center.x, center.y - size * 1.45, center.x, center.y - size * 0.2);
-    this.homeStructures.fillStyle(COLORS.sailcloth, 1);
-    this.homeStructures.fillTriangle(center.x, center.y - size * 1.4, center.x + size * 0.55, center.y - size * 1.15, center.x, center.y - size * 0.95);
-
-    const huts = [
-      { x: center.x - size * 1.7, y: center.y - size * 0.6 },
-      { x: center.x + size * 0.6, y: center.y + size * 1.4 },
-      { x: center.x - size * 0.8, y: center.y + size * 1.7 },
-    ];
-    for (const hut of huts) {
-      this.homeStructures.fillStyle(COLORS.timberLight, 1);
-      this.homeStructures.fillRect(hut.x - size * 0.28, hut.y - size * 0.05, size * 0.56, size * 0.42);
-      this.homeStructures.fillStyle(COLORS.roof, 1);
-      this.homeStructures.fillTriangle(hut.x - size * 0.4, hut.y, hut.x, hut.y - size * 0.42, hut.x + size * 0.4, hut.y);
+    if (this.pilotAssets && this.authoredHomeMetadata) {
+      const visual = createAuthoredHomeIslandVisual(this.scene, this.pilotAssets);
+      if (visual) {
+        const topLeftX = homeCenter.x - visual.metadata.anchors.homeCenter.x;
+        const topLeftY = homeCenter.y - visual.metadata.anchors.homeCenter.y;
+        visual.setPosition(topLeftX * size, topLeftY * size);
+        visual.setVisible(true);
+        chunk.homeVisual = visual;
+      }
     }
 
-    // East-facing harbour and a short dock aligned to the generated return tile.
-    this.homeStructures.lineStyle(size * 0.18, COLORS.timber, 1);
-    this.homeStructures.lineBetween(harbourWorld.x - size * 0.7, harbourWorld.y, dockWorld.x + size * 0.35, dockWorld.y);
-    this.homeStructures.lineStyle(size * 0.08, COLORS.timberLight, 1);
-    this.homeStructures.lineBetween(harbourWorld.x - size * 0.7, harbourWorld.y - size * 0.12, dockWorld.x + size * 0.35, dockWorld.y - size * 0.12);
-    this.homeStructures.lineBetween(harbourWorld.x - size * 0.7, harbourWorld.y + size * 0.12, dockWorld.x + size * 0.35, dockWorld.y + size * 0.12);
-    for (let x = harbourWorld.x - size * 0.5; x <= dockWorld.x + size * 0.25; x += size * 0.38) {
-      this.homeStructures.lineStyle(2, COLORS.timberLight, 1);
-      this.homeStructures.lineBetween(x, harbourWorld.y - size * 0.23, x, harbourWorld.y + size * 0.23);
+    if (!chunk.homeVisual) {
+      const homeStructures = this.scene.add.graphics().setDepth(5.5);
+      chunk.homeStructures = homeStructures;
+      const center = gridToWorld(homeCenter);
+      const harbourWorld = gridToWorld(harbour);
+      const dockWorld = gridToWorld(dock);
+
+      // A flag and simple huts make the home readable without production art.
+      homeStructures.lineStyle(3, COLORS.timber, 1);
+      homeStructures.lineBetween(center.x, center.y - size * 1.45, center.x, center.y - size * 0.2);
+      homeStructures.fillStyle(COLORS.sailcloth, 1);
+      homeStructures.fillTriangle(center.x, center.y - size * 1.4, center.x + size * 0.55, center.y - size * 1.15, center.x, center.y - size * 0.95);
+
+      const huts = [
+        { x: center.x - size * 1.7, y: center.y - size * 0.6 },
+        { x: center.x + size * 0.6, y: center.y + size * 1.4 },
+        { x: center.x - size * 0.8, y: center.y + size * 1.7 },
+      ];
+      for (const hut of huts) {
+        homeStructures.fillStyle(COLORS.timberLight, 1);
+        homeStructures.fillRect(hut.x - size * 0.28, hut.y - size * 0.05, size * 0.56, size * 0.42);
+        homeStructures.fillStyle(COLORS.roof, 1);
+        homeStructures.fillTriangle(hut.x - size * 0.4, hut.y, hut.x, hut.y - size * 0.42, hut.x + size * 0.4, hut.y);
+      }
+
+      // East-facing harbour and a short dock aligned to the generated return tile.
+      homeStructures.lineStyle(size * 0.18, COLORS.timber, 1);
+      homeStructures.lineBetween(harbourWorld.x - size * 0.7, harbourWorld.y, dockWorld.x + size * 0.35, dockWorld.y);
+      homeStructures.lineStyle(size * 0.08, COLORS.timberLight, 1);
+      homeStructures.lineBetween(harbourWorld.x - size * 0.7, harbourWorld.y - size * 0.12, dockWorld.x + size * 0.35, dockWorld.y - size * 0.12);
+      homeStructures.lineBetween(harbourWorld.x - size * 0.7, harbourWorld.y + size * 0.12, dockWorld.x + size * 0.35, dockWorld.y + size * 0.12);
+      for (let x = harbourWorld.x - size * 0.5; x <= dockWorld.x + size * 0.25; x += size * 0.38) {
+        homeStructures.lineStyle(2, COLORS.timberLight, 1);
+        homeStructures.lineBetween(x, harbourWorld.y - size * 0.23, x, harbourWorld.y + size * 0.23);
+      }
     }
+
+    const labelAt = gridToWorld({
+      x: homeCenter.x,
+      y: homeCenter.y - prototypeConfig.world.homeIslandRadius - 2,
+    });
+    chunk.label = this.scene.add.text(labelAt.x, labelAt.y, "HOME ISLAND", {
+      color: "#f5e4b3",
+      fontFamily: "ui-monospace, monospace",
+      fontSize: "14px",
+      fontStyle: "bold",
+      stroke: "#10242a",
+      strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(10);
   }
 
   private isAuthoredHomeFootprint(generated: GeneratedWorld, x: number, y: number): boolean {
-    if (!this.homeVisual) return false;
-    const metadata = this.homeVisual.metadata;
+    const metadata = this.authoredHomeMetadata;
+    if (!metadata) return false;
     const topLeftX = generated.landmarks.homeCenter.x - metadata.anchors.homeCenter.x;
     const topLeftY = generated.landmarks.homeCenter.y - metadata.anchors.homeCenter.y;
     return x >= topLeftX
@@ -493,17 +663,89 @@ export class WorldRenderer {
       && y < topLeftY + metadata.grid.height;
   }
 
-  private clear(): void {
-    this.ocean.setVisible(false);
-    this.homeVisual?.setVisible(false);
-    this.homeStructures.clear();
-    for (const chunk of this.chunks) {
-      for (const renderer of chunk.renderers) renderer.destroy();
+  private isHomeOwnerChunk(generated: GeneratedWorld, chunk: ChunkView): boolean {
+    const { grid, landmarks } = generated;
+    return chunk.chunkX === Math.floor(landmarks.homeCenter.x / grid.chunkSize)
+      && chunk.chunkY === Math.floor(landmarks.homeCenter.y / grid.chunkSize);
+  }
+
+  private assertValidChunkEntry(entry: Readonly<ActiveChunkEntry>): void {
+    const generated = this.generated;
+    if (!generated) throw new Error("A world must be bound before chunks can be validated");
+    const { x, y } = entry.coordinate;
+    if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
+      throw new RangeError(`Active chunk coordinates must be safe integers: ${entry.key}`);
     }
-    this.chunks = [];
-    for (const label of this.labels) label.destroy();
-    this.labels.length = 0;
-    this.lastWorld = undefined;
+    if (entry.key !== activeChunkKey(x, y)) {
+      throw new RangeError(`Active chunk key ${entry.key} does not match coordinate ${x},${y}`);
+    }
+    const columns = Math.ceil(generated.grid.width / generated.grid.chunkSize);
+    const rows = Math.ceil(generated.grid.height / generated.grid.chunkSize);
+    if (x < 0 || y < 0 || x >= columns || y >= rows) {
+      throw new RangeError(`Active chunk ${entry.key} is outside ${columns}x${rows} presentation bounds`);
+    }
+  }
+
+  private objectCounts(): {
+    graphics: number;
+    text: number;
+    authoredImages: number;
+    resources: number;
+  } {
+    let graphics = 0;
+    let text = 0;
+    let authoredImages = 0;
+    for (const chunk of this.chunks.values()) {
+      graphics += Object.values(chunk.layers).filter(Boolean).length;
+      if (chunk.homeStructures) graphics++;
+      if (chunk.label) text++;
+      if (chunk.homeVisual) authoredImages += chunk.homeVisual.metadata.render.slices.length;
+    }
+    return { graphics, text, authoredImages, resources: graphics + text + authoredImages };
+  }
+
+  private chunkResourceCount(chunk: ChunkView): number {
+    return Object.values(chunk.layers).filter(Boolean).length
+      + (chunk.homeStructures ? 1 : 0)
+      + (chunk.label ? 1 : 0)
+      + (chunk.homeVisual ? chunk.homeVisual.metadata.render.slices.length : 0);
+  }
+
+  private countActiveResources(): number {
+    let count = 0;
+    for (const chunk of this.chunks.values()) count += this.chunkResourceCount(chunk);
+    return count;
+  }
+
+  private activationResult(
+    activated: number,
+    deactivated: number,
+    retained: number,
+  ): Readonly<WorldRendererActivationResult> {
+    return Object.freeze({
+      activated,
+      deactivated,
+      retained,
+      telemetry: this.getTelemetry(),
+    });
+  }
+
+  private clearWorld(): void {
+    this.ocean.setVisible(false);
+    const activeCount = this.chunks.size;
+    for (const key of [...this.chunks.keys()]) this.deactivateChunk(key);
+    this.totalChunkDeactivations += activeCount;
+    this.generated = undefined;
+    this.islandsById = new Map();
     this.observedKnowledgeRevisions = new WeakMap();
   }
+}
+
+function compareActiveChunkEntry(
+  left: Readonly<ActiveChunkEntry>,
+  right: Readonly<ActiveChunkEntry>,
+): number {
+  return left.loadPriority - right.loadPriority
+    || left.coordinate.y - right.coordinate.y
+    || left.coordinate.x - right.coordinate.x;
 }

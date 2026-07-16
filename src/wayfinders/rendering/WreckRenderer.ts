@@ -2,60 +2,87 @@ import Phaser from "phaser";
 import { prototypeConfig } from "../config/prototypeConfig";
 import type { ShipwreckState } from "../core/types";
 import type { WorldGrid } from "../world/WorldGrid";
+import {
+  ChunkActivatedViewPool,
+  presentationChunksForWorldBounds,
+  type ChunkActivatedViewTelemetry,
+  type PresentationChunkCoordinate,
+} from "./lifetime";
 
 interface WreckView {
   container: Phaser.GameObjects.Container;
   hull: Phaser.GameObjects.Graphics;
   label: Phaser.GameObjects.Text;
-  known: boolean;
+}
+
+interface WreckPresentationRecord {
+  readonly wreck: Readonly<ShipwreckState>;
+  readonly visibleNow: boolean;
 }
 
 /** Developer-art shipwreck markers retained across later generations. */
 export class WreckRenderer {
-  private readonly views = new Map<number, WreckView>();
+  private readonly views: ChunkActivatedViewPool<number, WreckPresentationRecord, WreckView>;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(private readonly scene: Phaser.Scene) {
+    this.views = new ChunkActivatedViewPool({
+      idOf: ({ wreck }) => wreck.id,
+      chunkOf: ({ wreck }) => ({
+        x: Math.floor(wreck.tileX / prototypeConfig.navigation.chunkSize),
+        y: Math.floor(wreck.tileY / prototypeConfig.navigation.chunkSize),
+      }),
+      create: ({ wreck }) => this.create(wreck),
+      update: (view, record) => this.updateView(view, record),
+      activate: (view, { wreck }) => {
+        view.container.setActive(true).setVisible(true).setName(`wreck:${wreck.id}`);
+      },
+      deactivate: (view) => {
+        view.container.setActive(false).setVisible(false).setName("wreck:pooled");
+      },
+      destroy: (view) => view.container.destroy(true),
+      maxPooledViews: 16,
+    });
+  }
 
   sync(wrecks: readonly Readonly<ShipwreckState>[], world: WorldGrid): void {
-    const liveIds = new Set(wrecks.map((wreck) => wreck.id));
-    for (const [id, view] of this.views) {
-      if (liveIds.has(id)) continue;
-      view.container.destroy(true);
-      this.views.delete(id);
-    }
-
-    for (const wreck of wrecks) {
-      const view = this.views.get(wreck.id) ?? this.create(wreck);
-      view.container.setPosition(wreck.worldX, wreck.worldY);
-      view.hull.setRotation(Phaser.Math.DegToRad(wreck.heading));
-      view.label.setText(wreck.survey.state === "unexamined"
-        ? "UNIDENTIFIED WRECK"
-        : `WRECK · GENERATION ${wreck.generation} NAVIGATOR`);
+    this.views.sync(wrecks.flatMap((wreck): WreckPresentationRecord[] => {
       const visibleNow = world.isVisibleNow(wreck.tileX, wreck.tileY);
-      const known = visibleNow || wreck.discovered;
-      view.known = known;
-      view.container.setVisible(known).setAlpha(visibleNow ? 1 : 0.72);
-    }
+      return visibleNow || wreck.discovered ? [{ wreck, visibleNow }] : [];
+    }));
+  }
+
+  applyActiveChunks(
+    chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
+  ): void {
+    this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
   }
 
   updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
     const margin = prototypeConfig.navigation.tileSize * 3;
     const cameraView = camera.worldView;
-    for (const view of this.views.values()) {
-      const { container } = view;
-      container.setVisible(
-        view.known
-        && container.x >= cameraView.left - margin
-        && container.x <= cameraView.right + margin
-        && container.y >= cameraView.top - margin
-        && container.y <= cameraView.bottom + margin,
-      );
-    }
+    this.views.setActiveChunks(presentationChunksForWorldBounds({
+      minX: cameraView.left - margin,
+      minY: cameraView.top - margin,
+      maxX: cameraView.right + margin,
+      maxY: cameraView.bottom + margin,
+    }, prototypeConfig.navigation.tileSize * prototypeConfig.navigation.chunkSize));
+  }
+
+  getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
+    return this.views.getTelemetry();
   }
 
   destroy(): void {
-    for (const view of this.views.values()) view.container.destroy(true);
-    this.views.clear();
+    this.views.destroy();
+  }
+
+  private updateView(view: WreckView, record: Readonly<WreckPresentationRecord>): void {
+    const { wreck } = record;
+    view.container.setPosition(wreck.worldX, wreck.worldY).setAlpha(record.visibleNow ? 1 : 0.72);
+    view.hull.setRotation(Phaser.Math.DegToRad(wreck.heading));
+    view.label.setText(wreck.survey.state === "unexamined"
+      ? "UNIDENTIFIED WRECK"
+      : `WRECK · GENERATION ${wreck.generation} NAVIGATOR`);
   }
 
   private create(wreck: Readonly<ShipwreckState>): WreckView {
@@ -87,8 +114,6 @@ export class WreckRenderer {
       strokeThickness: 3,
     }).setOrigin(0.5, 0);
     const container = this.scene.add.container(wreck.worldX, wreck.worldY, [hull, label]).setDepth(36);
-    const view = { container, hull, label, known: false };
-    this.views.set(wreck.id, view);
-    return view;
+    return { container, hull, label };
   }
 }

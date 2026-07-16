@@ -9,13 +9,14 @@ import type {
   SimulationTraceSink,
 } from "../src/wayfinders/core/SimulationTrace.ts";
 import { GridGraph } from "../src/wayfinders/navigation/GridGraph.ts";
+import { DEFAULT_ACTIVE_CHUNK_BUDGET } from "../src/wayfinders/rendering/activation/index.ts";
 import {
   createWorldProfileConfig,
   WORLD_PROFILES,
   type WorldProfileName,
 } from "../tests/fixtures/worldProfiles.ts";
 
-const RESULT_VERSION = 2;
+const RESULT_VERSION = 3;
 const DEFAULT_UPDATE_SAMPLES = 25;
 const DEFAULT_CONSTRUCTION_SAMPLES = 3;
 const DEFAULT_WARMUP_CROSSINGS = 5;
@@ -44,9 +45,11 @@ interface ProfileResult {
   readonly phases: Partial<Record<SimulationPhase, Distribution>>;
   readonly resources?: {
     readonly loadedChunks: number;
+    readonly activeChunkBudget: number;
+    readonly modeledActiveChunks: number;
     readonly modeledTextureCount: number;
     readonly modeledTextureBytes: number;
-    readonly modeledFiveByFiveTextureBytes: number;
+    readonly modeledFullWorldTextureBytes: number;
     readonly model: string;
   };
   readonly heapDeltaBytes?: number;
@@ -161,12 +164,15 @@ function resourceEstimate(simulation: GameSimulation): ProfileResult["resources"
   const knowledgePixels = (chunkSize * 4 + 8) ** 2;
   const riskPixels = (chunkSize * 6) ** 2 * 2;
   const bytesPerChunk = (knowledgePixels + riskPixels) * 4;
+  const activeChunks = Math.min(chunks, DEFAULT_ACTIVE_CHUNK_BUDGET);
   return {
     loadedChunks: chunks,
-    modeledTextureCount: chunks * 3,
-    modeledTextureBytes: chunks * bytesPerChunk,
-    modeledFiveByFiveTextureBytes: Math.min(chunks, 25) * bytesPerChunk,
-    model: "One knowledge and two risk RGBA canvases per loaded chunk; terrain commands and GPU copies excluded.",
+    activeChunkBudget: DEFAULT_ACTIVE_CHUNK_BUDGET,
+    modeledActiveChunks: activeChunks,
+    modeledTextureCount: activeChunks * 3,
+    modeledTextureBytes: activeChunks * bytesPerChunk,
+    modeledFullWorldTextureBytes: chunks * bytesPerChunk,
+    model: "AM-5 active window: one knowledge and two risk RGBA canvases per active chunk; terrain commands and GPU copies excluded.",
   };
 }
 

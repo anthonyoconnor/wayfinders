@@ -8,6 +8,7 @@ import {
 } from "../src/wayfinders/rendering/OverlayChunkInvalidation";
 import { RiskOverlayRenderer } from "../src/wayfinders/rendering/RiskOverlayRenderer";
 import { createCameraCulledImage } from "../src/wayfinders/rendering/CameraCulledImage";
+import { ActiveChunkSet } from "../src/wayfinders/rendering/activation";
 import type { WorldChunk } from "../src/wayfinders/world/WorldChunk";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
@@ -85,6 +86,7 @@ function makeRendererHarness(key = "overlay-test") {
   };
   return {
     renderer: new RiskOverlayRenderer(scene as never),
+    textureKeys: () => [...textures.keys()].sort(),
     texture: (chunkX: number, chunkY: number) => {
       const texture = textures.get(`${key}-risk-forward-${chunkX}-${chunkY}`);
       if (!texture) throw new Error(`Missing forward texture ${chunkX},${chunkY}`);
@@ -198,6 +200,57 @@ describe("overlay chunk invalidation", () => {
 });
 
 describe("forward frontier rendering", () => {
+  it("keeps textures capped and renders current data when an inactive chunk activates", () => {
+    const world = new WorldGrid(8, 1, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const farFrontier = world.index(7, 0);
+    const forward = makeForward(world, [farFrontier], [farFrontier]);
+    const activeChunks = new ActiveChunkSet({
+      worldBounds: { minX: 0, minY: 0, maxX: 3, maxY: 0 },
+      prefetchRing: 0,
+      maxActiveChunks: 1,
+    });
+    const { renderer, texture, textureKeys } = makeRendererHarness("active-risk-test");
+
+    renderer.applyActiveChunkDelta(
+      world,
+      activeChunks.update({ minX: 0, minY: 0, maxX: 0, maxY: 0 }),
+    );
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1);
+    expect(textureKeys()).toEqual([
+      "active-risk-test-risk-forward-0-0",
+      "active-risk-test-risk-return-0-0",
+    ]);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      chunkCapacity: 1,
+      activeChunks: 1,
+      activeTextures: 2,
+      activeSprites: 2,
+      estimatedTextureBytes: 1_152,
+      peakActiveTextures: 2,
+    });
+
+    renderer.applyActiveChunkDelta(
+      world,
+      activeChunks.update({ minX: 3, minY: 0, maxX: 3, maxY: 0 }),
+    );
+    // Data identity and revisions are unchanged: activation itself must dirty
+    // the replacement view and upload the already-current sparse masks.
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1);
+
+    expect(textureKeys()).toEqual([
+      "active-risk-test-risk-forward-3-0",
+      "active-risk-test-risk-return-3-0",
+    ]);
+    expect(texture(3, 0).calls.length).toBeGreaterThan(0);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 1,
+      activeTextures: 2,
+      totalTextureAllocations: 4,
+      totalTextureReleases: 2,
+    });
+  });
+
   it("draws thin pale segments only on edges facing outside the logical reach mask", () => {
     const world = new WorldGrid(3, 3, 3);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);

@@ -4,7 +4,13 @@ import type {
   SurveySiteReadModel,
   SurveySiteType,
 } from "../exploration/SurveySiteContracts";
-import { gridToWorld } from "../world/CoordinateSystem";
+import { gridToChunk, gridToWorld } from "../world/CoordinateSystem";
+import {
+  ChunkActivatedViewPool,
+  presentationChunksForWorldBounds,
+  type ChunkActivatedViewTelemetry,
+  type PresentationChunkCoordinate,
+} from "./lifetime";
 
 type SurveySiteState = SurveySiteReadModel<string>["state"];
 
@@ -61,64 +67,76 @@ const STATE_STYLES: Readonly<Record<SurveySiteState, Readonly<StateStyle>>> = {
  * variants cannot expose a result, so rendering cannot leak unsurveyed content.
  */
 export class SurveySiteRenderer {
-  private readonly viewsById = new Map<string, SurveySiteView>();
-  private readonly viewPool: SurveySiteView[] = [];
+  private readonly views: ChunkActivatedViewPool<
+    string,
+    SurveySiteReadModel<string>,
+    SurveySiteView
+  >;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(private readonly scene: Phaser.Scene) {
+    this.views = new ChunkActivatedViewPool({
+      idOf: ({ id }) => id,
+      chunkOf: ({ tile }) => gridToChunk(tile),
+      create: () => this.createView(),
+      update: (view, record) => this.updateView(view, record),
+      activate: (view, { id }) => {
+        view.container.setActive(true).setVisible(true).setName(id);
+        view.renderedState = undefined;
+        view.renderedType = undefined;
+        view.renderedPresentationId = undefined;
+        view.renderedColor = undefined;
+      },
+      deactivate: (view) => {
+        view.container.setActive(false).setVisible(false).setName("survey-site:pooled");
+      },
+      destroy: (view) => view.container.destroy(true),
+      maxPooledViews: 32,
+    });
+  }
 
   sync(records: readonly Readonly<SurveySiteReadModel<string>>[]): void {
-    const liveIds = new Set<string>(records.map(({ id }) => id));
-    for (const [id, view] of this.viewsById) {
-      if (liveIds.has(id)) continue;
-      this.viewsById.delete(id);
-      view.container.setActive(false).setVisible(false).setName("survey-site:pooled");
-      this.viewPool.push(view);
-    }
+    this.views.sync(records);
+  }
 
-    for (const record of records) {
-      const view = this.viewsById.get(record.id) ?? this.acquire(record.id);
-      const position = gridToWorld(record.tile, prototypeConfig.navigation.tileSize);
-      view.container.setPosition(position.x, position.y);
-      if (
-        view.renderedState !== record.state
-        || view.renderedType !== record.type
-        || view.renderedPresentationId !== record.presentation.id
-        || view.renderedColor !== record.presentation.color
-      ) this.redraw(view, record);
-      view.badge.setText(record.presentation.badge);
-      view.label.setText(surveySiteLabelFor(record));
-    }
+  applyActiveChunks(
+    chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
+  ): void {
+    this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
   }
 
   updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
     const margin = prototypeConfig.navigation.tileSize * 4;
     const viewport = camera.worldView;
-    for (const { container } of this.viewsById.values()) {
-      container.setVisible(
-        container.x >= viewport.left - margin
-        && container.x <= viewport.right + margin
-        && container.y >= viewport.top - margin
-        && container.y <= viewport.bottom + margin,
-      );
-    }
+    this.views.setActiveChunks(presentationChunksForWorldBounds({
+      minX: viewport.left - margin,
+      minY: viewport.top - margin,
+      maxX: viewport.right + margin,
+      maxY: viewport.bottom + margin,
+    }, prototypeConfig.navigation.tileSize * prototypeConfig.navigation.chunkSize));
+  }
+
+  getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
+    return this.views.getTelemetry();
   }
 
   destroy(): void {
-    for (const view of this.viewsById.values()) view.container.destroy(true);
-    for (const view of this.viewPool) view.container.destroy(true);
-    this.viewsById.clear();
-    this.viewPool.length = 0;
+    this.views.destroy();
   }
 
-  private acquire(id: string): SurveySiteView {
-    const view = this.viewPool.pop() ?? this.createView();
-    view.container.setActive(true).setVisible(true).setName(id);
-    view.renderedState = undefined;
-    view.renderedType = undefined;
-    view.renderedPresentationId = undefined;
-    view.renderedColor = undefined;
-    this.viewsById.set(id, view);
-    return view;
+  private updateView(
+    view: SurveySiteView,
+    record: Readonly<SurveySiteReadModel<string>>,
+  ): void {
+    const position = gridToWorld(record.tile, prototypeConfig.navigation.tileSize);
+    view.container.setPosition(position.x, position.y);
+    if (
+      view.renderedState !== record.state
+      || view.renderedType !== record.type
+      || view.renderedPresentationId !== record.presentation.id
+      || view.renderedColor !== record.presentation.color
+    ) this.redraw(view, record);
+    view.badge.setText(record.presentation.badge);
+    view.label.setText(surveySiteLabelFor(record));
   }
 
   private createView(): SurveySiteView {

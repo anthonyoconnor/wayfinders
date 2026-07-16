@@ -1,10 +1,19 @@
 import Phaser from "phaser";
-import type { AuthoredFishingShoalMetadata } from "../assets/AuthoredAssetContracts";
+import {
+  AUTHORED_ASSET_IDS,
+  type AuthoredFishingShoalMetadata,
+} from "../assets/AuthoredAssetContracts";
 import { createAuthoredFishingShoalVisual } from "../assets/AuthoredAssetPresentation";
 import type { AuthoredAssetRuntime } from "../assets/PilotAssetRuntime";
 import { prototypeConfig } from "../config/prototypeConfig";
 import { createFishingShoalId, type FishingShoalReadModel } from "../exploration/FishingShoalContracts";
-import { gridToWorld } from "../world/CoordinateSystem";
+import { gridToChunk, gridToWorld } from "../world/CoordinateSystem";
+import {
+  ChunkActivatedViewPool,
+  presentationChunksForWorldBounds,
+  type ChunkActivatedViewTelemetry,
+  type PresentationChunkCoordinate,
+} from "./lifetime";
 
 type FishingShoalState = FishingShoalReadModel["state"];
 
@@ -68,8 +77,11 @@ const PILOT_SHOAL_ID = createFishingShoalId(0);
  * cannot become markers, and hidden-quality states cannot expose a quality.
  */
 export class FishingShoalRenderer {
-  private readonly viewsById = new Map<string, FishingShoalView>();
-  private readonly viewPool: FishingShoalView[] = [];
+  private readonly views: ChunkActivatedViewPool<
+    string,
+    FishingShoalReadModel,
+    FishingShoalView
+  >;
 
   private readonly authoredMetadata?: Readonly<AuthoredFishingShoalMetadata>;
   private readonly authoredAssets?: Readonly<AuthoredAssetRuntime>;
@@ -79,77 +91,88 @@ export class FishingShoalRenderer {
     pilotAssets?: Readonly<AuthoredAssetRuntime>,
   ) {
     this.authoredAssets = pilotAssets;
-    const authored = pilotAssets
-      ? createAuthoredFishingShoalVisual(scene, pilotAssets)
-      : undefined;
-    this.authoredMetadata = authored?.metadata;
-    authored?.image.destroy();
+    const metadata = pilotAssets?.metadata(AUTHORED_ASSET_IDS.fishingShoal);
+    this.authoredMetadata = metadata?.kind === "fishing-shoal" ? metadata : undefined;
+    this.views = new ChunkActivatedViewPool({
+      idOf: ({ id }) => id,
+      chunkOf: ({ tile }) => gridToChunk(tile),
+      create: () => this.createView(),
+      update: (view, record) => this.updateView(view, record),
+      activate: (view, { id }) => {
+        view.container.setActive(true).setVisible(true).setName(id);
+        view.renderedState = undefined;
+        view.renderedHomeConnected = undefined;
+      },
+      deactivate: (view) => {
+        view.container.setActive(false).setVisible(false).setName("fishing-shoal:pooled");
+        // The texture is shared by the scene asset runtime, but its Phaser image
+        // is unique presentation state and should not survive off-window churn.
+        view.authoredVisual?.destroy();
+        view.authoredVisual = undefined;
+      },
+      destroy: (view) => view.container.destroy(true),
+      maxPooledViews: 32,
+    });
   }
 
   sync(records: readonly Readonly<FishingShoalReadModel>[]): void {
-    const liveIds = new Set<string>();
-    for (const record of records) liveIds.add(record.id);
+    this.views.sync(records);
+  }
 
-    for (const [id, view] of this.viewsById) {
-      if (liveIds.has(id)) continue;
-      this.viewsById.delete(id);
-      view.container.setActive(false).setVisible(false).setName("fishing-shoal:pooled");
-      this.viewPool.push(view);
-    }
-
-    for (const record of records) {
-      const view = this.viewsById.get(record.id) ?? this.acquire(record.id);
-      const position = gridToWorld(record.tile, prototypeConfig.navigation.tileSize);
-      view.container.setPosition(position.x, position.y);
-
-      const homeConnected = record.state === "returned-survey" && record.homeConnected;
-      if (
-        view.renderedState !== record.state
-        || view.renderedHomeConnected !== homeConnected
-      ) {
-        this.redraw(view, record.state, homeConnected);
-      }
-      view.label.setText(this.labelFor(record));
-    }
+  applyActiveChunks(
+    chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
+  ): void {
+    this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
   }
 
   updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
     const margin = prototypeConfig.navigation.tileSize * 3;
     const viewport = camera.worldView;
-    for (const { container } of this.viewsById.values()) {
-      container.setVisible(
-        container.x >= viewport.left - margin
-        && container.x <= viewport.right + margin
-        && container.y >= viewport.top - margin
-        && container.y <= viewport.bottom + margin,
-      );
-    }
+    this.views.setActiveChunks(presentationChunksForWorldBounds({
+      minX: viewport.left - margin,
+      minY: viewport.top - margin,
+      maxX: viewport.right + margin,
+      maxY: viewport.bottom + margin,
+    }, prototypeConfig.navigation.tileSize * prototypeConfig.navigation.chunkSize));
+  }
+
+  getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
+    return this.views.getTelemetry();
   }
 
   destroy(): void {
-    for (const view of this.viewsById.values()) view.container.destroy(true);
-    for (const view of this.viewPool) view.container.destroy(true);
-    this.viewsById.clear();
-    this.viewPool.length = 0;
+    this.views.destroy();
   }
 
-  private acquire(id: string): FishingShoalView {
-    const view = this.viewPool.pop() ?? this.createView();
-    view.container.setActive(true).setVisible(true).setName(id);
-    const usesAuthoredVisual = id === PILOT_SHOAL_ID && view.authoredVisual !== undefined;
+  private updateView(
+    view: FishingShoalView,
+    record: Readonly<FishingShoalReadModel>,
+  ): void {
+    const position = gridToWorld(record.tile, prototypeConfig.navigation.tileSize);
+    view.container.setPosition(position.x, position.y);
+    if (record.id === PILOT_SHOAL_ID && !view.authoredVisual && this.authoredAssets) {
+      const authored = createAuthoredFishingShoalVisual(this.scene, this.authoredAssets);
+      if (authored) {
+        view.authoredVisual = authored.image;
+        view.container.addAt(authored.image, 0);
+      }
+    }
+    const usesAuthoredVisual = record.id === PILOT_SHOAL_ID && view.authoredVisual !== undefined;
     view.authoredVisual?.setVisible(usesAuthoredVisual);
     view.marker.setVisible(!usesAuthoredVisual);
     view.badge.setVisible(!usesAuthoredVisual);
-    view.renderedState = undefined;
-    view.renderedHomeConnected = undefined;
-    this.viewsById.set(id, view);
-    return view;
+
+    const homeConnected = record.state === "returned-survey" && record.homeConnected;
+    if (
+      view.renderedState !== record.state
+      || view.renderedHomeConnected !== homeConnected
+    ) {
+      this.redraw(view, record.state, homeConnected);
+    }
+    view.label.setText(this.labelFor(record));
   }
 
   private createView(): FishingShoalView {
-    const authoredVisual = this.authoredAssets
-      ? createAuthoredFishingShoalVisual(this.scene, this.authoredAssets)?.image
-      : undefined;
     const connectivityCue = this.scene.add.graphics();
     const marker = this.scene.add.graphics();
     const badge = this.scene.add.text(0, 0, "F?", {
@@ -169,11 +192,10 @@ export class FishingShoalRenderer {
       strokeThickness: 4,
     }).setOrigin(0.5, 0);
     const children: Phaser.GameObjects.GameObject[] = [];
-    if (authoredVisual) children.push(authoredVisual);
     children.push(connectivityCue, marker, badge, label);
     const container = this.scene.add.container(0, 0, children)
       .setDepth(this.authoredMetadata?.visual.depth ?? 43);
-    return { container, authoredVisual, connectivityCue, marker, badge, label };
+    return { container, connectivityCue, marker, badge, label };
   }
 
   private redraw(view: FishingShoalView, state: FishingShoalState, homeConnected: boolean): void {

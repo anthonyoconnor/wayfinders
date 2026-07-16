@@ -449,7 +449,7 @@ Implementation evidence:
 
 ### AM-5 — Activate presentation by chunk
 
-Status: active.
+Status: implemented and acceptance-tested on 2026-07-15; commit recorded by the AM-5 implementation batch.
 
 Goal: make renderer and asset memory follow the viewport, not total world area.
 
@@ -469,7 +469,18 @@ Exit criteria:
 - A coast-to-coast P2 voyage has stable memory after warm-up.
 - No visible missing seams, stale overlays, or marker duplication occurs during activation churn.
 
+Implementation evidence:
+
+- One camera-derived ActiveChunkSet owns a visible region, one-chunk prefetch ring, deterministic priority, deferred-placeholder demand, and a hard 25-chunk cap.
+- WorldRenderer iterates active chunk bounds only, destroys chunk graphics/authored art on deactivation, and reports active objects, visited tiles, activations, releases, and peaks.
+- Knowledge and risk overlays release Phaser sprites and canvas textures immediately. At the cap they retain at most 25 knowledge plus 50 risk textures, with decoded backing-store estimates and allocation/release telemetry.
+- Wreck, dossier, survey, and fishing renderers use a shared chunk-indexed view pool with exact identity, bounded inactive pooling, and duplicate prevention. A weighted reference-counted cache provides deterministic LRU eviction and placeholder-on-saturation for future unique assets.
+- Focused activation, renderer, overlay, seam, and lifetime suites passed 32 tests; the scheduled coast-to-coast P2 resource model also passed and peaked at 25 active chunks with zero deferred visible chunks.
+- The P2 benchmark models 75 active overlay textures and 9.22 MB of canvas backing stores at the cap, rather than 432 textures and 53.12 MB for all 144 logical chunks. GPU/framework overhead remains separately unmeasured.
+
 ### AM-6 — Add hierarchy or workers only where evidence requires them
+
+Status: active. A quiet 25-sample P2 run measured derived ForwardGuidance p95 at 12.61 ms against the 4 ms decision budget, so the gate selected a cancellable/coalesced derived-guidance optimization.
 
 Goal: retain architectural simplicity while providing an escape hatch for measured P2 costs.
 

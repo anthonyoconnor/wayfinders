@@ -3,6 +3,7 @@ import {
   KnowledgeOverlayRenderer,
   isExactIslandTileRevealed,
 } from "../src/wayfinders/rendering/KnowledgeOverlayRenderer";
+import { ActiveChunkSet } from "../src/wayfinders/rendering/activation";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 
@@ -88,8 +89,9 @@ function makeHarness(key = "island-fog-test") {
     renderer: new KnowledgeOverlayRenderer(scene as never),
     scratchCalls,
     filteredClearCalls,
-    texture: () => {
-      const texture = textures.get(`${key}-knowledge-mask-0-0`);
+    textureKeys: () => [...textures.keys()].sort(),
+    texture: (chunkX = 0, chunkY = 0) => {
+      const texture = textures.get(`${key}-knowledge-mask-${chunkX}-${chunkY}`);
       if (!texture) throw new Error("Knowledge mask texture was not created");
       return texture;
     },
@@ -99,6 +101,52 @@ function makeHarness(key = "island-fog-test") {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("exact island dossier fog reveal", () => {
+  it("releases inactive mask textures and keeps the decoded set at its chunk cap", () => {
+    const world = new WorldGrid(8, 1, 4);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const activeChunks = new ActiveChunkSet({
+      worldBounds: { minX: 0, minY: 0, maxX: 1, maxY: 0 },
+      prefetchRing: 0,
+      maxActiveChunks: 1,
+    });
+    const { renderer, texture, textureKeys } = makeHarness("active-fog-test");
+
+    renderer.applyActiveChunkDelta(
+      world,
+      activeChunks.update({ minX: 0, minY: 0, maxX: 0, maxY: 0 }),
+    );
+    renderer.sync(world, 17);
+    expect(textureKeys()).toEqual(["active-fog-test-knowledge-mask-0-0"]);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      chunkCapacity: 1,
+      activeChunks: 1,
+      activeTextures: 1,
+      activeSprites: 1,
+      estimatedTextureBytes: 2_304,
+      peakActiveTextures: 1,
+    });
+
+    const firstRefreshes = texture(0, 0).refreshCount;
+    // The active mask samples a one-tile border from this inactive neighbour.
+    world.setKnowledge(4, 0, KnowledgeState.Personal, 2);
+    renderer.sync(world, 17);
+    expect(texture(0, 0).refreshCount).toBe(firstRefreshes + 1);
+
+    renderer.applyActiveChunkDelta(
+      world,
+      activeChunks.update({ minX: 1, minY: 0, maxX: 1, maxY: 0 }),
+    );
+    renderer.sync(world, 17);
+    expect(textureKeys()).toEqual(["active-fog-test-knowledge-mask-1-0"]);
+    expect(texture(1, 0).refreshCount).toBe(1);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 1,
+      activeTextures: 1,
+      totalTextureAllocations: 2,
+      totalTextureReleases: 1,
+    });
+  });
+
   it("accepts only exact positive island IDs", () => {
     const revealed = new Set([-1, 0, 2]);
     expect(isExactIslandTileRevealed(-1, revealed)).toBe(false);

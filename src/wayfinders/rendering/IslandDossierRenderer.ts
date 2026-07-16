@@ -1,7 +1,13 @@
 import Phaser from "phaser";
 import { prototypeConfig } from "../config/prototypeConfig";
 import type { IslandDossierReadModelV1 } from "../exploration/IslandDossierContracts";
-import { gridToWorld } from "../world/CoordinateSystem";
+import { gridToChunk, gridToWorld } from "../world/CoordinateSystem";
+import {
+  ChunkActivatedViewPool,
+  presentationChunksForWorldBounds,
+  type ChunkActivatedViewTelemetry,
+  type PresentationChunkCoordinate,
+} from "./lifetime";
 
 type IslandDossierState = IslandDossierReadModelV1["state"];
 
@@ -29,55 +35,68 @@ const MARKER_STYLES: Readonly<Record<IslandDossierState, Readonly<MarkerStyle>>>
 
 /** Developer-art coastal chart mark for one dossier owned by one exact island ID. */
 export class IslandDossierRenderer {
-  private readonly viewsByIslandId = new Map<number, IslandDossierView>();
-  private readonly pool: IslandDossierView[] = [];
+  private readonly views: ChunkActivatedViewPool<
+    number,
+    IslandDossierReadModelV1,
+    IslandDossierView
+  >;
 
-  constructor(private readonly scene: Phaser.Scene) {}
+  constructor(private readonly scene: Phaser.Scene) {
+    this.views = new ChunkActivatedViewPool({
+      idOf: ({ islandId }) => islandId,
+      chunkOf: ({ canonicalApproach }) => gridToChunk(canonicalApproach),
+      create: () => this.createView(),
+      update: (view, record) => this.updateView(view, record),
+      activate: (view, { islandId }) => {
+        view.container.setActive(true).setVisible(true).setName(`island-dossier:${islandId}`);
+        view.renderedState = undefined;
+      },
+      deactivate: (view) => {
+        view.container.setActive(false).setVisible(false).setName("island-dossier:pooled");
+      },
+      destroy: (view) => view.container.destroy(true),
+      maxPooledViews: 32,
+    });
+  }
 
   sync(records: readonly Readonly<IslandDossierReadModelV1>[]): void {
-    const liveIds = new Set(records.map(({ islandId }) => islandId));
-    for (const [islandId, view] of this.viewsByIslandId) {
-      if (liveIds.has(islandId)) continue;
-      this.viewsByIslandId.delete(islandId);
-      view.container.setActive(false).setVisible(false).setName("island-dossier:pooled");
-      this.pool.push(view);
-    }
+    this.views.sync(records);
+  }
 
-    for (const record of records) {
-      const view = this.viewsByIslandId.get(record.islandId) ?? this.acquire(record.islandId);
-      const position = gridToWorld(record.canonicalApproach, prototypeConfig.navigation.tileSize);
-      view.container.setPosition(position.x, position.y);
-      if (view.renderedState !== record.state) this.redraw(view, record.state);
-      view.label.setText(this.labelFor(record));
-    }
+  /** Uses the shared ActiveChunkSet ordering without importing its owner. */
+  applyActiveChunks(
+    chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
+  ): void {
+    this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
   }
 
   updateViewport(camera: Phaser.Cameras.Scene2D.Camera): void {
     const margin = prototypeConfig.navigation.tileSize * 4;
     const viewport = camera.worldView;
-    for (const { container } of this.viewsByIslandId.values()) {
-      container.setVisible(
-        container.x >= viewport.left - margin
-        && container.x <= viewport.right + margin
-        && container.y >= viewport.top - margin
-        && container.y <= viewport.bottom + margin,
-      );
-    }
+    this.views.setActiveChunks(presentationChunksForWorldBounds({
+      minX: viewport.left - margin,
+      minY: viewport.top - margin,
+      maxX: viewport.right + margin,
+      maxY: viewport.bottom + margin,
+    }, prototypeConfig.navigation.tileSize * prototypeConfig.navigation.chunkSize));
+  }
+
+  getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
+    return this.views.getTelemetry();
   }
 
   destroy(): void {
-    for (const view of this.viewsByIslandId.values()) view.container.destroy(true);
-    for (const view of this.pool) view.container.destroy(true);
-    this.viewsByIslandId.clear();
-    this.pool.length = 0;
+    this.views.destroy();
   }
 
-  private acquire(islandId: number): IslandDossierView {
-    const view = this.pool.pop() ?? this.createView();
-    view.container.setActive(true).setVisible(true).setName(`island-dossier:${islandId}`);
-    view.renderedState = undefined;
-    this.viewsByIslandId.set(islandId, view);
-    return view;
+  private updateView(
+    view: IslandDossierView,
+    record: Readonly<IslandDossierReadModelV1>,
+  ): void {
+    const position = gridToWorld(record.canonicalApproach, prototypeConfig.navigation.tileSize);
+    view.container.setPosition(position.x, position.y);
+    if (view.renderedState !== record.state) this.redraw(view, record.state);
+    view.label.setText(this.labelFor(record));
   }
 
   private createView(): IslandDossierView {

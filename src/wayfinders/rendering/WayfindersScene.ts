@@ -71,6 +71,13 @@ import type { ShipRenderPose } from "./ShipPose";
 import { SurveySiteRenderer } from "./SurveySiteRenderer";
 import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
+import {
+  ActiveChunkSet,
+  DEFAULT_ACTIVE_CHUNK_BUDGET,
+  DEFAULT_ACTIVE_CHUNK_PREFETCH_RING,
+  viewportChunkRegion,
+  type ActiveChunkDelta,
+} from "./activation";
 
 interface MovementKeys {
   left: Phaser.Input.Keyboard.Key;
@@ -87,6 +94,19 @@ interface MovementKeys {
   cancel: Phaser.Input.Keyboard.Key;
 }
 
+interface PresentationResourceSnapshot {
+  readonly activeChunks: ReturnType<ActiveChunkSet["getTelemetry"]>;
+  readonly world: ReturnType<WorldRenderer["getTelemetry"]>;
+  readonly knowledge: ReturnType<KnowledgeOverlayRenderer["getResourceTelemetry"]>;
+  readonly risk: ReturnType<RiskOverlayRenderer["getResourceTelemetry"]>;
+  readonly markers: Readonly<{
+    wrecks: ReturnType<WreckRenderer["getLifetimeTelemetry"]>;
+    islandDossiers: ReturnType<IslandDossierRenderer["getLifetimeTelemetry"]>;
+    surveySites: ReturnType<SurveySiteRenderer["getLifetimeTelemetry"]>;
+    fishingShoals: ReturnType<FishingShoalRenderer["getLifetimeTelemetry"]>;
+  }>;
+}
+
 interface BrowserDebugApi {
   snapshot: () => ReturnType<GameSimulation["snapshot"]>;
   teleport: (x: number, y: number) => boolean;
@@ -98,6 +118,7 @@ interface BrowserDebugApi {
   navigatorWreckTargets: () => ReadonlyArray<{ id: number; generation: number; x: number; y: number }>;
   performance: () => ReturnType<FrameTimingMonitor["snapshot"]>;
   presentationWork: () => Readonly<PresentationWorkCounters>;
+  presentationResources: () => Readonly<PresentationResourceSnapshot>;
   fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
   islandDossierTargets: () => ReadonlyArray<{ islandId: number; x: number; y: number }>;
   surveySiteTargets: () => ReadonlyArray<{ id: string; type: string; x: number; y: number }>;
@@ -146,6 +167,8 @@ export class WayfindersScene extends Phaser.Scene {
   private fishingShoalRenderer!: FishingShoalRenderer;
   private shipRenderer!: ShipRenderer;
   private wreckRenderer!: WreckRenderer;
+  private activeChunkSet!: ActiveChunkSet;
+  private lastActiveChunkRevision = -1;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private debugGraphics!: Phaser.GameObjects.Graphics;
   private entityDebugGraphics!: Phaser.GameObjects.Graphics;
@@ -242,6 +265,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveySiteRenderer = new SurveySiteRenderer(this);
     this.fishingShoalRenderer = new FishingShoalRenderer(this, this.pilotAssets);
     this.shipRenderer = new ShipRenderer(this, this.pilotAssets);
+    this.resetActiveChunkSet();
     this.resetShipPresentation(true);
     this.gridGraphics = this.add.graphics().setDepth(70);
     this.debugGraphics = this.add.graphics().setDepth(71);
@@ -391,7 +415,63 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private renderWorld(): void {
-    this.worldRenderer.render(this.simulation.generated);
+    this.resetActiveChunkSet();
+    const delta = this.activeChunkSet.update(this.currentViewportChunkRegion());
+    this.worldRenderer.render(this.simulation.generated, delta.active);
+    this.applyActiveChunkDelta(delta, true);
+  }
+
+  private resetActiveChunkSet(): void {
+    const world = this.simulation.world;
+    this.activeChunkSet = new ActiveChunkSet({
+      worldBounds: {
+        minX: 0,
+        minY: 0,
+        maxX: Math.ceil(world.width / world.chunkSize) - 1,
+        maxY: Math.ceil(world.height / world.chunkSize) - 1,
+      },
+      prefetchRing: DEFAULT_ACTIVE_CHUNK_PREFETCH_RING,
+      maxActiveChunks: DEFAULT_ACTIVE_CHUNK_BUDGET,
+    });
+    this.lastActiveChunkRevision = -1;
+  }
+
+  private currentViewportChunkRegion() {
+    const camera = this.cameras.main;
+    const current = camera.worldView;
+    const width = current.width > 0 ? current.width : this.scale.width / Math.max(camera.zoom, 0.01);
+    const height = current.height > 0 ? current.height : this.scale.height / Math.max(camera.zoom, 0.01);
+    const viewport = current.width > 0 && current.height > 0
+      ? current
+      : {
+          x: this.simulation.ship.worldX - width / 2,
+          y: this.simulation.ship.worldY - height / 2,
+          width,
+          height,
+        };
+    return viewportChunkRegion(viewport, {
+      worldWidthTiles: this.simulation.world.width,
+      worldHeightTiles: this.simulation.world.height,
+      chunkSizeTiles: this.simulation.world.chunkSize,
+      tileSizePixels: this.simulation.config.navigation.tileSize,
+    });
+  }
+
+  private syncActiveChunks(force = false): void {
+    const delta = this.activeChunkSet.update(this.currentViewportChunkRegion());
+    if (!force && delta.revision === this.lastActiveChunkRevision) return;
+    this.applyActiveChunkDelta(delta);
+  }
+
+  private applyActiveChunkDelta(delta: Readonly<ActiveChunkDelta>, worldAlreadyBound = false): void {
+    if (!worldAlreadyBound) this.worldRenderer.applyActiveChunks(delta);
+    this.knowledgeOverlay.applyActiveChunkDelta(this.simulation.world, delta);
+    this.riskOverlay.applyActiveChunkDelta(this.simulation.world, delta);
+    this.wreckRenderer.applyActiveChunks(delta.active);
+    this.islandDossierRenderer.applyActiveChunks(delta.active);
+    this.surveySiteRenderer.applyActiveChunks(delta.active);
+    this.fishingShoalRenderer.applyActiveChunks(delta.active);
+    this.lastActiveChunkRevision = delta.revision;
   }
 
   private renderDebug(): void {
@@ -486,6 +566,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   private syncPresentation(force = false): void {
     this.presentationWork.beginFrame();
+    this.syncActiveChunks(force);
     const spatialEntitiesBefore = this.simulation.descriptorSpatialQueryTotals.entitiesExamined;
     this.shipRenderer.syncInterpolated(
       this.previousShipPose,
@@ -552,10 +633,6 @@ export class WayfindersScene extends Phaser.Scene {
       || camera.zoom !== this.lastViewportZoom;
     if (viewportChanged) {
       this.presentationWork.recordViewportQuery();
-      this.wreckRenderer.updateViewport(camera);
-      this.islandDossierRenderer.updateViewport(camera);
-      this.surveySiteRenderer.updateViewport(camera);
-      this.fishingShoalRenderer.updateViewport(camera);
       this.lastViewportX = viewport.x;
       this.lastViewportY = viewport.y;
       this.lastViewportWidth = viewport.width;
@@ -1654,8 +1731,10 @@ export class WayfindersScene extends Phaser.Scene {
       "#scene-tools-slot [data-field='seed']",
     );
     if (seedField) seedField.value = String(this.simulation.generated.seed);
-    this.renderWorld();
+    this.resetShipPresentation(true);
     this.configureCamera();
+    this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
+    this.renderWorld();
     this.lastDebugRevision = -1;
     this.lastDebugOverlayRevision = -1;
     this.lastDiagnosticsRevision = -1;
@@ -1667,14 +1746,12 @@ export class WayfindersScene extends Phaser.Scene {
     this.pendingCompletionNavigatorId = undefined;
     this.greatHallUpdated = false;
     this.greatHallView?.hide();
-    this.resetShipPresentation(true);
     this.updateProvisionOutput();
     this.showPendingGenerationHandover();
     this.syncPresentation(true);
-    // Camera follow deliberately uses smoothing during play. A restored or
-    // regenerated world is a discontinuity, so snap to the authoritative ship
-    // before smooth following resumes.
-    this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
+    // Camera follow deliberately uses smoothing during play. Regeneration was
+    // snapped before active chunks were selected, so the first presented
+    // region is already the playable one.
   }
 
   private inspectNextIsland(): void {
@@ -1782,6 +1859,7 @@ export class WayfindersScene extends Phaser.Scene {
       navigatorWreckTargets: () => this.navigatorWreckTargets(),
       performance: () => this.frameTiming.snapshot(),
       presentationWork: () => this.presentationWork.snapshot(),
+      presentationResources: () => this.presentationResourceSnapshot(),
       fishingShoalTargets: () => this.simulation.fishingShoalDefinitions.map(({ id, tile }) => ({
         id,
         x: tile.x,
@@ -1812,6 +1890,21 @@ export class WayfindersScene extends Phaser.Scene {
     };
     this.browserDebugApi = api;
     window.__WAYFINDERS__ = api;
+  }
+
+  private presentationResourceSnapshot(): Readonly<PresentationResourceSnapshot> {
+    return Object.freeze({
+      activeChunks: this.activeChunkSet.getTelemetry(),
+      world: this.worldRenderer.getTelemetry(),
+      knowledge: this.knowledgeOverlay.getResourceTelemetry(),
+      risk: this.riskOverlay.getResourceTelemetry(),
+      markers: Object.freeze({
+        wrecks: this.wreckRenderer.getLifetimeTelemetry(),
+        islandDossiers: this.islandDossierRenderer.getLifetimeTelemetry(),
+        surveySites: this.surveySiteRenderer.getLifetimeTelemetry(),
+        fishingShoals: this.fishingShoalRenderer.getLifetimeTelemetry(),
+      }),
+    });
   }
 
   private log(message: string): void {

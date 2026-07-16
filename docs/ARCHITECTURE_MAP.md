@@ -75,6 +75,11 @@ Features may not import Phaser.
   canonical WorldManifest is durable identity; WorldGrid remains runtime
   authority. Fishing, surveys, and dossiers reuse WorldAnalysisIndex instead
   of adding feature-owned connectivity or coastline scans.
+- WayfindersScene owns one ActiveChunkSet derived from the camera. Its bounded
+  delta drives terrain, authored home art, knowledge/risk textures, and every
+  marker pool. Renderers expose resource telemetry but cannot independently
+  widen their lifetime. The ocean backdrop is the deterministic placeholder
+  while visible-first activation catches up.
 
 ## Feature folder convention
 

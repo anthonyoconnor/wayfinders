@@ -66,15 +66,14 @@ finalize its own collision or enter a faithful isolated game test. The next
 defined graphics work is `GR-3.5` through `GR-3.8`; it removes those gaps without
 building a general-purpose art, animation or generation suite.
 
-The authorized architecture batch is in progress. `AM-0` through `AM-4` are
-implemented in dependency order and `AM-5` is active. `AM-6` remains a measured
-decision gate: hierarchy or worker complexity is added only for a named budget
-that the preceding work still misses. `AM-7` remains deferred under the
-standing gameplay-saving policy.
+The authorized architecture batch is in progress. `AM-0` through `AM-5` are
+implemented in dependency order. The `AM-6` gate is active because a
+25-sample P2 run measured derived ForwardGuidance p95 at 12.61 ms against its
+4 ms budget. `AM-7` remains deferred under the standing gameplay-saving policy.
 
 ## Architecture and scale track
 
-Status: active; `AM-0` through `AM-4` are complete and `AM-5` is in progress.
+Status: active; `AM-0` through `AM-5` are complete and `AM-6` is in progress.
 The authoritative detailed plan and evidence are
 [`architecture_milestones.md`](../architecture_milestones.md).
 
@@ -125,7 +124,7 @@ across fixed seeds with at least 300 islands.
 
 ### AM-5 — Active-chunk presentation
 
-Status: active.
+Status: implemented; the 25-chunk terrain/overlay/marker lifetime gate passes.
 
 Tie terrain, overlay, marker and authored-asset lifetime to a bounded active
 chunk window. Prove stable object, texture and memory use during a
@@ -133,9 +132,9 @@ coast-to-coast large-world voyage.
 
 ### AM-6 — Evidence-gated hierarchy or workers
 
-Status: conditional. Add hierarchical routing, worker guidance/generation or
-other concurrency only for a named budget that `AM-1` through `AM-5` still
-miss.
+Status: active. P2 derived ForwardGuidance misses its 4 ms p95 budget, selecting
+a cancellable/coalesced derived-guidance optimization while authoritative
+movement and return ordering remain on the simulation thread.
 
 ### AM-7 — Persistence
 

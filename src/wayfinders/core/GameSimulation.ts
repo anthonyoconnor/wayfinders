@@ -824,9 +824,11 @@ export class GameSimulation {
         this.rebuildDescriptorRegistry();
       },
     ));
-    this.visibility.updateAt(this.generated.landmarks.dock);
-    this.recalculateRiskOverlays();
-    this.lastMovement = NO_MOVEMENT;
+    measureSimulationPhase(this.trace, "playable-region", () => {
+      this.visibility.updateAt(this.generated.landmarks.dock);
+      this.recalculateRiskOverlays();
+      this.lastMovement = NO_MOVEMENT;
+    });
     this.lifecycleResolutionRevision++;
     this.revision++;
     this.events.emit("worldRegenerated", { seed: normalizedSeed });
