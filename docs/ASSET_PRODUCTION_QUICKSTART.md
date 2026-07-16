@@ -1,8 +1,9 @@
 # Asset production quickstart
 
-This is the current lightweight workflow for getting a source image into the asset
-library, reviewing it, trying it in the game and publishing an approved visual.
-It is intentionally a prototype workflow, not a general art or atlas tool.
+This is the current lightweight workflow for getting a source image into the
+asset library, finishing its candidate, sea-trialing its exact collision, and
+publishing an approved visual. It is intentionally a prototype workflow, not a
+general art or atlas tool.
 
 ## Normal workflow
 
@@ -14,34 +15,40 @@ It is intentionally a prototype workflow, not a general art or atlas tool.
 
    Open `http://127.0.0.1:5173/?mode=assets`.
 2. Select any source reference and choose **Import and prepare**, or choose
-   **Add PNG** for a new local image. Confirm the inferred family defaults,
-   asset name, stable ID, intended dimensions, layer role, collision semantics,
-   and optional runtime/test category.
+   **Add PNG** for a new local image. The form reads the PNG canvas immediately
+   and keeps **Keep original PNG dimensions** selected by default. Confirm the
+   inferred family, asset name, stable ID, layer role, collision semantics, and
+   optional runtime/test category. If a solid canvas is not divisible by `32`,
+   use the offered transparent-padding action; turn off keep-original only when
+   you deliberately want another output canvas.
 3. Choose **Prepare pending candidate**. The library reports validation,
    repository-write and preparation phases. A failed or cancelled job keeps no
    partial source, recipe or candidate output and can be retried from the same
    form. When preparation completes, choose **Open pending candidate** to reload
    the durable library record.
-4. Compare the candidate's source/prepared layers and collision overlay, then
-   choose **Approve for testing** or **Reject**. The review is tied to the exact
-   candidate fingerprint.
-5. For an approved candidate with a pilot runtime binding, choose **Test in
-   game**, or open:
-
-   ```text
-   http://127.0.0.1:5173/?testAsset=production.island.small-fishing-cay
-   ```
-
-   This is a visual test. The bound home island, player boat or fishing shoal
-   keeps its already accepted collision, anchors and gameplay metadata.
-6. Publish the reviewed visual handoff:
+4. Compare source and prepared layers, inspect the seed method and warnings, and
+   finish the candidate in its structured editor. Adjust supported settings and
+   layer visibility/opacity, then paint or erase the `8`/`32`-pixel collision
+   draft as needed. Choose **Save candidate** before reviewing or trialing edits.
+   Save prepares the affected output, issues a new fingerprint, and returns the
+   candidate to pending review.
+5. Choose **Validate current** and, for an island, **Trial candidate**. The
+   disposable trial contains only open water, the player boat, and this
+   candidate's actual prepared layers and saved collision. Use the reset
+   positions and grid/
+   collision overlays, then **Return to candidate**. A pending candidate may be
+   trialed; saving and relaunching picks up the new fingerprint and mask.
+6. Choose **Approve current** or **Reject current**. Review is tied to the exact
+   current fingerprint. Once a valid candidate is approved, choose
+   **Promote approved** in the same workbench. Stale or invalid candidates cannot be
+   approved or published; an exact-current candidate may still be rejected.
+7. Run the read-only repository gate after a publishing session:
 
    ```powershell
-   npm.cmd run assets:promote -- --id production.island.small-fishing-cay
    npm.cmd run assets:check
    ```
 
-   Approved images and thumbnails are written under
+   Promoted images and thumbnails are written under
    `public/assets/gr3/production`. The deterministic
    `production-assets.json` records source hashes, candidate fingerprint,
    public layer URLs and the preserved runtime-collision binding. Pending and
@@ -53,10 +60,6 @@ new review. Modifying a prepared image, thumbnail or collision draft makes the
 derived output gate stale; run preparation again before promotion. Re-review
 whenever the resulting fingerprint changes. `assets:check` rejects stale
 reviews, output hashes and orphaned public production files.
-
-Promotion remains a command-line operation until the pending-candidate UI
-completion milestone. Guided intake and preparation do not require a command or
-hand-authored JSON.
 
 ## Optional command-line preparation
 
@@ -129,7 +132,7 @@ examples):
     }
   ],
   "animations": [],
-  "collision": { "mode": "blank-draft", "tileSize": 32, "subcellSize": 8 },
+  "collision": { "mode": "shoreline-seed", "tileSize": 32, "subcellSize": 8 },
   "runtimeBinding": {
     "assetId": "home.island.primary",
     "collisionIntent": "preserve"
@@ -137,11 +140,12 @@ examples):
 }
 ```
 
-The blank `32`/`8` collision draft is visible for review, but it is never
-silently substituted for the accepted home collision. The binding makes this
-variation immediately testable in the home-island slot. Creating a distinct
-world island with its own final mask and placement remains an explicit runtime
-package/world-data change.
+The generated `32`/`8` shoreline draft is visible and editable, but it is never
+silently substituted for the accepted home collision. The binding records the
+intended runtime handoff; it does not enable a full-game candidate override.
+Use the isolated sea trial to test the candidate's own prepared layers and
+saved collision. Creating a distinct world island with its own final mask and
+placement remains an explicit runtime package/world-data change.
 
 ## Advanced manual recipe: passable fishing shoal variation
 
@@ -192,8 +196,9 @@ connected-border preparation but must declare an empty collision profile:
 }
 ```
 
-Run the same prepare, library review, in-game test and promotion commands with
-the shoal recipe ID. Survey sites and other world finds can already be prepared
-and previewed with the `world-feature` or `environment` families; they need a
-deliberate runtime binding/package before they can be promoted or tested in a
-game slot.
+Run the same preparation, structured review, and promotion flow with the shoal
+recipe ID. Survey sites and other world finds can already be prepared and
+previewed with the `world-feature` or `environment` families; they need a
+deliberate runtime binding/package before promotion or runtime integration. The
+isolated sea trial is for solid island candidates with a saved hybrid collision
+draft.

@@ -81,6 +81,17 @@ import {
   PRODUCTION_ASSET_LIBRARY_SELECTION_KEY,
   type ProductionAssetIntakeUi,
 } from "./ProductionAssetIntakeUi";
+import { assetTrialApplicationHref } from "./AssetAppMode";
+import {
+  PRODUCTION_CANDIDATE_AUTHORING_FORMAT_VERSION,
+  PRODUCTION_CANDIDATE_SUBCELL_SIZE,
+  PRODUCTION_CANDIDATE_TILE_SIZE,
+  productionCandidateAuthoringRequestsEqual,
+  productionCandidateDraftToEditorProfile,
+  validateProductionCandidateAuthoringRequest,
+  type ProductionCandidateAuthoredCollision,
+  type ProductionCandidateAuthoringRequest,
+} from "./ProductionCandidateAuthoring";
 
 interface ViewerState {
   assetId: AuthoredAssetId;
@@ -144,10 +155,33 @@ const AUTHORITATIVE_SHIP_HALF_EXTENT = PLAYER_PROFILE.kind === "box"
   : 14;
 const COLLISION_SAVE_ROUTE = "/__wayfinders/collision/save";
 const ASSET_REVIEW_ROUTE = "/__wayfinders/assets/review";
+const PRODUCTION_CANDIDATE_VALIDATE_ROUTE = "/__wayfinders/assets/candidate/validate";
+const PRODUCTION_CANDIDATE_SAVE_ROUTE = "/__wayfinders/assets/candidate/save";
+const PRODUCTION_CANDIDATE_PROMOTION_ROUTE = "/__wayfinders/assets/candidate/promote";
 
 type StandaloneLibraryEntry = ReferenceImageLibraryEntry | ProductionCandidateLibraryEntry;
 type ProductionPreviewMode = "source" | "prepared" | "compare";
-type ProductionReviewState = "pending" | "approved" | "rejected";
+type ProductionReviewState = "pending" | "approved" | "rejected" | "stale";
+type ProductionValidationState = "unchecked" | "validating" | "current" | "stale" | "error";
+type ProductionCollisionSemantics = ProductionCandidateAuthoredCollision["kind"];
+
+interface ProductionValidationStatus {
+  readonly state: ProductionValidationState;
+  readonly message: string;
+}
+
+interface ProductionAuthoringResponse {
+  readonly ok?: boolean;
+  readonly error?: string;
+  readonly message?: string;
+  readonly recipeId?: string;
+  readonly fingerprint?: string;
+  readonly previousFingerprint?: string;
+  readonly candidateFingerprint?: string;
+  readonly validationState?: "current";
+  readonly reviewState?: ProductionReviewState;
+  readonly promotionState?: "published";
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -156,6 +190,14 @@ function escapeHtml(value: string): string {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function collisionDraftMethodLabel(method: string): string {
+  if (method === "prepared-alpha-connected-shoreline-v1") return "prepared alpha shoreline";
+  if (method === "manual-blank-draft") return "manual blank draft";
+  if (method === "semantic-mask-center-sample") return "semantic mask sample";
+  if (method === "explicit-alpha-center-sample") return "explicit alpha sample";
+  return method.replaceAll("-", " ");
 }
 
 export class AssetViewerScene extends Phaser.Scene {
@@ -194,9 +236,24 @@ export class AssetViewerScene extends Phaser.Scene {
   private readonly productionPreviewModes = new Map<string, ProductionPreviewMode>();
   private readonly productionCompareOpacity = new Map<string, number>();
   private readonly productionReviewStates = new Map<string, ProductionReviewState>();
+  private readonly productionValidationStates = new Map<string, Readonly<ProductionValidationStatus>>();
+  private readonly productionLocallyDirty = new Set<string>();
+  private readonly productionAuthoringBaselines = new Map<
+    string,
+    Readonly<ProductionCandidateAuthoringRequest>
+  >();
+  private readonly productionCollisionSemantics = new Map<string, ProductionCollisionSemantics>();
+  private readonly productionEmptyReasons = new Map<string, string>();
+  private readonly productionHybridDrafts = new Map<
+    string,
+    Readonly<ProductionCandidateAuthoringRequest["collision"]>
+  >();
   private readonly layerVisibility = new Map<string, boolean>();
   private readonly layerOpacity = new Map<string, number>();
   private productionReviewInFlight = false;
+  private productionAuthoringInFlight = false;
+  private productionPromotionInFlight = false;
+  private productionEditorCandidateId?: string;
   private collisionSaveInFlight = false;
   private controlsAbort?: AbortController;
   private cursors?: Readonly<AssetViewerCursorKeys>;
@@ -285,7 +342,15 @@ export class AssetViewerScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.onResize, this);
     this.mountControls();
     this.installDebugApi();
-    this.rebuildPreview();
+    const restoredEntry = this.selectedLibraryEntry();
+    if (restoredEntry.entryType === "production-candidate") {
+      this.activateProductionCandidateEditor(restoredEntry);
+      this.beginReferencePreviewLoad(restoredEntry);
+    } else if (restoredEntry.entryType === "reference-image") {
+      this.beginReferencePreviewLoad(restoredEntry);
+    } else {
+      this.rebuildPreview();
+    }
 
     const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
     if (sceneStatus) sceneStatus.textContent = "Runtime asset viewer and collision authoring active";
@@ -347,6 +412,96 @@ export class AssetViewerScene extends Phaser.Scene {
   private selectedProductionCandidate(): Readonly<ProductionCandidateLibraryEntry> | undefined {
     const entry = this.selectedLibraryEntry();
     return entry.entryType === "production-candidate" ? entry : undefined;
+  }
+
+  private productionCandidateDimensions(
+    entry: Readonly<ProductionCandidateLibraryEntry>,
+  ): Readonly<{ width: number; height: number }> {
+    const firstLayer = entry.recipe.layers[0];
+    if (!firstLayer) throw new RangeError(`${entry.id} has no authorable layers`);
+    const width = firstLayer.preparation.targetWidth;
+    const height = firstLayer.preparation.targetHeight;
+    if (entry.recipe.layers.some((layer) =>
+      layer.preparation.targetWidth !== width || layer.preparation.targetHeight !== height)) {
+      throw new RangeError(`${entry.id} layers do not share one candidate canvas`);
+    }
+    return Object.freeze({ width, height });
+  }
+
+  private productionCandidateAuthoredCollision(
+    entry: Readonly<ProductionCandidateLibraryEntry>,
+  ): Readonly<ProductionCandidateAuthoredCollision> {
+    const draft = entry.collisionDraft;
+    if (draft.kind === "hybrid-grid-draft") {
+      return Object.freeze({
+        kind: "hybrid-grid-draft",
+        tileSize: PRODUCTION_CANDIDATE_TILE_SIZE,
+        subcellSize: PRODUCTION_CANDIDATE_SUBCELL_SIZE,
+        grid: Object.freeze({ ...draft.grid }),
+        solidSubcells: Object.freeze(draft.solidSubcells.map((point) => Object.freeze({ ...point }))),
+      });
+    }
+    if (draft.kind === "empty") {
+      return Object.freeze({ kind: "empty", passable: true, reason: draft.reason });
+    }
+    throw new RangeError(`${entry.id} preserves runtime collision and is not authorable as a pending mask`);
+  }
+
+  private activateProductionCandidateEditor(entry: Readonly<ProductionCandidateLibraryEntry>): void {
+    const collision = this.productionCandidateAuthoredCollision(entry);
+    const dimensions = this.productionCandidateDimensions(entry);
+    this.productionEditorCandidateId = entry.id;
+    this.productionCollisionSemantics.set(entry.id, collision.kind);
+    if (collision.kind === "hybrid-grid-draft") {
+      this.productionHybridDrafts.set(entry.id, collision);
+    } else {
+      this.productionEmptyReasons.set(entry.id, collision.reason);
+    }
+    this.productionAuthoringBaselines.set(entry.id, this.productionCandidateSavedRequest(entry));
+    this.activateProductionCandidateCollisionTarget(entry, dimensions.width, dimensions.height, collision);
+    this.renderProductionAuthoringForm(entry);
+    this.syncSelectedAssetUi();
+    void this.validateProductionCandidate();
+  }
+
+  private activateProductionCandidateCollisionTarget(
+    entry: Readonly<ProductionCandidateLibraryEntry>,
+    targetWidth: number,
+    targetHeight: number,
+    collision: Readonly<ProductionCandidateAuthoredCollision>,
+  ): void {
+    const profile = productionCandidateDraftToEditorProfile(collision);
+    const hybrid = collision.kind === "hybrid-grid-draft";
+    const width = hybrid ? collision.grid.width : Math.max(1, Math.ceil(targetWidth / PRODUCTION_CANDIDATE_TILE_SIZE));
+    const height = hybrid ? collision.grid.height : Math.max(1, Math.ceil(targetHeight / PRODUCTION_CANDIDATE_TILE_SIZE));
+    this.collisionTarget = Object.freeze({
+      objectKind: hybrid ? "generated-island" : "fishing-shoal",
+      label: entry.name,
+      source: "developer-metadata",
+      editing: hybrid ? "hybrid-grid" : "explicit-empty",
+      editingNote: hybrid
+        ? "Edit the pending candidate's canonical 32/8 px collision mask. Save candidate persists it."
+        : "This pending candidate is explicitly passable and has no solid collision mask.",
+      width,
+      height,
+      tileSize: PRODUCTION_CANDIDATE_TILE_SIZE,
+      baseMasks: Object.freeze(Array.from({ length: width * height }, () => 0)),
+      profile,
+      anchors: Object.freeze([]),
+      visualBounds: Object.freeze({ width: targetWidth, height: targetHeight }),
+    });
+    this.collisionModel = this.createCollisionModel(this.collisionTarget);
+    this.collisionAcceptedMetadata = undefined;
+    this.validatedCollisionCandidate = undefined;
+    this.collisionSelection = undefined;
+    this.collisionSelectionStart = undefined;
+    this.collisionHover = undefined;
+    this.collisionStrokePoints = undefined;
+    this.collisionPanGesture = undefined;
+    this.collisionProbeWorld = Object.freeze({ x: STAGE.centerX, y: STAGE.centerY });
+    this.syncCollisionControls();
+    this.reportCollision(this.collisionTarget.editingNote);
+    this.drawGuides();
   }
 
   private acceptedMetadata(assetId: AuthoredAssetId): Readonly<AuthoredAssetMetadata> | undefined {
@@ -493,40 +648,9 @@ export class AssetViewerScene extends Phaser.Scene {
     entry: Readonly<ProductionCandidateLibraryEntry>,
     visual?: Phaser.GameObjects.Image,
   ): void {
-    const graphics = this.collisionGraphics.clear();
-    if (!this.state.showFootprint || !visual?.visible) return;
-    if (entry.collisionDraft.kind !== "hybrid-grid-draft") return;
-    const bounds = visual.getBounds();
-    const { grid } = entry.collisionDraft;
-    const subcellWidth = bounds.width / grid.subcellColumns;
-    const subcellHeight = bounds.height / grid.subcellRows;
-    graphics.fillStyle(0xff4e4e, 0.32);
-    for (const solid of entry.collisionDraft.solidSubcells) {
-      graphics.fillRect(
-        bounds.left + solid.x * subcellWidth,
-        bounds.top + solid.y * subcellHeight,
-        subcellWidth,
-        subcellHeight,
-      );
-    }
-    graphics.lineStyle(1, 0xa4d9d3, 0.18);
-    for (let x = 0; x <= grid.subcellColumns; x++) {
-      const worldX = bounds.left + x * subcellWidth;
-      graphics.lineBetween(worldX, bounds.top, worldX, bounds.bottom);
-    }
-    for (let y = 0; y <= grid.subcellRows; y++) {
-      const worldY = bounds.top + y * subcellHeight;
-      graphics.lineBetween(bounds.left, worldY, bounds.right, worldY);
-    }
-    graphics.lineStyle(2, 0x45d584, 0.78);
-    for (let x = 0; x <= grid.width; x++) {
-      const worldX = bounds.left + x * (bounds.width / grid.width);
-      graphics.lineBetween(worldX, bounds.top, worldX, bounds.bottom);
-    }
-    for (let y = 0; y <= grid.height; y++) {
-      const worldY = bounds.top + y * (bounds.height / grid.height);
-      graphics.lineBetween(bounds.left, worldY, bounds.right, worldY);
-    }
+    this.collisionGraphics.clear();
+    if (!this.state.showFootprint || this.productionEditorCandidateId !== entry.id || !visual?.visible) return;
+    this.drawCollisionOverlay();
   }
 
   private rebuildStandalonePreview(entry: Readonly<StandaloneLibraryEntry>): void {
@@ -697,7 +821,13 @@ export class AssetViewerScene extends Phaser.Scene {
     this.guideGraphics.clear();
     const candidate = this.selectedProductionCandidate();
     if (candidate) {
-      this.drawProductionCollisionOverlay(candidate, this.comparisonVisual ?? this.referenceVisual);
+      const mode = this.productionPreviewModes.get(candidate.id) ?? "prepared";
+      const preparedVisual = mode === "compare"
+        ? this.comparisonVisual
+        : mode === "prepared"
+          ? this.referenceVisual
+          : undefined;
+      this.drawProductionCollisionOverlay(candidate, preparedVisual);
       return;
     }
     if (this.selectedReferenceEntry()) {
@@ -846,6 +976,20 @@ export class AssetViewerScene extends Phaser.Scene {
     width: number;
     height: number;
   }> {
+    const candidate = this.selectedProductionCandidate();
+    if (candidate && this.productionEditorCandidateId === candidate.id) {
+      const mode = this.productionPreviewModes.get(candidate.id) ?? "prepared";
+      const visual = mode === "compare" ? this.comparisonVisual : mode === "prepared" ? this.referenceVisual : undefined;
+      if (visual?.visible) {
+        const bounds = visual.getBounds();
+        return Object.freeze({
+          left: bounds.left,
+          top: bounds.top,
+          width: bounds.width,
+          height: bounds.height,
+        });
+      }
+    }
     const width = this.collisionTarget.width * this.collisionTarget.tileSize;
     const height = this.collisionTarget.height * this.collisionTarget.tileSize;
     return Object.freeze({
@@ -862,7 +1006,10 @@ export class AssetViewerScene extends Phaser.Scene {
     const target = this.collisionTarget;
     const snapshot = this.collisionModel.snapshot();
     const rect = this.collisionAssetRect();
-    const displaySubcellSize = target.tileSize / COLLISION_SUBCELLS_PER_TILE;
+    const displayTileWidth = rect.width / target.width;
+    const displayTileHeight = rect.height / target.height;
+    const displaySubcellWidth = displayTileWidth / COLLISION_SUBCELLS_PER_TILE;
+    const displaySubcellHeight = displayTileHeight / COLLISION_SUBCELLS_PER_TILE;
 
     if (snapshot.masks) {
       graphics.fillStyle(0xff4e4e, 0.26);
@@ -873,10 +1020,10 @@ export class AssetViewerScene extends Phaser.Scene {
             for (let subX = 0; subX < COLLISION_SUBCELLS_PER_TILE; subX++) {
               if (!isCollisionSubcellSolid(mask, subX, subY)) continue;
               graphics.fillRect(
-                rect.left + cellX * target.tileSize + subX * displaySubcellSize,
-                rect.top + cellY * target.tileSize + subY * displaySubcellSize,
-                displaySubcellSize,
-                displaySubcellSize,
+                rect.left + cellX * displayTileWidth + subX * displaySubcellWidth,
+                rect.top + cellY * displayTileHeight + subY * displaySubcellHeight,
+                displaySubcellWidth,
+                displaySubcellHeight,
               );
             }
           }
@@ -886,11 +1033,11 @@ export class AssetViewerScene extends Phaser.Scene {
       const subcellWidth = target.width * COLLISION_SUBCELLS_PER_TILE;
       const subcellHeight = target.height * COLLISION_SUBCELLS_PER_TILE;
       for (let x = 0; x <= subcellWidth; x++) {
-        const worldX = rect.left + x * displaySubcellSize;
+        const worldX = rect.left + x * displaySubcellWidth;
         graphics.lineBetween(worldX, rect.top, worldX, rect.top + rect.height);
       }
       for (let y = 0; y <= subcellHeight; y++) {
-        const worldY = rect.top + y * displaySubcellSize;
+        const worldY = rect.top + y * displaySubcellHeight;
         graphics.lineBetween(rect.left, worldY, rect.left + rect.width, worldY);
       }
     } else if (snapshot.profile.kind === "box") {
@@ -913,24 +1060,25 @@ export class AssetViewerScene extends Phaser.Scene {
 
     graphics.lineStyle(2, 0x45d584, 0.78);
     for (let x = 0; x <= target.width; x++) {
-      const worldX = rect.left + x * target.tileSize;
+      const worldX = rect.left + x * displayTileWidth;
       graphics.lineBetween(worldX, rect.top, worldX, rect.top + rect.height);
     }
     for (let y = 0; y <= target.height; y++) {
-      const worldY = rect.top + y * target.tileSize;
+      const worldY = rect.top + y * displayTileHeight;
       graphics.lineBetween(rect.left, worldY, rect.left + rect.width, worldY);
     }
 
     if (this.state.showFootprint) {
+      const candidate = this.selectedProductionCandidate();
       graphics.lineStyle(2, 0x83fff0, 0.8).strokeRect(
-        STAGE.centerX - target.visualBounds.width / 2,
-        STAGE.centerY - target.visualBounds.height / 2,
-        target.visualBounds.width,
-        target.visualBounds.height,
+        candidate ? rect.left : STAGE.centerX - target.visualBounds.width / 2,
+        candidate ? rect.top : STAGE.centerY - target.visualBounds.height / 2,
+        candidate ? rect.width : target.visualBounds.width,
+        candidate ? rect.height : target.visualBounds.height,
       );
       for (const anchor of target.anchors) {
-        const x = rect.left + (anchor.x + 0.5) * target.tileSize;
-        const y = rect.top + (anchor.y + 0.5) * target.tileSize;
+        const x = rect.left + (anchor.x + 0.5) * displayTileWidth;
+        const y = rect.top + (anchor.y + 0.5) * displayTileHeight;
         graphics.fillStyle(anchor.requiredClearance ? 0xffd47a : 0xf1f6c7, 0.95).fillCircle(x, y, 4);
         graphics.lineStyle(1, 0x041419, 0.9).strokeCircle(x, y, 5);
       }
@@ -941,8 +1089,8 @@ export class AssetViewerScene extends Phaser.Scene {
       let originY = STAGE.centerY;
       const metadata = target.packageMetadata;
       if (metadata?.kind === "home-island") {
-        originX = rect.left + (metadata.grid.placementOrigin.x + 0.5) * target.tileSize;
-        originY = rect.top + (metadata.grid.placementOrigin.y + 0.5) * target.tileSize;
+        originX = rect.left + (metadata.grid.placementOrigin.x + 0.5) * displayTileWidth;
+        originY = rect.top + (metadata.grid.placementOrigin.y + 0.5) * displayTileHeight;
       }
       graphics.lineStyle(2, 0xffd47a, 0.95);
       graphics.lineBetween(originX - 14, originY, originX + 14, originY);
@@ -953,16 +1101,16 @@ export class AssetViewerScene extends Phaser.Scene {
     if (this.collisionSelection) {
       const selection = this.collisionSelection;
       graphics.fillStyle(0x4bd6ff, 0.12).fillRect(
-        rect.left + selection.x * displaySubcellSize,
-        rect.top + selection.y * displaySubcellSize,
-        selection.width * displaySubcellSize,
-        selection.height * displaySubcellSize,
+        rect.left + selection.x * displaySubcellWidth,
+        rect.top + selection.y * displaySubcellHeight,
+        selection.width * displaySubcellWidth,
+        selection.height * displaySubcellHeight,
       );
       graphics.lineStyle(2, 0x4bd6ff, 0.95).strokeRect(
-        rect.left + selection.x * displaySubcellSize,
-        rect.top + selection.y * displaySubcellSize,
-        selection.width * displaySubcellSize,
-        selection.height * displaySubcellSize,
+        rect.left + selection.x * displaySubcellWidth,
+        rect.top + selection.y * displaySubcellHeight,
+        selection.width * displaySubcellWidth,
+        selection.height * displaySubcellHeight,
       );
     }
     if (this.collisionHover && snapshot.masks) {
@@ -977,10 +1125,10 @@ export class AssetViewerScene extends Phaser.Scene {
       );
       const first = hoverPoints[0];
       graphics.lineStyle(2, 0xfff2a8, 0.95).strokeRect(
-        rect.left + first.x * displaySubcellSize,
-        rect.top + first.y * displaySubcellSize,
-        hoverBrushSize * displaySubcellSize,
-        hoverBrushSize * displaySubcellSize,
+        rect.left + first.x * displaySubcellWidth,
+        rect.top + first.y * displaySubcellHeight,
+        hoverBrushSize * displaySubcellWidth,
+        hoverBrushSize * displaySubcellHeight,
       );
     }
     if (this.collisionStrokePoints) {
@@ -988,38 +1136,46 @@ export class AssetViewerScene extends Phaser.Scene {
       graphics.fillStyle(solid ? 0xff7b5e : 0x5ec8ff, 0.58);
       for (const point of this.collisionStrokePoints.values()) {
         graphics.fillRect(
-          rect.left + point.x * displaySubcellSize,
-          rect.top + point.y * displaySubcellSize,
-          displaySubcellSize,
-          displaySubcellSize,
+          rect.left + point.x * displaySubcellWidth,
+          rect.top + point.y * displaySubcellHeight,
+          displaySubcellWidth,
+          displaySubcellHeight,
         );
       }
     }
 
     const probeWorld = this.collisionProbeWorld ?? { x: STAGE.centerX, y: STAGE.centerY };
-    const modelScale = snapshot.masks ? 32 / target.tileSize : 1;
+    const modelScaleX = snapshot.masks ? PRODUCTION_CANDIDATE_TILE_SIZE / displayTileWidth : 1;
+    const modelScaleY = snapshot.masks ? PRODUCTION_CANDIDATE_TILE_SIZE / displayTileHeight : 1;
     const probeInput = snapshot.masks
       ? {
-        centerX: (probeWorld.x - rect.left) * modelScale,
-        centerY: (probeWorld.y - rect.top) * modelScale,
+        centerX: (probeWorld.x - rect.left) * modelScaleX,
+        centerY: (probeWorld.y - rect.top) * modelScaleY,
       }
       : { centerX: probeWorld.x - STAGE.centerX, centerY: probeWorld.y - STAGE.centerY };
     const probe = this.collisionModel.probeHull({
       ...probeInput,
-      halfWidth: AUTHORITATIVE_SHIP_HALF_EXTENT * modelScale,
+      halfWidth: AUTHORITATIVE_SHIP_HALF_EXTENT * modelScaleX,
+      halfHeight: AUTHORITATIVE_SHIP_HALF_EXTENT * modelScaleY,
       outsideIsSolid: false,
     });
+    const displayProbeHalfWidth = snapshot.masks
+      ? AUTHORITATIVE_SHIP_HALF_EXTENT / modelScaleX
+      : AUTHORITATIVE_SHIP_HALF_EXTENT;
+    const displayProbeHalfHeight = snapshot.masks
+      ? AUTHORITATIVE_SHIP_HALF_EXTENT / modelScaleY
+      : AUTHORITATIVE_SHIP_HALF_EXTENT;
     graphics.fillStyle(probe.collides ? 0xff4949 : 0x53e18d, 0.12).fillRect(
-      probeWorld.x - AUTHORITATIVE_SHIP_HALF_EXTENT,
-      probeWorld.y - AUTHORITATIVE_SHIP_HALF_EXTENT,
-      AUTHORITATIVE_SHIP_HALF_EXTENT * 2,
-      AUTHORITATIVE_SHIP_HALF_EXTENT * 2,
+      probeWorld.x - displayProbeHalfWidth,
+      probeWorld.y - displayProbeHalfHeight,
+      displayProbeHalfWidth * 2,
+      displayProbeHalfHeight * 2,
     );
     graphics.lineStyle(2, probe.collides ? 0xff4949 : 0x53e18d, 0.95).strokeRect(
-      probeWorld.x - AUTHORITATIVE_SHIP_HALF_EXTENT,
-      probeWorld.y - AUTHORITATIVE_SHIP_HALF_EXTENT,
-      AUTHORITATIVE_SHIP_HALF_EXTENT * 2,
-      AUTHORITATIVE_SHIP_HALF_EXTENT * 2,
+      probeWorld.x - displayProbeHalfWidth,
+      probeWorld.y - displayProbeHalfHeight,
+      displayProbeHalfWidth * 2,
+      displayProbeHalfHeight * 2,
     );
   }
 
@@ -1077,9 +1233,12 @@ export class AssetViewerScene extends Phaser.Scene {
     const snapshot = this.collisionModel.snapshot();
     if (!snapshot.masks) return undefined;
     const rect = this.collisionAssetRect();
-    const displaySubcellSize = this.collisionTarget.tileSize / COLLISION_SUBCELLS_PER_TILE;
-    const x = Math.floor((worldX - rect.left) / displaySubcellSize);
-    const y = Math.floor((worldY - rect.top) / displaySubcellSize);
+    const displaySubcellWidth = rect.width
+      / (this.collisionTarget.width * COLLISION_SUBCELLS_PER_TILE);
+    const displaySubcellHeight = rect.height
+      / (this.collisionTarget.height * COLLISION_SUBCELLS_PER_TILE);
+    const x = Math.floor((worldX - rect.left) / displaySubcellWidth);
+    const y = Math.floor((worldY - rect.top) / displaySubcellHeight);
     if (
       x < 0
       || y < 0
@@ -1101,7 +1260,10 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionPointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.selectedStandaloneEntry() || this.collisionSaveInFlight) return;
+    if (this.selectedReferenceEntry() || this.collisionSaveInFlight || this.productionAuthoringInFlight) return;
+    const selectedCandidate = this.selectedProductionCandidate();
+    if (selectedCandidate
+      && (this.productionPreviewModes.get(selectedCandidate.id) ?? "prepared") === "source") return;
     this.collisionProbeWorld = Object.freeze({ x: pointer.worldX, y: pointer.worldY });
     if (pointer.button === 1 || this.collisionSpaceHeld || this.collisionTool === "pan") {
       this.collisionPanGesture = Object.freeze({
@@ -1147,7 +1309,10 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionPointerMove(pointer: Phaser.Input.Pointer): void {
-    if (this.selectedStandaloneEntry() || this.collisionSaveInFlight) return;
+    if (this.selectedReferenceEntry() || this.collisionSaveInFlight || this.productionAuthoringInFlight) return;
+    const selectedCandidate = this.selectedProductionCandidate();
+    if (selectedCandidate
+      && (this.productionPreviewModes.get(selectedCandidate.id) ?? "prepared") === "source") return;
     this.collisionProbeWorld = Object.freeze({ x: pointer.worldX, y: pointer.worldY });
     const point = this.collisionSubcellAt(pointer.worldX, pointer.worldY);
     this.collisionHover = point;
@@ -1169,7 +1334,7 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionPointerUp(): void {
-    if (this.collisionSaveInFlight) {
+    if (this.collisionSaveInFlight || this.productionAuthoringInFlight) {
       this.collisionStrokePoints = undefined;
       this.collisionSelectionStart = undefined;
       return;
@@ -1266,29 +1431,78 @@ export class AssetViewerScene extends Phaser.Scene {
         </div>
         <div data-library="badges" class="asset-selection-badges"></div>
         <section data-production-review class="production-review-panel" hidden>
-          <div class="production-preview-modes" role="group" aria-label="Candidate preview mode">
-            <button data-production-mode="source" type="button">Source</button>
-            <button data-production-mode="prepared" type="button">Prepared</button>
-            <button data-production-mode="compare" type="button">Compare</button>
-          </div>
-          <label class="production-opacity">Prepared opacity
-            <input data-production="opacity" type="range" min="0" max="1" step="0.05" value="1">
-            <output data-production="opacity-output">100%</output>
-          </label>
-          <label class="production-collision-toggle">
-            <input data-production="collision" type="checkbox" checked>
-            <span data-production="collision-label">Show collision draft</span>
-          </label>
-          <p data-production="notice" class="production-review-notice"></p>
-          <div class="production-review-actions">
-            <button data-production-review-action="approved" type="button">Approve for testing</button>
-            <button data-production-review-action="rejected" type="button">Reject</button>
-            <a data-production="test-link" class="production-test-link" href="#" hidden>Test visually in game</a>
-          </div>
-          <output data-production="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
+          <form data-production-authoring="form" class="production-authoring-form">
+            <header>
+              <div><p class="eyebrow">Persisted candidate recipe</p><h4>Finish this asset</h4></div>
+              <span data-production="validation-badge" class="production-state-badge">Unchecked</span>
+            </header>
+            <div class="production-authoring-fields">
+              <label>Name <input data-production-authoring="name" type="text" maxlength="120" required></label>
+              <label>Family
+                <select data-production-authoring="family">
+                  <option value="island">Island</option>
+                  <option value="vessel">Vessel</option>
+                  <option value="shoal">Shoal</option>
+                  <option value="world-feature">World feature</option>
+                  <option value="environment">Environment</option>
+                </select>
+              </label>
+              <label>Canvas width <input data-production-authoring="width" type="number" min="1" max="4096" step="1" required></label>
+              <label>Canvas height <input data-production-authoring="height" type="number" min="1" max="4096" step="1" required></label>
+              <label>Collision semantics
+                <select data-production-authoring="collision-semantics">
+                  <option value="hybrid-grid-draft">Solid 32/8 px mask</option>
+                  <option value="empty">Explicitly passable</option>
+                </select>
+              </label>
+              <label>Test binding
+                <select data-production-authoring="runtime-binding">
+                  <option value="">No runtime binding</option>
+                  ${ASSET_IDS.map((assetId) => `<option value="${escapeHtml(assetId)}">${escapeHtml(assetId)}</option>`).join("")}
+                </select>
+              </label>
+            </div>
+            <fieldset class="production-layer-authoring">
+              <legend>Persisted layer order, visibility and opacity</legend>
+              <div data-production-authoring="layers"></div>
+            </fieldset>
+            <p data-production-authoring="collision-note" class="production-review-notice"></p>
+            <div class="production-authoring-actions">
+              <button data-production-action="validate" type="button">Validate current</button>
+              <button data-production-action="save" type="button">Save candidate</button>
+            </div>
+            <output data-production="validation-status" class="asset-viewer-diagnostics" aria-live="polite"></output>
+          </form>
+          <section class="production-preview-only" aria-label="Preview-only controls">
+            <header><p class="eyebrow">Preview only</p><h4>Display controls (not saved)</h4></header>
+            <div class="production-preview-modes" role="group" aria-label="Candidate preview mode">
+              <button data-production-mode="source" type="button">Source</button>
+              <button data-production-mode="prepared" type="button">Prepared</button>
+              <button data-production-mode="compare" type="button">Compare</button>
+            </div>
+            <label class="production-opacity">Prepared opacity
+              <input data-production="opacity" type="range" min="0" max="1" step="0.05" value="1">
+              <output data-production="opacity-output">100%</output>
+            </label>
+            <label class="production-collision-toggle">
+              <input data-production="collision" type="checkbox" checked>
+              <span data-production="collision-label">Show collision draft</span>
+            </label>
+            <p data-production="notice" class="production-review-notice"></p>
+          </section>
+          <section class="production-lifecycle-actions" aria-label="Candidate review and publication">
+            <header><p class="eyebrow">Persisted lifecycle</p><h4>Review, trial and publish</h4></header>
+            <div class="production-review-actions">
+              <button data-production-review-action="approved" type="button">Approve current</button>
+              <button data-production-review-action="rejected" type="button">Reject current</button>
+              <button data-production-action="promote" type="button">Promote approved</button>
+              <a data-production="trial-link" class="production-test-link" href="#">Trial candidate</a>
+            </div>
+            <output data-production="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
+          </section>
         </section>
         <details class="asset-selection-overview">
-          <summary>Asset overview, layers and animation</summary>
+          <summary>Preview-only asset overview, layers and animation</summary>
           <div class="asset-selection-overview-body">
             <div data-library="details" class="asset-selection-details"></div>
             <div class="asset-selection-subsection">
@@ -1302,17 +1516,17 @@ export class AssetViewerScene extends Phaser.Scene {
           </div>
         </details>
       </section>
-      <details class="asset-inspector-section" data-selected-package-only open>
+      <details class="asset-inspector-section" data-collision-editor-section open>
         <summary>Collision</summary>
         <section class="collision-workbench" aria-labelledby="collision-workbench-title">
           <header>
             <div>
-              <p class="eyebrow">Live package editor</p>
-              <h3 id="collision-workbench-title">Collision authoring</h3>
+              <p class="eyebrow" data-collision="eyebrow">Live package editor</p>
+              <h3 id="collision-workbench-title" data-collision="title">Collision authoring</h3>
             </div>
             <button data-collision="fit" type="button">Fit</button>
           </header>
-          <label class="collision-target-row">Runtime profile
+          <label class="collision-target-row" data-package-collision-only>Runtime profile
             <select data-collision="target"></select>
           </label>
           <p data-collision="note" class="collision-note"></p>
@@ -1362,9 +1576,9 @@ export class AssetViewerScene extends Phaser.Scene {
             <button data-collision="redo" type="button">Redo</button>
             <button data-collision="reset" type="button">Reset edits</button>
           </div>
-          <button data-collision="save" class="collision-save-button" type="button">Save to library</button>
+          <button data-collision="save" data-package-collision-only class="collision-save-button" type="button">Save to library</button>
           <output data-collision="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
-          <details class="collision-portable">
+          <details class="collision-portable" data-package-collision-only>
             <summary>Portable candidate file</summary>
             <div class="collision-portable-body">
               <label class="collision-import">Import collision candidate
@@ -1614,6 +1828,7 @@ export class AssetViewerScene extends Phaser.Scene {
         this.productionIntakeUi?.open({
           name: entry.name,
           repositoryPath: entry.reference.relativePath,
+          sourceUrl: entry.layers[0]?.url ?? entry.thumbnailUrl,
           kind: entry.reference.kind,
         });
       }, { signal });
@@ -1652,6 +1867,58 @@ export class AssetViewerScene extends Phaser.Scene {
         }
       }, { signal });
     }
+    const authoringForm = slot.querySelector<HTMLFormElement>("[data-production-authoring=form]");
+    authoringForm?.addEventListener("input", (event) => {
+      const input = event.target as HTMLInputElement;
+      const layerRow = input.closest<HTMLElement>("[data-production-layer-id]");
+      if (layerRow && input.matches("[data-production-layer-opacity]")) {
+        const output = layerRow.querySelector<HTMLOutputElement>("[data-production-layer-opacity-output]");
+        if (output) output.value = `${Math.round(Number(input.value) * 100)}%`;
+      }
+      this.markProductionCandidateStale("Unsaved candidate settings or collision edits require validation.");
+    }, { signal });
+    authoringForm?.addEventListener("change", (event) => {
+      const control = event.target as HTMLElement;
+      if (control.matches(
+        "[data-production-authoring=width], [data-production-authoring=height], [data-production-authoring=collision-semantics]",
+      )) this.applyProductionCandidateShapeControls();
+      this.syncProductionAuthoringControls();
+    }, { signal });
+    authoringForm?.addEventListener("click", (event) => {
+      const button = (event.target as Element).closest<HTMLButtonElement>("[data-production-layer-move]");
+      if (!button) return;
+      const row = button.closest<HTMLElement>("[data-production-layer-id]");
+      const direction = Number(button.dataset.productionLayerMove);
+      if (!row || (direction !== -1 && direction !== 1)) return;
+      const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+      if (!(sibling instanceof HTMLElement)) return;
+      if (direction < 0) row.parentElement?.insertBefore(row, sibling);
+      else row.parentElement?.insertBefore(sibling, row);
+      this.markProductionCandidateStale("Layer order changed; save and validate the candidate.");
+      this.syncProductionLayerMoveControls();
+    }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-production-action=validate]")
+      ?.addEventListener("click", () => { void this.validateProductionCandidate(); }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-production-action=save]")
+      ?.addEventListener("click", () => { void this.saveProductionCandidate(); }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-production-action=promote]")
+      ?.addEventListener("click", () => { void this.promoteProductionCandidate(); }, { signal });
+    slot.querySelector<HTMLAnchorElement>("[data-production=trial-link]")
+      ?.addEventListener("click", (event) => {
+        const entry = this.selectedProductionCandidate();
+        if (!entry) return;
+        if (
+          this.productionAuthoringInFlight
+          || this.productionLocallyDirty.has(entry.id)
+          || entry.recipe.family !== "island"
+          || entry.collisionDraft.kind !== "hybrid-grid-draft"
+        ) {
+          event.preventDefault();
+          this.reportProductionReview("Save a current island collision draft before launching its sea trial.", true);
+          return;
+        }
+        sessionStorage.setItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY, entry.id);
+      }, { signal });
     const layers = slot.querySelector<HTMLElement>("[data-library=layers]");
     layers?.addEventListener("change", (event) => {
       const input = event.target as HTMLInputElement;
@@ -1674,6 +1941,508 @@ export class AssetViewerScene extends Phaser.Scene {
     }, { signal });
   }
 
+  private renderProductionAuthoringForm(entry: Readonly<ProductionCandidateLibraryEntry>): void {
+    const form = document.querySelector<HTMLFormElement>("[data-production-authoring=form]");
+    if (!form) return;
+    const dimensions = this.productionCandidateDimensions(entry);
+    const name = form.querySelector<HTMLInputElement>("[data-production-authoring=name]");
+    const family = form.querySelector<HTMLSelectElement>("[data-production-authoring=family]");
+    const width = form.querySelector<HTMLInputElement>("[data-production-authoring=width]");
+    const height = form.querySelector<HTMLInputElement>("[data-production-authoring=height]");
+    const semantics = form.querySelector<HTMLSelectElement>("[data-production-authoring=collision-semantics]");
+    const binding = form.querySelector<HTMLSelectElement>("[data-production-authoring=runtime-binding]");
+    const layers = form.querySelector<HTMLElement>("[data-production-authoring=layers]");
+    if (!name || !family || !width || !height || !semantics || !binding || !layers) return;
+    name.value = entry.recipe.name;
+    family.value = entry.recipe.family;
+    width.value = String(dimensions.width);
+    height.value = String(dimensions.height);
+    semantics.value = this.productionCollisionSemantics.get(entry.id) ?? entry.collisionDraft.kind;
+    binding.value = entry.recipe.runtimeBinding?.assetId ?? "";
+    layers.innerHTML = entry.recipe.layers.map((layer) => `
+      <div class="production-layer-authoring-row" data-production-layer-id="${escapeHtml(layer.id)}">
+        <div class="production-layer-order-actions">
+          <button data-production-layer-move="-1" type="button" aria-label="Move ${escapeHtml(layer.name)} earlier">&uarr;</button>
+          <button data-production-layer-move="1" type="button" aria-label="Move ${escapeHtml(layer.name)} later">&darr;</button>
+        </div>
+        <strong>${escapeHtml(layer.name)}</strong>
+        <code>${escapeHtml(layer.id)}</code>
+        <label><input data-production-layer-visible type="checkbox" ${layer.defaultVisible ? "checked" : ""}> Visible by default</label>
+        <label>Opacity
+          <input data-production-layer-opacity type="range" min="0" max="1" step="0.05" value="${layer.opacity}">
+          <output data-production-layer-opacity-output>${Math.round(layer.opacity * 100)}%</output>
+        </label>
+      </div>`).join("");
+    this.productionLocallyDirty.delete(entry.id);
+    this.productionValidationStates.set(entry.id, Object.freeze({
+      state: "unchecked",
+      message: "Validate the exact prepared fingerprint before approval.",
+    }));
+    this.syncProductionLayerMoveControls();
+    this.syncProductionAuthoringControls();
+  }
+
+  private syncProductionLayerMoveControls(): void {
+    const root = document.querySelector<HTMLElement>("[data-production-authoring=layers]");
+    if (!root) return;
+    const rows = [...root.querySelectorAll<HTMLElement>("[data-production-layer-id]")];
+    rows.forEach((row, index) => {
+      const earlier = row.querySelector<HTMLButtonElement>('[data-production-layer-move="-1"]');
+      const later = row.querySelector<HTMLButtonElement>('[data-production-layer-move="1"]');
+      if (earlier) earlier.disabled = index === 0 || this.productionAuthoringInFlight;
+      if (later) later.disabled = index === rows.length - 1 || this.productionAuthoringInFlight;
+    });
+  }
+
+  private currentProductionValidation(
+    entry: Readonly<ProductionCandidateLibraryEntry>,
+  ): Readonly<ProductionValidationStatus> {
+    return this.productionValidationStates.get(entry.id) ?? Object.freeze({
+      state: "unchecked",
+      message: "Validate the exact prepared fingerprint before approval.",
+    });
+  }
+
+  private setProductionValidation(
+    entry: Readonly<ProductionCandidateLibraryEntry>,
+    state: ProductionValidationState,
+    message: string,
+  ): void {
+    this.productionValidationStates.set(entry.id, Object.freeze({ state, message }));
+    const status = document.querySelector<HTMLOutputElement>("[data-production=validation-status]");
+    if (status) {
+      status.value = message;
+      status.dataset.state = state === "error" || state === "stale" ? "error" : "ready";
+    }
+    this.syncProductionAuthoringControls();
+  }
+
+  private markProductionCandidateStale(message: string): void {
+    const entry = this.selectedProductionCandidate();
+    if (!entry || this.productionEditorCandidateId !== entry.id) return;
+    const baseline = this.productionAuthoringBaselines.get(entry.id);
+    let matchesSaved = false;
+    try {
+      matchesSaved = baseline !== undefined
+        && productionCandidateAuthoringRequestsEqual(baseline, this.productionCandidateAuthoringRequest());
+    } catch {
+      // Invalid in-progress input is still a local edit; the form exposes its specific error separately.
+    }
+    if (matchesSaved) {
+      this.productionLocallyDirty.delete(entry.id);
+      this.setProductionValidation(
+        entry,
+        "unchecked",
+        "Edits match the saved candidate again. Validate the exact prepared fingerprint before approval.",
+      );
+      return;
+    }
+    this.productionLocallyDirty.add(entry.id);
+    this.setProductionValidation(entry, "stale", message);
+  }
+
+  private productionCandidateSavedRequest(
+    entry: Readonly<ProductionCandidateLibraryEntry>,
+  ): Readonly<ProductionCandidateAuthoringRequest> {
+    const dimensions = this.productionCandidateDimensions(entry);
+    return validateProductionCandidateAuthoringRequest({
+      formatVersion: PRODUCTION_CANDIDATE_AUTHORING_FORMAT_VERSION,
+      recipeId: entry.id,
+      candidateFingerprint: entry.fingerprint,
+      settings: {
+        name: entry.recipe.name,
+        family: entry.recipe.family,
+        targetWidth: dimensions.width,
+        targetHeight: dimensions.height,
+        layers: entry.recipe.layers.map((layer) => ({
+          id: layer.id,
+          defaultVisible: layer.defaultVisible,
+          opacity: layer.opacity,
+        })),
+        runtimeBindingAssetId: entry.recipe.runtimeBinding?.assetId ?? null,
+      },
+      collision: this.productionCandidateAuthoredCollision(entry),
+    });
+  }
+
+  private productionHybridCollisionFromModel(
+    targetWidth: number,
+    targetHeight: number,
+  ): Readonly<ProductionCandidateAuthoredCollision> {
+    if (
+      !Number.isInteger(targetWidth)
+      || !Number.isInteger(targetHeight)
+      || targetWidth <= 0
+      || targetHeight <= 0
+      || targetWidth % PRODUCTION_CANDIDATE_TILE_SIZE !== 0
+      || targetHeight % PRODUCTION_CANDIDATE_TILE_SIZE !== 0
+    ) {
+      throw new RangeError("Solid collision canvases must use positive dimensions aligned to 32 px");
+    }
+    const width = targetWidth / PRODUCTION_CANDIDATE_TILE_SIZE;
+    const height = targetHeight / PRODUCTION_CANDIDATE_TILE_SIZE;
+    const subcellColumns = width * COLLISION_SUBCELLS_PER_TILE;
+    const subcellRows = height * COLLISION_SUBCELLS_PER_TILE;
+    const solidSubcells: Array<Readonly<{ x: number; y: number }>> = [];
+    const snapshot = this.collisionModel.snapshot();
+    if (snapshot.masks) {
+      const sourceWidth = this.collisionTarget.width;
+      const sourceHeight = this.collisionTarget.height;
+      for (let cellY = 0; cellY < Math.min(height, sourceHeight); cellY++) {
+        for (let cellX = 0; cellX < Math.min(width, sourceWidth); cellX++) {
+          const mask = snapshot.masks[cellY * sourceWidth + cellX];
+          for (let subY = 0; subY < COLLISION_SUBCELLS_PER_TILE; subY++) {
+            for (let subX = 0; subX < COLLISION_SUBCELLS_PER_TILE; subX++) {
+              if (!isCollisionSubcellSolid(mask, subX, subY)) continue;
+              solidSubcells.push(Object.freeze({
+                x: cellX * COLLISION_SUBCELLS_PER_TILE + subX,
+                y: cellY * COLLISION_SUBCELLS_PER_TILE + subY,
+              }));
+            }
+          }
+        }
+      }
+    } else {
+      const entry = this.selectedProductionCandidate();
+      const savedDraft = entry ? this.productionHybridDrafts.get(entry.id) : undefined;
+      if (savedDraft?.kind === "hybrid-grid-draft") {
+        for (const point of savedDraft.solidSubcells) {
+          if (point.x < subcellColumns && point.y < subcellRows) solidSubcells.push(Object.freeze({ ...point }));
+        }
+      }
+    }
+    return Object.freeze({
+      kind: "hybrid-grid-draft",
+      tileSize: PRODUCTION_CANDIDATE_TILE_SIZE,
+      subcellSize: PRODUCTION_CANDIDATE_SUBCELL_SIZE,
+      grid: Object.freeze({ width, height, subcellColumns, subcellRows }),
+      solidSubcells: Object.freeze(solidSubcells),
+    });
+  }
+
+  private applyProductionCandidateShapeControls(): void {
+    const entry = this.selectedProductionCandidate();
+    if (!entry || this.productionEditorCandidateId !== entry.id) return;
+    const widthInput = document.querySelector<HTMLInputElement>("[data-production-authoring=width]");
+    const heightInput = document.querySelector<HTMLInputElement>("[data-production-authoring=height]");
+    const semanticsInput = document.querySelector<HTMLSelectElement>(
+      "[data-production-authoring=collision-semantics]",
+    );
+    if (!widthInput || !heightInput || !semanticsInput) return;
+    const targetWidth = Number(widthInput.value);
+    const targetHeight = Number(heightInput.value);
+    const semantics = semanticsInput.value as ProductionCollisionSemantics;
+    try {
+      if (
+        !Number.isInteger(targetWidth)
+        || !Number.isInteger(targetHeight)
+        || targetWidth < 1
+        || targetHeight < 1
+        || targetWidth > 4_096
+        || targetHeight > 4_096
+      ) throw new RangeError("Candidate canvas dimensions must be integers between 1 and 4096 px");
+      const previousSemantics = this.productionCollisionSemantics.get(entry.id);
+      if (previousSemantics === "hybrid-grid-draft") {
+        const currentWidth = this.collisionTarget.width * PRODUCTION_CANDIDATE_TILE_SIZE;
+        const currentHeight = this.collisionTarget.height * PRODUCTION_CANDIDATE_TILE_SIZE;
+        this.productionHybridDrafts.set(
+          entry.id,
+          this.productionHybridCollisionFromModel(currentWidth, currentHeight),
+        );
+      }
+      let collision: Readonly<ProductionCandidateAuthoredCollision>;
+      if (semantics === "hybrid-grid-draft") {
+        const saved = this.productionHybridDrafts.get(entry.id);
+        if (this.collisionModel.snapshot().masks && previousSemantics === "hybrid-grid-draft") {
+          collision = this.productionHybridCollisionFromModel(targetWidth, targetHeight);
+        } else {
+          if (
+            targetWidth % PRODUCTION_CANDIDATE_TILE_SIZE !== 0
+            || targetHeight % PRODUCTION_CANDIDATE_TILE_SIZE !== 0
+          ) throw new RangeError("Solid collision canvases must align to the 32 px navigation grid");
+          const width = targetWidth / PRODUCTION_CANDIDATE_TILE_SIZE;
+          const height = targetHeight / PRODUCTION_CANDIDATE_TILE_SIZE;
+          collision = Object.freeze({
+            kind: "hybrid-grid-draft",
+            tileSize: PRODUCTION_CANDIDATE_TILE_SIZE,
+            subcellSize: PRODUCTION_CANDIDATE_SUBCELL_SIZE,
+            grid: Object.freeze({
+              width,
+              height,
+              subcellColumns: width * COLLISION_SUBCELLS_PER_TILE,
+              subcellRows: height * COLLISION_SUBCELLS_PER_TILE,
+            }),
+            solidSubcells: Object.freeze(saved?.kind === "hybrid-grid-draft"
+              ? saved.solidSubcells.filter((point) =>
+                point.x < width * COLLISION_SUBCELLS_PER_TILE
+                && point.y < height * COLLISION_SUBCELLS_PER_TILE)
+              : []),
+          });
+        }
+        this.productionHybridDrafts.set(entry.id, collision);
+      } else if (semantics === "empty") {
+        collision = Object.freeze({
+          kind: "empty",
+          passable: true,
+          reason: this.productionEmptyReasons.get(entry.id)
+            ?? "Author explicitly marked this candidate passable.",
+        });
+      } else {
+        throw new RangeError("Choose supported collision semantics");
+      }
+      this.productionCollisionSemantics.set(entry.id, semantics);
+      this.activateProductionCandidateCollisionTarget(entry, targetWidth, targetHeight, collision);
+      this.markProductionCandidateStale("Canvas or collision semantics changed; save and validate the candidate.");
+      this.rebuildPreview();
+    } catch (error) {
+      this.setProductionValidation(entry, "error", this.errorMessage(error));
+    }
+  }
+
+  private productionCandidateAuthoringRequest(): Readonly<ProductionCandidateAuthoringRequest> {
+    const entry = this.selectedProductionCandidate();
+    if (!entry || this.productionEditorCandidateId !== entry.id) {
+      throw new Error("Select an authorable production candidate first");
+    }
+    const form = document.querySelector<HTMLFormElement>("[data-production-authoring=form]");
+    const name = form?.querySelector<HTMLInputElement>("[data-production-authoring=name]");
+    const family = form?.querySelector<HTMLSelectElement>("[data-production-authoring=family]");
+    const width = form?.querySelector<HTMLInputElement>("[data-production-authoring=width]");
+    const height = form?.querySelector<HTMLInputElement>("[data-production-authoring=height]");
+    const semantics = form?.querySelector<HTMLSelectElement>("[data-production-authoring=collision-semantics]");
+    const binding = form?.querySelector<HTMLSelectElement>("[data-production-authoring=runtime-binding]");
+    const layerRoot = form?.querySelector<HTMLElement>("[data-production-authoring=layers]");
+    if (!name || !family || !width || !height || !semantics || !binding || !layerRoot) {
+      throw new Error("Candidate authoring controls are unavailable");
+    }
+    const targetWidth = Number(width.value);
+    const targetHeight = Number(height.value);
+    const collision: Readonly<ProductionCandidateAuthoredCollision> = semantics.value === "empty"
+      ? Object.freeze({
+        kind: "empty",
+        passable: true,
+        reason: this.productionEmptyReasons.get(entry.id)
+          ?? "Author explicitly marked this candidate passable.",
+      })
+      : this.productionHybridCollisionFromModel(targetWidth, targetHeight);
+    const layers = [...layerRoot.querySelectorAll<HTMLElement>("[data-production-layer-id]")].map((row) => {
+      const id = row.dataset.productionLayerId;
+      const visible = row.querySelector<HTMLInputElement>("[data-production-layer-visible]");
+      const opacity = row.querySelector<HTMLInputElement>("[data-production-layer-opacity]");
+      if (!id || !visible || !opacity) throw new Error("Candidate layer controls are incomplete");
+      return { id, defaultVisible: visible.checked, opacity: Number(opacity.value) };
+    });
+    let runtimeBindingAssetId: AuthoredAssetId | null = null;
+    if (binding.value !== "") {
+      if (!ASSET_IDS.includes(binding.value as AuthoredAssetId)) {
+        throw new RangeError("Test binding must name a current pilot runtime asset");
+      }
+      runtimeBindingAssetId = binding.value as AuthoredAssetId;
+    }
+    return validateProductionCandidateAuthoringRequest({
+      formatVersion: PRODUCTION_CANDIDATE_AUTHORING_FORMAT_VERSION,
+      recipeId: entry.id,
+      candidateFingerprint: entry.fingerprint,
+      settings: {
+        name: name.value,
+        family: family.value,
+        targetWidth,
+        targetHeight,
+        layers,
+        runtimeBindingAssetId,
+      },
+      collision,
+    });
+  }
+
+  private async validateProductionCandidate(): Promise<void> {
+    const entry = this.selectedProductionCandidate();
+    if (!entry || this.productionAuthoringInFlight) return;
+    if (this.productionLocallyDirty.has(entry.id)) {
+      this.setProductionValidation(entry, "stale", "Save candidate before validating unsaved edits.");
+      return;
+    }
+    this.productionAuthoringInFlight = true;
+    this.setProductionValidation(entry, "validating", "Validating the exact prepared candidate fingerprint...");
+    try {
+      const response = await fetch(PRODUCTION_CANDIDATE_VALIDATE_ROUTE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          formatVersion: PRODUCTION_CANDIDATE_AUTHORING_FORMAT_VERSION,
+          recipeId: entry.id,
+          candidateFingerprint: entry.fingerprint,
+        }),
+      });
+      const payload = await response.json().catch(() => undefined) as ProductionAuthoringResponse | undefined;
+      if (!response.ok || payload?.ok !== true || payload.validationState !== "current") {
+        throw new Error(payload?.error ?? `Candidate validation failed with HTTP ${response.status}`);
+      }
+      if (payload.reviewState) this.productionReviewStates.set(entry.id, payload.reviewState);
+      this.setProductionValidation(entry, "current", "Current fingerprint and prepared output are valid.");
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.setProductionValidation(entry, /stale|refresh/iu.test(message) ? "stale" : "error", message);
+    } finally {
+      this.productionAuthoringInFlight = false;
+      this.syncSelectedAssetUi();
+      this.syncProductionAuthoringControls();
+    }
+  }
+
+  private async saveProductionCandidate(): Promise<void> {
+    const entry = this.selectedProductionCandidate();
+    if (!entry || this.productionAuthoringInFlight) return;
+    try {
+      const request = this.productionCandidateAuthoringRequest();
+      this.productionAuthoringInFlight = true;
+      sessionStorage.setItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY, entry.id);
+      this.setProductionValidation(entry, "validating", "Saving recipe, canonical collision and prepared output...");
+      const response = await fetch(PRODUCTION_CANDIDATE_SAVE_ROUTE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(request),
+      });
+      const payload = await response.json().catch(() => undefined) as ProductionAuthoringResponse | undefined;
+      if (!response.ok || payload?.ok !== true || !payload.fingerprint) {
+        throw new Error(payload?.error ?? `Candidate save failed with HTTP ${response.status}`);
+      }
+      this.productionLocallyDirty.delete(entry.id);
+      this.productionReviewStates.set(entry.id, "pending");
+      this.setProductionValidation(entry, "current", payload.message ?? "Candidate saved and returned to pending review.");
+      window.location.reload();
+    } catch (error) {
+      const message = this.errorMessage(error);
+      this.setProductionValidation(entry, /stale|refresh/iu.test(message) ? "stale" : "error", message);
+    } finally {
+      this.productionAuthoringInFlight = false;
+      this.syncProductionAuthoringControls();
+    }
+  }
+
+  private async promoteProductionCandidate(): Promise<void> {
+    const entry = this.selectedProductionCandidate();
+    if (!entry || this.productionPromotionInFlight) return;
+    const validation = this.currentProductionValidation(entry);
+    if (
+      validation.state !== "current"
+      || this.productionLocallyDirty.has(entry.id)
+      || this.productionReviewState(entry) !== "approved"
+      || entry.recipe.runtimeBinding?.collisionIntent !== "preserve"
+    ) {
+      this.reportProductionReview(
+        "Promotion requires the current validated fingerprint, its approval, and a collision-preserving runtime binding.",
+        true,
+      );
+      return;
+    }
+    this.productionPromotionInFlight = true;
+    this.syncProductionAuthoringControls();
+    this.reportProductionReview("Publishing the exact approved candidate fingerprint...");
+    try {
+      const response = await fetch(PRODUCTION_CANDIDATE_PROMOTION_ROUTE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          formatVersion: PRODUCTION_CANDIDATE_AUTHORING_FORMAT_VERSION,
+          recipeId: entry.id,
+          candidateFingerprint: entry.fingerprint,
+        }),
+      });
+      const payload = await response.json().catch(() => undefined) as ProductionAuthoringResponse | undefined;
+      if (!response.ok || payload?.ok !== true || payload.promotionState !== "published") {
+        throw new Error(payload?.error ?? `Candidate promotion failed with HTTP ${response.status}`);
+      }
+      this.reportProductionReview(payload.message ?? "Current approved candidate published.");
+    } catch (error) {
+      const message = this.errorMessage(error);
+      if (/stale|refresh/iu.test(message)) this.setProductionValidation(entry, "stale", message);
+      this.reportProductionReview(message, true);
+    } finally {
+      this.productionPromotionInFlight = false;
+      this.syncProductionAuthoringControls();
+    }
+  }
+
+  private syncProductionAuthoringControls(): void {
+    const entry = this.selectedProductionCandidate();
+    if (!entry) return;
+    const validation = this.currentProductionValidation(entry);
+    const locallyDirty = this.productionLocallyDirty.has(entry.id);
+    const reviewState = this.productionReviewState(entry);
+    const badge = document.querySelector<HTMLElement>("[data-production=validation-badge]");
+    if (badge) {
+      badge.textContent = validation.state;
+      badge.dataset.state = validation.state;
+    }
+    const validationStatus = document.querySelector<HTMLOutputElement>("[data-production=validation-status]");
+    if (validationStatus && validationStatus.value !== validation.message) {
+      validationStatus.value = validation.message;
+      validationStatus.dataset.state = validation.state === "error" || validation.state === "stale"
+        ? "error"
+        : "ready";
+    }
+    let requestError: string | undefined;
+    try { this.productionCandidateAuthoringRequest(); }
+    catch (error) { requestError = this.errorMessage(error); }
+    const validate = document.querySelector<HTMLButtonElement>("[data-production-action=validate]");
+    const save = document.querySelector<HTMLButtonElement>("[data-production-action=save]");
+    const promote = document.querySelector<HTMLButtonElement>("[data-production-action=promote]");
+    if (validate) {
+      validate.disabled = this.productionAuthoringInFlight || locallyDirty;
+      validate.textContent = validation.state === "validating" ? "Validating..." : "Validate current";
+    }
+    if (save) {
+      const needsCanonicalMask = entry.collisionDraft.kind === "hybrid-grid-draft"
+        && entry.recipe.collision.mode !== "mask-file";
+      const hasSaveableChange = locallyDirty || needsCanonicalMask;
+      save.disabled = this.productionAuthoringInFlight || requestError !== undefined || !hasSaveableChange;
+      save.textContent = this.productionAuthoringInFlight ? "Working..." : "Save candidate";
+      save.title = requestError
+        ?? (hasSaveableChange
+          ? "Persist recipe settings and canonical collision"
+          : "This exact candidate is already saved");
+    }
+    for (const control of document.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+      "[data-production-authoring=form] input, [data-production-authoring=form] select",
+    )) control.disabled = this.productionAuthoringInFlight;
+    this.syncProductionLayerMoveControls();
+    const canApprove = validation.state === "current" && !locallyDirty && !this.productionReviewInFlight;
+    for (const button of document.querySelectorAll<HTMLButtonElement>("[data-production-review-action]")) {
+      button.disabled = this.productionReviewInFlight
+        || this.productionAuthoringInFlight
+        || (button.dataset.productionReviewAction === "approved" && !canApprove);
+    }
+    if (promote) {
+      promote.disabled = this.productionPromotionInFlight
+        || validation.state !== "current"
+        || locallyDirty
+        || reviewState !== "approved"
+        || entry.recipe.runtimeBinding?.collisionIntent !== "preserve";
+      promote.textContent = this.productionPromotionInFlight ? "Promoting..." : "Promote approved";
+      promote.title = entry.recipe.runtimeBinding?.collisionIntent === "preserve"
+        ? "Publish the exact current approved fingerprint"
+        : "Choose a collision-preserving runtime binding before promotion";
+    }
+    const trialLink = document.querySelector<HTMLAnchorElement>("[data-production=trial-link]");
+    if (trialLink && !trialLink.hidden) {
+      const blocked = this.productionAuthoringInFlight || locallyDirty;
+      trialLink.setAttribute("aria-disabled", String(blocked));
+      trialLink.textContent = blocked ? "Save before trial" : "Trial candidate";
+      trialLink.title = blocked
+        ? "Save the current settings and collision mask before launching the sea trial"
+        : "Launch the isolated trial for this exact saved fingerprint";
+    }
+    const collisionNote = document.querySelector<HTMLElement>("[data-production-authoring=collision-note]");
+    if (collisionNote) {
+      const semantics = this.productionCollisionSemantics.get(entry.id);
+      collisionNote.textContent = requestError ?? (semantics === "empty"
+        ? "Explicitly passable candidates save no solid mask. Islands must use a solid 32/8 px mask."
+        : "The collision workbench below edits the canonical saved mask. Solid canvases align to 32 px.");
+      collisionNote.dataset.state = requestError ? "error" : "ready";
+    }
+  }
+
   private productionReviewState(entry: Readonly<ProductionCandidateLibraryEntry>): ProductionReviewState {
     return this.productionReviewStates.get(entry.id) ?? entry.reviewState;
   }
@@ -1685,16 +2454,15 @@ export class AssetViewerScene extends Phaser.Scene {
     status.dataset.state = error ? "error" : "ready";
   }
 
-  private productionGameTestUrl(entry: Readonly<ProductionCandidateLibraryEntry>): string {
-    const url = new URL(window.location.href);
-    url.searchParams.delete("mode");
-    url.searchParams.set("testAsset", entry.id);
-    return `${url.pathname}${url.search}${url.hash}`;
-  }
-
   private async reviewProductionCandidate(decision: "approved" | "rejected"): Promise<void> {
     const entry = this.selectedProductionCandidate();
     if (!entry || this.productionReviewInFlight) return;
+    const validation = this.currentProductionValidation(entry);
+    if (decision === "approved"
+      && (validation.state !== "current" || this.productionLocallyDirty.has(entry.id))) {
+      this.reportProductionReview("Approval requires the current validated fingerprint with no unsaved edits.", true);
+      return;
+    }
     this.productionReviewInFlight = true;
     this.syncSelectedAssetUi();
     this.reportProductionReview(`Saving ${decision} decision\u2026`);
@@ -1713,19 +2481,22 @@ export class AssetViewerScene extends Phaser.Scene {
       this.productionReviewStates.set(entry.id, decision);
       this.reportProductionReview(
         decision === "approved"
-          ? "Approved for visual testing. Collision and gameplay metadata remain unchanged."
+          ? "Current candidate fingerprint approved. It may now be promoted or trialed."
           : "Rejected. Runtime files remain unchanged.",
       );
     } catch (error) {
-      this.reportProductionReview(this.errorMessage(error), true);
+      const message = this.errorMessage(error);
+      if (/stale|refresh/iu.test(message)) this.setProductionValidation(entry, "stale", message);
+      this.reportProductionReview(message, true);
     } finally {
       this.productionReviewInFlight = false;
       this.syncSelectedAssetUi();
+      this.syncProductionAuthoringControls();
     }
   }
 
   private stepLibrarySelection(direction: -1 | 1): void {
-    if (this.collisionSaveInFlight) return;
+    if (this.collisionSaveInFlight || this.productionAuthoringInFlight || this.productionPromotionInFlight) return;
     const visibleItems = [...(this.assetLibraryBrowser?.querySelectorAll<HTMLButtonElement>(
       "[data-library-id]:not([hidden])",
     ) ?? [])].filter((item) => !item.closest<HTMLElement>("[data-library-group]")?.hidden);
@@ -1738,17 +2509,32 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private selectLibraryAsset(id: string): void {
-    if (this.collisionSaveInFlight) return;
+    if (this.collisionSaveInFlight || this.productionAuthoringInFlight || this.productionPromotionInFlight) return;
+    if (id === this.selectedLibraryAssetId) return;
+    const currentCandidate = this.selectedProductionCandidate();
+    if (currentCandidate && this.productionLocallyDirty.has(currentCandidate.id)) {
+      const discard = window.confirm(
+        `Discard unsaved settings and collision edits for ${currentCandidate.name}?`,
+      );
+      if (!discard) {
+        this.reportProductionReview("Selection unchanged; save or discard the candidate edits first.", true);
+        return;
+      }
+      this.productionLocallyDirty.delete(currentCandidate.id);
+    }
     const entry = assetLibraryEntryById(id);
     if (!entry) return;
-    this.stashCurrentCollisionDraft();
+    if (!currentCandidate) this.stashCurrentCollisionDraft();
     this.referenceLoadRevision++;
     this.selectedLibraryAssetId = entry.id;
     this.previewAssets = this.catalogAssets;
     if (entry.entryType === "authored-package") {
-      this.selectCatalogCollisionTarget(entry.package.metadata.assetId);
+      this.productionEditorCandidateId = undefined;
+      this.selectCatalogCollisionTarget(entry.package.metadata.assetId, false);
     } else {
       this.validatedCollisionCandidate = undefined;
+      if (entry.entryType === "production-candidate") this.activateProductionCandidateEditor(entry);
+      else this.productionEditorCandidateId = undefined;
       this.beginReferencePreviewLoad(entry);
     }
   }
@@ -1857,35 +2643,66 @@ export class AssetViewerScene extends Phaser.Scene {
       const collision = document.querySelector<HTMLInputElement>("[data-production=collision]");
       if (collision) {
         collision.checked = this.state.showFootprint;
-        collision.disabled = entry.collisionDraft.kind !== "hybrid-grid-draft";
+        collision.disabled = this.productionCollisionSemantics.get(entry.id) !== "hybrid-grid-draft";
       }
       const collisionLabel = document.querySelector<HTMLElement>("[data-production=collision-label]");
-      if (collisionLabel) collisionLabel.textContent = entry.collisionDraft.kind === "hybrid-grid-draft"
-        ? `Show ${entry.collisionDraft.tileSize}/${entry.collisionDraft.subcellSize} px collision draft`
-        : entry.collisionDraft.kind === "empty"
+      if (collisionLabel) collisionLabel.textContent = this.productionCollisionSemantics.get(entry.id) === "hybrid-grid-draft"
+        ? `Show ${PRODUCTION_CANDIDATE_TILE_SIZE}/${PRODUCTION_CANDIDATE_SUBCELL_SIZE} px editable collision draft${entry.collisionDraft.kind === "hybrid-grid-draft" ? ` · ${collisionDraftMethodLabel(entry.collisionDraft.method)}` : ""}`
+        : this.productionCollisionSemantics.get(entry.id) === "empty"
           ? "Explicitly passable (no collision grid)"
-          : `Uses accepted collision from ${entry.collisionDraft.runtimeAssetId}`;
+          : entry.collisionDraft.kind === "preserve-runtime-collision"
+            ? `Uses accepted collision from ${entry.collisionDraft.runtimeAssetId}`
+            : "Collision draft is unavailable";
       const notice = document.querySelector<HTMLElement>("[data-production=notice]");
-      if (notice) notice.textContent = entry.recipe.runtimeBinding
-        ? `${reviewState}. Visual game testing uses ${entry.recipe.runtimeBinding.assetId} and preserves its accepted collision mask.`
-        : `${reviewState}. This candidate has no runtime test binding.`;
+      if (notice) {
+        const bindingNotice = entry.recipe.runtimeBinding
+          ? `${reviewState}. Persisted test binding: ${entry.recipe.runtimeBinding.assetId}. The isolated trial uses this candidate's own prepared layers and saved collision.`
+          : `${reviewState}. No runtime test binding. The isolated trial uses this candidate's own prepared layers and saved collision.`;
+        const collisionWarnings = entry.collisionDraft.kind === "hybrid-grid-draft"
+          && entry.collisionDraft.warnings.length > 0
+          ? ` Collision warning${entry.collisionDraft.warnings.length === 1 ? "" : "s"}: ${entry.collisionDraft.warnings.join(" ")}`
+          : "";
+        notice.textContent = `${bindingNotice}${collisionWarnings}`;
+      }
       for (const button of document.querySelectorAll<HTMLButtonElement>("[data-production-review-action]")) {
-        button.disabled = this.productionReviewInFlight;
         button.dataset.active = String(button.dataset.productionReviewAction === reviewState);
       }
-      const testLink = document.querySelector<HTMLAnchorElement>("[data-production=test-link]");
-      if (testLink) {
-        testLink.hidden = reviewState !== "approved" || !entry.recipe.runtimeBinding;
-        testLink.href = this.productionGameTestUrl(entry);
+      const trialLink = document.querySelector<HTMLAnchorElement>("[data-production=trial-link]");
+      if (trialLink) {
+        const supportsTrial = entry.recipe.family === "island"
+          && entry.collisionDraft.kind === "hybrid-grid-draft";
+        trialLink.hidden = !supportsTrial;
+        if (supportsTrial) {
+          trialLink.href = assetTrialApplicationHref({
+            candidateId: entry.id,
+            candidateFingerprint: entry.fingerprint,
+          });
+        } else {
+          trialLink.removeAttribute("href");
+        }
       }
       const item = this.assetLibraryBrowser?.querySelector<HTMLButtonElement>(
         `[data-library-id="${CSS.escape(entry.id)}"]`,
       );
       const status = item?.querySelector<HTMLElement>(".asset-library-status");
       if (status) status.textContent = reviewState;
+      this.syncProductionAuthoringControls();
     }
     for (const packageOnly of document.querySelectorAll<HTMLElement>("[data-selected-package-only]")) {
       packageOnly.hidden = entry.entryType !== "authored-package";
+    }
+    const collisionEditor = document.querySelector<HTMLElement>("[data-collision-editor-section]");
+    if (collisionEditor) collisionEditor.hidden = entry.entryType === "reference-image";
+    const collisionEyebrow = document.querySelector<HTMLElement>("[data-collision=eyebrow]");
+    const collisionTitle = document.querySelector<HTMLElement>("[data-collision=title]");
+    if (collisionEyebrow) collisionEyebrow.textContent = entry.entryType === "production-candidate"
+      ? "Persisted candidate mask"
+      : "Live package editor";
+    if (collisionTitle) collisionTitle.textContent = entry.entryType === "production-candidate"
+      ? "Candidate collision authoring"
+      : "Collision authoring";
+    for (const packageCollisionOnly of document.querySelectorAll<HTMLElement>("[data-package-collision-only]")) {
+      packageCollisionOnly.hidden = entry.entryType !== "authored-package";
     }
   }
 
@@ -2016,9 +2833,9 @@ export class AssetViewerScene extends Phaser.Scene {
     this.reportCollision(this.collisionTarget.editingNote);
   }
 
-  private selectCatalogCollisionTarget(assetId: AuthoredAssetId): void {
+  private selectCatalogCollisionTarget(assetId: AuthoredAssetId, stashCurrent = true): void {
     if (this.collisionSaveInFlight) return;
-    this.stashCurrentCollisionDraft();
+    if (stashCurrent) this.stashCurrentCollisionDraft();
     const metadata = this.acceptedMetadata(assetId);
     if (!metadata) throw new RangeError(`Catalog metadata ${assetId} is unavailable`);
     this.previewAssets = this.catalogAssets;
@@ -2194,20 +3011,30 @@ export class AssetViewerScene extends Phaser.Scene {
     const snapshot = this.collisionModel.snapshot();
     this.drawGuides();
     this.syncCollisionControls();
-    if (snapshot.serializationError) this.reportCollision(snapshot.serializationError, true);
-    else if (changed) this.reportCollision("Collision draft changed; save it to update the runtime package.");
+    const candidate = this.selectedProductionCandidate();
+    if (snapshot.serializationError) {
+      this.reportCollision(snapshot.serializationError, true);
+      if (candidate) this.setProductionValidation(candidate, "error", snapshot.serializationError);
+    } else if (changed && candidate && this.productionEditorCandidateId === candidate.id) {
+      this.markProductionCandidateStale("Collision changed; save candidate before validation or approval.");
+      this.reportCollision("Candidate collision changed; use Save candidate to persist its canonical mask.");
+    } else if (changed) {
+      this.reportCollision("Collision draft changed; save it to update the runtime package.");
+    }
   }
 
   private syncCollisionControls(): void {
     if (!this.collisionTarget || !this.collisionModel) return;
     const snapshot = this.collisionModel.snapshot();
+    const busy = this.collisionSaveInFlight || this.productionAuthoringInFlight;
+    const productionCandidate = this.selectedProductionCandidate();
     const effectiveMode = this.collisionTarget.editing === "hybrid-grid" && this.collisionTarget.tileSize !== 32
       ? "read-only"
       : this.collisionTarget.editing;
     const target = document.querySelector<HTMLSelectElement>("[data-collision=target]");
     if (target) {
       target.value = this.collisionTarget.objectKind;
-      target.disabled = this.collisionSaveInFlight;
+      target.disabled = busy || productionCandidate !== undefined;
     }
     const note = document.querySelector<HTMLElement>("[data-collision=note]");
     if (note) note.textContent = effectiveMode === "read-only" && this.collisionTarget.tileSize !== 32
@@ -2222,44 +3049,44 @@ export class AssetViewerScene extends Phaser.Scene {
       const active = button.dataset.collisionTool === this.collisionTool;
       button.dataset.active = String(active);
       button.setAttribute("aria-pressed", String(active));
-      button.disabled = this.collisionSaveInFlight || !snapshot.editable;
+      button.disabled = busy || !snapshot.editable;
     }
     for (const button of document.querySelectorAll<HTMLButtonElement>("[data-collision-brush]")) {
       const active = Number(button.dataset.collisionBrush) === this.collisionBrushSize;
       button.dataset.active = String(active);
       button.setAttribute("aria-pressed", String(active));
-      button.disabled = this.collisionSaveInFlight || !snapshot.editable;
+      button.disabled = busy || !snapshot.editable;
     }
     const halfExtent = document.querySelector<HTMLInputElement>("[data-collision=half-extent]");
     if (halfExtent) {
       if (snapshot.profile.kind === "box") halfExtent.value = String(snapshot.profile.halfSize.width);
-      halfExtent.disabled = this.collisionSaveInFlight || !snapshot.editable;
+      halfExtent.disabled = busy || !snapshot.editable;
     }
     const setDisabled = (selector: string, disabled: boolean) => {
       const button = document.querySelector<HTMLButtonElement>(selector);
       if (button) button.disabled = disabled;
     };
-    setDisabled("[data-collision=undo]", this.collisionSaveInFlight || !snapshot.canUndo);
-    setDisabled("[data-collision=redo]", this.collisionSaveInFlight || !snapshot.canRedo);
-    setDisabled("[data-collision=reset]", this.collisionSaveInFlight || !snapshot.editable || !snapshot.dirty);
+    setDisabled("[data-collision=undo]", busy || !snapshot.canUndo);
+    setDisabled("[data-collision=redo]", busy || !snapshot.canRedo);
+    setDisabled("[data-collision=reset]", busy || !snapshot.editable || !snapshot.dirty);
     setDisabled(
       "[data-collision=save]",
-      this.collisionSaveInFlight
+      busy
         || !snapshot.editable
         || !snapshot.dirty
         || !snapshot.exportable
         || !this.collisionAcceptedMetadata,
     );
-    setDisabled("[data-collision=selection-solid]", this.collisionSaveInFlight || !this.collisionSelection || !snapshot.editable);
-    setDisabled("[data-collision=selection-clear]", this.collisionSaveInFlight || !this.collisionSelection || !snapshot.editable);
-    setDisabled("[data-collision=revert-cell]", this.collisionSaveInFlight || !this.collisionHover || !snapshot.editable);
-    setDisabled("[data-collision=apply-box]", this.collisionSaveInFlight || !snapshot.editable);
-    setDisabled("[data-collision=set-empty]", this.collisionSaveInFlight || !snapshot.editable);
+    setDisabled("[data-collision=selection-solid]", busy || !this.collisionSelection || !snapshot.editable);
+    setDisabled("[data-collision=selection-clear]", busy || !this.collisionSelection || !snapshot.editable);
+    setDisabled("[data-collision=revert-cell]", busy || !this.collisionHover || !snapshot.editable);
+    setDisabled("[data-collision=apply-box]", busy || !snapshot.editable);
+    setDisabled("[data-collision=set-empty]", busy || !snapshot.editable);
     setDisabled(
       "[data-collision=validate]",
-      this.collisionSaveInFlight || !snapshot.editable || !snapshot.exportable || !this.collisionAcceptedMetadata,
+      busy || !snapshot.editable || !snapshot.exportable || !this.collisionAcceptedMetadata,
     );
-    setDisabled("[data-collision=export]", this.collisionSaveInFlight || !this.validatedCollisionCandidate);
+    setDisabled("[data-collision=export]", busy || !this.validatedCollisionCandidate);
     const save = document.querySelector<HTMLButtonElement>("[data-collision=save]");
     if (save) {
       save.textContent = this.collisionSaveInFlight ? "Saving…" : "Save to library";
@@ -2267,9 +3094,9 @@ export class AssetViewerScene extends Phaser.Scene {
     }
     for (const button of document.querySelectorAll<HTMLButtonElement>(
       "[data-library-id], [data-library-action=previous], [data-library-action=next]",
-    )) button.disabled = this.collisionSaveInFlight;
+    )) button.disabled = busy || this.productionPromotionInFlight || this.productionReviewInFlight;
     const viewer = document.querySelector<HTMLSelectElement>("[data-viewer=asset]");
-    if (viewer) viewer.disabled = this.collisionSaveInFlight;
+    if (viewer) viewer.disabled = busy;
   }
 
   private syncPackageSelectors(): void {
@@ -2336,7 +3163,12 @@ export class AssetViewerScene extends Phaser.Scene {
   }
 
   private onCollisionKeyDown(event: KeyboardEvent): void {
-    if (this.selectedStandaloneEntry() || this.domControlsFocused(event.target) || this.collisionSaveInFlight) return;
+    if (
+      this.selectedReferenceEntry()
+      || this.domControlsFocused(event.target)
+      || this.collisionSaveInFlight
+      || this.productionAuthoringInFlight
+    ) return;
     if (event.code === "Space") {
       this.collisionSpaceHeld = true;
       event.preventDefault();
@@ -2358,7 +3190,7 @@ export class AssetViewerScene extends Phaser.Scene {
 
   private domControlsFocused(target: EventTarget | null = document.activeElement): boolean {
     return target instanceof Element
-      && target.closest("#developer-tools-panel, #asset-library-browser") !== null;
+      && target.closest("#developer-tools-panel, #asset-library-browser, .production-intake-dialog") !== null;
   }
 
   private mountCandidateWorkbench(

@@ -68,6 +68,7 @@ function preparationFor(image, request) {
     }
   }
   const common = {
+    sizing: request.canvasSizing === "native" ? "native" : "contain",
     targetWidth: request.targetWidth,
     targetHeight: request.targetHeight,
     thumbnailMaximum: 192,
@@ -118,7 +119,9 @@ function buildRecipe(request, image, sourceFile, manifest) {
     animations: [],
     collision: request.collisionSemantics === "passable"
       ? { mode: "empty", reason: `The ${request.family} family is explicitly passable` }
-      : { mode: "blank-draft", tileSize: 32, subcellSize: 8 },
+      : request.family === "island"
+        ? { mode: "shoreline-seed", tileSize: 32, subcellSize: 8 }
+        : { mode: "blank-draft", tileSize: 32, subcellSize: 8 },
     ...(runtimeAssetId ? {
       runtimeBinding: { assetId: runtimeAssetId, collisionIntent: "preserve" },
     } : {}),

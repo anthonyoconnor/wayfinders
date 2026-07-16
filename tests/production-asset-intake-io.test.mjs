@@ -41,6 +41,7 @@ function request(id = "production.island.test-cay") {
     family: "island",
     targetWidth: 32,
     targetHeight: 32,
+    canvasSizing: "native",
     layerRole: "base",
     collisionSemantics: "solid",
     runtimeCategory: "home-island",
@@ -73,7 +74,8 @@ describe("GR-3.5 repository intake transaction", () => {
       id: "production.island.test-cay",
       lifecycle: "source",
       provenance: { sourceFile: "assets-src/gr3/intake/production-island-test-cay-source.png" },
-      collision: { mode: "blank-draft" },
+      layers: [{ preparation: { sizing: "native", targetWidth: 32, targetHeight: 32 } }],
+      collision: { mode: "shoreline-seed", tileSize: 32, subcellSize: 8 },
     });
     expect(phases).toEqual(["validating", "writing", "preparing", "completed"]);
     expect(await readFile(path.join(root, manifest.recipes[0].provenance.sourceFile))).toEqual(png());

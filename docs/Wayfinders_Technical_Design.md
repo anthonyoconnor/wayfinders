@@ -327,12 +327,38 @@ rendered pixels do not. Package schema, editable profile categories, source
 preparation, review, promotion, and repository transactions are documented in
 `Wayfinders_Asset_Pipeline.md`.
 
-The asset library provides guided reference and local-PNG intake. Confirmed
-family defaults and stable identity become one validated source recipe and one
-pending candidate through the constrained development-server API. Job progress,
-field validation, retry and cancellation are presentation state; rollback-safe
-repository transactions keep recipe, source, prepared output and generated
-index consistent. This authoring persistence is not gameplay saving.
+The asset library provides guided reference and local-PNG intake. It reads the
+PNG canvas dimensions as soon as the source is selected and keeps them as the
+default output dimensions. When a solid asset is not aligned to the `32`-pixel
+navigation grid, the form warns before submission and offers transparent canvas
+padding to the next aligned size; it does not require the operator to calculate
+the dimensions or stretch the source.
+
+Confirmed family defaults and stable identity become one validated source
+recipe and one pending candidate through the constrained development-server
+API. Island preparation creates a deterministic, editable `8`-pixel shoreline
+seed from prepared alpha and retains its method and uncertainty warnings with
+the draft. Passable families remain explicitly empty, and no generated draft
+becomes runtime authority automatically.
+
+The pending-candidate workbench is the structured authoring surface for recipe
+settings, ordered layer presentation, collision semantics, and collision-mask
+editing. Save, validation, exact-fingerprint review, and promotion use narrow
+serialized repository operations. Saving prepares the affected output, issues
+a new fingerprint, and clears the prior review; stale or invalid candidates
+cannot be approved or promoted. Job progress, field validation, retry and
+cancellation are presentation state, while rollback-safe repository
+transactions keep source, recipe, authored mask, prepared output, review data,
+and generated indexes consistent.
+
+An island candidate can enter a disposable sea trial before approval. The
+trial contains only open water, the authored player boat, and the candidate's
+actual prepared layers on a centred origin. Its isolated `WorldGrid` applies
+the exact saved `32`/`8` collision draft, exposes safe boat resets and grid and
+collision overlays, and returns directly to the same library record. It never
+constructs `GameSimulation`, persists trial state, changes the runtime world
+catalog, or promotes the candidate. Repository authoring and the trial are not
+gameplay saving.
 
 ## 11. Developer and event interfaces
 

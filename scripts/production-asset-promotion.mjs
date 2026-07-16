@@ -64,8 +64,15 @@ export function productionManifestFingerprint(manifest) {
 }
 
 function validateIndex(value, manifest) {
-  if (!isRecord(value) || value.formatVersion !== 1 || value.pipelineVersion !== 1 || !Array.isArray(value.entries)) {
-    throw new ProductionAssetPromotionError("Generated production index must use formatVersion 1 and pipelineVersion 1");
+  if (
+    !isRecord(value)
+    || value.formatVersion !== 1
+    || value.pipelineVersion !== PRODUCTION_PREPARATION_PIPELINE_VERSION
+    || !Array.isArray(value.entries)
+  ) {
+    throw new ProductionAssetPromotionError(
+      `Generated production index must use formatVersion 1 and pipelineVersion ${PRODUCTION_PREPARATION_PIPELINE_VERSION}`,
+    );
   }
   const expectedManifestHash = productionManifestFingerprint(manifest);
   if (value.manifestSha256 !== expectedManifestHash) {

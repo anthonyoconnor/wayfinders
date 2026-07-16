@@ -1,7 +1,7 @@
 # Wayfinders completed roadmap archive
 
 Status: historical. This document preserves the scope, gates and acceptance
-evidence for completed `GP-0.1` through `GP-4.1`, `GR-1.1` through `GR-3.4`,
+evidence for completed `GP-0.1` through `GP-4.1`, `GR-1.1` through `GR-3.8`,
 and `AM-0` through `AM-6` work. It does not define or authorize future work. See
 `Wayfinders_Roadmap.md` for the small, current forward plan.
 
@@ -927,8 +927,9 @@ loaded and verified in gameplay.
 
 ### GR-3 — Production-asset prototype
 
-The `GR-3.1` through `GR-3.4` batch established a deterministic source-to-review
-prototype without expanding runtime world-placement authority.
+The `GR-3.1` through `GR-3.8` sequence established a deterministic local
+source-to-promotion workflow and isolated collision trial without expanding
+runtime world-placement authority.
 
 #### GR-3.1 — Production recipe manifest
 
@@ -966,15 +967,17 @@ artifacts, hashes, and orphaned promoted files.
 
 #### GR-3.5 — Guided UI source intake and recipe creation
 
-Status: implemented and accepted on 2026-07-15.
+Status: implemented and accepted on 2026-07-16.
 
 Implementation evidence: every usable reference exposes **Import and prepare**,
 while **Add PNG** accepts one new local image. The compact form keeps inferred
-family defaults visible and confirms stable identity, intended dimensions,
-layer role, collision semantics, and an optional pilot test binding. A
-same-origin development-server job reports validation, repository-write and
-preparation phases, survives a browser refresh through its job identity, and
-supports cancellation and retry.
+family defaults visible and confirms stable identity, layer role, collision
+semantics, and an optional pilot test binding. It reads the selected PNG's
+native canvas immediately, keeps original dimensions by default, and offers
+transparent padding to the next `32`-pixel boundary with a warning when solid
+collision requires it. A same-origin development-server job reports
+validation, repository-write and preparation phases, survives a browser refresh
+through its job identity, and supports cancellation and retry.
 
 The repository-wide intake lock and nested atomic transactions create the
 source, validated recipe, prepared layers, thumbnail, collision semantics and
@@ -985,6 +988,70 @@ pre-mutation cancellation, and full cleanup after synthetic failure. An
 interactive browser pass verified both reference and local-PNG entry points,
 live field-error recovery, and a clean browser console without adding a
 production candidate.
+
+#### GR-3.6 — Best-effort collision seed on import
+
+Status: implemented and accepted.
+
+The gate required every current island reference, once prepared, to receive a
+deterministic, grid-aligned, non-empty first draft without broadly blocking
+transparent exterior water. Detectable fine projections and concave shoreline
+detail had to use the `8`-pixel subgrid inside the `32`-pixel navigation grid.
+Passable families had to remain explicitly empty, and no seed could become
+runtime authority automatically.
+
+Implementation evidence: prepared island alpha is partitioned into connected
+fine-grid regions. Low-coverage isolated noise is ignored while retained
+regions preserve their shoreline shape. The candidate record keeps the stable
+seed-method identifier, editable sparse mask, and warnings for blank,
+disconnected, edge-touching, or unusually broad results. Determinism,
+concavity/projection retention, exterior transparency, warning stability,
+passable semantics, and candidate-catalog round trips have focused contract
+coverage.
+
+#### GR-3.7 — Pending candidate authoring and UI completion
+
+Status: implemented and accepted.
+
+The gate required the pending record to be the structured place to finish a
+candidate. Supported recipe settings and complete collision state had to
+survive save and refresh exactly; changing source, recipe, or mask had to issue
+a new fingerprint and invalidate review; invalid or stale data could not be
+approved or promoted; and the complete validation, review, and promotion loop
+had to work without commands or hand-authored JSON.
+
+Implementation evidence: the workbench exposes name, family, dimensions,
+ordered layer visibility/opacity, collision semantics, test binding, and the
+existing paint/erase, `8`/`32`-pixel brush, fill, selection, undo/redo, and hull-
+probe tools. **Save candidate** sends one exact-fingerprint structured request
+through the serialized authoring service, atomically commits recipe and mask
+inputs, prepares the affected output, verifies collision equivalence, and
+returns the new fingerprint to pending review. Validation, approval, rejection,
+and exact-current promotion are first-class UI actions. Contract, API, and
+repository-I/O coverage includes solid/passable round trips, stale requests,
+review invalidation, failed-prepare rollback, and exact approved-fingerprint
+promotion.
+
+#### GR-3.8 — Isolated single-island sea trial
+
+Status: implemented and accepted.
+
+The gate required a deterministic trial containing only open water, the player
+boat, and one selected island candidate. It had to render the candidate's actual
+prepared layers and centred origin, block the boat by the exact saved collision
+mask, allow pending candidates, expose fingerprint/dimensions/origin/collision
+revision and debug overlays, and return directly to the same durable library
+record.
+
+Implementation evidence: the candidate-only trial validates the requested
+fingerprint and exact `32`/`8` canvas, creates an isolated open-ocean
+`WorldGrid`, applies only the saved sparse candidate masks, and derives four
+hull-safe reset positions. Its scene uses the normal vessel presentation and
+movement authority but never constructs `GameSimulation`. Trial contract and
+route coverage verifies deterministic placement, stale-fingerprint rejection,
+pending review support, exact mask transfer, safe resets, bounded content, and
+direct-return selection. Trial state is disposable and has no persistence,
+review, promotion, or runtime-catalog mutation path.
 
 ## Architecture and scale track
 
@@ -1031,5 +1098,5 @@ determine whether the user-visible departure symptom remains.
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-4.1`, graphics and asset
-work through `GR-3.5`, and architecture work through `AM-6`. Upcoming, proposed,
+work through `GR-3.8`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.

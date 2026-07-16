@@ -1,13 +1,13 @@
 {
   "formatVersion": 1,
-  "pipelineVersion": 1,
-  "manifestSha256": "ebfda7d7268c6b34e3b827a8f8d2fd86a9fb7a0f487bfedc9d854492eba24627",
+  "pipelineVersion": 2,
+  "manifestSha256": "d9c79252e3b349ffe854eeb371b9f2c4ce8ed9e175d26dada1620f016dfcd8b2",
   "entries": [
     {
       "id": "production.island.colossal-wilderness",
       "family": "island",
       "lifecycle": "candidate",
-      "jobKey": "487501c658b47caed5c71d3902389cb91da57e27f757a2388415d21a84105d68",
+      "jobKey": "5f7f587c4fa433207e588bf9f8151a1fcd065c760bb418a92d99a6207451f143",
       "sourceFiles": [
         "assets-src/gr1/island-colossal-wilderness-source.png"
       ],
@@ -31,7 +31,7 @@
       "id": "production.island.large-fortified-port",
       "family": "island",
       "lifecycle": "candidate",
-      "jobKey": "ddc4bfbef67357a64cef49736c81f7a7fc346dcc6a880c755f638d57b2985093",
+      "jobKey": "ee16ef9797803fe9048c0599d8601d6550e0c018160b30c3565e5302170c81f3",
       "sourceFiles": [
         "assets-src/gr1/island-large-fortified-port-source.png"
       ],
@@ -55,7 +55,7 @@
       "id": "production.island.medium-abandoned-atoll",
       "family": "island",
       "lifecycle": "candidate",
-      "jobKey": "62254a5d4aaff673a856dacb3ccce7c5776a02b8ef766caa1816b554d7d13555",
+      "jobKey": "ab93bee081ce4b84b072daf976aba531a1795aa464e6ed277cc4b1fbd57ad537",
       "sourceFiles": [
         "assets-src/gr1/island-medium-abandoned-atoll-source.png"
       ],
@@ -79,7 +79,7 @@
       "id": "production.island.small-fishing-cay",
       "family": "island",
       "lifecycle": "candidate",
-      "jobKey": "f1f7957ffde2136694a166fd88c784c66e255116f92123c58234ff52743872f6",
+      "jobKey": "57aea3b83793a83b772cacc19664cdb9458ab8086bdb28ac97605ea587581c23",
       "sourceFiles": [
         "assets-src/gr1/island-small-fishing-cay-source.png"
       ],
@@ -103,7 +103,7 @@
       "id": "production.island.tiny-volcanic-stack",
       "family": "island",
       "lifecycle": "candidate",
-      "jobKey": "e98c544cd06360ae3b10e79f0b21f79bf8abcff55b659b701455f4d6b4af1ec2",
+      "jobKey": "3a6c0b41eb6fa1f596206bc019b7ef3aafbd86be25826cdfe7210329701edd0a",
       "sourceFiles": [
         "assets-src/gr1/island-tiny-volcanic-stack-source.png"
       ],
@@ -118,6 +118,30 @@
       ],
       "thumbnailFile": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/thumbnail.png",
       "collisionDraftFile": "assets-src/gr3/candidates/production-island-tiny-volcanic-stack/collision-draft.json",
+      "runtimeBinding": {
+        "assetId": "home.island.primary",
+        "collisionIntent": "preserve"
+      }
+    },
+    {
+      "id": "production.island.volcano",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "b1eebd1d105e8c9cae9f8eab70a590355147a6777a0536aedc1dc3c6837e4950",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-volcano-source.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-volcano/base.png",
+          "width": 480,
+          "height": 480,
+          "sha256": "a7a3a18269e97cb8968261e80f53ea0635f4d62f02a69ba0bcb3afb06ee410ad"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-volcano/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-volcano/collision-draft.json",
       "runtimeBinding": {
         "assetId": "home.island.primary",
         "collisionIntent": "preserve"

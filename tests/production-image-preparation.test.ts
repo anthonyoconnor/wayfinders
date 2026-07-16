@@ -114,6 +114,31 @@ describe("GR-3.2 production image preparation", () => {
     expect(pixel(result.image, 0, 0)[3]).toBe(0);
   });
 
+  it("pads a native source canvas transparently without scaling its pixels", () => {
+    const source = image(3, 2);
+    setPixel(source, 0, 0, [220, 20, 20, 255]);
+    setPixel(source, 2, 1, [20, 40, 220, 255]);
+
+    const result = prepareProductionImage(source, {
+      mode: "preserve",
+      sizing: "native",
+      targetWidth: 5,
+      targetHeight: 4,
+    });
+
+    expect(result.sourceBounds).toEqual({ x: 0, y: 0, width: 3, height: 2 });
+    expect(result.placement).toEqual({ x: 1, y: 1, width: 3, height: 2 });
+    expect(pixel(result.image, 1, 1)).toEqual([220, 20, 20, 255]);
+    expect(pixel(result.image, 3, 2)).toEqual([20, 40, 220, 255]);
+    expect(pixel(result.image, 0, 0)[3]).toBe(0);
+    expect(() => prepareProductionImage(source, {
+      mode: "preserve",
+      sizing: "native",
+      targetWidth: 2,
+      targetHeight: 2,
+    })).toThrow(/does not fit/u);
+  });
+
   it("is byte-for-byte deterministic", () => {
     const source = image(4, 3, [255, 0, 255, 255]);
     setPixel(source, 1, 1, [70, 150, 40, 255]);

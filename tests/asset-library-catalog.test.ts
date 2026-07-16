@@ -42,7 +42,7 @@ const ESTABLISHED_IDS = [
 
 describe("asset library catalog", () => {
   it("keeps the established 23 identities and adds production and concept previews once", () => {
-    expect(ASSET_LIBRARY_CATALOG).toHaveLength(45);
+    expect(ASSET_LIBRARY_CATALOG).toHaveLength(46);
     expect(ASSET_LIBRARY_CATALOG.filter((entry) => entry.entryType === "authored-package"))
       .toHaveLength(3);
 
@@ -62,8 +62,8 @@ describe("asset library catalog", () => {
     expect(examples.every((entry) => entry.reference.runtimeStatus === "reference-only")).toBe(true);
 
     const candidates = ASSET_LIBRARY_CATALOG.filter((entry) => entry.entryType === "production-candidate");
-    expect(candidates).toHaveLength(5);
-    expect(new Set(candidates.map((entry) => entry.id)).size).toBe(5);
+    expect(candidates).toHaveLength(6);
+    expect(new Set(candidates.map((entry) => entry.id)).size).toBe(6);
     expect(candidates.every((entry) => entry.recipe.lifecycle === "source")).toBe(true);
 
     const conceptReferences = referenceEntries.filter((entry) =>
@@ -92,6 +92,7 @@ describe("asset library catalog", () => {
         kind: "hybrid-grid-draft",
         tileSize: 32,
         subcellSize: 8,
+        method: "prepared-alpha-connected-shoreline-v1",
         grid: { width: 15, height: 15, subcellColumns: 60, subcellRows: 60 },
       },
     });
@@ -110,7 +111,7 @@ describe("asset library catalog", () => {
     if (candidate.collisionDraft.kind !== "hybrid-grid-draft") {
       throw new Error("Expected hybrid-grid collision draft");
     }
-    expect(candidate.collisionDraft.solidSubcells).toEqual([]);
+    expect(candidate.collisionDraft.solidSubcells.length).toBeGreaterThan(0);
     expect(candidate.fingerprint).toBe(
       productionIndex.entries.find((entry) => entry.id === candidate.id)?.jobKey,
     );
@@ -140,7 +141,7 @@ describe("asset library catalog", () => {
         }],
       },
     });
-    expect(stale.find((entry) => entry.id === prepared.id)).toMatchObject({ reviewState: "pending" });
+    expect(stale.find((entry) => entry.id === prepared.id)).toMatchObject({ reviewState: "stale" });
   });
 
   it("previews a passable multi-layer shoal candidate from a non-island source path", () => {
@@ -353,7 +354,7 @@ describe("asset library catalog", () => {
       "reference.island.20.rock-shard",
     ]);
     expect(ASSET_LIBRARY_GROUPS.map((group) => [group.id, group.entries.length])).toEqual([
-      ["islands", 38],
+      ["islands", 39],
       ["vessels", 1],
       ["world-features", 6],
     ]);

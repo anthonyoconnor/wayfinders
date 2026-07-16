@@ -2,7 +2,11 @@ import {
   PRODUCTION_ASSET_FAMILY_DEFAULTS,
   PRODUCTION_ASSET_INTAKE_FORMAT_VERSION,
   PRODUCTION_ASSET_INTAKE_ROUTE,
+  gridPaddedProductionAssetDimensions,
+  productionAssetPngDimensions,
   suggestedProductionAssetId,
+  type ProductionAssetCanvasSizing,
+  type ProductionAssetDimensions,
   type ProductionAssetFamilyDefaults,
 } from "./ProductionAssetIntake";
 import type { ProductionAssetFamily } from "./ProductionAssetRecipe";
@@ -10,6 +14,7 @@ import type { ProductionAssetFamily } from "./ProductionAssetRecipe";
 export interface ProductionAssetIntakeReference {
   readonly name: string;
   readonly repositoryPath: string;
+  readonly sourceUrl: string;
   readonly kind: "island" | "shoal" | "environment";
 }
 
@@ -77,8 +82,14 @@ export function mountProductionAssetIntakeUi({
           <option value="environment">Environment</option>
         </select><small data-field-error="family"></small></label>
         <label class="production-intake-wide">Stable ID<input name="id" required maxlength="96" spellcheck="false"><small data-field-error="id"></small></label>
-        <label>Width (px)<input name="targetWidth" type="number" min="1" max="4096" required><small data-field-error="targetWidth"></small></label>
-        <label>Height (px)<input name="targetHeight" type="number" min="1" max="4096" required><small data-field-error="targetHeight"></small></label>
+        <label class="production-intake-wide production-intake-dimensions-mode"><input name="keepOriginalDimensions" type="checkbox" checked> Keep original PNG dimensions</label>
+        <label>Canvas width (px)<input name="targetWidth" type="number" min="1" max="4096" required><small data-field-error="targetWidth"></small></label>
+        <label>Canvas height (px)<input name="targetHeight" type="number" min="1" max="4096" required><small data-field-error="targetHeight"></small></label>
+        <div class="production-intake-wide production-intake-dimensions" data-intake-dimensions>
+          <p data-intake-dimensions-summary>Choose a PNG to read its dimensions.</p>
+          <p data-intake-dimensions-warning hidden></p>
+          <button type="button" data-intake-pad hidden></button>
+        </div>
         <label>Layer role<select name="layerRole"><option value="base">Base</option><option value="overlay">Overlay</option><option value="effect">Effect</option><option value="reference">Reference</option></select><small data-field-error="layerRole"></small></label>
         <label>Collision<select name="collisionSemantics"><option value="solid">Solid draft</option><option value="passable">Explicitly passable</option></select><small data-field-error="collisionSemantics"></small></label>
         <label class="production-intake-wide">Runtime/test category<select name="runtimeCategory">
@@ -111,9 +122,15 @@ export function mountProductionAssetIntakeUi({
   const sourceSummary = form.querySelector<HTMLElement>("[data-intake-source-summary]");
   const uploadLabel = form.querySelector<HTMLElement>("[data-intake-upload]");
   const defaults = form.querySelector<HTMLElement>("[data-intake-defaults]");
+  const dimensionSummary = form.querySelector<HTMLElement>("[data-intake-dimensions-summary]");
+  const dimensionWarning = form.querySelector<HTMLElement>("[data-intake-dimensions-warning]");
+  const padDimensions = form.querySelector<HTMLButtonElement>("[data-intake-pad]");
   let reference: Readonly<ProductionAssetIntakeReference> | undefined;
   let currentJob: IntakeJob | undefined;
   let pollTimer: number | undefined;
+  let sourceDimensions: Readonly<ProductionAssetDimensions> | undefined;
+  let canvasSizing: ProductionAssetCanvasSizing = "native";
+  let dimensionReadRevision = 0;
 
   const clearErrors = () => {
     for (const output of form.querySelectorAll<HTMLElement>("[data-field-error]")) output.textContent = "";
@@ -125,10 +142,71 @@ export function mountProductionAssetIntakeUi({
       if (output) output.textContent = message;
     }
   };
+  const targetDimensions = (): ProductionAssetDimensions => ({
+    width: Number(field<HTMLInputElement>(form, "targetWidth").value),
+    height: Number(field<HTMLInputElement>(form, "targetHeight").value),
+  });
+  const updateDimensionControls = (jobActive = false) => {
+    const keepOriginal = field<HTMLInputElement>(form, "keepOriginalDimensions");
+    const width = field<HTMLInputElement>(form, "targetWidth");
+    const height = field<HTMLInputElement>(form, "targetHeight");
+    width.disabled = jobActive || keepOriginal.checked;
+    height.disabled = jobActive || keepOriginal.checked;
+    const target = targetDimensions();
+    const family = field<HTMLSelectElement>(form, "family").value as ProductionAssetFamily;
+    const collision = field<HTMLSelectElement>(form, "collisionSemantics").value;
+    const completeTarget = Number.isInteger(target.width) && target.width > 0
+      && Number.isInteger(target.height) && target.height > 0;
+    const nativeDimensions = sourceDimensions;
+    if (dimensionSummary) {
+      dimensionSummary.textContent = sourceDimensions
+        ? `PNG canvas: ${sourceDimensions.width}\u00d7${sourceDimensions.height} px. Output canvas: ${target.width}\u00d7${target.height} px.`
+        : "Choose a PNG to read its dimensions.";
+    }
+    const needsGridPadding = collision === "solid" && completeTarget
+      && (target.width % 32 !== 0 || target.height % 32 !== 0);
+    const canPadNativeCanvas = nativeDimensions !== undefined
+      && target.width === nativeDimensions.width
+      && target.height === nativeDimensions.height;
+    if (dimensionWarning) {
+      dimensionWarning.hidden = !needsGridPadding;
+      dimensionWarning.textContent = needsGridPadding
+        ? `${family === "island" ? "Island" : "Solid"} collision uses 32 px navigation cells. Pad the canvas rather than stretching the art.`
+        : "";
+    }
+    if (padDimensions) {
+      padDimensions.hidden = !needsGridPadding || !canPadNativeCanvas;
+      padDimensions.disabled = jobActive;
+      if (needsGridPadding && canPadNativeCanvas && nativeDimensions) {
+        try {
+          const padded = gridPaddedProductionAssetDimensions(nativeDimensions);
+          padDimensions.textContent = `Pad transparently to ${padded.width}\u00d7${padded.height}`;
+        } catch {
+          padDimensions.hidden = true;
+        }
+      }
+    }
+  };
+  const useSourceDimensions = (dimensions: Readonly<ProductionAssetDimensions>) => {
+    sourceDimensions = dimensions;
+    if (field<HTMLInputElement>(form, "keepOriginalDimensions").checked) {
+      canvasSizing = "native";
+      field<HTMLInputElement>(form, "targetWidth").value = String(dimensions.width);
+      field<HTMLInputElement>(form, "targetHeight").value = String(dimensions.height);
+    }
+    updateDimensionControls();
+  };
+  const readSourceDimensions = async (bytes: ArrayBuffer, revision: number) => {
+    const dimensions = productionAssetPngDimensions(new Uint8Array(bytes));
+    if (revision !== dimensionReadRevision) return;
+    useSourceDimensions(dimensions);
+  };
   const applyDefaults = (family: ProductionAssetFamily, name?: string) => {
     const selected: ProductionAssetFamilyDefaults = PRODUCTION_ASSET_FAMILY_DEFAULTS[family];
-    field<HTMLInputElement>(form, "targetWidth").value = String(selected.targetWidth);
-    field<HTMLInputElement>(form, "targetHeight").value = String(selected.targetHeight);
+    if (!sourceDimensions) {
+      field<HTMLInputElement>(form, "targetWidth").value = String(selected.targetWidth);
+      field<HTMLInputElement>(form, "targetHeight").value = String(selected.targetHeight);
+    }
     field<HTMLSelectElement>(form, "layerRole").value = selected.layerRole;
     field<HTMLSelectElement>(form, "collisionSemantics").value = selected.collisionSemantics;
     field<HTMLSelectElement>(form, "runtimeCategory").value = selected.runtimeCategory;
@@ -136,6 +214,7 @@ export function mountProductionAssetIntakeUi({
     const assetName = name ?? field<HTMLInputElement>(form, "name").value;
     field<HTMLInputElement>(form, "id").value = suggestedProductionAssetId(assetName, family);
     field<HTMLInputElement>(form, "idConfirmed").checked = false;
+    updateDimensionControls();
   };
   const renderJob = (job: IntakeJob) => {
     currentJob = job;
@@ -152,6 +231,7 @@ export function mountProductionAssetIntakeUi({
     for (const control of form.elements) {
       if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) control.disabled = active;
     }
+    updateDimensionControls(active);
     if (job.status === "failed") {
       showErrors(job.fieldErrors ?? { form: job.message });
       if (submit) submit.textContent = "Retry preparation";
@@ -182,6 +262,58 @@ export function mountProductionAssetIntakeUi({
 
   field<HTMLSelectElement>(form, "family").addEventListener("change", (event) => {
     applyDefaults((event.currentTarget as HTMLSelectElement).value as ProductionAssetFamily);
+  });
+  field<HTMLInputElement>(form, "sourceFile").addEventListener("change", (event) => {
+    const revision = ++dimensionReadRevision;
+    sourceDimensions = undefined;
+    const sourceFile = (event.currentTarget as HTMLInputElement).files?.[0];
+    if (!sourceFile) {
+      if (submit) submit.disabled = false;
+      updateDimensionControls();
+      return;
+    }
+    if (submit) submit.disabled = true;
+    void sourceFile.arrayBuffer()
+      .then((bytes) => readSourceDimensions(bytes, revision))
+      .catch((error) => {
+        if (revision !== dimensionReadRevision) return;
+        showErrors({ source: error instanceof Error ? error.message : "Could not read PNG dimensions" });
+        updateDimensionControls();
+      })
+      .finally(() => {
+        if (revision === dimensionReadRevision && submit) submit.disabled = false;
+      });
+  });
+  field<HTMLInputElement>(form, "keepOriginalDimensions").addEventListener("change", (event) => {
+    const keepOriginal = (event.currentTarget as HTMLInputElement).checked;
+    canvasSizing = keepOriginal ? "native" : "resize";
+    if (keepOriginal && sourceDimensions) {
+      field<HTMLInputElement>(form, "targetWidth").value = String(sourceDimensions.width);
+      field<HTMLInputElement>(form, "targetHeight").value = String(sourceDimensions.height);
+    }
+    updateDimensionControls();
+  });
+  field<HTMLInputElement>(form, "targetWidth").addEventListener("input", () => {
+    canvasSizing = "resize";
+    updateDimensionControls();
+  });
+  field<HTMLInputElement>(form, "targetHeight").addEventListener("input", () => {
+    canvasSizing = "resize";
+    updateDimensionControls();
+  });
+  field<HTMLSelectElement>(form, "collisionSemantics").addEventListener("change", () => updateDimensionControls());
+  padDimensions?.addEventListener("click", () => {
+    try {
+      if (!sourceDimensions) throw new RangeError("Choose a PNG before padding its canvas");
+      const padded = gridPaddedProductionAssetDimensions(sourceDimensions);
+      canvasSizing = "native";
+      field<HTMLInputElement>(form, "keepOriginalDimensions").checked = false;
+      field<HTMLInputElement>(form, "targetWidth").value = String(padded.width);
+      field<HTMLInputElement>(form, "targetHeight").value = String(padded.height);
+      updateDimensionControls();
+    } catch (error) {
+      showErrors({ targetWidth: error instanceof Error ? error.message : "Could not pad canvas dimensions" });
+    }
   });
   field<HTMLInputElement>(form, "name").addEventListener("input", () => {
     const family = field<HTMLSelectElement>(form, "family").value as ProductionAssetFamily;
@@ -232,6 +364,7 @@ export function mountProductionAssetIntakeUi({
             family: field<HTMLSelectElement>(form, "family").value,
             targetWidth: Number(field<HTMLInputElement>(form, "targetWidth").value),
             targetHeight: Number(field<HTMLInputElement>(form, "targetHeight").value),
+            canvasSizing,
             layerRole: field<HTMLSelectElement>(form, "layerRole").value,
             collisionSemantics: field<HTMLSelectElement>(form, "collisionSemantics").value,
             runtimeCategory: field<HTMLSelectElement>(form, "runtimeCategory").value,
@@ -262,6 +395,9 @@ export function mountProductionAssetIntakeUi({
   return {
     open(nextReference) {
       reference = nextReference;
+      const revision = ++dimensionReadRevision;
+      sourceDimensions = undefined;
+      canvasSizing = "native";
       form.reset();
       clearErrors();
       currentJob = undefined;
@@ -280,8 +416,26 @@ export function mountProductionAssetIntakeUi({
         ? `Source reference: ${reference.name} (${reference.repositoryPath})`
         : "Choose one new local PNG. The source will be copied into the repository transaction.";
       if (uploadLabel) uploadLabel.hidden = Boolean(reference);
+      updateDimensionControls();
       dialog.showModal();
       (reference ? field<HTMLInputElement>(form, "name") : field<HTMLInputElement>(form, "sourceFile")).focus();
+      if (reference) {
+        if (submit) submit.disabled = true;
+        void fetch(reference.sourceUrl)
+          .then((response) => {
+            if (!response.ok) throw new Error(`Could not read source PNG (HTTP ${response.status})`);
+            return response.arrayBuffer();
+          })
+          .then((bytes) => readSourceDimensions(bytes, revision))
+          .catch((error) => {
+            if (revision !== dimensionReadRevision) return;
+            showErrors({ source: error instanceof Error ? error.message : "Could not read PNG dimensions" });
+            updateDimensionControls();
+          })
+          .finally(() => {
+            if (revision === dimensionReadRevision && submit) submit.disabled = false;
+          });
+      }
     },
     destroy() {
       window.clearTimeout(pollTimer);

@@ -7,7 +7,12 @@ import {
 import {
   prototypeConfig,
 } from "./wayfinders/config/prototypeConfig";
-import { applicationModeHref, resolveWayfindersApplicationMode } from "./wayfinders/assets/AssetAppMode";
+import {
+  applicationModeHref,
+  resolveAssetTrialApplicationRequest,
+  resolveWayfindersApplicationMode,
+} from "./wayfinders/assets/AssetAppMode";
+import { AssetTrialScene } from "./wayfinders/assets/AssetTrialScene";
 import { AssetViewerScene } from "./wayfinders/assets/AssetViewerScene";
 import { GameSimulation } from "./wayfinders/core/GameSimulation";
 import { WayfindersScene } from "./wayfinders/rendering/WayfindersScene";
@@ -159,15 +164,23 @@ window.addEventListener("blur", () => { suppressEscapeUntilKeyUp = false; });
 
 phaserVersion.textContent = Phaser.VERSION;
 assetModeLink.href = applicationModeHref(applicationMode);
-assetModeLink.textContent = applicationMode === "assets" ? "Back to game" : "Asset tools";
-toolsToggle.textContent = applicationMode === "assets" ? "Asset controls" : "Developer tools";
+assetModeLink.textContent = applicationMode === "assets"
+  ? "Back to game"
+  : applicationMode === "asset-trial" ? "Return to asset tools" : "Asset tools";
+toolsToggle.textContent = applicationMode === "assets"
+  ? "Asset controls"
+  : applicationMode === "asset-trial" ? "Trial controls" : "Developer tools";
 const toolsTitle = document.querySelector<HTMLElement>("#developer-tools-title");
-if (toolsTitle) toolsTitle.textContent = applicationMode === "assets" ? "Asset workbench" : "Developer tools";
+if (toolsTitle) toolsTitle.textContent = applicationMode === "assets"
+  ? "Asset workbench"
+  : applicationMode === "asset-trial" ? "Sea trial" : "Developer tools";
 const toolsEyebrow = document.querySelector<HTMLElement>(".developer-tools__header .eyebrow");
-if (toolsEyebrow) toolsEyebrow.textContent = applicationMode === "assets" ? "Production tooling" : "Prototype sandbox";
+if (toolsEyebrow) toolsEyebrow.textContent = applicationMode === "assets"
+  ? "Production tooling"
+  : applicationMode === "asset-trial" ? "Disposable candidate world" : "Prototype sandbox";
 const riskLegend = document.querySelector<HTMLElement>("#risk-legend");
-if (riskLegend && applicationMode === "assets") riskLegend.hidden = true;
-if (applicationMode === "assets") setDeveloperToolsOpen(true);
+if (riskLegend && applicationMode !== "game") riskLegend.hidden = true;
+if (applicationMode !== "game") setDeveloperToolsOpen(true);
 document.documentElement.dataset.appReady = "true";
 document.documentElement.dataset.applicationMode = applicationMode;
 
@@ -176,7 +189,9 @@ export let wayfindersGame: Phaser.Game | undefined;
 try {
   const scenes = applicationMode === "assets"
     ? [new AssetViewerScene()]
-    : [new WayfindersScene(new GameSimulation(prototypeConfig))];
+    : applicationMode === "asset-trial"
+      ? [new AssetTrialScene(resolveAssetTrialApplicationRequest(window.location.search)!)]
+      : [new WayfindersScene(new GameSimulation(prototypeConfig))];
   wayfindersGame = createWayfindersGame(scenes);
   window.dispatchEvent(
     new CustomEvent("wayfinders:shell-ready", {
@@ -185,6 +200,7 @@ try {
   );
 } catch (error) {
   const message = error instanceof Error ? error.message : "The renderer could not be started.";
+  setStatus(message, "error");
   log(message);
   console.error(error);
 }

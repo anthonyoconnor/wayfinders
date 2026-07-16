@@ -45,80 +45,13 @@ The implemented baseline supports the prototype world and the named large-world
 profiles. Its current contracts are documented in the technical design and
 architecture map; its delivery history is archived.
 
-No next gameplay milestone is defined. Guided source intake is implemented.
-The next defined production-asset work is the `GR-3.6` through `GR-3.8`
-sequence below. It closes the remaining collision-draft, pending-authoring, and
-isolated-trial gaps without building a general-purpose art editor or expanding
-runtime world content.
+No next gameplay or production-asset milestone is defined. The implemented
+production workflow includes guided source intake, editable shoreline seeding,
+structured pending-candidate completion, UI-native review and promotion, and
+an isolated candidate sea trial. It does not expand runtime world content or
+create a general-purpose art editor.
 
-The water-system proposal is another independent candidate track. Product
-priority between it and the production-asset sequence has not been chosen.
-
-## Production-asset workflow
-
-### GR-3.6 — Best-effort collision seed on import
-
-Status: defined, not started, and not authorized. Builds on implemented
-`GR-3.5` guided intake.
-
-Generate a useful first island-collision draft from prepared transparency,
-matte boundaries, and connected shoreline geometry. Seed sparse `8`-pixel
-subcells within the `32`-pixel navigation grid. Prefer a conservative shoreline
-that blocks visible land while retaining coves, channels, and surrounding
-water. Family semantics remain authoritative: shoals and other passable effects
-stay explicitly empty, and uncertain output remains an editable draft.
-
-The library shows the method and warnings with the mask. The algorithm must be
-deterministic for identical source and settings, but it need not provide
-general computer vision or final-quality collision.
-
-Acceptance gate: every current island reference receives a deterministic,
-non-empty, grid-aligned shoreline draft; transparent exterior water is not
-broadly solid; detectable thin projections and concave shorelines use the fine
-grid; passable families remain empty; and generated drafts never become runtime
-authority automatically.
-
-### GR-3.7 — Pending candidate authoring and UI completion
-
-Status: defined, not started, and not authorized. Depends on `GR-3.6`.
-
-Make the pending record the single place to finish an asset. Reuse collision
-paint/erase, `8`/`32`-pixel brushes, selection, fill, undo/redo, and hull-probe
-tools against the candidate draft. Provide structured controls for name,
-family, dimensions, layer order/visibility/opacity, collision semantics, and
-test binding; raw JSON is not the normal editing interface.
-
-**Save candidate** writes validated recipe and collision data through a narrow
-API, prepares affected output, creates a new fingerprint, and returns any prior
-approval to pending. Approval, rejection, validation, and promotion are UI
-actions with explicit current, stale, and error states. Preview-only settings
-must be visibly distinct from persisted recipe values.
-
-Acceptance gate: collision and supported asset settings survive save and
-refresh exactly; changed source, recipe, or mask invalidates the prior
-fingerprint and review; invalid data cannot be approved or promoted; and a
-valid candidate can complete preparation, validation, review, and promotion
-without commands or manual JSON.
-
-### GR-3.8 — Isolated single-island sea trial
-
-Status: defined, not started, and not authorized. Depends on `GR-3.7`.
-
-Launch an explicit candidate trial from the pending editor. The deterministic
-trial world contains only open water, the player boat, and the selected island.
-It loads that candidate's actual prepared layers and saved collision draft; it
-must not borrow the home island's image, footprint, or collision. Pending
-candidates may be trialed before approval.
-
-Provide safe boat spawn/reset positions, collision and navigation-grid debug
-overlays, and a direct return to the same library record. Trial state is
-disposable and is neither gameplay persistence nor world-catalog promotion.
-
-Acceptance gate: the candidate fingerprint, dimensions, origin, and collision
-revision are visible; no unrelated world content is present; the boat is
-blocked exactly by the saved candidate mask; save/retrial reflects edits
-immediately; and returning to the library restores the same pending record and
-review state.
+The water-system proposal is the only currently defined candidate track.
 
 ## Water presentation
 
@@ -132,29 +65,14 @@ navigation, knowledge, and world generation as the only gameplay authorities.
 Its source pack, render design, implementation sequence, budgets, and acceptance
 criteria are defined in `Wayfinders_Water_System_Milestone.md`.
 
-Before authorization, confirm the proposed art direction and whether this track
-runs before or after the production-asset workflow. Implementation must consume
-the existing shared active-chunk boundary and must not introduce a second
-presentation-lifetime policy or simulation clock.
-
-## Forward dependencies
-
-```mermaid
-flowchart LR
-    B["Current implemented baseline through GR-3.5"] --> GR36["GR-3.6 collision seed"]
-    GR36 --> GR37["GR-3.7 pending authoring"]
-    GR37 --> GR38["GR-3.8 isolated sea trial"]
-    B --> WTR["WTR-1 layered water proposal"]
-```
-
-The graph shows technical dependencies, not authorization. Runtime integration
-remains serialized; tools must reuse current renderer, asset, collision, and
-gameplay contracts rather than fork them.
+Before authorization, confirm the proposed art direction. Implementation must
+consume the existing shared active-chunk boundary and must not introduce a
+second presentation-lifetime policy or simulation clock.
 
 ## Explicitly deferred
 
-- Broad runtime-asset expansion until the UI-native intake, authoring, and
-  sea-trial loop exists and a separate content batch is authorized.
+- Broad runtime-asset expansion until a separate content batch defines and
+  authorizes the new packages, placement, and gameplay-facing semantics.
 - Authoritative tribe economy/output, selectable voyage loadouts, generic wreck
   salvage/recovery, and automatic trade gameplay. Product rationale and open
   questions belong in `Wayfinders_Economy_Design.md`.
@@ -174,6 +92,6 @@ gameplay contracts rather than fork them.
 ## Authorization boundary
 
 No milestone in this document is authorized for implementation. Starting the
-remaining production-asset sequence, the water proposal, gameplay persistence,
-a new gameplay milestone, broad runtime content rollout, or any other deferred
-scope requires explicit user authorization.
+water proposal, gameplay persistence, a new gameplay or production-asset
+milestone, broad runtime content rollout, or any other deferred scope requires
+explicit user authorization.

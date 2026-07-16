@@ -1,11 +1,11 @@
 {
   "formatVersion": 1,
-  "pipelineVersion": 1,
+  "pipelineVersion": 2,
   "recipeId": "production.island.small-fishing-cay",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "39eac9bb008a6fc3c797c7d90d6c608e15ce80422ebf6be0c25a853fdf27c9ef",
-  "jobKey": "f1f7957ffde2136694a166fd88c784c66e255116f92123c58234ff52743872f6",
+  "recipeHash": "be9e51b1440b35e870fe5e29a66db4fa3d258a17ab114c7cb185d643dbaeaae1",
+  "jobKey": "57aea3b83793a83b772cacc19664cdb9458ab8086bdb28ac97605ea587581c23",
   "sources": [
     {
       "layerId": "base",
@@ -44,7 +44,7 @@
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-small-fishing-cay/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "29a934c420713a3eeb2c0bf2ebd68ad7a911c9552be48b8160888116a7d73b4e"
+      "sha256": "79bceaee3dc213dc567acae57f33145973c5e059b98d321184490f48e7eabff5"
     }
   },
   "runtimeBinding": {

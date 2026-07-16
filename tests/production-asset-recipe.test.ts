@@ -44,18 +44,25 @@ function validIslandRecipe() {
 }
 
 describe("production asset recipe manifest", () => {
-  it("tracks the three pilot bindings and five selected island sources", () => {
+  it("tracks the three pilot bindings and current prepared island sources", () => {
     const manifest = validateProductionAssetRecipeManifest(productionRecipes);
-    expect(manifest.recipes).toHaveLength(8);
+    expect(manifest.recipes).toHaveLength(9);
     expect(manifest.recipes.filter((recipe) => recipe.lifecycle === "runtime").map((recipe) => recipe.id))
       .toEqual([
         AUTHORED_ASSET_IDS.homeIsland,
         AUTHORED_ASSET_IDS.playerBoat,
         AUTHORED_ASSET_IDS.fishingShoal,
       ]);
-    expect(manifest.recipes.filter((recipe) => recipe.lifecycle === "source")).toHaveLength(5);
-    expect(manifest.recipes.filter((recipe) => recipe.lifecycle === "source")
-      .every((recipe) => recipe.collision.mode === "blank-draft")).toBe(true);
+    const sources = manifest.recipes.filter((recipe) => recipe.lifecycle === "source");
+    expect(sources.map((recipe) => recipe.id)).toEqual([
+      "production.island.colossal-wilderness",
+      "production.island.large-fortified-port",
+      "production.island.medium-abandoned-atoll",
+      "production.island.small-fishing-cay",
+      "production.island.tiny-volcanic-stack",
+      "production.island.volcano",
+    ]);
+    expect(sources.every((recipe) => recipe.collision.mode === "shoreline-seed")).toBe(true);
   });
 
   it("validates and freezes a lightweight island source recipe", () => {
@@ -71,6 +78,22 @@ describe("production asset recipe manifest", () => {
     });
     expect(Object.isFrozen(manifest)).toBe(true);
     expect(Object.isFrozen(manifest.recipes[0].layers[0].preparation)).toBe(true);
+  });
+
+  it("accepts an explicit prepared shoreline seed as an editable island draft", () => {
+    const manifest = validateProductionAssetRecipeManifest({
+      formatVersion: 1,
+      recipes: [{
+        ...validIslandRecipe(),
+        collision: { mode: "shoreline-seed", tileSize: 32, subcellSize: 8 },
+      }],
+    });
+
+    expect(manifest.recipes[0].collision).toEqual({
+      mode: "shoreline-seed",
+      tileSize: 32,
+      subcellSize: 8,
+    });
   });
 
   it("accepts the closed pilot runtime IDs only when visual work preserves collision", () => {

@@ -146,6 +146,38 @@ function alphaBounds(image, threshold) {
   };
 }
 
+function placeNativeCanvas(image, target) {
+  if (image.width > target.width || image.height > target.height) {
+    throw new RangeError(
+      `Native ${image.width}x${image.height} source canvas does not fit inside ${target.width}x${target.height}`,
+    );
+  }
+  const output = {
+    width: target.width,
+    height: target.height,
+    pixels: Buffer.alloc(target.width * target.height * 4),
+  };
+  const placement = {
+    x: Math.floor((target.width - image.width) / 2),
+    y: Math.floor((target.height - image.height) / 2),
+    width: image.width,
+    height: image.height,
+  };
+  for (let y = 0; y < image.height; y++) {
+    image.pixels.copy(
+      output.pixels,
+      pixelOffset(output.width, placement.x, placement.y + y),
+      pixelOffset(image.width, 0, y),
+      pixelOffset(image.width, 0, y + 1),
+    );
+  }
+  return {
+    image: output,
+    sourceBounds: { x: 0, y: 0, width: image.width, height: image.height },
+    placement,
+  };
+}
+
 function containCrop(image, sourceBounds, target) {
   const output = {
     width: target.width,
@@ -188,10 +220,11 @@ function containCrop(image, sourceBounds, target) {
   return { image: output, sourceBounds, placement };
 }
 
-/** Trims connected-border output and contain-fits it onto an exact target canvas. */
+/** Places pixels natively or trims and contain-fits them onto an exact target canvas. */
 export function trimAndContainImage(image, preparation) {
   const source = checkedImage(image);
   const target = targetSize(preparation);
+  if (preparation?.sizing === "native") return placeNativeCanvas(source, target);
   if (preparation?.mode === "preserve") {
     return containCrop(source, { x: 0, y: 0, width: source.width, height: source.height }, target);
   }

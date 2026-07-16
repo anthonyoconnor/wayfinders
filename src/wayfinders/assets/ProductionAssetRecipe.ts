@@ -26,6 +26,8 @@ export type ProductionAssetBlendMode = "normal" | "multiply" | "screen" | "add";
 
 export interface ProductionAssetPreparation {
   readonly mode: "preserve" | "connected-border";
+  /** Native keeps source pixels 1:1; contain permits intentional resizing. */
+  readonly sizing?: "native" | "contain";
   readonly targetWidth: number;
   readonly targetHeight: number;
   readonly thumbnailMaximum: number;
@@ -62,6 +64,7 @@ export interface ProductionAssetAnimationRecipe {
 export type ProductionAssetCollisionRecipe =
   | Readonly<{ mode: "preserve" }>
   | Readonly<{ mode: "blank-draft"; tileSize: number; subcellSize: number }>
+  | Readonly<{ mode: "shoreline-seed"; tileSize: number; subcellSize: number }>
   | Readonly<{ mode: "empty"; reason: string }>
   | Readonly<{ mode: "mask-file"; maskFile: string; tileSize: number; subcellSize: number }>
   | Readonly<{
@@ -186,10 +189,15 @@ function enumValue<T extends string>(value: unknown, allowed: ReadonlySet<T>, la
 function validatePreparation(input: unknown, label: string): ProductionAssetPreparation {
   const parsed = record(input, label);
   const mode = enumValue(parsed.mode, new Set(["preserve", "connected-border"] as const), `${label}.mode`);
+  const sizing = parsed.sizing === undefined
+    ? undefined
+    : enumValue(parsed.sizing, new Set(["native", "contain"] as const), `${label}.sizing`);
   const targetWidth = integer(parsed.targetWidth, `${label}.targetWidth`, 1, 4_096);
   const targetHeight = integer(parsed.targetHeight, `${label}.targetHeight`, 1, 4_096);
   const thumbnailMaximum = integer(parsed.thumbnailMaximum, `${label}.thumbnailMaximum`, 32, 512);
-  if (mode === "preserve") return { mode, targetWidth, targetHeight, thumbnailMaximum };
+  if (mode === "preserve") {
+    return { mode, ...(sizing ? { sizing } : {}), targetWidth, targetHeight, thumbnailMaximum };
+  }
 
   if (!Array.isArray(parsed.matteColor) || parsed.matteColor.length !== 3) {
     throw new RangeError(`${label}.matteColor must contain three RGB channels`);
@@ -204,6 +212,7 @@ function validatePreparation(input: unknown, label: string): ProductionAssetPrep
   }
   return {
     mode,
+    ...(sizing ? { sizing } : {}),
     targetWidth,
     targetHeight,
     thumbnailMaximum,
@@ -219,7 +228,7 @@ function validateCollision(input: unknown, label: string): ProductionAssetCollis
   const parsed = record(input, label);
   const mode = enumValue(
     parsed.mode,
-    new Set(["preserve", "blank-draft", "empty", "mask-file", "alpha"] as const),
+    new Set(["preserve", "blank-draft", "shoreline-seed", "empty", "mask-file", "alpha"] as const),
     `${label}.mode`,
   );
   if (mode === "preserve") return { mode };
@@ -227,7 +236,7 @@ function validateCollision(input: unknown, label: string): ProductionAssetCollis
   const tileSize = integer(parsed.tileSize, `${label}.tileSize`, 1, 512);
   const subcellSize = integer(parsed.subcellSize, `${label}.subcellSize`, 1, tileSize);
   if (tileSize % subcellSize !== 0) throw new RangeError(`${label}.subcellSize must divide tileSize exactly`);
-  if (mode === "blank-draft") return { mode, tileSize, subcellSize };
+  if (mode === "blank-draft" || mode === "shoreline-seed") return { mode, tileSize, subcellSize };
   if (mode === "mask-file") {
     return { mode, maskFile: repositoryFile(parsed.maskFile, `${label}.maskFile`), tileSize, subcellSize };
   }
@@ -360,8 +369,8 @@ function validateRecipe(input: unknown, index: number): ProductionAssetRecipe {
   if (family === "environment" && collision.mode !== "empty") {
     throw new RangeError(`${label} environment visuals must be explicitly passable`);
   }
-  if (collision.mode === "alpha" && lifecycle === "reference") {
-    throw new RangeError(`${label} reference art cannot assert alpha collision authority`);
+  if ((collision.mode === "alpha" || collision.mode === "shoreline-seed") && lifecycle === "reference") {
+    throw new RangeError(`${label} reference art cannot seed collision authority`);
   }
 
   return {

@@ -120,13 +120,15 @@ export interface ProductionCandidateLibraryEntry extends AssetLibraryEntryBase {
   readonly collisionDraftFile: string;
   readonly collisionDraft: Readonly<ProductionCandidateCollisionDraft>;
   readonly lifecycle: "candidate";
-  readonly reviewState: "pending" | "approved" | "rejected";
+  readonly reviewState: "pending" | "approved" | "rejected" | "stale";
 }
 
 export interface ProductionCandidateHybridCollisionDraft {
   readonly kind: "hybrid-grid-draft";
   readonly tileSize: number;
   readonly subcellSize: number;
+  readonly method: string;
+  readonly warnings: readonly string[];
   readonly grid: Readonly<{
     width: number;
     height: number;
@@ -757,7 +759,27 @@ function validateCandidateCollisionDraft(
     coordinates.add(key);
     return Object.freeze({ x, y });
   });
-  return Object.freeze({ kind: "hybrid-grid-draft", tileSize, subcellSize, grid, solidSubcells: Object.freeze(solidSubcells) });
+  const method = parsed.method === undefined
+    ? "legacy-unspecified-draft"
+    : nonEmptyString(parsed.method, `Collision draft ${recipeId}.method`);
+  const warningInput = parsed.warnings ?? [];
+  if (!Array.isArray(warningInput) || warningInput.length > 16) {
+    throw new RangeError(`Collision draft ${recipeId}.warnings must contain at most 16 messages`);
+  }
+  const warnings = warningInput.map((warning, warningIndex) => {
+    const result = nonEmptyString(warning, `Collision draft ${recipeId}.warnings[${warningIndex}]`);
+    if (result.length > 240) throw new RangeError(`Collision draft ${recipeId}.warnings[${warningIndex}] is too long`);
+    return result;
+  });
+  return Object.freeze({
+    kind: "hybrid-grid-draft",
+    tileSize,
+    subcellSize,
+    method,
+    warnings: Object.freeze(warnings),
+    grid,
+    solidSubcells: Object.freeze(solidSubcells),
+  });
 }
 
 function categoryForFamily(family: ProductionAssetFamily): AssetLibraryCategoryId {
@@ -853,15 +875,23 @@ function productionCandidateEntries(
     );
     const collisionDraft = validateCandidateCollisionDraft(collisionDraftInput, recipe.id, prepared.jobKey);
     const currentReview = reviewStates.get(recipe.id);
-    const reviewState = currentReview?.candidateFingerprint === prepared.jobKey
-      ? currentReview.decision
-      : "pending";
+    const reviewState = !currentReview
+      ? "pending"
+      : currentReview.candidateFingerprint === prepared.jobKey ? currentReview.decision : "stale";
     const collisionFields: AssetLibraryDetailField[] = collisionDraft.kind === "hybrid-grid-draft"
       ? [
         { id: "profile", name: "Profile", value: "Hybrid grid draft" },
+        { id: "method", name: "Method", value: titleFromSlug(collisionDraft.method) },
         { id: "tile-size", name: "Navigation cell", value: collisionDraft.tileSize, unit: "px" },
         { id: "subcell-size", name: "Collision subcell", value: collisionDraft.subcellSize, unit: "px" },
         { id: "solid-subcells", name: "Solid subcells", value: collisionDraft.solidSubcells.length },
+        ...(collisionDraft.warnings.length === 0
+          ? [{ id: "warnings", name: "Warnings", value: "None" }]
+          : collisionDraft.warnings.map((warning, index) => ({
+            id: `warning-${index + 1}`,
+            name: index === 0 ? "Warning" : `Warning ${index + 1}`,
+            value: warning,
+          }))),
       ]
       : collisionDraft.kind === "empty"
         ? [

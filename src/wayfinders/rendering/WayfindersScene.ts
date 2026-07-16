@@ -3,11 +3,6 @@ import { appendDeveloperLog, clearDeveloperLog } from "../../developerLog";
 import { preloadPilotAssetPackages } from "../assets/PilotAssetCatalog";
 import { createPilotAssetRuntime, type PilotAssetRuntime } from "../assets/PilotAssetRuntime";
 import {
-  preloadProductionAssetTestOverride,
-  resolveProductionAssetTestOverride,
-  type ProductionAssetTestOverride,
-} from "../assets/ProductionAssetTesting";
-import {
   onPrototypeConfigChanged,
   patchPrototypeConfig,
   prototypeConfig,
@@ -237,25 +232,17 @@ export class WayfindersScene extends Phaser.Scene {
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
   private pilotAssets!: PilotAssetRuntime;
-  private readonly productionAssetTestOverride?: Readonly<ProductionAssetTestOverride>;
   constructor(simulation = new GameSimulation()) {
     super({ key: "WayfindersScene" });
     this.simulation = simulation;
-    this.productionAssetTestOverride = typeof window === "undefined"
-      ? undefined
-      : resolveProductionAssetTestOverride(window.location.search);
   }
 
   preload(): void {
     preloadPilotAssetPackages(this);
-    preloadProductionAssetTestOverride(this, this.productionAssetTestOverride);
   }
 
   create(): void {
-    this.pilotAssets = createPilotAssetRuntime(
-      this,
-      this.productionAssetTestOverride ? [this.productionAssetTestOverride] : [],
-    );
+    this.pilotAssets = createPilotAssetRuntime(this);
     this.worldRenderer = new WorldRenderer(this, this.pilotAssets);
     this.wreckRenderer = new WreckRenderer(this);
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
@@ -275,8 +262,6 @@ export class WayfindersScene extends Phaser.Scene {
     for (const diagnostic of this.pilotAssets.diagnostics) {
       this.log(`Using developer graphics for ${diagnostic.assetId}: ${diagnostic.message}`);
     }
-    if (this.productionAssetTestOverride) this.log(this.productionAssetTestOverride.collisionNotice);
-
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error("Keyboard input is unavailable");
     this.keys = keyboard.addKeys({

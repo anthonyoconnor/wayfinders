@@ -6,15 +6,18 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 
 ## Startup order
 
-1. `src/main.ts` selects game or asset-tool mode and supplies validated
-   prototype configuration.
-2. `GameSimulation` plans a `WorldManifest`, rasterizes `WorldGrid`, builds one
-   `WorldAnalysisIndex`, and composes gameplay features.
-3. `WayfindersScene` creates Phaser presentation and translates input into
+1. `src/main.ts` selects the game, asset-library, or isolated-trial application
+   mode and supplies validated prototype configuration.
+2. In game mode, `GameSimulation` plans a `WorldManifest`, rasterizes
+   `WorldGrid`, builds one `WorldAnalysisIndex`, and composes gameplay features.
+3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
-4. Presentation controllers and renderers consume read models, revisions, and
-   the shared active-chunk delta.
-5. Diagnostics and development tools consume bounded read models and counters;
+4. The asset-library mode starts `AssetViewerScene` without gameplay
+   simulation. The trial mode starts `AssetTrialScene` with one isolated open-
+   water `WorldGrid`, movement authority, and selected candidate.
+5. Presentation controllers and renderers consume read models, revisions, and
+   the shared active-chunk delta where applicable.
+6. Diagnostics and development tools consume bounded read models and counters;
    they do not own gameplay state.
 
 ## Ownership
@@ -27,7 +30,7 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 | `exploration` / `features` | feature state, commands, selectors, and mutation results | scene lifecycle |
 | `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering | feature-specific presentation rules |
 | `rendering` | Phaser lifecycle, resource activation, and read-model adaptation | authoritative gameplay decisions |
-| `assets` | semantic package contracts, loading, authoring, and promotion | navigation authority outside declared collision metadata |
+| `assets` | semantic package and candidate contracts, loading, preparation, local authoring, review, promotion, and isolated trials | navigation authority outside declared collision metadata or gameplay-session state |
 
 ## Dependency direction
 
@@ -74,9 +77,13 @@ not import Phaser.
   objects. Shared package textures and the player-boat visual remain a small
   scene-owned set. Feature-specific presentation belongs in controllers and
   renderers.
-- Asset tools share runtime package validation and presentation factories. They
-  do not create another gameplay simulation or infer collision from pixels at
-  runtime.
+- Asset tools share runtime package validation, presentation factories, and the
+  accepted hybrid collision contract. Narrow same-origin development-server
+  operations serialize source intake, candidate save, review, and exact-
+  fingerprint promotion. The disposable candidate trial owns only an isolated
+  open-water `WorldGrid`, movement authority, and candidate presentation; it
+  does not create `GameSimulation`, mutate the runtime world catalog, or add a
+  gameplay-persistence seam.
 
 Diagnostics are distributed with their owner: simulation traces and counters
 live in `core`, presentation/resource counters in `WayfindersScene` and its

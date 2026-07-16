@@ -1,11 +1,11 @@
 {
   "formatVersion": 1,
-  "pipelineVersion": 1,
+  "pipelineVersion": 2,
   "recipeId": "production.island.medium-abandoned-atoll",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "1e17dfba7c7f1a9a419e9009c0c7b6f4c5e70230f3b56fdb6584673a4763fd4c",
-  "jobKey": "62254a5d4aaff673a856dacb3ccce7c5776a02b8ef766caa1816b554d7d13555",
+  "recipeHash": "fc823b08b595075531ea56c06d1c92eac00fbe0e61d459284d40434cf16f85ef",
+  "jobKey": "ab93bee081ce4b84b072daf976aba531a1795aa464e6ed277cc4b1fbd57ad537",
   "sources": [
     {
       "layerId": "base",
@@ -44,7 +44,7 @@
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-medium-abandoned-atoll/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "d54cb48e3dda58ce66b1decd449e84c14cec0529b506ce5249537c7a28e650af"
+      "sha256": "53e7987c5a78af743570d2672f7f241d0aa503ce417e3cc61040e1436f518d95"
     }
   },
   "runtimeBinding": {

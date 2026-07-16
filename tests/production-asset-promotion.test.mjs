@@ -85,7 +85,7 @@ async function createRepository(decision = "approved") {
   }), "utf8"));
   const index = {
     formatVersion: 1,
-    pipelineVersion: 1,
+    pipelineVersion: PRODUCTION_PREPARATION_PIPELINE_VERSION,
     manifestSha256: productionManifestFingerprint(manifest),
     entries: [{
       id,
@@ -125,7 +125,7 @@ async function createRepository(decision = "approved") {
   const collisionBytes = Buffer.from(`${JSON.stringify(collisionDraft, null, 2)}\n`);
   const report = {
     formatVersion: 1,
-    pipelineVersion: 1,
+    pipelineVersion: PRODUCTION_PREPARATION_PIPELINE_VERSION,
     recipeId: id,
     family: "island",
     lifecycle: "candidate",

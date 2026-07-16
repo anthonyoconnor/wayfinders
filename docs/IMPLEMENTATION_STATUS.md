@@ -1,13 +1,14 @@
 # Wayfinders operational status
 
-Status: current development handoff, verified 2026-07-15.
+Status: current development handoff, verified 2026-07-16.
 
-The GR-3.5 working tree passed asset validation, source and test typechecks,
-architecture, quick, contract, integration and repository-I/O lanes, and the
-production bundle on 2026-07-15. The bundle lane required its normal filesystem
-access after the managed sandbox denied Vite config loading. Serial performance
-verification remains recorded through commit `0ea2d7a`; GR-3.5 does not change
-runtime frame work or performance budgets.
+The asset workflow through GR-3.8 is implemented. Focused contract and
+repository-I/O verification covers native-dimension intake and padding,
+deterministic shoreline seeding, structured candidate save/validation/review/
+promotion, fingerprint invalidation, rollback, and isolated-trial authority.
+Run the aggregate source gates below against the current tree. Serial
+performance verification remains recorded through commit `0ea2d7a`; this local
+asset work does not change gameplay frame work or performance budgets.
 
 This file records only volatile operational facts. Implemented behavior belongs
 in `Wayfinders_Technical_Design.md`, ownership in `ARCHITECTURE_MAP.md`, future
@@ -17,9 +18,11 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
 ## Runnable surfaces
 
 - The default browser route starts a fresh playable voyage.
-- `?mode=assets` opens the asset library, candidate review, runtime package
-  inspection, guided reference/local-PNG intake, and supported collision
-  authoring.
+- `?mode=assets` opens the asset library, guided reference/local-PNG intake,
+  structured pending-candidate authoring, validation, exact-fingerprint review
+  and promotion, runtime-package inspection, and supported collision authoring.
+- An island candidate can launch a disposable open-water sea trial from its
+  library record and return directly to that same record.
 - Gameplay-session saving is absent; refresh starts a new session.
 - Repository asset authoring is local development tooling and is independent of
   gameplay persistence.
@@ -42,11 +45,6 @@ membership; `tests/README.md` explains lane selection.
 
 ## Open operational gaps
 
-- Production-asset promotion still requires a command-line step; guided intake
-  and preparation are UI-native. Complete pending-candidate controls and
-  UI-native promotion remain in the current roadmap.
-- Pending island candidates do not yet have a complete collision-edit and
-  isolated-sea-trial loop.
 - The layered water system is proposed but is not registered or loaded by the
   game.
 - Desktop keyboard and pointer input are the validated target. Touch-first

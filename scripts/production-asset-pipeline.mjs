@@ -11,9 +11,12 @@ import {
   encodePng,
 } from "./asset-pipeline.mjs";
 import { prepareProductionImage } from "./production-image-preparation.mjs";
+import {
+  seedPreparedShorelineCollision,
+} from "./production-collision-seeding.mjs";
 import { commitAtomicFileTransaction } from "./repository-collision-transaction.mjs";
 
-export const PRODUCTION_PREPARATION_PIPELINE_VERSION = 1;
+export const PRODUCTION_PREPARATION_PIPELINE_VERSION = 2;
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const manifestPath = path.join(root, "assets-src", "gr3", "production-recipes.json");
@@ -163,7 +166,22 @@ export async function createCollisionDraft(recipe, preparedLayers, fingerprint) 
         subcellSize: recipe.collision.subcellSize,
         grid: collisionGrid(recipe.collision, base.width, base.height),
         solidSubcells: [],
+        method: "manual-blank-draft",
+        warnings: ["Collision is blank and requires manual authoring."],
       };
+    case "shoreline-seed": {
+      const seeded = seedPreparedShorelineCollision(base, recipe.collision);
+      return {
+        ...common,
+        kind: "hybrid-grid-draft",
+        tileSize: recipe.collision.tileSize,
+        subcellSize: recipe.collision.subcellSize,
+        grid: seeded.grid,
+        solidSubcells: seeded.solidSubcells,
+        method: seeded.method,
+        warnings: seeded.warnings,
+      };
+    }
     case "alpha": {
       const sampled = sampledSolidSubcells(
         base,
@@ -177,6 +195,8 @@ export async function createCollisionDraft(recipe, preparedLayers, fingerprint) 
         subcellSize: recipe.collision.subcellSize,
         grid: sampled.grid,
         solidSubcells: sampled.solids,
+        method: "explicit-alpha-center-sample",
+        warnings: ["Center sampling can miss thin or concave shoreline detail."],
         suggestedFrom: "explicit-alpha-solid-contract",
       };
     }
@@ -198,6 +218,8 @@ export async function createCollisionDraft(recipe, preparedLayers, fingerprint) 
         subcellSize: recipe.collision.subcellSize,
         grid: sampled.grid,
         solidSubcells: sampled.solids,
+        method: "semantic-mask-center-sample",
+        warnings: [],
         suggestedFrom: recipe.collision.maskFile,
       };
     }

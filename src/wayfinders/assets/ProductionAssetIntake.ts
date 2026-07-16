@@ -7,6 +7,7 @@ export const PRODUCTION_ASSET_INTAKE_ROUTE = "/__wayfinders/assets/intake";
 export const PRODUCTION_ASSET_INTAKE_FORMAT_VERSION = 1 as const;
 
 export type ProductionAssetCollisionSemantics = "passable" | "solid";
+export type ProductionAssetCanvasSizing = "native" | "resize";
 export type ProductionAssetRuntimeCategory =
   | "none"
   | "home-island"
@@ -26,6 +27,8 @@ export interface ProductionAssetIntakeRequest {
   readonly family: ProductionAssetFamily;
   readonly targetWidth: number;
   readonly targetHeight: number;
+  /** Native keeps source pixels 1:1 and permits only transparent canvas expansion. */
+  readonly canvasSizing: ProductionAssetCanvasSizing;
   readonly layerRole: ProductionAssetLayerRole;
   readonly collisionSemantics: ProductionAssetCollisionSemantics;
   readonly runtimeCategory: ProductionAssetRuntimeCategory;
@@ -38,6 +41,47 @@ export interface ProductionAssetFamilyDefaults {
   readonly collisionSemantics: ProductionAssetCollisionSemantics;
   readonly runtimeCategory: ProductionAssetRuntimeCategory;
   readonly summary: string;
+}
+
+export interface ProductionAssetDimensions {
+  readonly width: number;
+  readonly height: number;
+}
+
+const PNG_SIGNATURE = Object.freeze([137, 80, 78, 71, 13, 10, 26, 10]);
+
+/** Reads the authoritative canvas size from a PNG IHDR without decoding pixels. */
+export function productionAssetPngDimensions(bytes: Uint8Array): Readonly<ProductionAssetDimensions> {
+  if (bytes.byteLength < 24 || PNG_SIGNATURE.some((value, index) => bytes[index] !== value)) {
+    throw new RangeError("The selected file is not a PNG");
+  }
+  if (String.fromCharCode(bytes[12], bytes[13], bytes[14], bytes[15]) !== "IHDR") {
+    throw new RangeError("The selected PNG has no IHDR header");
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  if (width < 1 || height < 1 || width > 4_096 || height > 4_096) {
+    throw new RangeError("PNG dimensions must be between 1 and 4096 pixels");
+  }
+  return Object.freeze({ width, height });
+}
+
+/** Returns the smallest transparent canvas aligned to the collision grid. */
+export function gridPaddedProductionAssetDimensions(
+  dimensions: Readonly<ProductionAssetDimensions>,
+  gridSize = 32,
+): Readonly<ProductionAssetDimensions> {
+  if (!Number.isInteger(gridSize) || gridSize < 1) throw new RangeError("Grid size must be a positive integer");
+  const width = boundedInteger(dimensions.width);
+  const height = boundedInteger(dimensions.height);
+  if (!width || !height) throw new RangeError("Asset dimensions must be whole numbers from 1 to 4096");
+  const paddedWidth = Math.ceil(width / gridSize) * gridSize;
+  const paddedHeight = Math.ceil(height / gridSize) * gridSize;
+  if (paddedWidth > 4_096 || paddedHeight > 4_096) {
+    throw new RangeError("Grid padding would exceed the 4096 pixel texture limit");
+  }
+  return Object.freeze({ width: paddedWidth, height: paddedHeight });
 }
 
 export const PRODUCTION_ASSET_FAMILY_DEFAULTS: Readonly<Record<ProductionAssetFamily, ProductionAssetFamilyDefaults>> =
@@ -97,6 +141,7 @@ export class ProductionAssetIntakeValidationError extends Error {
 const FAMILIES = new Set<ProductionAssetFamily>(["island", "vessel", "shoal", "world-feature", "environment"]);
 const LAYER_ROLES = new Set<ProductionAssetLayerRole>(["base", "overlay", "effect", "reference"]);
 const COLLISION_SEMANTICS = new Set<ProductionAssetCollisionSemantics>(["passable", "solid"]);
+const CANVAS_SIZING = new Set<ProductionAssetCanvasSizing>(["native", "resize"]);
 const RUNTIME_CATEGORIES = new Set<ProductionAssetRuntimeCategory>([
   "none",
   "home-island",
@@ -160,6 +205,11 @@ export function validateProductionAssetIntakeRequest(input: unknown): Readonly<P
   const targetHeight = boundedInteger(parsed.targetHeight);
   if (!targetWidth) errors.targetWidth = "Width must be a whole number from 1 to 4096";
   if (!targetHeight) errors.targetHeight = "Height must be a whole number from 1 to 4096";
+  const canvasSizing = typeof parsed.canvasSizing === "string"
+    && CANVAS_SIZING.has(parsed.canvasSizing as ProductionAssetCanvasSizing)
+    ? parsed.canvasSizing as ProductionAssetCanvasSizing
+    : undefined;
+  if (!canvasSizing) errors.canvasSizing = "Choose native canvas placement or intentional resizing";
   const layerRole = typeof parsed.layerRole === "string" && LAYER_ROLES.has(parsed.layerRole as ProductionAssetLayerRole)
     ? parsed.layerRole as ProductionAssetLayerRole
     : undefined;
@@ -212,7 +262,7 @@ export function validateProductionAssetIntakeRequest(input: unknown): Readonly<P
   }
 
   if (Object.keys(errors).length > 0 || !family || !targetWidth || !targetHeight || !layerRole
-    || !collisionSemantics || !runtimeCategory || !source) {
+    || !canvasSizing || !collisionSemantics || !runtimeCategory || !source) {
     throw new ProductionAssetIntakeValidationError(errors);
   }
   return Object.freeze({
@@ -224,6 +274,7 @@ export function validateProductionAssetIntakeRequest(input: unknown): Readonly<P
     family,
     targetWidth,
     targetHeight,
+    canvasSizing,
     layerRole,
     collisionSemantics,
     runtimeCategory,

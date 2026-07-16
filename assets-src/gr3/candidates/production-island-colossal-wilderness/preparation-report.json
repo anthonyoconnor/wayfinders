@@ -1,11 +1,11 @@
 {
   "formatVersion": 1,
-  "pipelineVersion": 1,
+  "pipelineVersion": 2,
   "recipeId": "production.island.colossal-wilderness",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "41823d9a87bbbef49b328bd203135ac48d7cd335a39529d54c3da7848a56b846",
-  "jobKey": "487501c658b47caed5c71d3902389cb91da57e27f757a2388415d21a84105d68",
+  "recipeHash": "8615cc93d7d8a76af40ccbb923a2dbf9f0965e7218990dc4919721d9a2312ca1",
+  "jobKey": "5f7f587c4fa433207e588bf9f8151a1fcd065c760bb418a92d99a6207451f143",
   "sources": [
     {
       "layerId": "base",
@@ -44,7 +44,7 @@
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-colossal-wilderness/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "a95779a0deb267c0d1e6209be3adb287a49d5b7037a97ad912057989e78dc987"
+      "sha256": "041a70f96d524094325483c953b1a0fc03802f89ce2e163c385fcf83c2f5ba50"
     }
   },
   "runtimeBinding": {
