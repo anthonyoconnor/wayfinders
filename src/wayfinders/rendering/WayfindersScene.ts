@@ -298,8 +298,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.bindSimulationEvents();
     this.showPendingGenerationHandover();
     this.syncPresentation(true);
-    const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
-    if (sceneStatus) sceneStatus.textContent = "Exploration sandbox active";
     if (this.gameStatus) this.gameStatus.textContent = "WASD / arrows sail · wheel or Q/E zoom · Developer tools tune";
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.destroyBindings());

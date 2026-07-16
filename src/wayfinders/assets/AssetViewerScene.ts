@@ -375,8 +375,6 @@ export class AssetViewerScene extends Phaser.Scene {
       this.rebuildPreview();
     }
 
-    const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
-    if (sceneStatus) sceneStatus.textContent = "Runtime asset viewer and collision authoring active";
     const gameStatus = document.querySelector<HTMLElement>("#game-status");
     if (gameStatus) gameStatus.textContent = "Collision authoring · wheel or Q/E zoom · arrows or Pan tool move";
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroyBindings, this);

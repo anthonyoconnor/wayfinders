@@ -2102,33 +2102,6 @@ html[data-application-mode="assets"] #developer-tools-close {
   border-bottom: 0;
 }
 
-.tool-section.tool-disclosure {
-  padding: 0;
-  border-bottom: 0;
-}
-
-.runtime-summary {
-  display: grid;
-  gap: 0.45rem;
-  margin: 0;
-}
-
-.runtime-summary div {
-  display: grid;
-  grid-template-columns: minmax(5.5rem, 0.65fr) minmax(0, 1fr);
-  gap: 0.75rem;
-}
-
-.runtime-summary dt {
-  color: var(--shell-muted);
-}
-
-.runtime-summary dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.runtime-summary,
 .tool-slot,
 .developer-log {
   font-size: 0.8rem;

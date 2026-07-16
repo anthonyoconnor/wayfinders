@@ -55,8 +55,6 @@ const developerLog = requireElement<HTMLDivElement>("#developer-log");
 const developerLogCopy = requireElement<HTMLButtonElement>("#developer-log-copy");
 const developerLogClear = requireElement<HTMLButtonElement>("#developer-log-clear");
 const developerLogFeedback = requireElement<HTMLOutputElement>("#developer-log-feedback");
-const rendererStatus = requireElement<HTMLElement>("#renderer-status");
-const phaserVersion = requireElement<HTMLElement>("#phaser-version");
 const assetModeLink = requireElement<HTMLAnchorElement>("#asset-mode-link");
 const appShell = requireElement<HTMLDivElement>("#app");
 const assetWorkspaceTabsRoot = requireElement<HTMLElement>("#asset-workspace-tabs");
@@ -124,7 +122,6 @@ export function createWayfindersGame(
     banner: false,
     callbacks: {
       postBoot: () => {
-        rendererStatus.textContent = "WebGL ready";
         if (scenes.length === 0) setStatus("Renderer ready; awaiting scene binding.");
       },
     },
@@ -178,7 +175,6 @@ window.addEventListener("keyup", (event) => {
 });
 window.addEventListener("blur", () => { suppressEscapeUntilKeyUp = false; });
 
-phaserVersion.textContent = Phaser.VERSION;
 assetModeLink.href = applicationModeHref(applicationMode);
 assetModeLink.textContent = applicationMode === "assets"
   ? "Back to game"

@@ -153,8 +153,6 @@ export class AssetTrialScene extends Phaser.Scene {
     this.scale.on(Phaser.Scale.Events.RESIZE, this.fitTrial, this);
     this.mountControls();
     this.installDebugApi();
-    const sceneStatus = document.querySelector<HTMLElement>("#scene-status");
-    if (sceneStatus) sceneStatus.textContent = "Isolated asset sea trial";
     const status = document.querySelector<HTMLElement>("#game-status");
     if (status) status.textContent = "Sea trial · WASD or arrows sail · candidate collision is authoritative";
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);

@@ -148,4 +148,13 @@ describe("GR-2.1 asset application mode", () => {
     expect(source).toContain("updateIdentityAvailability");
     expect(source).not.toContain("idConfirmed");
   });
+
+  it("keeps runtime implementation details out of the developer panel", () => {
+    const shell = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+
+    expect(shell).not.toContain("Runtime details");
+    expect(shell).not.toContain('id="renderer-status"');
+    expect(shell).not.toContain('id="phaser-version"');
+    expect(shell).not.toContain('id="scene-status"');
+  });
 });
