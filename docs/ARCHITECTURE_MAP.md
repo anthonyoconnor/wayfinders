@@ -60,9 +60,17 @@ Features may not import Phaser.
 - prototypeConfig remains only as the live developer-panel compatibility
   input. GameSimulation no longer changes it during regeneration.
 - WorldGrid chunks are storage units, not presentation activation. AM-3 and AM-5
-  introduce spatial and active-chunk lifecycle boundaries.
+  separate descriptor lookup from the later active-chunk lifecycle boundary.
+- WorldSpatialIndex is the reusable deterministic chunk-bucket index.
+  WorldDescriptorRegistry is the composition-owned heterogeneous adapter;
+  feature systems still perform exact sight, range, state and approach checks.
+- GameSimulation coalesces all interaction lookups per ship tile and all
+  visibility lookups per visibility revision. Feature read-model arrays are
+  revision-cached and built from local candidates plus known record IDs.
 - WayfindersScene remains Phaser's lifecycle owner while presentation
-  controllers are extracted by feature.
+  controllers are extracted by feature. Stationary viewports skip marker scans,
+  diagnostics use a narrow cached projection, and PresentationWorkMonitor
+  exposes query/change/marker/time counters.
 
 ## Feature folder convention
 

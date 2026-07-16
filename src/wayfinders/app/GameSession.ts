@@ -29,6 +29,7 @@ import {
   createSessionMutation,
   type SessionCommandName,
   type SessionCommandResult,
+  type SessionMutationEffects,
   type SessionRevisions,
 } from "./SessionMutation";
 
@@ -98,29 +99,62 @@ export class GameSession {
   interactWithFishingShoal(
     command: Readonly<FishingShoalInteractionCommandV1>,
   ): SessionCommandResult<FishingShoalInteractionResultV1> {
-    return this.execute("fishing.interact", () => this.simulation.interactWithFishingShoal(command));
+    return this.execute(
+      "fishing.interact",
+      () => this.simulation.interactWithFishingShoal(command),
+      (result) => result.status === "surveyed"
+        ? { changedEntities: [{ kind: "fishing-shoal", id: result.id }] }
+        : {},
+    );
   }
 
   interactWithSurveySite(
     command: Readonly<SurveySiteInteractionCommand>,
   ): SessionCommandResult<SurveySiteInteractionResult> {
-    return this.execute("survey.interact", () => this.simulation.interactWithSurveySite(command));
+    return this.execute(
+      "survey.interact",
+      () => this.simulation.interactWithSurveySite(command),
+      (result) => result.status === "surveyed"
+        ? { changedEntities: [{ kind: "survey-site", id: result.id }] }
+        : {},
+    );
   }
 
   interactWithIslandDossier(
     command: Readonly<IslandDossierInteractionCommandV1>,
   ): SessionCommandResult<IslandDossierInteractionResultV1> {
-    return this.execute("dossier.interact", () => this.simulation.interactWithIslandDossier(command));
+    return this.execute(
+      "dossier.interact",
+      () => this.simulation.interactWithIslandDossier(command),
+      (result) => result.status === "surveyed"
+        ? { changedEntities: [{ kind: "island-dossier", id: result.islandId }] }
+        : {},
+    );
   }
 
   interactWithWreck(
     command: Readonly<WreckSurveyInteractionCommandV1>,
   ): SessionCommandResult<WreckSurveyInteractionResultV1> {
-    return this.execute("wreck.interact", () => this.simulation.interactWithWreck(command));
+    return this.execute(
+      "wreck.interact",
+      () => this.simulation.interactWithWreck(command),
+      (result) => result.status === "surveyed"
+        ? { changedEntities: [{ kind: "wreck", id: result.wreckId }] }
+        : {},
+    );
   }
 
   forceWreck(): SessionCommandResult<boolean> {
-    return this.execute("force-wreck", () => this.simulation.forceWreck());
+    return this.execute(
+      "force-wreck",
+      () => this.simulation.forceWreck(),
+      (wrecked) => {
+        const wreckId = this.simulation.pendingWreckId;
+        return wrecked && wreckId !== null
+          ? { changedEntities: [{ kind: "wreck", id: wreckId }] }
+          : {};
+      },
+    );
   }
 
   acknowledgeGenerationHandover(): SessionCommandResult<boolean> {
@@ -138,7 +172,11 @@ export class GameSession {
     return this.execute("start-new-game", () => this.simulation.startNewGame());
   }
 
-  private execute<T>(command: SessionCommandName, operation: () => T): SessionCommandResult<T> {
+  private execute<T>(
+    command: SessionCommandName,
+    operation: () => T,
+    effectsFor?: (value: T) => Readonly<SessionMutationEffects>,
+  ): SessionCommandResult<T> {
     const before = captureSessionRevisions(this.simulation);
     const from = Object.freeze({
       x: this.simulation.ship.currentTileX,
@@ -147,7 +185,13 @@ export class GameSession {
     const value = operation();
     return Object.freeze({
       value,
-      mutation: createSessionMutation(command, this.simulation, before, from),
+      mutation: createSessionMutation(
+        command,
+        this.simulation,
+        before,
+        from,
+        effectsFor?.(value),
+      ),
     });
   }
 }

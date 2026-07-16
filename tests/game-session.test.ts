@@ -48,6 +48,7 @@ describe("GameSession command boundary", () => {
     expect(result.mutation.changed.simulation).toBe(true);
     expect(result.mutation.changed.knowledge).toBe(true);
     expect(result.mutation.changedChunkKeys.length).toBe(2);
+    expect(result.mutation.changedEntities).toEqual([]);
 
     const after = session.read();
     expect(after.snapshot.tile).toEqual(destination);

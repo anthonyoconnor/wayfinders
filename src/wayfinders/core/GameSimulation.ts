@@ -16,6 +16,7 @@ import type {
 } from "../exploration/ForwardGuidance";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
+  FISHING_SHOAL_INTERACTION_RANGE_TILES,
   type FishingShoalDefinition,
   type FishingShoalInteractionCommandV1,
   type FishingShoalInteractionReadModel,
@@ -30,6 +31,7 @@ import {
 } from "../features/fishing";
 import {
   ISLAND_DOSSIER_CONTRACT_VERSION,
+  ISLAND_DOSSIER_INTERACTION_RANGE_TILES,
   type IslandDossierDefinitionV1,
   type IslandDossierInteractionCommandV1,
   type IslandDossierInteractionReadModelV1,
@@ -62,6 +64,7 @@ import {
 import { generateSurveySiteCatalog } from "../exploration/SurveySiteCatalog";
 import {
   SURVEY_SITE_CONTRACT_VERSION,
+  SURVEY_SITE_INTERACTION_RANGE_TILES,
   type SurveySiteDefinition,
   type SurveySiteId,
   type SurveySiteInteractionCommand,
@@ -86,6 +89,14 @@ import {
 import { MovementSystem, createShipStateAtGrid } from "../navigation/MovementSystem";
 import type { MovementAuthority } from "../navigation/MovementAuthority";
 import { GridGraph } from "../navigation/GridGraph";
+import {
+  WorldDescriptorRegistry,
+  boundsForWorldIndices,
+  createBoundsDescriptor,
+  createPointDescriptor,
+  type WorldDescriptorCandidates,
+  type WorldDescriptorEntry,
+} from "../app/WorldDescriptorRegistry";
 import {
   NAVIGATOR_GENERATION_HANDOVER_VERSION,
   NAVIGATOR_VOYAGE_LIMIT,
@@ -212,6 +223,20 @@ const NO_MOVEMENT: MovementResult = {
   tileChanged: false,
 };
 
+const NO_DESCRIPTOR_CANDIDATES: WorldDescriptorCandidates = Object.freeze({
+  fishingShoalIds: Object.freeze([]),
+  surveySiteIds: Object.freeze([]),
+  islandDossierIds: Object.freeze([]),
+  wreckIds: Object.freeze([]),
+});
+
+const MAX_INTERACTION_QUERY_RADIUS = Math.max(
+  FISHING_SHOAL_INTERACTION_RANGE_TILES,
+  ISLAND_DOSSIER_INTERACTION_RANGE_TILES,
+  SURVEY_SITE_INTERACTION_RANGE_TILES,
+  WRECK_SURVEY_INTERACTION_RANGE_TILES,
+);
+
 /** Advances within the effective uint32 seed space and never repeats the prior world. */
 export function createNextWorldSeed(previousSeed: number): number {
   const current = Math.trunc(previousSeed) >>> 0;
@@ -263,6 +288,18 @@ export class GameSimulation {
   private islandDossierSystem!: IslandDossierSystem;
   private surveySiteSystem!: SurveySiteSystem;
   private fishingFeature!: FishingFeatureSystem;
+  private descriptorRegistry!: WorldDescriptorRegistry;
+  private interactionCandidateCache?: {
+    readonly x: number;
+    readonly y: number;
+    readonly spatialRevision: number;
+    readonly candidates: WorldDescriptorCandidates;
+  };
+  private visibleCandidateCache?: {
+    readonly visibilityRevision: number;
+    readonly spatialRevision: number;
+    readonly candidates: WorldDescriptorCandidates;
+  };
   private idolLocationDefinitionsValue: readonly Readonly<IdolLocationDefinition>[] = Object.freeze([]);
   private readonly generator: WorldGenerator;
   private expeditionId = 1;
@@ -428,7 +465,9 @@ export class GameSimulation {
   }
 
   get surveySiteReadModels(): readonly Readonly<SurveySiteReadModel>[] {
-    return this.surveySiteSystem.readModels();
+    return this.surveySiteSystem.readModels(
+      this.visibleDescriptorCandidates().surveySiteIds,
+    );
   }
 
   get surveySiteRecordsRevision(): number {
@@ -494,11 +533,17 @@ export class GameSimulation {
   }
 
   get fishingShoalReadModels(): readonly Readonly<FishingShoalReadModel>[] {
-    return this.fishingFeature.readModels();
+    return this.fishingFeature.readModels(
+      this.visibleDescriptorCandidates().fishingShoalIds,
+    );
   }
 
   get fishingShoalRecordsRevision(): number {
     return this.fishingFeature.recordsRevision;
+  }
+
+  get descriptorSpatialQueryTotals() {
+    return this.descriptorRegistry.queryTotals();
   }
 
   get surveyBudget(): Readonly<SurveyBudgetReadModel> {
@@ -514,7 +559,7 @@ export class GameSimulation {
     return this.fishingFeature.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
-    }, this.surveyBudget);
+    }, this.surveyBudget, this.interactionCandidates().fishingShoalIds);
   }
 
   get islandDossierInteraction(): Readonly<IslandDossierInteractionReadModelV1> | undefined {
@@ -522,7 +567,7 @@ export class GameSimulation {
     return this.islandDossierSystem.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
-    }, this.surveyBudget);
+    }, this.surveyBudget, this.interactionCandidates().islandDossierIds);
   }
 
   get surveySiteInteraction(): Readonly<SurveySiteInteractionReadModel> | undefined {
@@ -530,13 +575,15 @@ export class GameSimulation {
     return this.surveySiteSystem.interactionNear({
       x: this.ship.currentTileX,
       y: this.ship.currentTileY,
-    }, this.surveyBudget);
+    }, this.surveyBudget, this.interactionCandidates().surveySiteIds);
   }
 
   get wreckSurveyInteraction(): Readonly<WreckSurveyInteractionReadModelV1> | undefined {
     if (this.pendingRespawn || this.pendingGenerationHandoverValue || this.completionChoiceActive) return undefined;
     let closest: { wreck: ShipwreckState; distance: number } | undefined;
-    for (const wreck of this.shipwrecks) {
+    for (const wreckId of this.interactionCandidates().wreckIds) {
+      const wreck = this.shipwrecks.find(({ id }) => id === wreckId);
+      if (!wreck) continue;
       if (
         !wreck.discovered
         || wreck.survey.state !== "unexamined"
@@ -643,10 +690,11 @@ export class GameSimulation {
         const visibility = this.visibility.updateForMovement(previousTile, currentTile);
         const knowledge = this.knowledge.applyTrailingVisibility(visibility, this.expeditionId);
         knowledgeChanged += knowledge.changedCount;
+        const visibleCandidates = this.visibleDescriptorCandidates();
         this.observeIslandDossiers();
-        if (this.observeSurveySites() > 0) lifecycleChanged = true;
-        if (this.observeFishingShoals() > 0) lifecycleChanged = true;
-        this.discoverVisibleWrecks();
+        if (this.observeSurveySites(visibleCandidates.surveySiteIds) > 0) lifecycleChanged = true;
+        if (this.observeFishingShoals(visibleCandidates.fishingShoalIds) > 0) lifecycleChanged = true;
+        this.discoverVisibleWrecks(visibleCandidates.wreckIds);
         this.events.emit("shipEnteredTile", currentTile);
 
         if (this.atDock) {
@@ -708,6 +756,9 @@ export class GameSimulation {
     this.provisions = new ProvisionSystem(this.world, this.config);
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
+    this.descriptorRegistry = new WorldDescriptorRegistry(this.config.navigation.chunkSize);
+    this.interactionCandidateCache = undefined;
+    this.visibleCandidateCache = undefined;
     this.riskResultsInitialized = false;
     measureSimulationPhase(this.trace, "feature-catalogs", () => {
       this.islandDossierSystem = new IslandDossierSystem(
@@ -747,6 +798,7 @@ export class GameSimulation {
         homeReturnTile: this.generated.landmarks.homeReturnTile,
         config: this.config,
       });
+      this.rebuildDescriptorRegistry();
     });
     this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
@@ -773,10 +825,11 @@ export class GameSimulation {
     this.movement.teleport(this.ship, tile);
     const visibility = this.visibility.updateAt(tile);
     let knowledgeChanged = this.knowledge.applyVisibility(visibility, this.expeditionId).changedCount;
+    const visibleCandidates = this.visibleDescriptorCandidates();
     this.observeIslandDossiers();
-    this.observeSurveySites();
-    this.observeFishingShoals();
-    this.discoverVisibleWrecks();
+    this.observeSurveySites(visibleCandidates.surveySiteIds);
+    this.observeFishingShoals(visibleCandidates.fishingShoalIds);
+    this.discoverVisibleWrecks(visibleCandidates.wreckIds);
     this.lastMovement = NO_MOVEMENT;
     this.events.emit("shipTeleported", tile);
     this.events.emit("shipEnteredTile", tile);
@@ -800,10 +853,11 @@ export class GameSimulation {
     if (!this.activeExpedition && !this.isInSupportedWater()) this.startExpedition();
     const visibility = this.visibility.updateAt(tile);
     const knowledge = this.knowledge.applyVisibility(visibility, this.expeditionId);
+    const visibleCandidates = this.visibleDescriptorCandidates();
     this.observeIslandDossiers();
-    this.observeSurveySites();
-    this.observeFishingShoals();
-    this.discoverVisibleWrecks();
+    this.observeSurveySites(visibleCandidates.surveySiteIds);
+    this.observeFishingShoals(visibleCandidates.fishingShoalIds);
+    this.discoverVisibleWrecks(visibleCandidates.wreckIds);
     this.recalculateRiskOverlays();
     this.revision++;
     if (knowledge.changedCount > 0) this.events.emit("knowledgeChanged", { count: knowledge.changedCount });
@@ -1480,6 +1534,12 @@ export class GameSimulation {
       survey: { state: "unexamined" },
     };
     this.shipwrecks.push(wreck);
+    this.descriptorRegistry.upsert(createPointDescriptor(
+      "wreck",
+      wreck.id,
+      { x: wreck.tileX, y: wreck.tileY },
+    ));
+    this.interactionCandidateCache = undefined;
     this.wrecksRevision++;
     const reverted = this.knowledge.revertExpedition(expeditionId);
     const lostIslandDossiers = this.islandDossierSystem.revertExpedition(expeditionId);
@@ -1783,9 +1843,108 @@ export class GameSimulation {
     };
   }
 
-  private discoverVisibleWrecks(): number {
-    let discoveredCount = 0;
+  private rebuildDescriptorRegistry(): void {
+    const entries: WorldDescriptorEntry[] = [];
+    for (const definition of this.fishingFeature.definitions) {
+      entries.push(createPointDescriptor("fishing-shoal", definition.id, definition.tile));
+    }
+    for (const definition of this.surveySiteSystem.definitions) {
+      entries.push(createBoundsDescriptor("survey-site", definition.id, {
+        minX: Math.min(definition.tile.x, definition.serviceAnchor.x),
+        minY: Math.min(definition.tile.y, definition.serviceAnchor.y),
+        maxX: Math.max(definition.tile.x, definition.serviceAnchor.x),
+        maxY: Math.max(definition.tile.y, definition.serviceAnchor.y),
+      }));
+    }
+    for (const definition of this.islandDossierSystem.definitions) {
+      entries.push(createBoundsDescriptor(
+        "island-dossier",
+        definition.islandId,
+        boundsForWorldIndices(definition.approachIndices, this.world.width),
+      ));
+    }
     for (const wreck of this.shipwrecks) {
+      entries.push(createPointDescriptor(
+        "wreck",
+        wreck.id,
+        { x: wreck.tileX, y: wreck.tileY },
+      ));
+    }
+    this.descriptorRegistry.replace(entries);
+    this.interactionCandidateCache = undefined;
+    this.visibleCandidateCache = undefined;
+  }
+
+  private interactionCandidates(): WorldDescriptorCandidates {
+    const x = this.ship.currentTileX;
+    const y = this.ship.currentTileY;
+    const cached = this.interactionCandidateCache;
+    if (
+      cached
+      && cached.x === x
+      && cached.y === y
+      && cached.spatialRevision === this.descriptorRegistry.revision
+    ) return cached.candidates;
+
+    const candidates = this.descriptorRegistry.queryNear(
+      { x, y },
+      MAX_INTERACTION_QUERY_RADIUS,
+    ).candidates;
+    this.interactionCandidateCache = Object.freeze({
+      x,
+      y,
+      spatialRevision: this.descriptorRegistry.revision,
+      candidates,
+    });
+    return candidates;
+  }
+
+  private visibleDescriptorCandidates(): WorldDescriptorCandidates {
+    const cached = this.visibleCandidateCache;
+    if (
+      cached
+      && cached.visibilityRevision === this.world.visibilityVersion
+      && cached.spatialRevision === this.descriptorRegistry.revision
+    ) return cached.candidates;
+
+    const visible = this.world.getVisibleIndices();
+    if (visible.size === 0) {
+      this.visibleCandidateCache = Object.freeze({
+        visibilityRevision: this.world.visibilityVersion,
+        spatialRevision: this.descriptorRegistry.revision,
+        candidates: NO_DESCRIPTOR_CANDIDATES,
+      });
+      return NO_DESCRIPTOR_CANDIDATES;
+    }
+    let minX = this.world.width;
+    let minY = this.world.height;
+    let maxX = -1;
+    let maxY = -1;
+    for (const index of visible) {
+      const x = index % this.world.width;
+      const y = Math.floor(index / this.world.width);
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+    const candidates = this.descriptorRegistry.queryBounds({ minX, minY, maxX, maxY }).candidates;
+    this.visibleCandidateCache = Object.freeze({
+      visibilityRevision: this.world.visibilityVersion,
+      spatialRevision: this.descriptorRegistry.revision,
+      candidates,
+    });
+    return candidates;
+  }
+
+  private discoverVisibleWrecks(candidateIds?: Iterable<number>): number {
+    let discoveredCount = 0;
+    const wrecks = candidateIds === undefined
+      ? this.shipwrecks
+      : [...candidateIds]
+        .map((id) => this.shipwrecks.find((wreck) => wreck.id === id))
+        .filter((wreck): wreck is ShipwreckState => wreck !== undefined);
+    for (const wreck of wrecks) {
       if (wreck.discovered || !this.world.isVisibleNow(wreck.tileX, wreck.tileY)) continue;
       wreck.discovered = true;
       discoveredCount++;
@@ -1817,11 +1976,13 @@ export class GameSimulation {
     return observation.found.length;
   }
 
-  private observeSurveySites(): number {
+  private observeSurveySites(candidateIds?: Iterable<string>): number {
     if (!this.activeExpedition || this.pendingRespawn) return 0;
     const observation = this.surveySiteSystem.observeCurrentSight(
       this.expeditionId,
       this.generation,
+      this.world.getVisibleIndices(),
+      candidateIds,
     );
     for (const record of observation.found) {
       const definition = this.surveySiteSystem.definitionFor(record.id);
@@ -1838,11 +1999,13 @@ export class GameSimulation {
     return observation.found.length;
   }
 
-  private observeFishingShoals(): number {
+  private observeFishingShoals(candidateIds?: Iterable<string>): number {
     if (!this.activeExpedition || this.pendingRespawn) return 0;
     const observation = this.fishingFeature.observeCurrentSight(
       this.expeditionId,
       this.generation,
+      this.world.getVisibleIndices(),
+      candidateIds,
     );
     for (const record of observation.found) {
       const definition = this.fishingFeature.definitionFor(record.id);

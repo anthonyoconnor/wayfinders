@@ -46,6 +46,11 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
   private returnedCache: ReadonlyArray<Readonly<SurveySiteReturnedRecord>> = Object.freeze([]);
   private recordsDirty = false;
   private recordsRevisionValue = 0;
+  private readModelCache: readonly Readonly<SurveySiteReadModel<TType>>[] = Object.freeze([]);
+  private readModelCacheMode: "all" | "bounded" | undefined;
+  private readModelRecordsRevision = -1;
+  private readModelKnowledgeVersion = -1;
+  private readModelVisibilityVersion = -1;
   private readonly graph: GridGraph;
 
   constructor(
@@ -79,6 +84,7 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
   interactionNear(
     shipTile: Readonly<GridPoint>,
     surveyBudget: Readonly<SurveyBudgetReadModel>,
+    candidateIds?: Iterable<string>,
   ): Readonly<SurveySiteInteractionReadModel<TType>> | undefined {
     let closest: {
       definition: Readonly<SurveySiteDefinition<TType>>;
@@ -86,7 +92,7 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
       distance: number;
     } | undefined;
 
-    for (const definition of this.definitions) {
+    for (const definition of this.candidateDefinitions(candidateIds)) {
       const provisional = this.provisionalById.get(definition.id);
       const returned = this.returnedById.get(definition.id);
       const state = provisional?.state === "sighted"
@@ -179,6 +185,7 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
     expeditionId: number,
     generation: number,
     visibleIndices: Iterable<number> = this.world.getVisibleIndices(),
+    candidateIds?: Iterable<string>,
   ): SurveySiteObservation {
     assertProvenance(expeditionId, generation, "Survey-site observation");
     const visible = typeof (visibleIndices as ReadonlySet<number>).has === "function"
@@ -186,7 +193,7 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
       : new Set(visibleIndices);
     const found: SurveySiteProvisionalRecord[] = [];
 
-    for (const definition of this.definitions) {
+    for (const definition of this.candidateDefinitions(candidateIds)) {
       if (this.provisionalById.has(definition.id) || this.returnedById.has(definition.id)) continue;
       if (!visible.has(this.world.index(definition.tile.x, definition.tile.y))) continue;
       const record: SurveySiteProvisionalRecord = {
@@ -252,9 +259,20 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
     return Object.freeze(lost);
   }
 
-  readModels(): readonly Readonly<SurveySiteReadModel<TType>>[] {
+  readModels(candidateIds?: Iterable<string>): readonly Readonly<SurveySiteReadModel<TType>>[] {
+    const mode = candidateIds === undefined ? "all" : "bounded";
+    if (
+      this.readModelCacheMode === mode
+      && this.readModelRecordsRevision === this.recordsRevisionValue
+      && this.readModelKnowledgeVersion === this.world.knowledgeVersion
+      && this.readModelVisibilityVersion === this.world.visibilityVersion
+    ) return this.readModelCache;
+
     const models: SurveySiteReadModel<TType>[] = [];
-    for (const definition of this.definitions) {
+    const definitions = candidateIds === undefined
+      ? this.definitions
+      : this.readModelDefinitions(candidateIds);
+    for (const definition of definitions) {
       const provisional = this.provisionalById.get(definition.id);
       const returned = this.returnedById.get(definition.id);
       const base = {
@@ -303,7 +321,12 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
       };
       models.push(Object.freeze(model));
     }
-    return Object.freeze(models);
+    this.readModelCache = Object.freeze(models);
+    this.readModelCacheMode = mode;
+    this.readModelRecordsRevision = this.recordsRevisionValue;
+    this.readModelKnowledgeVersion = this.world.knowledgeVersion;
+    this.readModelVisibilityVersion = this.world.visibilityVersion;
+    return this.readModelCache;
   }
 
   private registerDefinition(definition: Readonly<SurveySiteDefinition<TType>>): void {
@@ -334,6 +357,29 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
       ) > SURVEY_SITE_INTERACTION_RANGE_TILES
     ) throw new RangeError(`Survey site ${definition.id} service anchor is out of range`);
     this.definitionById.set(definition.id, definition);
+  }
+
+  private *candidateDefinitions(
+    candidateIds?: Iterable<string>,
+  ): IterableIterator<Readonly<SurveySiteDefinition<TType>>> {
+    if (candidateIds === undefined) {
+      yield* this.definitions;
+      return;
+    }
+    for (const id of candidateIds) {
+      const definition = this.definitionById.get(id as SurveySiteId);
+      if (definition) yield definition;
+    }
+  }
+
+  private readModelDefinitions(candidateIds: Iterable<string>): readonly Readonly<SurveySiteDefinition<TType>>[] {
+    const ids = new Set(candidateIds);
+    for (const id of this.provisionalById.keys()) ids.add(id);
+    for (const id of this.returnedById.keys()) ids.add(id);
+    return [...ids]
+      .map((id) => this.definitionById.get(id as SurveySiteId))
+      .filter((definition): definition is Readonly<SurveySiteDefinition<TType>> => definition !== undefined)
+      .sort((left, right) => compareSurveySiteIds(left.id, right.id));
   }
 
   private reject(id: SurveySiteId | undefined, reason: SurveySiteRejectedResult["reason"]): SurveySiteRejectedResult {

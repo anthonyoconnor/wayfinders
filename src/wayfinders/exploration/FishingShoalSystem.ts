@@ -33,12 +33,19 @@ export interface FishingShoalCommitResult {
 /** Owns mutable shoal knowledge while definitions remain seed-derived. */
 export class FishingShoalSystem {
   private readonly definitionById = new Map<string, Readonly<FishingShoalDefinition>>();
+  private readonly definitionOrderById = new Map<string, number>();
   private readonly provisionalById = new Map<string, FishingShoalProvisionalRecordV1>();
   private readonly returnedById = new Map<string, FishingShoalReturnedRecordV1>();
   private provisionalCache: ReadonlyArray<Readonly<FishingShoalProvisionalRecordV1>> = Object.freeze([]);
   private returnedCache: ReadonlyArray<Readonly<FishingShoalReturnedRecordV1>> = Object.freeze([]);
   private recordsDirty = false;
   private recordsRevisionValue = 0;
+  private readModelCache: readonly Readonly<FishingShoalReadModel>[] = Object.freeze([]);
+  private readModelCacheMode: "all" | "bounded" | undefined;
+  private readModelRecordsRevision = -1;
+  private readModelKnowledgeVersion = -1;
+  private readModelVisibilityVersion = -1;
+  private readModelTopologyVersion = -1;
   private readonly supportedConnectivity: SupportedConnectivitySystem;
 
   constructor(
@@ -48,9 +55,10 @@ export class FishingShoalSystem {
     config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
   ) {
     this.supportedConnectivity = new SupportedConnectivitySystem(world, homeReturnTile, config);
-    for (const definition of definitions) {
+    for (const [order, definition] of definitions.entries()) {
       if (this.definitionById.has(definition.id)) throw new RangeError(`Duplicate fishing shoal ${definition.id}`);
       this.definitionById.set(definition.id, definition);
+      this.definitionOrderById.set(definition.id, order);
     }
   }
 
@@ -87,13 +95,14 @@ export class FishingShoalSystem {
   interactionNear(
     tile: Readonly<{ x: number; y: number }>,
     surveyBudget: Readonly<SurveyBudgetReadModel>,
+    candidateIds?: Iterable<string>,
   ): FishingShoalInteractionReadModel | undefined {
     let closest: {
       definition: Readonly<FishingShoalDefinition>;
       distance: number;
       state: FishingShoalInteractionReadModel["state"];
     } | undefined;
-    for (const definition of this.definitions) {
+    for (const definition of this.candidateDefinitions(candidateIds)) {
       const provisional = this.provisionalById.get(definition.id);
       const returned = this.returnedById.get(definition.id);
       const state = provisional?.state === "sighted"
@@ -179,12 +188,13 @@ export class FishingShoalSystem {
     expeditionId: number,
     generation: number,
     visibleIndices: Iterable<number> = this.world.getVisibleIndices(),
+    candidateIds?: Iterable<string>,
   ): FishingShoalObservation {
     const visible = typeof (visibleIndices as ReadonlySet<number>).has === "function"
       ? visibleIndices as ReadonlySet<number>
       : new Set(visibleIndices);
     const found: FishingShoalProvisionalRecordV1[] = [];
-    for (const definition of this.definitions) {
+    for (const definition of this.candidateDefinitions(candidateIds)) {
       if (this.provisionalById.has(definition.id) || this.returnedById.has(definition.id)) continue;
       if (!visible.has(this.world.index(definition.tile.x, definition.tile.y))) continue;
       const record: FishingShoalProvisionalRecordV1 = {
@@ -250,9 +260,21 @@ export class FishingShoalSystem {
     return Object.freeze(lost);
   }
 
-  readModels(): readonly Readonly<FishingShoalReadModel>[] {
+  readModels(candidateIds?: Iterable<string>): readonly Readonly<FishingShoalReadModel>[] {
+    const mode = candidateIds === undefined ? "all" : "bounded";
+    if (
+      this.readModelCacheMode === mode
+      && this.readModelRecordsRevision === this.recordsRevisionValue
+      && this.readModelKnowledgeVersion === this.world.knowledgeVersion
+      && this.readModelVisibilityVersion === this.world.visibilityVersion
+      && this.readModelTopologyVersion === this.world.supportedTopologyVersion
+    ) return this.readModelCache;
+
     const models: FishingShoalReadModel[] = [];
-    for (const definition of this.definitions) {
+    const definitions = candidateIds === undefined
+      ? this.definitions
+      : this.readModelDefinitions(candidateIds);
+    for (const definition of definitions) {
       const visible = this.world.isVisibleNow(definition.tile.x, definition.tile.y);
       const provisional = this.provisionalById.get(definition.id);
       const returned = this.returnedById.get(definition.id);
@@ -305,12 +327,43 @@ export class FishingShoalSystem {
       };
       models.push(model);
     }
-    return Object.freeze(models);
+    this.readModelCache = Object.freeze(models);
+    this.readModelCacheMode = mode;
+    this.readModelRecordsRevision = this.recordsRevisionValue;
+    this.readModelKnowledgeVersion = this.world.knowledgeVersion;
+    this.readModelVisibilityVersion = this.world.visibilityVersion;
+    this.readModelTopologyVersion = this.world.supportedTopologyVersion;
+    return this.readModelCache;
   }
 
   private markRecordsChanged(): void {
     this.recordsDirty = true;
     this.recordsRevisionValue++;
+  }
+
+  private *candidateDefinitions(
+    candidateIds?: Iterable<string>,
+  ): IterableIterator<Readonly<FishingShoalDefinition>> {
+    if (candidateIds === undefined) {
+      yield* this.definitions;
+      return;
+    }
+    for (const id of candidateIds) {
+      const definition = this.definitionById.get(id);
+      if (definition) yield definition;
+    }
+  }
+
+  private readModelDefinitions(candidateIds: Iterable<string>): readonly Readonly<FishingShoalDefinition>[] {
+    const ids = new Set(candidateIds);
+    for (const id of this.provisionalById.keys()) ids.add(id);
+    for (const id of this.returnedById.keys()) ids.add(id);
+    return [...ids]
+      .map((id) => this.definitionById.get(id))
+      .filter((definition): definition is Readonly<FishingShoalDefinition> => definition !== undefined)
+      .sort((left, right) => (
+        (this.definitionOrderById.get(left.id) ?? 0) - (this.definitionOrderById.get(right.id) ?? 0)
+      ));
   }
 
   private isHomeConnected(definition: Readonly<FishingShoalDefinition>): boolean {

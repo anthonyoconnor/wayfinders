@@ -60,6 +60,17 @@ export interface SessionMutation {
   };
   /** Logical chunks directly affected by the command's ship-tile transition. */
   readonly changedChunkKeys: readonly string[];
+  readonly changedEntities: readonly Readonly<SessionChangedEntity>[];
+}
+
+export interface SessionChangedEntity {
+  readonly kind: "fishing-shoal" | "survey-site" | "island-dossier" | "wreck";
+  readonly id: string | number;
+}
+
+export interface SessionMutationEffects {
+  readonly changedChunkKeys?: readonly string[];
+  readonly changedEntities?: readonly Readonly<SessionChangedEntity>[];
 }
 
 export interface SessionCommandResult<T> {
@@ -89,6 +100,7 @@ export function createSessionMutation(
   simulation: GameSimulation,
   before: SessionRevisions,
   from: Readonly<GridPoint>,
+  effects: Readonly<SessionMutationEffects> = {},
 ): SessionMutation {
   const after = captureSessionRevisions(simulation);
   const to = Object.freeze({
@@ -96,13 +108,14 @@ export function createSessionMutation(
     y: simulation.ship.currentTileY,
   });
   const tileChanged = from.x !== to.x || from.y !== to.y;
-  const changedChunkKeys = tileChanged
-    ? Object.freeze([...new Set([from, to].map((tile) => {
+  const changedChunkKeys = Object.freeze([...new Set([
+    ...(tileChanged ? [from, to].map((tile) => {
       const chunkX = Math.floor(tile.x / simulation.world.chunkSize);
       const chunkY = Math.floor(tile.y / simulation.world.chunkSize);
       return `${chunkX},${chunkY}`;
-    }))])
-    : Object.freeze([] as string[]);
+    }) : []),
+    ...(effects.changedChunkKeys ?? []),
+  ])]);
 
   return Object.freeze({
     command,
@@ -124,5 +137,8 @@ export function createSessionMutation(
     }),
     shipTile: tileChanged ? Object.freeze({ from: Object.freeze({ ...from }), to }) : undefined,
     changedChunkKeys,
+    changedEntities: Object.freeze((effects.changedEntities ?? []).map((entity) => (
+      Object.freeze({ ...entity })
+    ))),
   });
 }

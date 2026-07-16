@@ -40,6 +40,8 @@ export class IslandDossierSystem {
   private recordsDirty = false;
   private recordsRevisionValue = 0;
   private fogRevealRevisionValue = 0;
+  private readModelCache: readonly Readonly<IslandDossierReadModelV1>[] = Object.freeze([]);
+  private readModelRecordsRevision = -1;
   private readonly graph: GridGraph;
 
   constructor(
@@ -124,10 +126,11 @@ export class IslandDossierSystem {
   interactionNear(
     tile: Readonly<GridPoint>,
     surveyBudget: Readonly<SurveyBudgetReadModel>,
+    candidateIslandIds?: Iterable<number>,
   ): Readonly<IslandDossierInteractionReadModelV1> | undefined {
     if (!this.world.inBounds(tile.x, tile.y)) return undefined;
     const index = this.world.index(tile.x, tile.y);
-    for (const definition of this.definitions) {
+    for (const definition of this.candidateDefinitions(candidateIslandIds)) {
       const provisional = this.provisionalByIslandId.get(definition.islandId);
       const returned = this.returnedByIslandId.get(definition.islandId);
       const state = provisional?.state === "sighted"
@@ -253,8 +256,15 @@ export class IslandDossierSystem {
   }
 
   readModels(): readonly Readonly<IslandDossierReadModelV1>[] {
+    if (this.readModelRecordsRevision === this.recordsRevisionValue) return this.readModelCache;
     const models: Readonly<IslandDossierReadModelV1>[] = [];
-    for (const definition of this.definitions) {
+    const recordIds = new Set([
+      ...this.provisionalByIslandId.keys(),
+      ...this.returnedByIslandId.keys(),
+    ]);
+    for (const islandId of [...recordIds].sort((left, right) => left - right)) {
+      const definition = this.definitionByIslandId.get(islandId);
+      if (!definition) continue;
       const provisional = this.provisionalByIslandId.get(definition.islandId);
       const returned = this.returnedByIslandId.get(definition.islandId);
       if (returned?.state === "dossier") {
@@ -293,7 +303,9 @@ export class IslandDossierSystem {
         }));
       }
     }
-    return Object.freeze(models);
+    this.readModelCache = Object.freeze(models);
+    this.readModelRecordsRevision = this.recordsRevisionValue;
+    return this.readModelCache;
   }
 
   private registerDefinition(definition: Readonly<IslandDossierDefinitionV1>): void {
@@ -351,6 +363,19 @@ export class IslandDossierSystem {
 
     this.definitionByIslandId.set(definition.islandId, definition);
     this.approachIndicesByIslandId.set(definition.islandId, approaches);
+  }
+
+  private *candidateDefinitions(
+    candidateIslandIds?: Iterable<number>,
+  ): IterableIterator<Readonly<IslandDossierDefinitionV1>> {
+    if (candidateIslandIds === undefined) {
+      yield* this.definitions;
+      return;
+    }
+    for (const islandId of candidateIslandIds) {
+      const definition = this.definitionByIslandId.get(islandId);
+      if (definition) yield definition;
+    }
   }
 
   private collectRevealedIslandIds(

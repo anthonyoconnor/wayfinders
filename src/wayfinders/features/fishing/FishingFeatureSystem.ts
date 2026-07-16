@@ -84,8 +84,9 @@ export class FishingFeatureSystem implements FishingPresentationSource {
   interactionNear(
     tile: Readonly<GridPoint>,
     surveyBudget: Readonly<SurveyBudgetReadModel>,
+    candidateIds?: Iterable<string>,
   ): FishingShoalInteractionReadModel | undefined {
-    return this.system.interactionNear(tile, surveyBudget);
+    return this.system.interactionNear(tile, surveyBudget, candidateIds);
   }
 
   /** New command boundary with typed mutation effects. */
@@ -134,8 +135,14 @@ export class FishingFeatureSystem implements FishingPresentationSource {
     expeditionId: number,
     generation: number,
     visibleIndices: Iterable<number> = this.world.getVisibleIndices(),
+    candidateIds?: Iterable<string>,
   ): FishingShoalObservation {
-    return this.system.observeCurrentSight(expeditionId, generation, visibleIndices);
+    return this.system.observeCurrentSight(
+      expeditionId,
+      generation,
+      visibleIndices,
+      candidateIds,
+    );
   }
 
   commitExpedition(expeditionId: number): FishingShoalCommitResult {
@@ -146,8 +153,8 @@ export class FishingFeatureSystem implements FishingPresentationSource {
     return this.system.revertExpedition(expeditionId);
   }
 
-  readModels(): readonly Readonly<FishingShoalReadModel>[] {
-    return this.system.readModels();
+  readModels(candidateIds?: Iterable<string>): readonly Readonly<FishingShoalReadModel>[] {
+    return this.system.readModels(candidateIds);
   }
 }
 

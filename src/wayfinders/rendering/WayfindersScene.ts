@@ -16,7 +16,9 @@ import {
 } from "../config/prototypeConfig";
 import { GameSimulation } from "../core/GameSimulation";
 import { FrameTimingMonitor } from "../core/FrameTimingMonitor";
+import { PresentationWorkMonitor, type PresentationWorkCounters } from "../core/PresentationWorkCounters";
 import { SimulationClock } from "../core/SimulationClock";
+import { SimulationDiagnosticsAdapter } from "../core/SimulationDiagnosticsReadModel";
 import type { GridPoint, MovementInput } from "../core/types";
 import {
   FISHING_SHOAL_CONTRACT_VERSION,
@@ -95,6 +97,7 @@ interface BrowserDebugApi {
   returnToDock: () => boolean;
   navigatorWreckTargets: () => ReadonlyArray<{ id: number; generation: number; x: number; y: number }>;
   performance: () => ReturnType<FrameTimingMonitor["snapshot"]>;
+  presentationWork: () => Readonly<PresentationWorkCounters>;
   fishingShoalTargets: () => ReadonlyArray<{ id: string; x: number; y: number }>;
   islandDossierTargets: () => ReadonlyArray<{ islandId: number; x: number; y: number }>;
   surveySiteTargets: () => ReadonlyArray<{ id: string; type: string; x: number; y: number }>;
@@ -131,6 +134,8 @@ export class WayfindersScene extends Phaser.Scene {
 
   private readonly clock = new SimulationClock();
   private readonly frameTiming = new FrameTimingMonitor();
+  private readonly presentationWork = new PresentationWorkMonitor();
+  private readonly simulationDiagnostics = new SimulationDiagnosticsAdapter();
   private keys!: MovementKeys;
   private worldRenderer!: WorldRenderer;
   private knowledgeOverlay!: KnowledgeOverlayRenderer;
@@ -190,6 +195,15 @@ export class WayfindersScene extends Phaser.Scene {
   private lastFishingShoalVisibilityVersion = -1;
   private lastFishingShoalKnowledgeVersion = -1;
   private lastFishingShoalSupportedTopologyVersion = -1;
+  private activeWreckMarkers = 0;
+  private activeIslandDossierMarkers = 0;
+  private activeSurveySiteMarkers = 0;
+  private activeFishingShoalMarkers = 0;
+  private lastViewportX = Number.NaN;
+  private lastViewportY = Number.NaN;
+  private lastViewportWidth = Number.NaN;
+  private lastViewportHeight = Number.NaN;
+  private lastViewportZoom = Number.NaN;
   private browserDebugApi?: BrowserDebugApi;
   private activeLifecycleCue?: Phaser.GameObjects.Text;
   private returnCueScheduled = false;
@@ -471,6 +485,8 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private syncPresentation(force = false): void {
+    this.presentationWork.beginFrame();
+    const spatialEntitiesBefore = this.simulation.descriptorSpatialQueryTotals.entitiesExamined;
     this.shipRenderer.syncInterpolated(
       this.previousShipPose,
       this.currentShipPose,
@@ -482,12 +498,18 @@ export class WayfindersScene extends Phaser.Scene {
       || this.lastWrecksRevision !== this.simulation.wrecksRevision
       || this.lastWreckVisibilityVersion !== this.simulation.world.visibilityVersion
     ) {
-      this.wreckRenderer.sync(this.simulation.wrecks, this.simulation.world);
+      const wrecks = this.simulation.wrecks;
+      this.wreckRenderer.sync(wrecks, this.simulation.world);
+      this.presentationWork.recordRevisionSync(this.activeWreckMarkers, wrecks.length);
+      this.activeWreckMarkers = wrecks.length;
       this.lastWrecksRevision = this.simulation.wrecksRevision;
       this.lastWreckVisibilityVersion = this.simulation.world.visibilityVersion;
     }
     if (force || this.lastIslandDossierRecordsRevision !== this.simulation.islandDossierRecordsRevision) {
-      this.islandDossierRenderer.sync(this.simulation.islandDossierReadModels);
+      const records = this.simulation.islandDossierReadModels;
+      this.islandDossierRenderer.sync(records);
+      this.presentationWork.recordRevisionSync(this.activeIslandDossierMarkers, records.length);
+      this.activeIslandDossierMarkers = records.length;
       this.lastIslandDossierRecordsRevision = this.simulation.islandDossierRecordsRevision;
     }
     if (
@@ -496,7 +518,10 @@ export class WayfindersScene extends Phaser.Scene {
       || this.lastSurveySiteVisibilityVersion !== this.simulation.world.visibilityVersion
       || this.lastSurveySiteKnowledgeVersion !== this.simulation.world.knowledgeVersion
     ) {
-      this.surveySiteRenderer.sync(this.simulation.surveySiteReadModels);
+      const records = this.simulation.surveySiteReadModels;
+      this.surveySiteRenderer.sync(records);
+      this.presentationWork.recordRevisionSync(this.activeSurveySiteMarkers, records.length);
+      this.activeSurveySiteMarkers = records.length;
       this.lastSurveySiteRecordsRevision = this.simulation.surveySiteRecordsRevision;
       this.lastSurveySiteVisibilityVersion = this.simulation.world.visibilityVersion;
       this.lastSurveySiteKnowledgeVersion = this.simulation.world.knowledgeVersion;
@@ -508,16 +533,35 @@ export class WayfindersScene extends Phaser.Scene {
       || this.lastFishingShoalKnowledgeVersion !== this.simulation.world.knowledgeVersion
       || this.lastFishingShoalSupportedTopologyVersion !== this.simulation.world.supportedTopologyVersion
     ) {
-      this.fishingShoalRenderer.sync(this.simulation.fishingShoalReadModels);
+      const records = this.simulation.fishingShoalReadModels;
+      this.fishingShoalRenderer.sync(records);
+      this.presentationWork.recordRevisionSync(this.activeFishingShoalMarkers, records.length);
+      this.activeFishingShoalMarkers = records.length;
       this.lastFishingShoalRecordsRevision = this.simulation.fishingShoalRecordsRevision;
       this.lastFishingShoalVisibilityVersion = this.simulation.world.visibilityVersion;
       this.lastFishingShoalKnowledgeVersion = this.simulation.world.knowledgeVersion;
       this.lastFishingShoalSupportedTopologyVersion = this.simulation.world.supportedTopologyVersion;
     }
-    this.wreckRenderer.updateViewport(this.cameras.main);
-    this.islandDossierRenderer.updateViewport(this.cameras.main);
-    this.surveySiteRenderer.updateViewport(this.cameras.main);
-    this.fishingShoalRenderer.updateViewport(this.cameras.main);
+    const camera = this.cameras.main;
+    const viewport = camera.worldView;
+    const viewportChanged = force
+      || viewport.x !== this.lastViewportX
+      || viewport.y !== this.lastViewportY
+      || viewport.width !== this.lastViewportWidth
+      || viewport.height !== this.lastViewportHeight
+      || camera.zoom !== this.lastViewportZoom;
+    if (viewportChanged) {
+      this.presentationWork.recordViewportQuery();
+      this.wreckRenderer.updateViewport(camera);
+      this.islandDossierRenderer.updateViewport(camera);
+      this.surveySiteRenderer.updateViewport(camera);
+      this.fishingShoalRenderer.updateViewport(camera);
+      this.lastViewportX = viewport.x;
+      this.lastViewportY = viewport.y;
+      this.lastViewportWidth = viewport.width;
+      this.lastViewportHeight = viewport.height;
+      this.lastViewportZoom = camera.zoom;
+    }
     this.renderEntityDebug();
     this.knowledgeOverlay.sync(
       this.simulation.world,
@@ -536,6 +580,8 @@ export class WayfindersScene extends Phaser.Scene {
     );
     this.cargoRenderer.sync(this.simulation.ship.provisions);
     this.syncSurveyRibbon();
+    const spatialEntitiesAfter = this.simulation.descriptorSpatialQueryTotals.entitiesExamined;
+    this.presentationWork.recordEntityQueries(spatialEntitiesAfter - spatialEntitiesBefore);
     this.syncHomeAction();
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const greatHallOpen = this.greatHallView?.isOpen ?? false;
@@ -555,6 +601,7 @@ export class WayfindersScene extends Phaser.Scene {
         || greatHallOpen
       )
     );
+    const diagnosticsStartedAt = diagnosticsDue ? performance.now() : undefined;
     const host = this.gameHost;
     if (diagnosticsDue && host) {
       if (this.datasetGenerated !== this.simulation.generated) {
@@ -659,26 +706,26 @@ export class WayfindersScene extends Phaser.Scene {
     }
 
     if (diagnosticsDue) {
-      const snapshot = this.simulation.snapshot();
+      const diagnostics = this.simulationDiagnostics.read(this.simulation);
       this.updateProvisionOutput();
       if (host) {
-        host.dataset.personalTiles = String(snapshot.knowledge.personal);
-        host.dataset.supportedTiles = String(snapshot.knowledge.supported);
-        host.dataset.unknownTiles = String(snapshot.knowledge.unknown);
-        host.dataset.visibleTiles = String(snapshot.knowledge.visibleNow);
-        host.dataset.forwardReachable = String(snapshot.risk.forwardReachable);
-        host.dataset.forwardFrontier = String(snapshot.risk.forwardFrontier);
-        host.dataset.forwardHeading = snapshot.risk.forwardHeading.toFixed(2);
-        host.dataset.forwardConeHalfAngle = String(snapshot.risk.forwardConeHalfAngleDegrees);
-        host.dataset.returnComfortable = String(snapshot.risk.comfortable);
-        host.dataset.returnWarning = String(snapshot.risk.warning);
-        host.dataset.returnCritical = String(snapshot.risk.critical);
-        host.dataset.returnImpossible = String(snapshot.risk.impossible);
-        host.dataset.returnPathTiles = String(snapshot.risk.returnPathTiles);
-        host.dataset.returnCorridorTiles = String(snapshot.risk.returnCorridorTiles);
-        host.dataset.returnLevel = String(snapshot.risk.returnLevel);
-        host.dataset.returnCost = snapshot.risk.returnCost?.toFixed(3) ?? "unreachable";
-        host.dataset.returnMargin = snapshot.risk.returnMargin?.toFixed(3) ?? "unreachable";
+        host.dataset.personalTiles = String(diagnostics.knowledge.personal);
+        host.dataset.supportedTiles = String(diagnostics.knowledge.supported);
+        host.dataset.unknownTiles = String(diagnostics.knowledge.unknown);
+        host.dataset.visibleTiles = String(diagnostics.knowledge.visibleNow);
+        host.dataset.forwardReachable = String(diagnostics.risk.forwardReachable);
+        host.dataset.forwardFrontier = String(diagnostics.risk.forwardFrontier);
+        host.dataset.forwardHeading = diagnostics.risk.forwardHeading.toFixed(2);
+        host.dataset.forwardConeHalfAngle = String(diagnostics.risk.forwardConeHalfAngleDegrees);
+        host.dataset.returnComfortable = String(diagnostics.risk.comfortable);
+        host.dataset.returnWarning = String(diagnostics.risk.warning);
+        host.dataset.returnCritical = String(diagnostics.risk.critical);
+        host.dataset.returnImpossible = String(diagnostics.risk.impossible);
+        host.dataset.returnPathTiles = String(diagnostics.risk.returnPathTiles);
+        host.dataset.returnCorridorTiles = String(diagnostics.risk.returnCorridorTiles);
+        host.dataset.returnLevel = String(diagnostics.risk.returnLevel);
+        host.dataset.returnCost = diagnostics.risk.returnCost?.toFixed(3) ?? "unreachable";
+        host.dataset.returnMargin = diagnostics.risk.returnMargin?.toFixed(3) ?? "unreachable";
       }
       this.lastDiagnosticsRevision = this.simulation.revision;
       this.lastDiagnosticsOverlayRevision = this.simulation.overlaysRevision;
@@ -700,6 +747,16 @@ export class WayfindersScene extends Phaser.Scene {
         ? `${voyage} underway · return to the home dock to secure findings`
         : `${voyage} ready · WASD / arrows sail · wheel or Q/E zoom`;
       if (this.gameStatus.textContent !== message) this.gameStatus.textContent = message;
+    }
+    if (diagnosticsStartedAt !== undefined) {
+      this.presentationWork.recordDiagnostics(performance.now() - diagnosticsStartedAt);
+      if (host) {
+        const work = this.presentationWork.snapshot();
+        host.dataset.presentationQueriedEntities = String(work.queriedEntities);
+        host.dataset.presentationChangedEntities = String(work.changedEntities);
+        host.dataset.presentationActiveMarkers = String(work.activeMarkers);
+        host.dataset.presentationDiagnosticsMs = work.diagnosticsMs.toFixed(3);
+      }
     }
   }
 
@@ -1724,6 +1781,7 @@ export class WayfindersScene extends Phaser.Scene {
       returnToDock: () => this.returnToDockForTesting(),
       navigatorWreckTargets: () => this.navigatorWreckTargets(),
       performance: () => this.frameTiming.snapshot(),
+      presentationWork: () => this.presentationWork.snapshot(),
       fishingShoalTargets: () => this.simulation.fishingShoalDefinitions.map(({ id, tile }) => ({
         id,
         x: tile.x,
