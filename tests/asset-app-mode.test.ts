@@ -125,9 +125,11 @@ describe("GR-2.1 asset application mode", () => {
 
     expect(styles).toContain('html[data-application-mode="assets"] .app-shell');
     expect(styles).toContain("grid-template-columns: minmax(0, 1fr) var(--asset-inspector-width)");
+    expect(styles).toMatch(/data-application-mode="assets"\] \.app-shell[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden/u);
+    expect(styles).toMatch(/data-application-mode="assets"\] \.game-region[\s\S]*?min-height: 0;[\s\S]*?overflow: hidden/u);
     expect(styles).toMatch(/data-application-mode="assets"\] \.game-host[\s\S]*?grid-column: 2/u);
-    expect(styles).toMatch(/data-application-mode="assets"\] \.asset-library-browser[\s\S]*?position: relative/u);
-    expect(styles).toMatch(/data-application-mode="assets"\] \.developer-tools[\s\S]*?position: relative/u);
+    expect(styles).toMatch(/data-application-mode="assets"\] \.asset-library-browser[\s\S]*?position: relative[\s\S]*?min-height: 0/u);
+    expect(styles).toMatch(/data-application-mode="assets"\] \.developer-tools[\s\S]*?position: relative[\s\S]*?min-height: 0/u);
     expect(main).toContain('const permanentAssetTools = applicationMode === "assets"');
     expect(main).toContain("const effectiveOpen = permanentAssetTools || open");
     expect(main).toContain("gameHost.clientWidth || window.innerWidth");
