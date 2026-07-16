@@ -548,7 +548,7 @@ The lane split is now implemented in `vitest.config.ts` and exposed through name
 
 The test compiler is part of the full gate. With the concurrently deleted `assets-src/gr3/reviews.json` restored transiently from HEAD, both source and test typechecks pass cleanly; the fixture was removed again after verification. The repository-asset-dependent suites live in the I/O lane, so unrelated asset work cannot block domain-only feedback while the full gate still detects the missing artifact.
 
-After consolidation, the quick lane passed 11 files and 41 tests in 3.72 seconds of Vitest time. The combined quick/contract/integration/I/O gate passed 74 files and 482 tests in 47.10 seconds. The isolated performance lane passed 6 files and 111 tests in 44.83 seconds. These are development-machine observations, not portable limits.
+After consolidation, the quick lane passed 11 files and 41 tests in 3.72 seconds of Vitest time. The final combined quick/contract/integration/I/O gate passed 74 files and 481 tests in 57.83 seconds. The isolated performance lane passed 6 files and 111 tests in 43.27 seconds. These are development-machine observations, not portable limits.
 
 ### Implemented lanes
 
@@ -654,7 +654,15 @@ The 2026-07-15 consolidation removed scaffolding that existed only to keep old a
 - `3080c2d` removed the unused GameSession/SessionBuilder/SessionConfig wrapper stack, duplicate fishing adapters and state, duplicate feature-catalog tracing, dead topology/cache helpers, renderer viewport shims, overlay loaded-world fallbacks, a test-only resource cache, profile aliases, and future-only manifest payloads.
 - `c86c1de` made cooperative ForwardGuidance the sole production scheduler, removed the deferred/synchronous option and status flag, rejected unsupported travel-cost precision, refreshed exact cost units after live tuning, and renamed milestone-labelled performance tests around the behavior they protect.
 - `94e50da` completed the internal reference-image type rename so the removed island-only alias has no remaining caller.
+- `3dbaef7` removed the unused synchronous `ForwardGuidance.recalculate` contract, its dead reuse bookkeeping, and the in-place mask-identity test that existed only for that obsolete hot path. Benchmarks now use the retained exact `calculate` oracle.
 - ActiveChunkSet deltas are now the only presentation-activation input. GameSimulation is the only gameplay composition root. Fishing has one public feature API. Forward guidance has one runtime scheduling path. No compatibility facade or transition flag remains from AM-0 through AM-6.
+
+Transition-only tests were removed with their owners rather than retained as permanent coverage:
+
+- `game-session.test.ts`, `session-config.test.ts`, and `TestSessionBuilder.ts` were deleted with the unused session wrapper stack.
+- Reference-counted cache and old viewport-helper cases were deleted from `presentation-lifetime.test.ts`; that file now covers only the production-used `ChunkActivatedViewPool`.
+- Renderer and overlay tests now activate through explicit ActiveChunkSet deltas. `viewport-chunk-region.test.ts` remains because `WayfindersScene` uses that camera-to-region adapter in production.
+- The synchronous-guidance compatibility-default test and arbitrary-cost fallback test were removed. Remaining synchronous calculations are bootstrap or exact equivalence oracles for the sole cooperative runtime, not a second scheduler.
 
 This cleanup deliberately did not remove the authored-asset V1 collision fallback. That is a documented external package contract for metadata omission, not milestone migration scaffolding.
 
