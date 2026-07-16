@@ -22,6 +22,7 @@ const quickTests = [
 // feedback while retaining them in the full correctness gate.
 const repositoryAssetTests = [
   "tests/asset-library-catalog.test.ts",
+  "tests/great-hall-preview-assets.test.ts",
 ];
 
 // Prototype-world construction and cross-feature journeys belong here. Keep

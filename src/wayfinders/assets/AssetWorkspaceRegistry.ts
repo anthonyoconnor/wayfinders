@@ -1,4 +1,5 @@
 import { FISHING_SHOAL_ASSET_WORKSPACE } from "./workspaces/FishingShoalAssetWorkspace";
+import { GREAT_HALL_ASSET_WORKSPACE } from "./workspaces/GreatHallAssetWorkspace";
 import { ISLAND_ASSET_WORKSPACE } from "./workspaces/IslandAssetWorkspace";
 import { SHIP_ASSET_WORKSPACE } from "./workspaces/ShipAssetWorkspace";
 import type { AssetWorkspaceModule } from "./workspaces/AssetWorkspace";
@@ -7,6 +8,7 @@ export const ASSET_WORKSPACES = Object.freeze([
   ISLAND_ASSET_WORKSPACE,
   SHIP_ASSET_WORKSPACE,
   FISHING_SHOAL_ASSET_WORKSPACE,
+  GREAT_HALL_ASSET_WORKSPACE,
 ] as const);
 
 export type AssetWorkspaceId = (typeof ASSET_WORKSPACES)[number]["id"];

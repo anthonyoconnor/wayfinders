@@ -2,13 +2,24 @@ import type { AuthoredAssetId } from "../AuthoredAssetContracts";
 import type { AssetLibraryEntry } from "../AssetLibraryCatalog";
 import type { RuntimeCollisionObjectKind } from "../CollisionProfileRegistry";
 
-export interface AssetWorkspaceModule {
+export interface AssetWorkspaceBase {
   readonly id: string;
   readonly label: string;
+  readonly kind: "library" | "great-hall-preview";
+}
+
+export interface AssetLibraryWorkspaceModule extends AssetWorkspaceBase {
+  readonly kind: "library";
   readonly initialAssetId: AuthoredAssetId;
   readonly collisionObjectKinds: readonly RuntimeCollisionObjectKind[];
   accepts(entry: Readonly<AssetLibraryEntry>): boolean;
 }
+
+export interface GreatHallAssetWorkspaceModule extends AssetWorkspaceBase {
+  readonly kind: "great-hall-preview";
+}
+
+export type AssetWorkspaceModule = AssetLibraryWorkspaceModule | GreatHallAssetWorkspaceModule;
 
 export function assetWorkspaceSelectionKey(workspaceId: string): string {
   return `wayfinders:asset-workspace:${workspaceId}:selection`;

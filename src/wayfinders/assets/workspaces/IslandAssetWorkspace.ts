@@ -5,6 +5,7 @@ import type { AssetWorkspaceModule } from "./AssetWorkspace";
 export const ISLAND_ASSET_WORKSPACE = Object.freeze({
   id: "islands",
   label: "Islands",
+  kind: "library",
   initialAssetId: AUTHORED_ASSET_IDS.homeIsland,
   collisionObjectKinds: [
     "home-island",

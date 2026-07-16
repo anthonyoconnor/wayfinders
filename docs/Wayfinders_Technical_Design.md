@@ -353,17 +353,17 @@ navigation grid, the form warns before submission and offers transparent canvas
 padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
-The asset-library route provides persistent **Islands**, **Ships**, and
-**Fishing shoals** tabs above permanent left-library, centre-preview, and right-
-workbench regions. The active workspace is URL-addressable and follows browser
-history; accessible arrow-key navigation uses roving focus. A typed registry
-partitions catalog entries and collision profiles, while separate scene
-instances namespace selection and unsaved editor state. Workspace shutdown
-aborts its DOM listeners and Phaser bindings before the next workspace mounts.
-The left and right columns scroll independently, and the Phaser preview is
-sized to the centre column so it cannot render behind those controls. Existing
-recipe names and stable IDs are checked in the form and again under the
-repository lock; conflicts block
+The asset-library route provides persistent **Islands**, **Ships**, **Fishing
+shoals**, and **Great Hall** tabs above permanent left-library, centre-preview,
+and right-workbench regions. The active workspace is URL-addressable and
+follows browser history; accessible arrow-key navigation uses roving focus. A
+typed registry partitions library catalog entries and collision profiles,
+while a scene factory mounts either a library scene or the isolated Great Hall
+approval scene. Workspace shutdown aborts its DOM listeners and Phaser
+bindings before the next workspace mounts. The left and right columns scroll
+independently, and the Phaser preview is sized to the centre column so it
+cannot render behind those controls. Existing recipe names and stable IDs are
+checked in the form and again under the repository lock; conflicts block
 intake without a separate confirmation step. Validated family defaults and
 identity become one source recipe and one pending candidate through the
 constrained development-server API. Island preparation creates a deterministic,
@@ -402,8 +402,24 @@ their save, validation, review, and promotion operations continue to use the
 narrow serialized repository seams until a dedicated workspace milestone
 replaces them.
 
-An imported island can enter a disposable sea trial regardless of availability. The
-trial contains only open water, the authored player boat, and the candidate's
+The Great Hall workspace is a view-only product-review surface. A single
+navigator-count control reveals the first one through twenty entries of a fixed
+ordered portrait catalog; twelve-generation era pages bound portrait DOM, and
+the selected memorial always has four voyage bands. Representative active,
+completed, lost/unlocated, lost/confirmed, handover, completion, tally, and ten
+achievement-symbol states come from immutable preview fixtures. Portrait and
+symbol files are read directly from `public/assets/gr5/great-hall`, so replacing
+a file and reloading shows the revision without runtime generation, asset
+promotion, or an editor. The workspace never constructs `GameSimulation`,
+reads live lineage, changes Great Hall gameplay, or authorizes game integration.
+The fixed preview model supports one through twenty generations, renders at
+most twelve portrait controls and four selected voyage bands, and has a `5 ms`
+p95 model-build regression budget at twenty generations. Browser image decode,
+layout, and interaction measurements remain part of the pending product-review
+pass rather than gameplay performance authority.
+
+An imported island can enter a disposable sea trial regardless of availability.
+The trial contains only open water, the authored player boat, and the candidate's
 actual prepared layers on a centred origin. Its isolated `WorldGrid` applies
 the exact saved `32`/`8` collision draft, exposes safe boat resets and grid and
 collision overlays, and returns directly to the same library record. It never

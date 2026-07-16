@@ -19,17 +19,19 @@ describe("GR-4.0 isolated asset workspaces", () => {
       { id: "islands", label: "Islands" },
       { id: "ships", label: "Ships" },
       { id: "fishing-shoals", label: "Fishing shoals" },
+      { id: "great-hall", label: "Great Hall" },
     ]);
+    const libraryWorkspaces = ASSET_WORKSPACES.filter((workspace) => workspace.kind === "library");
     for (const entry of ASSET_LIBRARY_CATALOG) {
-      expect(ASSET_WORKSPACES.filter((workspace) => workspace.accepts(entry)), entry.id).toHaveLength(1);
+      expect(libraryWorkspaces.filter((workspace) => workspace.accepts(entry)), entry.id).toHaveLength(1);
     }
-    for (const workspace of ASSET_WORKSPACES) {
+    for (const workspace of libraryWorkspaces) {
       expect(ASSET_LIBRARY_CATALOG.some((entry) =>
         entry.id === workspace.initialAssetId && workspace.accepts(entry))).toBe(true);
     }
     for (const objectKind of RUNTIME_COLLISION_OBJECT_KINDS) {
       expect(
-        ASSET_WORKSPACES.filter((workspace) =>
+        libraryWorkspaces.filter((workspace) =>
           workspace.collisionObjectKinds.some((ownedKind) => ownedKind === objectKind)),
         objectKind,
       ).toHaveLength(1);
@@ -39,15 +41,19 @@ describe("GR-4.0 isolated asset workspaces", () => {
   it("resolves direct links, defaults invalid values, and builds stable history URLs", () => {
     expect(resolveAssetWorkspace("?mode=assets&workspace=ships").id).toBe("ships");
     expect(resolveAssetWorkspace("?mode=assets&workspace=fishing-shoals").id).toBe("fishing-shoals");
+    expect(resolveAssetWorkspace("?mode=assets&workspace=great-hall").id).toBe("great-hall");
     expect(resolveAssetWorkspace("?mode=assets&workspace=unknown").id).toBe("islands");
     expect(assetWorkspaceHref("islands")).toBe("?mode=assets&workspace=islands");
+    expect(assetWorkspaceHref("great-hall")).toBe("?mode=assets&workspace=great-hall");
   });
 
   it("supports wrapping arrow navigation and namespaces scene and selection state", () => {
-    expect(adjacentAssetWorkspaceId("islands", -1)).toBe("fishing-shoals");
+    expect(adjacentAssetWorkspaceId("islands", -1)).toBe("great-hall");
     expect(adjacentAssetWorkspaceId("islands", 1)).toBe("ships");
-    expect(adjacentAssetWorkspaceId("fishing-shoals", 1)).toBe("islands");
+    expect(adjacentAssetWorkspaceId("fishing-shoals", 1)).toBe("great-hall");
+    expect(adjacentAssetWorkspaceId("great-hall", 1)).toBe("islands");
     expect(assetWorkspaceSceneKey("ships")).toBe("AssetViewerScene:ships");
+    expect(assetWorkspaceSceneKey("great-hall")).toBe("AssetViewerScene:great-hall");
     expect(assetWorkspaceSelectionKey("ships")).toBe("wayfinders:asset-workspace:ships:selection");
   });
 
@@ -70,7 +76,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(tabs).toContain('"popstate"');
     expect(main).toContain("wayfindersGame!.scene.stop(previousKey)");
     expect(main).toContain("wayfindersGame!.scene.start(nextKey)");
-    expect(main).toContain("new AssetViewerScene(workspace)");
+    expect(main).toContain("createAssetWorkspaceScene(workspace)");
     expect(scene).toContain("this.controlsAbort?.abort()");
     expect(scene).toContain("assetWorkspaceSelectionKey(this.workspace.id)");
     expect(scene).toContain("this.workspaceCatalog");

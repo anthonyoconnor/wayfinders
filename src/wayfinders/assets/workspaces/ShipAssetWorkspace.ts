@@ -5,6 +5,7 @@ import type { AssetWorkspaceModule } from "./AssetWorkspace";
 export const SHIP_ASSET_WORKSPACE = Object.freeze({
   id: "ships",
   label: "Ships",
+  kind: "library",
   initialAssetId: AUTHORED_ASSET_IDS.playerBoat,
   collisionObjectKinds: ["player-ship", "wreck"] as const,
   accepts: (entry: Readonly<AssetLibraryEntry>) => entry.categoryId === "vessels",

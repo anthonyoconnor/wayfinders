@@ -86,10 +86,13 @@ not import Phaser.
   does not create `GameSimulation`, mutate the runtime world catalog, or add a
   gameplay-persistence seam.
 - `AssetWorkspaceRegistry` is the asset-library composition seam. The shell owns
-  accessible tab navigation, URL history, and the three permanent mount regions;
-  each workspace module owns its catalog partition, collision profiles,
-  namespaced selection, and scene lifetime. Stopping a workspace aborts its DOM
-  listeners and Phaser bindings before another workspace starts.
+  accessible tab navigation, URL history, and the three permanent mount regions.
+  Library workspaces own their catalog partition, collision profiles,
+  namespaced selection, and scene lifetime. The view-only Great Hall workspace
+  owns a fixed twenty-generation presentation fixture and no catalog or
+  gameplay authority. `AssetWorkspaceSceneFactory` selects the isolated scene
+  kind at composition. Stopping a workspace aborts its DOM listeners and Phaser
+  bindings before another workspace starts.
 - The Islands workspace owns its focused properties, availability-status,
   sea-trial, collision, and imported-island deletion UI. Its save and guarded
   deletion adapters commit through rollback-safe repository transactions.

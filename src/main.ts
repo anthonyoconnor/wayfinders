@@ -13,7 +13,7 @@ import {
   resolveWayfindersApplicationMode,
 } from "./wayfinders/assets/AssetAppMode";
 import { AssetTrialScene } from "./wayfinders/assets/AssetTrialScene";
-import { AssetViewerScene } from "./wayfinders/assets/AssetViewerScene";
+import { createAssetWorkspaceScene } from "./wayfinders/assets/AssetWorkspaceSceneFactory";
 import {
   AVAILABLE_AUTHORED_ISLAND_CATALOG,
   AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
@@ -207,7 +207,7 @@ let assetWorkspaceTabs: AssetWorkspaceTabs | undefined;
 
 try {
   const scenes = applicationMode === "assets"
-    ? [new AssetViewerScene(initialAssetWorkspace)]
+    ? [createAssetWorkspaceScene(initialAssetWorkspace)]
     : applicationMode === "asset-trial"
       ? [new AssetTrialScene(resolveAssetTrialApplicationRequest(window.location.search)!)]
       : [new WayfindersScene(
@@ -231,7 +231,7 @@ try {
         const nextKey = assetWorkspaceSceneKey(workspace.id);
         wayfindersGame!.scene.stop(previousKey);
         if (!registeredWorkspaceIds.has(workspace.id as AssetWorkspaceId)) {
-          wayfindersGame!.scene.add(nextKey, new AssetViewerScene(workspace), false);
+          wayfindersGame!.scene.add(nextKey, createAssetWorkspaceScene(workspace), false);
           registeredWorkspaceIds.add(workspace.id as AssetWorkspaceId);
         }
         wayfindersGame!.scene.start(nextKey);

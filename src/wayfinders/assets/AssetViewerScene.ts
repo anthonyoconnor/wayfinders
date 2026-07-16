@@ -93,7 +93,7 @@ import {
 import {
   assetWorkspaceSceneKey,
   assetWorkspaceSelectionKey,
-  type AssetWorkspaceModule,
+  type AssetLibraryWorkspaceModule,
 } from "./workspaces/AssetWorkspace";
 
 interface ViewerState {
@@ -275,7 +275,7 @@ export class AssetViewerScene extends Phaser.Scene {
   private collisionPanGesture?: Readonly<CollisionPanGesture>;
   private collisionSpaceHeld = false;
 
-  constructor(private readonly workspace: Readonly<AssetWorkspaceModule>) {
+  constructor(private readonly workspace: Readonly<AssetLibraryWorkspaceModule>) {
     super({ key: assetWorkspaceSceneKey(workspace.id) });
     this.workspaceCatalog = Object.freeze(ASSET_LIBRARY_CATALOG.filter((entry) => workspace.accepts(entry)));
     this.workspaceGroups = groupAssetLibraryEntries(this.workspaceCatalog);
