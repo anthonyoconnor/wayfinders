@@ -4,6 +4,7 @@ import { GridGraph } from "../navigation/GridGraph";
 import { IslandKind, type GeneratedIsland } from "../world/IslandGenerator";
 import { seededValue } from "../world/SeededRandom";
 import type { WorldGrid } from "../world/WorldGrid";
+import type { WorldAnalysisIndex } from "../world/analysis";
 import {
   ISLAND_DOSSIER_CONTENT_VERSION,
   ISLAND_DOSSIER_INTERACTION_RANGE_TILES,
@@ -126,7 +127,7 @@ function dockReachableMask(
 function deriveApproachIndices(
   world: WorldGrid,
   footprintIndices: readonly number[],
-  reachable: Uint8Array,
+  isReachable: (index: number) => boolean,
 ): readonly number[] {
   const approaches = new Set<number>();
   const extent = Math.ceil(ISLAND_DOSSIER_INTERACTION_RANGE_TILES);
@@ -140,7 +141,7 @@ function deriveApproachIndices(
         const y = footprintY + dy;
         if (!world.inBounds(x, y)) continue;
         const candidate = world.index(x, y);
-        if (!reachable[candidate]) continue;
+        if (!isReachable(candidate)) continue;
         approaches.add(candidate);
       }
     }
@@ -177,6 +178,7 @@ export function generateIslandDossierCatalog(
   homeReturnTile: Readonly<GridPoint>,
   contentVersion: number = ISLAND_DOSSIER_CONTENT_VERSION,
   config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
+  analysis?: WorldAnalysisIndex,
 ): readonly Readonly<IslandDossierDefinitionV1>[] {
   if (contentVersion !== ISLAND_DOSSIER_CONTENT_VERSION) {
     throw new RangeError(`Unsupported island-dossier content version ${contentVersion}`);
@@ -190,24 +192,37 @@ export function generateIslandDossierCatalog(
     islandsById.set(island.id, island);
   }
 
-  const footprints = new Map<number, number[]>();
-  for (const islandId of islandsById.keys()) footprints.set(islandId, []);
-  world.forEachTile((_x, _y, index) => {
-    const footprint = footprints.get(world.getIslandIdAtIndex(index));
-    if (footprint) footprint.push(index);
-  });
+  const footprints = new Map<number, readonly number[]>();
+  if (analysis) {
+    if (!analysis.isCurrentFor(world)) throw new RangeError("Island-dossier analysis index is stale");
+    for (const islandId of islandsById.keys()) footprints.set(islandId, analysis.getIslandIndices(islandId));
+  } else {
+    const mutableFootprints = new Map<number, number[]>();
+    for (const islandId of islandsById.keys()) mutableFootprints.set(islandId, []);
+    world.forEachTile((_x, _y, index) => {
+      const footprint = mutableFootprints.get(world.getIslandIdAtIndex(index));
+      if (footprint) footprint.push(index);
+    });
+    for (const [islandId, indices] of mutableFootprints) footprints.set(islandId, indices);
+  }
 
-  const reachable = dockReachableMask(world, homeReturnTile, config);
+  const reachable = analysis ? undefined : dockReachableMask(world, homeReturnTile, config);
+  const homeComponent = analysis?.componentIdAt(homeReturnTile);
+  if (analysis && homeComponent === undefined) {
+    throw new RangeError("Island-dossier home return tile is blocked");
+  }
+  const isReachable = (index: number): boolean => analysis
+    ? analysis.componentIdAt(index) === homeComponent
+    : reachable?.[index] === 1;
   const usedNames = new Set<string>();
   const definitions: IslandDossierDefinitionV1[] = [];
   for (const island of [...islandsById.values()].sort((left, right) => left.id - right.id)) {
-    const mutableFootprint = footprints.get(island.id);
-    if (!mutableFootprint || mutableFootprint.length === 0) {
+    const footprint = footprints.get(island.id);
+    if (!footprint || footprint.length === 0) {
       throw new RangeError(`Generated island ${island.id} has no exact island-ID footprint`);
     }
-    mutableFootprint.sort((left, right) => left - right);
-    const footprintIndices = Object.freeze([...mutableFootprint]);
-    const approachIndices = deriveApproachIndices(world, footprintIndices, reachable);
+    const footprintIndices = Object.freeze([...footprint].sort((left, right) => left - right));
+    const approachIndices = deriveApproachIndices(world, footprintIndices, isReachable);
     if (approachIndices.length === 0) {
       throw new RangeError(`Generated island ${island.id} has no dock-reachable coastal approach`);
     }

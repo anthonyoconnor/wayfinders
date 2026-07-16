@@ -1,6 +1,10 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
 import { GridGraph } from "../navigation/GridGraph";
+import {
+  IslandPlacementIndex,
+  type IslandPlacementIndexStats,
+} from "./IslandPlacementIndex";
 import { KnowledgeState, TerrainType } from "./TileData";
 import { seededValue } from "./SeededRandom";
 import type { WorldGrid } from "./WorldGrid";
@@ -40,6 +44,46 @@ export interface GeneratedIsland {
 
 interface IslandProfile extends Omit<GeneratedIsland, "center" | "bounds"> {}
 
+export type IslandPlacementRejection = "edge" | "home-clearance" | "starter-lane" | "island-channel";
+
+export interface IslandPlacementFailureDiagnostics {
+  readonly seed: number;
+  readonly islandId: number;
+  readonly placedIslandCount: number;
+  readonly worldWidth: number;
+  readonly worldHeight: number;
+  readonly outerRadius: number;
+  readonly randomAttemptLimit: number;
+  readonly fallbackScanLimit: number;
+  readonly candidatesEvaluated: number;
+  readonly rejectionCounts: Readonly<Record<IslandPlacementRejection, number>>;
+  readonly spatialIndex: IslandPlacementIndexStats;
+}
+
+/** Structured, deterministic failure that points directly at density constraints. */
+export class IslandPlacementError extends RangeError {
+  readonly diagnostics: IslandPlacementFailureDiagnostics;
+
+  constructor(diagnostics: IslandPlacementFailureDiagnostics) {
+    const rejected = diagnostics.rejectionCounts;
+    super(
+      `Unable to place configured island ${diagnostics.islandId} for seed ${diagnostics.seed} `
+      + `after ${diagnostics.candidatesEvaluated} bounded candidates in `
+      + `${diagnostics.worldWidth}x${diagnostics.worldHeight}; rejected `
+      + `edge=${rejected.edge}, home-clearance=${rejected["home-clearance"]}, `
+      + `starter-lane=${rejected["starter-lane"]}, island-channel=${rejected["island-channel"]}. `
+      + `Reduce island count/radii, edge margin, home clearance, or minimum channel width.`,
+    );
+    this.name = "IslandPlacementError";
+    this.diagnostics = diagnostics;
+  }
+}
+
+interface PlacementAttemptDiagnostics {
+  candidatesEvaluated: number;
+  readonly rejectionCounts: Record<IslandPlacementRejection, number>;
+}
+
 const PLACEMENT_NAMESPACE = 2_003;
 const PROFILE_NAMESPACE = 3_011;
 const SHAPE_NAMESPACE = 5_009;
@@ -59,27 +103,55 @@ export class IslandGenerator {
   constructor(private readonly config: PrototypeConfig = prototypeConfig) {}
 
   generate(grid: WorldGrid, seed: number, home: GridPoint, dock: GridPoint): GeneratedIsland[] {
+    const islands = this.plan(grid, seed, home, dock);
+    this.rasterize(grid, seed, islands, dock);
+    return islands;
+  }
+
+  /** Deterministically lays out descriptors without touching logical tile state. */
+  plan(grid: WorldGrid, seed: number, home: GridPoint, dock: GridPoint): GeneratedIsland[] {
     const profiles = this.buildProfiles(seed);
     const placed: GeneratedIsland[] = [];
+    const maximumOuterRadius = profiles.reduce(
+      (maximum, profile) => Math.max(maximum, profile.outerRadius),
+      0,
+    );
+    const placementIndex = new IslandPlacementIndex(
+      maximumOuterRadius,
+      this.config.islands.minimumChannelWidth,
+    );
 
     const legacyProfile = profiles.find(({ id }) => id === 1);
     if (!legacyProfile) throw new RangeError("Scattered island generation requires island profile 1");
-    placed.push(this.placeLegacyIsland(grid, seed, home, dock, legacyProfile, placed));
+    const legacyIsland = this.placeLegacyIsland(grid, seed, home, dock, legacyProfile, placementIndex);
+    placed.push(legacyIsland);
+    placementIndex.add(legacyIsland);
 
     const remaining = profiles
       .filter(({ id }) => id !== 1)
       .sort((a, b) => b.outerRadius - a.outerRadius || a.id - b.id);
     for (const profile of remaining) {
-      placed.push(this.placeIsland(grid, seed, home, dock, profile, placed));
+      const island = this.placeIsland(grid, seed, home, dock, profile, placementIndex);
+      placed.push(island);
+      placementIndex.add(island);
     }
 
     placed.sort((a, b) => a.id - b.id);
-    for (const island of placed) {
+    return placed;
+  }
+
+  /** Paints a previously planned layout and validates its ocean connectivity. */
+  rasterize(
+    grid: WorldGrid,
+    seed: number,
+    islands: readonly GeneratedIsland[],
+    dock: GridPoint,
+  ): void {
+    for (const island of islands) {
       this.paintIsland(grid, seed, island);
       if (island.kind === IslandKind.Atoll) this.carveAtollPassage(grid, seed, island);
     }
-    this.assertOpenOcean(grid, dock, placed);
-    return placed;
+    this.assertOpenOcean(grid, dock, islands);
   }
 
   private buildProfiles(seed: number): IslandProfile[] {
@@ -188,8 +260,9 @@ export class IslandGenerator {
     home: GridPoint,
     dock: GridPoint,
     profile: IslandProfile,
-    placed: readonly GeneratedIsland[],
+    placementIndex: IslandPlacementIndex,
   ): GeneratedIsland {
+    const diagnostics = this.createAttemptDiagnostics();
     const minimumDistance = this.minimumHomeDistance(profile);
     const baseDistance = Math.max(this.config.world.hiddenObstacleDistance, minimumDistance + 0.5);
     for (let attempt = 0; attempt < this.config.islands.placementAttempts; attempt++) {
@@ -199,11 +272,11 @@ export class IslandGenerator {
         x: Math.round(home.x + Math.cos(angle) * (baseDistance + distanceJitter)),
         y: Math.round(home.y + Math.sin(angle) * (baseDistance + distanceJitter)),
       };
-      if (this.isValidCenter(grid, home, dock, profile, center, placed)) {
+      if (this.isValidCenter(grid, home, dock, profile, center, placementIndex, diagnostics)) {
         return this.finishRecord(profile, center);
       }
     }
-    return this.placeFallback(grid, seed, home, dock, profile, placed);
+    return this.placeFallback(grid, seed, home, dock, profile, placementIndex, diagnostics);
   }
 
   private placeIsland(
@@ -212,23 +285,59 @@ export class IslandGenerator {
     home: GridPoint,
     dock: GridPoint,
     profile: IslandProfile,
-    placed: readonly GeneratedIsland[],
+    placementIndex: IslandPlacementIndex,
   ): GeneratedIsland {
+    const diagnostics = this.createAttemptDiagnostics();
     const margin = Math.ceil(profile.outerRadius + this.config.islands.edgeMargin);
     const spanX = grid.width - margin * 2;
     const spanY = grid.height - margin * 2;
-    if (spanX < 0 || spanY < 0) throw new RangeError(`Island ${profile.id} cannot fit inside the world margins`);
+    if (spanX < 0 || spanY < 0) {
+      throw this.createPlacementError(grid, seed, profile, placementIndex, diagnostics);
+    }
 
     for (let attempt = 0; attempt < this.config.islands.placementAttempts; attempt++) {
-      const center = {
-        x: margin + Math.floor(seededValue(seed + PLACEMENT_NAMESPACE, profile.id, attempt * 2) * (spanX + 1)),
-        y: margin + Math.floor(seededValue(seed + PLACEMENT_NAMESPACE, profile.id, attempt * 2 + 1) * (spanY + 1)),
-      };
-      if (this.isValidCenter(grid, home, dock, profile, center, placed)) {
+      const center = this.samplePlacementCenter(seed, profile.id, attempt, margin, spanX, spanY);
+      if (this.isValidCenter(grid, home, dock, profile, center, placementIndex, diagnostics)) {
         return this.finishRecord(profile, center);
       }
     }
-    return this.placeFallback(grid, seed, home, dock, profile, placed);
+    return this.placeFallback(grid, seed, home, dock, profile, placementIndex, diagnostics);
+  }
+
+  private samplePlacementCenter(
+    seed: number,
+    islandId: number,
+    attempt: number,
+    margin: number,
+    spanX: number,
+    spanY: number,
+  ): GridPoint {
+    const { archipelagoBias, archipelagoClusters, archipelagoRadius } = this.config.islands;
+    const useArchipelago = archipelagoClusters > 0
+      && seededValue(seed + PLACEMENT_NAMESPACE + 101, islandId, attempt) < archipelagoBias;
+    if (!useArchipelago) {
+      return {
+        x: margin + Math.floor(seededValue(seed + PLACEMENT_NAMESPACE, islandId, attempt * 2) * (spanX + 1)),
+        y: margin + Math.floor(seededValue(seed + PLACEMENT_NAMESPACE, islandId, attempt * 2 + 1) * (spanY + 1)),
+      };
+    }
+
+    const cluster = Math.min(
+      archipelagoClusters - 1,
+      Math.floor(seededValue(seed + PLACEMENT_NAMESPACE + 211, islandId, attempt) * archipelagoClusters),
+    );
+    const clusterX = margin + seededValue(seed + PLACEMENT_NAMESPACE + 307, cluster, 0) * spanX;
+    const clusterY = margin + seededValue(seed + PLACEMENT_NAMESPACE + 307, cluster, 1) * spanY;
+    const angle = seededValue(seed + PLACEMENT_NAMESPACE + 401, islandId, attempt) * TWO_PI;
+    // Square root produces uniform area density rather than crowding every
+    // candidate into the exact centre of an archipelago.
+    const distance = Math.sqrt(
+      seededValue(seed + PLACEMENT_NAMESPACE + 503, islandId, attempt),
+    ) * archipelagoRadius;
+    return {
+      x: Math.max(margin, Math.min(margin + spanX, Math.round(clusterX + Math.cos(angle) * distance))),
+      y: Math.max(margin, Math.min(margin + spanY, Math.round(clusterY + Math.sin(angle) * distance))),
+    };
   }
 
   private placeFallback(
@@ -237,20 +346,19 @@ export class IslandGenerator {
     home: GridPoint,
     dock: GridPoint,
     profile: IslandProfile,
-    placed: readonly GeneratedIsland[],
+    placementIndex: IslandPlacementIndex,
+    diagnostics: PlacementAttemptDiagnostics,
   ): GeneratedIsland {
     const total = grid.tileCount;
     const start = Math.floor(seededValue(seed + PLACEMENT_NAMESPACE + 31, profile.id, 0) * total);
     for (let offset = 0; offset < total; offset++) {
       const index = (start + offset) % total;
       const center = grid.pointFromIndex(index);
-      if (this.isValidCenter(grid, home, dock, profile, center, placed)) {
+      if (this.isValidCenter(grid, home, dock, profile, center, placementIndex, diagnostics)) {
         return this.finishRecord(profile, center);
       }
     }
-    throw new RangeError(
-      `Unable to place configured island ${profile.id}; reduce count, radii, margins, or channel width`,
-    );
+    throw this.createPlacementError(grid, seed, profile, placementIndex, diagnostics);
   }
 
   private isValidCenter(
@@ -259,26 +367,75 @@ export class IslandGenerator {
     dock: GridPoint,
     profile: IslandProfile,
     center: GridPoint,
-    placed: readonly GeneratedIsland[],
+    placementIndex: IslandPlacementIndex,
+    diagnostics: PlacementAttemptDiagnostics,
   ): boolean {
+    diagnostics.candidatesEvaluated++;
     const edge = this.config.islands.edgeMargin;
     if (
       center.x - profile.outerRadius < edge
       || center.y - profile.outerRadius < edge
       || center.x + profile.outerRadius > grid.width - 1 - edge
       || center.y + profile.outerRadius > grid.height - 1 - edge
-    ) return false;
-    if (Math.hypot(center.x - home.x, center.y - home.y) < this.minimumHomeDistance(profile)) return false;
+    ) return this.reject(diagnostics, "edge");
+    if (Math.hypot(center.x - home.x, center.y - home.y) < this.minimumHomeDistance(profile)) {
+      return this.reject(diagnostics, "home-clearance");
+    }
 
     const corridor = this.config.islands.safeCorridorHalfWidth;
     if (
       center.x + profile.outerRadius >= dock.x
       && center.y - profile.outerRadius <= dock.y + corridor
       && center.y + profile.outerRadius >= dock.y - corridor
-    ) return false;
+    ) return this.reject(diagnostics, "starter-lane");
 
-    return placed.every((other) => Math.hypot(center.x - other.center.x, center.y - other.center.y)
-      >= profile.outerRadius + other.outerRadius + this.config.islands.minimumChannelWidth);
+    if (placementIndex.findConflict(center, profile.outerRadius)) {
+      return this.reject(diagnostics, "island-channel");
+    }
+    return true;
+  }
+
+  private createAttemptDiagnostics(): PlacementAttemptDiagnostics {
+    return {
+      candidatesEvaluated: 0,
+      rejectionCounts: {
+        edge: 0,
+        "home-clearance": 0,
+        "starter-lane": 0,
+        "island-channel": 0,
+      },
+    };
+  }
+
+  private reject(
+    diagnostics: PlacementAttemptDiagnostics,
+    reason: IslandPlacementRejection,
+  ): false {
+    diagnostics.rejectionCounts[reason]++;
+    return false;
+  }
+
+  private createPlacementError(
+    grid: WorldGrid,
+    seed: number,
+    profile: IslandProfile,
+    placementIndex: IslandPlacementIndex,
+    attempts: PlacementAttemptDiagnostics,
+  ): IslandPlacementError {
+    const rejectionCounts = Object.freeze({ ...attempts.rejectionCounts });
+    return new IslandPlacementError(Object.freeze({
+      seed,
+      islandId: profile.id,
+      placedIslandCount: placementIndex.diagnostics().islandCount,
+      worldWidth: grid.width,
+      worldHeight: grid.height,
+      outerRadius: profile.outerRadius,
+      randomAttemptLimit: this.config.islands.placementAttempts,
+      fallbackScanLimit: grid.tileCount,
+      candidatesEvaluated: attempts.candidatesEvaluated,
+      rejectionCounts,
+      spatialIndex: placementIndex.diagnostics(),
+    }));
   }
 
   private minimumHomeDistance(profile: IslandProfile): number {

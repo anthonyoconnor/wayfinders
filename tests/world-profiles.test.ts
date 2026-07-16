@@ -51,7 +51,19 @@ describe("architecture world profiles", () => {
         homeClearance: 1,
         edgeMargin: 3,
         placementAttempts: 48,
+        archipelagoClusters: 24,
+        archipelagoRadius: 24,
+        archipelagoBias: 0.6,
       },
     });
+  });
+
+  it("keeps density, island-size, archipelago, and channel policies explicit", () => {
+    const profile = WORLD_PROFILES.P2;
+    expect(profile.density.islandCount).toBe(300);
+    expect(profile.islandSize).toEqual({ minRadius: 1, maxRadius: 3 });
+    expect(profile.archipelago).toEqual({ clusters: 24, radius: 24, bias: 0.6 });
+    expect(profile.minimumChannel).toEqual({ width: 4, edgeMargin: 3, homeClearance: 1 });
+    expect(profile.placementAttemptLimit).toBe(48);
   });
 });

@@ -8,6 +8,7 @@ import {
 import { seededValue } from "../world/SeededRandom";
 import { TerrainType } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
+import type { WorldAnalysisIndex } from "../world/analysis";
 import {
   SURVEY_SITE_CONTENT_VERSION,
   compareSurveySiteIds,
@@ -175,6 +176,7 @@ export function generateSurveySiteCatalog(
   homeReturnTile: Readonly<GridPoint>,
   contentVersion: number = SURVEY_SITE_CONTENT_VERSION,
   config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
+  analysis?: WorldAnalysisIndex,
 ): readonly Readonly<SurveySiteDefinition>[] {
   return generateSurveySiteCatalogFromDescriptors(
     world,
@@ -184,6 +186,7 @@ export function generateSurveySiteCatalog(
     INITIAL_SURVEY_SITE_DESCRIPTORS,
     contentVersion,
     config,
+    analysis,
   );
 }
 
@@ -199,6 +202,7 @@ export function generateSurveySiteCatalogFromDescriptors<TType extends string>(
   descriptors: readonly Readonly<SurveySiteTypeDescriptor<TType>>[],
   contentVersion: number = SURVEY_SITE_CONTENT_VERSION,
   config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
+  analysis?: WorldAnalysisIndex,
 ): readonly Readonly<SurveySiteDefinition<TType>>[] {
   if (contentVersion !== SURVEY_SITE_CONTENT_VERSION) {
     throw new RangeError(`Unsupported survey-site content version ${contentVersion}`);
@@ -214,14 +218,27 @@ export function generateSurveySiteCatalogFromDescriptors<TType extends string>(
 
   validateDescriptors(descriptors);
   const islandById = new Map(islands.map((island) => [island.id, island] as const));
-  const reachable = dockReachableMask(world, homeReturnTile, graph);
+  if (analysis && !analysis.isCurrentFor(world)) throw new RangeError("Survey-site analysis index is stale");
+  const reachable = analysis ? undefined : dockReachableMask(world, homeReturnTile, graph);
+  const homeComponent = analysis?.componentIdAt(homeReturnTile);
+  if (analysis && homeComponent === undefined) {
+    throw new RangeError("Survey-site home return tile must be an in-bounds passable tile");
+  }
   const usedVisualIndices = new Set<number>();
   const usedAnchorIndices = new Set<number>();
   const usedIslandIds = new Set<number>();
   const definitions: SurveySiteDefinition<TType>[] = [];
 
   for (const descriptor of descriptors) {
-    const candidates = buildCandidates(world, seed, descriptor, islandById, reachable);
+    const candidates = buildCandidates(
+      world,
+      seed,
+      descriptor,
+      islandById,
+      reachable,
+      analysis,
+      homeComponent,
+    );
     for (let ordinal = 0; ordinal < descriptor.count; ordinal++) {
       const unused = candidates.filter((candidate) => (
         !usedVisualIndices.has(candidate.index)
@@ -264,19 +281,32 @@ function buildCandidates<TType extends string>(
   seed: number,
   descriptor: Readonly<SurveySiteTypeDescriptor<TType>>,
   islandById: ReadonlyMap<number, GeneratedIsland>,
-  reachable: Uint8Array,
+  reachable: Uint8Array | undefined,
+  analysis: WorldAnalysisIndex | undefined,
+  homeComponent: number | undefined,
 ): RankedSiteCandidate[] {
   const terrain = new Set<TerrainType>(descriptor.placement.terrain);
   const islandKinds = new Set<IslandKind>(descriptor.placement.islandKinds);
   const candidates: RankedSiteCandidate[] = [];
 
-  for (let index = 0; index < world.tileCount; index++) {
+  const candidateIndices = analysis
+    ? [...islandById.values()]
+      .filter((island) => islandKinds.has(island.kind))
+      .flatMap((island) => analysis.getIslandIndices(island.id))
+      .sort((left, right) => left - right)
+    : undefined;
+  const totalCandidates = candidateIndices?.length ?? world.tileCount;
+  for (let ordinal = 0; ordinal < totalCandidates; ordinal++) {
+    const index = candidateIndices?.[ordinal] ?? ordinal;
     const islandId = world.getIslandIdAtIndex(index);
     const island = islandById.get(islandId);
     if (!island || !islandKinds.has(island.kind)) continue;
     const tile = world.pointFromIndex(index);
-    if (!terrain.has(world.getTerrain(tile.x, tile.y))) continue;
-    const serviceAnchor = findServiceAnchor(world, tile, reachable);
+    const candidateTerrain = analysis?.terrainAt(index) ?? world.getTerrain(tile.x, tile.y);
+    if (!terrain.has(candidateTerrain)) continue;
+    const serviceAnchor = analysis
+      ? analysis.findServiceAnchor(index, homeComponent)
+      : findServiceAnchor(world, tile, reachable as Uint8Array);
     if (!serviceAnchor) continue;
     candidates.push({
       index,

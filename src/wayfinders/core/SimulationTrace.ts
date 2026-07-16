@@ -1,6 +1,11 @@
 export type SimulationPhase =
   | "world-generation"
+  | "manifest-generation"
+  | "logical-rasterization"
+  | "world-analysis"
   | "feature-catalogs"
+  | "feature-seeding"
+  | "playable-region"
   | "movement"
   | "observation"
   | "forward-guidance"

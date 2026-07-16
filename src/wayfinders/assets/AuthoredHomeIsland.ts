@@ -27,6 +27,31 @@ export interface AuthoredHomeIslandPlacement {
 }
 
 /**
+ * Resolves the authored package anchors without touching world storage. World
+ * manifest planning uses this to establish stable landmark facts before the
+ * logical rasterization phase begins.
+ */
+export function resolveAuthoredHomeIslandPlacement(
+  placementAnchor: Readonly<GridPoint>,
+  metadata: Readonly<AuthoredHomeIslandMetadata> = PILOT_HOME_ISLAND_METADATA,
+): Readonly<AuthoredHomeIslandPlacement> {
+  const topLeft = Object.freeze({
+    x: placementAnchor.x - metadata.grid.placementOrigin.x,
+    y: placementAnchor.y - metadata.grid.placementOrigin.y,
+  });
+  return Object.freeze({
+    topLeft,
+    landmarks: Object.freeze({
+      homeCenter: Object.freeze(translate(metadata.anchors.homeCenter, topLeft)),
+      harbour: Object.freeze(translate(metadata.anchors.harbour, topLeft)),
+      dock: Object.freeze(translate(metadata.anchors.dock, topLeft)),
+      homeReturnTile: Object.freeze(translate(metadata.anchors.homeReturn, topLeft)),
+    }),
+    service: Object.freeze(translate(metadata.anchors.service, topLeft)),
+  });
+}
+
+/**
  * Runs package collision through the same exact ship-clearance checks used by
  * world generation without mutating a live world. Intended for candidate
  * validation before an authored package can be exported or accepted.
@@ -56,10 +81,8 @@ export function stampAuthoredHomeIsland(
   metadata: Readonly<AuthoredHomeIslandMetadata> = PILOT_HOME_ISLAND_METADATA,
   config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
 ): Readonly<AuthoredHomeIslandPlacement> {
-  const topLeft = {
-    x: placementAnchor.x - metadata.grid.placementOrigin.x,
-    y: placementAnchor.y - metadata.grid.placementOrigin.y,
-  };
+  const placement = resolveAuthoredHomeIslandPlacement(placementAnchor, metadata);
+  const { topLeft } = placement;
   if (
     topLeft.x < 0
     || topLeft.y < 0
@@ -89,16 +112,7 @@ export function stampAuthoredHomeIsland(
 
   assertRequiredWaterConnectivity(grid, topLeft, metadata, config);
 
-  return Object.freeze({
-    topLeft: Object.freeze(topLeft),
-    landmarks: Object.freeze({
-      homeCenter: Object.freeze(translate(metadata.anchors.homeCenter, topLeft)),
-      harbour: Object.freeze(translate(metadata.anchors.harbour, topLeft)),
-      dock: Object.freeze(translate(metadata.anchors.dock, topLeft)),
-      homeReturnTile: Object.freeze(translate(metadata.anchors.homeReturn, topLeft)),
-    }),
-    service: Object.freeze(translate(metadata.anchors.service, topLeft)),
-  });
+  return placement;
 }
 
 function assertRequiredWaterConnectivity(

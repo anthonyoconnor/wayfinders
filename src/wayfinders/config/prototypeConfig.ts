@@ -30,6 +30,12 @@ export interface PrototypeConfig {
     homeClearance: number;
     edgeMargin: number;
     placementAttempts: number;
+    /** Number of deterministic scatter centres; zero selects fully dispersed placement. */
+    archipelagoClusters: number;
+    /** Maximum tile radius used when sampling around an archipelago centre. */
+    archipelagoRadius: number;
+    /** Fraction of bounded placement attempts that prefer an archipelago centre. */
+    archipelagoBias: number;
     edgeNoise: number;
     safeCorridorHalfWidth: number;
     highIslandWeight: number;
@@ -122,6 +128,9 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
     homeClearance: 2,
     edgeMargin: 6,
     placementAttempts: 64,
+    archipelagoClusters: 0,
+    archipelagoRadius: 24,
+    archipelagoBias: 0,
     edgeNoise: 0.24,
     safeCorridorHalfWidth: 2,
     highIslandWeight: 1,
@@ -313,6 +322,9 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   nonNegative(config.islands.homeClearance, "islands.homeClearance");
   nonNegative(config.islands.edgeMargin, "islands.edgeMargin");
   positiveInteger(config.islands.placementAttempts, "islands.placementAttempts");
+  nonNegativeInteger(config.islands.archipelagoClusters, "islands.archipelagoClusters");
+  positive(config.islands.archipelagoRadius, "islands.archipelagoRadius");
+  unitInterval(config.islands.archipelagoBias, "islands.archipelagoBias");
   unitInterval(config.islands.edgeNoise, "islands.edgeNoise");
   nonNegative(config.islands.safeCorridorHalfWidth, "islands.safeCorridorHalfWidth");
   nonNegative(config.islands.highIslandWeight, "islands.highIslandWeight");

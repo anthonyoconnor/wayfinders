@@ -4,6 +4,7 @@ import { GridGraph } from "../navigation/GridGraph";
 import { seededValue } from "../world/SeededRandom";
 import { TerrainType } from "../world/TileData";
 import type { WorldGrid } from "../world/WorldGrid";
+import type { WorldAnalysisIndex } from "../world/analysis";
 import {
   FISHING_SHOAL_CLUE_KINDS,
   FISHING_SHOAL_CONTENT_VERSION,
@@ -34,11 +35,12 @@ const CLUE_LABELS: Readonly<Record<(typeof FISHING_SHOAL_CLUE_KINDS)[number], re
 
 function candidateIsEligible(
   world: WorldGrid,
-  graph: GridGraph,
+  graph: GridGraph | undefined,
   index: number,
   home: GridPoint,
+  analysis: WorldAnalysisIndex | undefined,
 ): GridPoint | undefined {
-  if (!graph.isNavigationNodePassable(index)) return undefined;
+  if (!(analysis?.isPassable(index) ?? graph?.isNavigationNodePassable(index))) return undefined;
   if (world.getIslandIdAtIndex(index) >= 0 || world.getResourceIdAtIndex(index) >= 0) return undefined;
   const tile = world.pointFromIndex(index);
   if (
@@ -76,15 +78,20 @@ export function generateFishingShoalCatalog(
   home: GridPoint,
   contentVersion: number = FISHING_SHOAL_CONTENT_VERSION,
   config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
+  analysis?: WorldAnalysisIndex,
 ): readonly Readonly<FishingShoalDefinition>[] {
   if (contentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
     throw new RangeError(`Unsupported fishing-shoal content version ${contentVersion}`);
   }
 
-  const graph = new GridGraph(world, config);
+  if (analysis && !analysis.isCurrentFor(world)) throw new RangeError("Fishing-shoal analysis index is stale");
+  const graph = analysis ? undefined : new GridGraph(world, config);
   const candidates: RankedCandidate[] = [];
-  for (let index = 0; index < world.tileCount; index++) {
-    const tile = candidateIsEligible(world, graph, index, home);
+  const candidateIndices = analysis?.getPassableIndices();
+  const totalCandidates = candidateIndices?.length ?? world.tileCount;
+  for (let ordinal = 0; ordinal < totalCandidates; ordinal++) {
+    const index = candidateIndices?.[ordinal] ?? ordinal;
+    const tile = candidateIsEligible(world, graph, index, home, analysis);
     if (!tile) continue;
     candidates.push({
       index,

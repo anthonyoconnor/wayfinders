@@ -1,10 +1,23 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint } from "../core/types";
-import { stampAuthoredHomeIsland } from "../assets/AuthoredHomeIsland";
+import {
+  PILOT_HOME_ISLAND_METADATA,
+  resolveAuthoredHomeIslandPlacement,
+  stampAuthoredHomeIsland,
+} from "../assets/AuthoredHomeIsland";
 import { GridGraph } from "../navigation/GridGraph";
 import { IslandGenerator, type GeneratedIsland } from "./IslandGenerator";
 import { seededValue } from "./SeededRandom";
 import { KnowledgeState, TerrainType } from "./TileData";
+import {
+  worldGenerationProfileIdForConfig,
+  worldGenerationSettingsFingerprint,
+} from "./WorldGenerationProfiles";
+import { WorldAnalysisIndex } from "./analysis";
+import {
+  createManifestFromPlannedWorldV1,
+  type WorldManifestV1,
+} from "./manifest";
 import { WorldGrid } from "./WorldGrid";
 
 export { seededValue } from "./SeededRandom";
@@ -18,11 +31,21 @@ export interface WorldLandmarks {
   hiddenResource: GridPoint;
 }
 
-export interface GeneratedWorld {
+export const WORLD_GENERATOR_VERSION = "wayfinders-world-v1";
+
+export interface PlannedWorld {
   seed: number;
-  grid: WorldGrid;
   landmarks: WorldLandmarks;
   islands: readonly GeneratedIsland[];
+  manifest: WorldManifestV1;
+}
+
+export interface RasterizedWorld extends PlannedWorld {
+  grid: WorldGrid;
+}
+
+export interface GeneratedWorld extends RasterizedWorld {
+  analysis: WorldAnalysisIndex;
 }
 
 function smoothStep(value: number): number {
@@ -49,6 +72,65 @@ export class WorldGenerator {
   constructor(private readonly config: PrototypeConfig = prototypeConfig) {}
 
   generate(seed = this.config.world.seed): GeneratedWorld {
+    const planned = this.plan(seed);
+    const rasterized = this.rasterize(planned);
+    return { ...rasterized, analysis: this.analyze(rasterized) };
+  }
+
+  /** Produces stable world facts without allocating or painting logical chunks. */
+  plan(seed = this.config.world.seed): PlannedWorld {
+    const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
+    const planningGrid = new WorldGrid(
+      this.config.world.width,
+      this.config.world.height,
+      this.config.navigation.chunkSize,
+    );
+    const homePlacement = {
+      x: Math.floor(planningGrid.width / 2),
+      y: Math.floor(planningGrid.height / 2),
+    };
+    const home = resolveAuthoredHomeIslandPlacement(homePlacement);
+    this.assertHomePlacementFits(planningGrid, home.topLeft);
+    const islands = new IslandGenerator(this.config).plan(
+      planningGrid,
+      normalizedSeed,
+      home.landmarks.homeCenter,
+      home.landmarks.dock,
+    );
+    const hiddenObstacle = islands[0];
+    if (!hiddenObstacle) throw new RangeError("World generation requires at least one scattered island");
+    const landmarks: WorldLandmarks = {
+      ...home.landmarks,
+      hiddenObstacleCenter: { ...hiddenObstacle.center },
+      hiddenResource: this.planHiddenResource(
+        planningGrid,
+        normalizedSeed,
+        home.landmarks.homeCenter,
+        hiddenObstacle.center,
+      ),
+    };
+    const manifest = createManifestFromPlannedWorldV1({
+      seed: normalizedSeed,
+      width: planningGrid.width,
+      height: planningGrid.height,
+      chunkSize: planningGrid.chunkSize,
+      landmarks,
+      islands,
+    }, {
+      generatorVersion: WORLD_GENERATOR_VERSION,
+      settingsProfileId: worldGenerationProfileIdForConfig(this.config),
+      settingsFingerprint: worldGenerationSettingsFingerprint(this.config),
+    });
+    return Object.freeze({
+      seed: normalizedSeed,
+      landmarks: Object.freeze(landmarks),
+      islands: Object.freeze(islands),
+      manifest,
+    });
+  }
+
+  /** Paints authoritative tile state from a previously planned manifest layout. */
+  rasterize(planned: Readonly<PlannedWorld>): RasterizedWorld {
     const grid = new WorldGrid(
       this.config.world.width,
       this.config.world.height,
@@ -61,29 +143,34 @@ export class WorldGenerator {
       y: Math.floor(grid.height / 2),
     };
 
-    this.paintSupportedWater(grid, seed, homePlacement);
+    this.paintSupportedWater(grid, planned.seed, homePlacement);
     const home = stampAuthoredHomeIsland(grid, homePlacement, undefined, this.config);
-    const { homeCenter, harbour, dock, homeReturnTile } = home.landmarks;
-
-    const islands = new IslandGenerator(this.config).generate(grid, seed, homeCenter, dock);
-    const hiddenObstacleCenter = { ...islands[0].center };
-
-    const hiddenResource = this.chooseHiddenResource(grid, seed, homeCenter, hiddenObstacleCenter);
-    grid.setResourceId(hiddenResource.x, hiddenResource.y, 1);
+    this.assertLandmarksMatch(planned.landmarks, home.landmarks);
+    new IslandGenerator(this.config).rasterize(grid, planned.seed, planned.islands, home.landmarks.dock);
+    const graph = new GridGraph(grid, this.config);
+    const hiddenResourceIndex = grid.index(
+      planned.landmarks.hiddenResource.x,
+      planned.landmarks.hiddenResource.y,
+    );
+    if (!graph.isNavigationNodePassable(hiddenResourceIndex)) {
+      throw new RangeError("Planned hidden resource is not navigation-passable after rasterization");
+    }
+    grid.setResourceId(planned.landmarks.hiddenResource.x, planned.landmarks.hiddenResource.y, 1);
 
     return {
-      seed,
+      ...planned,
       grid,
-      islands,
-      landmarks: {
-        homeCenter,
-        harbour,
-        dock,
-        homeReturnTile,
-        hiddenObstacleCenter,
-        hiddenResource,
-      },
     };
+  }
+
+  /** Builds the one reusable topology/coastline index for all feature seeding. */
+  analyze(world: Readonly<RasterizedWorld>): WorldAnalysisIndex {
+    const graph = new GridGraph(world.grid, this.config);
+    return WorldAnalysisIndex.build(world.grid, {
+      sourceId: world.manifest.settingsFingerprint ?? world.manifest.generatorVersion,
+      sourceRevision: world.manifest.generatorVersion,
+      isPassable: (index) => graph.isNavigationNodePassable(index),
+    });
   }
 
   private paintSupportedWater(grid: WorldGrid, seed: number, center: GridPoint): void {
@@ -111,22 +198,40 @@ export class WorldGenerator {
     }
   }
 
-  private chooseHiddenResource(grid: WorldGrid, seed: number, home: GridPoint, obstacle: GridPoint): GridPoint {
-    const graph = new GridGraph(grid, this.config);
+  private planHiddenResource(grid: WorldGrid, seed: number, home: GridPoint, obstacle: GridPoint): GridPoint {
     const offsetSign = seededValue(seed + 307, 0, 0) < 0.5 ? -1 : 1;
     const candidate = {
       x: obstacle.x + offsetSign * (this.config.world.hiddenObstacleRadius + 3),
       y: obstacle.y + offsetSign * 2,
     };
-    if (
-      grid.inBounds(candidate.x, candidate.y)
-      && graph.isNavigationNodePassable(grid.index(candidate.x, candidate.y))
-    ) return candidate;
+    if (grid.inBounds(candidate.x, candidate.y)) return candidate;
 
     return {
       x: Math.max(0, Math.min(grid.width - 1, home.x - this.config.world.hiddenObstacleDistance)),
       y: home.y,
     };
+  }
+
+  private assertHomePlacementFits(grid: WorldGrid, topLeft: Readonly<GridPoint>): void {
+    if (
+      topLeft.x < 0
+      || topLeft.y < 0
+      || topLeft.x + PILOT_HOME_ISLAND_METADATA.grid.width > grid.width
+      || topLeft.y + PILOT_HOME_ISLAND_METADATA.grid.height > grid.height
+    ) {
+      throw new RangeError("Authored home island does not fit inside the planned world");
+    }
+  }
+
+  private assertLandmarksMatch(
+    planned: Readonly<WorldLandmarks>,
+    rasterized: Pick<WorldLandmarks, "homeCenter" | "harbour" | "dock" | "homeReturnTile">,
+  ): void {
+    for (const key of ["homeCenter", "harbour", "dock", "homeReturnTile"] as const) {
+      if (planned[key].x !== rasterized[key].x || planned[key].y !== rasterized[key].y) {
+        throw new RangeError(`Planned ${key} changed during logical rasterization`);
+      }
+    }
   }
 
 }

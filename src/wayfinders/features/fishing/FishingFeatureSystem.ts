@@ -18,6 +18,7 @@ import {
 } from "../../exploration/FishingShoalSystem";
 import type { SurveyBudgetReadModel } from "../../exploration/SurveyContracts";
 import type { WorldGrid } from "../../world/WorldGrid";
+import type { WorldAnalysisIndex } from "../../world/analysis";
 import type {
   FishingCommand,
   FishingCommandContext,
@@ -172,6 +173,7 @@ export interface GeneratedFishingFeatureDependencies {
   readonly seed: number;
   readonly homeReturnTile: Readonly<GridPoint>;
   readonly config?: Pick<PrototypeConfig, "navigation" | "movement">;
+  readonly analysis?: WorldAnalysisIndex;
 }
 
 /** Composition helper for production sessions; tests can inject tiny definitions directly. */
@@ -185,6 +187,7 @@ export function createGeneratedFishingFeature(
     dependencies.homeReturnTile,
     undefined,
     config,
+    dependencies.analysis,
   );
   return new FishingFeatureSystem(
     dependencies.world,

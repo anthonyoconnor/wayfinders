@@ -8,8 +8,8 @@ Wayfinders_Technical_Design.md.
 ## Startup order
 
 1. src/main.ts resolves application mode and creates the session configuration.
-2. GameSimulation generates the authoritative world and composes gameplay
-   systems.
+2. GameSimulation plans a versioned WorldManifest, rasterizes logical tiles,
+   builds one WorldAnalysisIndex, and seeds features from that shared index.
 3. WayfindersScene creates Phaser presentation and translates input into
    simulation commands.
 4. Renderers consume simulation read models and revision counters.
@@ -71,6 +71,10 @@ Features may not import Phaser.
   controllers are extracted by feature. Stationary viewports skip marker scans,
   diagnostics use a narrow cached projection, and PresentationWorkMonitor
   exposes query/change/marker/time counters.
+- WorldGenerator has explicit plan, rasterize, and analyze stages. Its
+  canonical WorldManifest is durable identity; WorldGrid remains runtime
+  authority. Fishing, surveys, and dossiers reuse WorldAnalysisIndex instead
+  of adding feature-owned connectivity or coastline scans.
 
 ## Feature folder convention
 

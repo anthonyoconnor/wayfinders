@@ -731,7 +731,24 @@ export class GameSimulation {
     this.generated = measureSimulationPhase(
       this.trace,
       "world-generation",
-      () => this.generator.generate(normalizedSeed),
+      () => {
+        const planned = measureSimulationPhase(
+          this.trace,
+          "manifest-generation",
+          () => this.generator.plan(normalizedSeed),
+        );
+        const rasterized = measureSimulationPhase(
+          this.trace,
+          "logical-rasterization",
+          () => this.generator.rasterize(planned),
+        );
+        const analysis = measureSimulationPhase(
+          this.trace,
+          "world-analysis",
+          () => this.generator.analyze(rasterized),
+        );
+        return { ...rasterized, analysis };
+      },
     );
     this.expeditionId = 1;
     this.activeExpedition = false;
@@ -760,46 +777,53 @@ export class GameSimulation {
     this.interactionCandidateCache = undefined;
     this.visibleCandidateCache = undefined;
     this.riskResultsInitialized = false;
-    measureSimulationPhase(this.trace, "feature-catalogs", () => {
-      this.islandDossierSystem = new IslandDossierSystem(
-        this.world,
-        generateIslandDossierCatalog(
+    measureSimulationPhase(this.trace, "feature-catalogs", () => measureSimulationPhase(
+      this.trace,
+      "feature-seeding",
+      () => {
+        this.islandDossierSystem = new IslandDossierSystem(
           this.world,
-          this.generated.seed,
-          this.generated.islands,
-          this.generated.landmarks.homeReturnTile,
-          undefined,
+          generateIslandDossierCatalog(
+            this.world,
+            this.generated.seed,
+            this.generated.islands,
+            this.generated.landmarks.homeReturnTile,
+            undefined,
+            this.config,
+            this.generated.analysis,
+          ),
           this.config,
-        ),
-        this.config,
-      );
-      this.surveySiteSystem = new SurveySiteSystem(
-        this.world,
-        generateSurveySiteCatalog(
+        );
+        this.surveySiteSystem = new SurveySiteSystem(
           this.world,
-          this.generated.seed,
-          this.generated.islands,
-          this.generated.landmarks.homeReturnTile,
-          undefined,
+          generateSurveySiteCatalog(
+            this.world,
+            this.generated.seed,
+            this.generated.islands,
+            this.generated.landmarks.homeReturnTile,
+            undefined,
+            this.config,
+            this.generated.analysis,
+          ),
           this.config,
-        ),
-        this.config,
-      );
-      this.idolLocationDefinitionsValue = generateIdolLocationCatalog(
-        this.generated.seed,
-        this.config.world.idolCount,
-        this.islandDossierSystem.definitions,
-        this.surveySiteSystem.definitions,
-      );
-      this.completionStateValue = "in-progress";
-      this.fishingFeature = createGeneratedFishingFeature({
-        world: this.world,
-        seed: this.generated.seed,
-        homeReturnTile: this.generated.landmarks.homeReturnTile,
-        config: this.config,
-      });
-      this.rebuildDescriptorRegistry();
-    });
+        );
+        this.idolLocationDefinitionsValue = generateIdolLocationCatalog(
+          this.generated.seed,
+          this.config.world.idolCount,
+          this.islandDossierSystem.definitions,
+          this.surveySiteSystem.definitions,
+        );
+        this.completionStateValue = "in-progress";
+        this.fishingFeature = createGeneratedFishingFeature({
+          world: this.world,
+          seed: this.generated.seed,
+          homeReturnTile: this.generated.landmarks.homeReturnTile,
+          config: this.config,
+          analysis: this.generated.analysis,
+        });
+        this.rebuildDescriptorRegistry();
+      },
+    ));
     this.visibility.updateAt(this.generated.landmarks.dock);
     this.recalculateRiskOverlays();
     this.lastMovement = NO_MOVEMENT;

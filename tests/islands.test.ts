@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import { ForwardRangeSystem } from "../src/wayfinders/exploration/ForwardRangeSystem.ts";
 import { createShipStateAtGrid } from "../src/wayfinders/navigation/MovementSystem.ts";
-import { IslandKind, IslandSize } from "../src/wayfinders/world/IslandGenerator.ts";
+import {
+  IslandGenerator,
+  IslandKind,
+  IslandPlacementError,
+  IslandSize,
+} from "../src/wayfinders/world/IslandGenerator.ts";
 import {
   KnowledgeState,
   TerrainType,
@@ -79,6 +84,34 @@ describe("scattered island generation", () => {
 
     expect(replay.islands).toEqual(first.islands);
     expect(alternate.islands).not.toEqual(first.islands);
+  });
+
+  it("can plan descriptors without mutating the logical grid", () => {
+    const config = makeConfig();
+    const generated = new WorldGenerator(config).generate(84_221);
+    const blank = new WorldGrid(config.world.width, config.world.height, config.navigation.chunkSize);
+    blank.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const versionsBefore = {
+      terrain: blank.terrainVersion,
+      collision: blank.collisionVersion,
+      knowledge: blank.knowledgeVersion,
+      topology: blank.supportedTopologyVersion,
+    };
+
+    const planned = new IslandGenerator(config).plan(
+      blank,
+      generated.seed,
+      generated.landmarks.homeCenter,
+      generated.landmarks.dock,
+    );
+
+    expect(planned).toEqual(generated.islands);
+    expect({
+      terrain: blank.terrainVersion,
+      collision: blank.collisionVersion,
+      knowledge: blank.knowledgeVersion,
+      topology: blank.supportedTopologyVersion,
+    }).toEqual(versionsBefore);
   });
 
   it("preserves margins, home clearance, wide channels, and the eastbound starter lane", () => {
@@ -200,8 +233,32 @@ describe("scattered island generation", () => {
 
   it("fails explicitly when the configured placement constraints are impossible", () => {
     const config = makeConfig({ islands: { edgeMargin: 40 } });
-    expect(() => new WorldGenerator(config).generate(31_415)).toThrow(
-      /Unable to place configured island/,
+    const captureFailure = (): unknown => {
+      try {
+        new WorldGenerator(config).generate(31_415);
+      } catch (error) {
+        return error;
+      }
+      return undefined;
+    };
+    const failure = captureFailure();
+
+    expect(failure).toBeInstanceOf(IslandPlacementError);
+    const placementFailure = failure as IslandPlacementError;
+    expect(placementFailure.message).toMatch(/Unable to place configured island/);
+    expect(placementFailure.message).toMatch(/Reduce island count\/radii/);
+    expect(placementFailure.diagnostics).toMatchObject({
+      seed: 31_415,
+      worldWidth: config.world.width,
+      worldHeight: config.world.height,
+      randomAttemptLimit: config.islands.placementAttempts,
+      fallbackScanLimit: config.world.width * config.world.height,
+    });
+    expect(placementFailure.diagnostics.candidatesEvaluated).toBeLessThanOrEqual(
+      config.islands.placementAttempts + config.world.width * config.world.height,
     );
+    expect(Object.values(placementFailure.diagnostics.rejectionCounts).reduce((sum, count) => sum + count, 0))
+      .toBe(placementFailure.diagnostics.candidatesEvaluated);
+    expect((captureFailure() as IslandPlacementError).diagnostics).toEqual(placementFailure.diagnostics);
   });
 });

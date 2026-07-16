@@ -66,17 +66,17 @@ finalize its own collision or enter a faithful isolated game test. The next
 defined graphics work is `GR-3.5` through `GR-3.8`; it removes those gaps without
 building a general-purpose art, animation or generation suite.
 
-The architecture audit is now an upcoming work track. `AM-0` through `AM-5`
-form its planned dependency order. Scheduling relative to other upcoming work
-may be explicitly reprioritized, but architecture implementation begins with
-`AM-0` rather than skipping directly to a large-world rewrite. `AM-6` is
-permitted only when measurements show that hierarchy or worker complexity is
-needed. `AM-7` remains deferred under the standing gameplay-saving policy.
+The authorized architecture batch is in progress. `AM-0` through `AM-4` are
+implemented in dependency order and `AM-5` is active. `AM-6` remains a measured
+decision gate: hierarchy or worker complexity is added only for a named budget
+that the preceding work still misses. `AM-7` remains deferred under the
+standing gameplay-saving policy.
 
 ## Architecture and scale track
 
-Status: upcoming; implementation has not started. The authoritative detailed
-plan is [`architecture_milestones.md`](../architecture_milestones.md).
+Status: active; `AM-0` through `AM-4` are complete and `AM-5` is in progress.
+The authoritative detailed plan and evidence are
+[`architecture_milestones.md`](../architecture_milestones.md).
 
 Goal: remove the measured tile-entry sailing hitch, make runtime work scale
 with nearby or changed content, support a deterministic `384 x 384` world with
@@ -85,11 +85,15 @@ without replacing the prototype wholesale.
 
 ### AM-0 — Trustworthy baseline
 
+Status: implemented.
+
 Freeze repeatable prototype and scale fixtures; type-check tests; split quick,
 integration and performance feedback; and record subsystem-level navigation,
 generation, resource and memory measurements.
 
 ### AM-1 — Sailing responsiveness
+
+Status: implemented.
 
 Cache topology/collision edge classification and separate authoritative
 movement and return queries from revisioned forward guidance. Meet the
@@ -97,11 +101,15 @@ tile-entry and rendered-frame budgets before changing camera or shoreline feel.
 
 ### AM-2 — Agent-friendly ownership boundaries
 
+Status: implemented.
+
 Introduce immutable session configuration, small command/read-model contracts,
 typed mutation effects and one representative feature extraction while keeping
 compatibility facades around the current simulation and scene.
 
 ### AM-3 — Local-change scaling
+
+Status: implemented.
 
 Add spatial indexes, chunk membership and revision-driven interaction and
 presentation updates so idle, interaction and diagnostics work no longer grows
@@ -109,11 +117,15 @@ with every island or feature definition.
 
 ### AM-4 — Deterministic high-density world pipeline
 
+Status: implemented; the 100-seed P2 and 500-island stress gates pass.
+
 Introduce a versioned world manifest, bounded spatially indexed island
 placement and one shared analysis index. Prove the normal `384 x 384` profile
 across fixed seeds with at least 300 islands.
 
 ### AM-5 — Active-chunk presentation
+
+Status: active.
 
 Tie terrain, overlay, marker and authored-asset lifetime to a bounded active
 chunk window. Prove stable object, texture and memory use during a

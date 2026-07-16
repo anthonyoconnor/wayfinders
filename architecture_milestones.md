@@ -3,7 +3,7 @@
 Audit date: 2026-07-14
 Repository snapshot reviewed: Git HEAD 4c2351d, with unrelated asset-package work occurring concurrently
 Scope: architecture and test audit only; no existing source, test, configuration, or asset file was modified
-Roadmap status: AM-0 through AM-5 are planned upcoming work; AM-6 is conditional on measured need; AM-7 remains deferred until gameplay persistence is explicitly authorized.
+Roadmap status (2026-07-15): AM-0 through AM-4 are implemented; AM-5 is active; AM-6 remains an evidence gate; AM-7 remains deferred until gameplay persistence is explicitly authorized.
 
 ## Executive conclusion
 
@@ -320,6 +320,8 @@ Consumers subscribe to the narrow revision/event they need. Avoid a universal ev
 
 ### AM-0 — Establish a trustworthy baseline
 
+Status: implemented in `5e01ffd`.
+
 Goal: know whether changes improve the game and whether failures belong to the change.
 
 Deliverables:
@@ -341,6 +343,8 @@ Exit criteria:
 - P0/P1/P2 fixtures name all non-default settings explicitly and never mutate global configuration.
 
 ### AM-1 — Remove the sailing hitch
+
+Status: implemented in `0796763` and `bbe5c8a`.
 
 Goal: make ship response feel immediate without changing gameplay reachability.
 
@@ -367,6 +371,8 @@ If cached ForwardGuidance still exceeds 4 ms p95, introduce a versioned incremen
 
 ### AM-2 — Create agent-friendly ownership boundaries
 
+Status: implemented in `17c3f10`.
+
 Goal: reduce the number of files and implicit dependencies an AI agent must understand for a feature change.
 
 Deliverables:
@@ -389,6 +395,8 @@ Exit criteria:
 
 ### AM-3 — Make work proportional to local change
 
+Status: implemented in `61e27de`.
+
 Goal: support hundreds of descriptors without scanning all of them per frame or interaction.
 
 Deliverables:
@@ -407,6 +415,8 @@ Exit criteria:
 - Diagnostics stay below their stated budget and do not allocate a deep world snapshot on their refresh interval.
 
 ### AM-4 — Build a deterministic high-density world pipeline
+
+Status: implemented and acceptance-tested on 2026-07-15; commit recorded by the AM-4 implementation batch.
 
 Goal: reliably generate and analyze a P2 world with hundreds of islands.
 
@@ -428,7 +438,18 @@ Exit criteria:
 - Adding a feature does not add another full-grid coastline/connectivity scan.
 - Generation phase budgets are recorded and regression-tested outside the quick lane.
 
+Implementation evidence:
+
+- `WorldGenerator.plan`, `rasterize`, and `analyze` separate stable manifest facts, logical tiles, and one reusable analysis build. GameSimulation records `manifest-generation`, `logical-rasterization`, `world-analysis`, and `feature-seeding` independently.
+- `WorldManifestV1` has stable IDs, generator/settings identity, validation, canonical JSON, parsing, and byte-equivalent replay tests.
+- `IslandPlacementIndex` replaces pairwise placement scans with deterministic local buckets. Bounded failures carry seed, candidate limits, rejection counts, and index diagnostics.
+- Production P0/P1/P2/P2-500 profiles state density, island-size, archipelago, channel, and attempt policies in one source shared by tests and benchmarks.
+- The scheduled performance lane rasterized and connectivity-checked 100 fixed P2 seeds with 300 islands each, plus the 500-island stress profile: 106 tests passed in 26.95 seconds (24.80 seconds test work) on the local audit machine.
+- A same-machine one-sample P2 comparison reduced construction from 5,550 ms to 1,190 ms and feature seeding from 3,594 ms to 442 ms. The split phases measured 29.5 ms manifest planning, 442.0 ms rasterization, and 212.8 ms analysis. Trend runs, not this single sample, remain the regression authority.
+
 ### AM-5 — Activate presentation by chunk
+
+Status: active.
 
 Goal: make renderer and asset memory follow the viewport, not total world area.
 
