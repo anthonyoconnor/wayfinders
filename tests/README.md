@@ -1,41 +1,65 @@
 # Test lanes
 
+This file is the canonical guide to test-project assignment and lane selection.
+`vitest.config.ts` is the executable source of truth.
+
+PowerShell examples use `npm.cmd`; other shells may use `npm`.
+
+## Commands
+
 Use the smallest lane that can disprove the change:
 
-- `npm test` / `npm run test:quick` — the curated, sub-15-second agent loop for
-  high-signal architecture, domain and small deterministic contracts.
-- `npm run test:contract` — the broader domain, schema and rendering-adapter
-  contract suite.
-- `npm run test:integration` — prototype-world generation and complete
-  `GameSimulation` feature journeys.
-- `npm run test:io` — filesystem, HTTP, checked-in repository-asset contracts
-  and asset-pipeline transactions.
-- `npm run test:all` — quick, contract, integration and I/O projects; this is
-  the full correctness suite.
-- `npm run test:perf` — explicit scale benchmarks and soaks; not in the default
-  agent feedback loop. Performance files run serially so independent CPU-heavy
-  seed sweeps cannot invalidate one another's timing budgets.
-- `npm run typecheck:test` — strict compilation of TypeScript tests and
+- `npm.cmd test` / `npm.cmd run test:quick` — curated deterministic feedback for
+  high-frequency architecture and domain seams.
+- `npm.cmd run test:contract` — the default home for TypeScript unit, domain,
+  schema, and rendering-adapter contracts.
+- `npm.cmd run test:integration` — explicit prototype-world construction and
+  complete `GameSimulation` cross-feature journeys.
+- `npm.cmd run test:io` — repository-facing artifact integrity, HTTP/filesystem
+  transactions, and `.mjs` transaction suites not assigned elsewhere.
+- `npm.cmd run test:all` — quick, contract, integration, and I/O projects; the
+  full correctness suite.
+- `npm.cmd run test:perf` — serial scale, timing, and soak coverage outside the
+  default feedback loop.
+- `npm.cmd run typecheck:test` — strict TypeScript compilation for tests and
   harnesses.
-- `npm run check:quick` — architecture boundaries plus the quick lane.
-- `npm run check` — asset validation, source/test typechecks, every correctness
-  lane and the production bundle.
+- `npm.cmd run check:quick` — architecture boundaries plus the quick lane.
+- `npm.cmd run check` — asset validation, source/test typechecks, every
+  correctness lane, and the production bundle.
 
-Tests should use `fixtures/worldProfiles.ts` for named P0/P1/P2 scale
-assumptions. Prefer hand-authored tiny fixtures for feature behavior. Construct
-a complete `GameSimulation` only when the behavior crosses subsystem
-boundaries.
+## Assignment
 
-When a property/seed test fails, print the seed and profile name. Performance
-failures must report the profile, phase, sample count, median, p95/p99 and
-threshold. Browser and performance coverage remain separate from the default
-agent feedback loop.
+New `tests/**/*.test.ts` files enter the contract catch-all automatically. Add
+a file to an explicit list in `vitest.config.ts` only when another lane owns it:
 
-## Choosing a lane
+- **quick:** a small deterministic fixture protecting a frequent change seam;
+- **integration:** complete simulation construction or cross-feature journey;
+- **I/O:** cross-file generated-artifact integrity, repository mutation, HTTP,
+  or transaction behavior whose real boundary is part of the contract; or
+- **performance:** scale sweeps, timing distributions, resource budgets, or
+  soaks.
 
-Add a test to the `quickTests` list in `vitest.config.ts` only when it uses a
-tiny, isolated fixture and protects a high-frequency change seam. New
-TypeScript tests otherwise enter the contract catch-all automatically, so
-coverage cannot silently fall out of the full suite. Tests that read or mutate
-repository artifacts belong in the I/O project; scale sweeps and timing budgets
-belong under `tests/performance/`.
+A test may use a temporary file to exercise an otherwise quick checker, or read
+and assert the semantic content of a checked-in manifest as part of a pure
+contract, without becoming an I/O test. Assign by the risk being protected, not
+by the mere presence of a filesystem API call. Cross-file generated integrity
+and repository mutation remain I/O work.
+
+Prefer hand-authored tiny worlds for feature behavior. Construct
+`GameSimulation` only when behavior crosses subsystem boundaries. Use
+`fixtures/worldProfiles.ts` for named `P0`, `P1`, and `P2` scale assumptions.
+
+## Failure evidence
+
+- Property and seed sweeps report the seed and profile needed to replay a
+  failure.
+- New or modified timing-distribution tests report profile, phase, sample count,
+  the percentiles they assert, and the threshold. Additional percentiles are
+  useful evidence but are not required when the contract does not compute them.
+- Deterministic capacity or work-bound failures report the applicable profile
+  and seed, measured counters, and declared limit. Synthetic fixtures do not
+  invent a seed when none affects the result.
+
+Keep browser acceptance separate from the default automated lane. Performance
+files run serially so independent CPU-heavy tests do not invalidate one
+another's measurements.

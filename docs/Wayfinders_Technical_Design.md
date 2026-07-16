@@ -1,872 +1,407 @@
 # Wayfinders technical design
 
-This document describes the accepted implementation baseline. The roadmap
-contains proposed future sequencing; this document contains current runtime
-behavior and constraints.
+This document owns current implemented runtime and gameplay contracts. It is
+written as present truth: delivery history belongs in
+`Wayfinders_Roadmap_Archive.md`, code ownership in `ARCHITECTURE_MAP.md`, and
+future scope in `Wayfinders_Roadmap.md`.
 
-Gameplay-session saving is intentionally absent. Every launch or refresh
-creates a fresh session, and the runtime has no save schema, browser store,
-autosave, checkpoint or restoration path. The development asset workbench may
-persist reviewed package metadata; that repository-authoring path is not a
-gameplay save system.
-
-## 1. Design goals
+## 1. Foundation
 
 Wayfinders is a browser exploration prototype about leaving safe water,
 building knowledge through travel, deciding when to return, and passing a
-stronger chart to later voyages and generations. Its finite world goal is to
-rediscover the locations of idols lost when the world split into islands and
-return that knowledge home; the idols themselves are never recovered.
+stronger chart to later navigators. The finite world goal is to rediscover and
+return the locations of idols lost when the world split into islands. The idols
+themselves are not recovered.
 
 The implementation follows these rules:
 
-1. Gameplay state is authoritative outside Phaser presentation objects.
-2. World generation, navigation and knowledge behavior are deterministic and
-   testable without a browser.
-3. Current sight may reveal visuals without discounting the cost of Unknown
-   travel.
-4. Only exact-dock return commits an expedition.
-5. Rendering never becomes a second gameplay-data source.
-6. Stable logical identity and authoritative state boundaries preserve the
-   option to design saving later without imposing current save obligations.
-7. Normal sailing work remains local, sparse or cached.
+1. Authoritative gameplay state is independent of Phaser objects.
+2. World generation, navigation, knowledge, and feature behavior are
+   deterministic and headless-testable.
+3. Current sight may reveal presentation without discounting Unknown travel.
+4. Only exact-home-dock return commits an expedition.
+5. Rendered pixels and animation never become gameplay authority.
+6. Stable logical identity and rebuildable derived data preserve future design
+   options without creating current compatibility obligations.
+7. Normal sailing work is local, sparse, cached, revision-driven, or bounded by
+   the active presentation window.
 
-## 2. Runtime architecture
+Gameplay-session persistence is not a runtime capability. A launch or refresh
+constructs a fresh `GameSimulation`; there is no game save schema, browser game
+store, autosave, checkpoint, migration, or restoration path. Repository writes
+performed by local asset tools are asset authoring, not gameplay saving.
 
-The application lives under `src/wayfinders` and is split into these domains:
+## 2. Runtime composition
+
+`GameSimulation` is the headless gameplay composition root. It owns generated
+world state, movement, knowledge, provisions, expedition lifecycle, lineage,
+discoveries, and derived guidance. It exposes commands, read models, revisions,
+and typed events without depending on Phaser.
+
+`WayfindersScene` owns Phaser lifecycle. It converts input to simulation
+commands, advances the fixed-step clock and cooperative derived work, adapts
+read models into presentation controllers, follows the ship, and owns
+screen-space UI. It never mutates authoritative arrays directly.
+
+Feature systems own feature rules and state. `GameSimulation` owns explicit
+composition and atomic cross-feature ordering. A small typed event bus notifies
+presentation after authoritative changes; events are not a second mutation
+path. Current module ownership and import direction are defined in
+`ARCHITECTURE_MAP.md`.
+
+## 3. Configuration, timing, and scale profiles
+
+`prototypeConfig` is one validated live tuning store. Complete patches validate
+before mutation. Test helpers create isolated values; world-profile helpers
+supply benchmark and scale-fixture configurations. World-shape changes take
+effect through explicit regeneration.
+
+Default prototype values:
+
+| Setting | Value |
+| --- | ---: |
+| World | `96 x 96` navigation tiles |
+| Navigation tile | `32` world pixels |
+| Art lattice | `16` world pixels |
+| Chunk | `32 x 32` navigation tiles |
+| Current-sight radius | `5` tiles |
+| Starting provisions | `12` bundles |
+| Survey cost | `2` bundles |
+| Supported / Personal / Unknown travel cost | `0 / 0.1 / 0.2` per tile |
+| Fixed simulation rate | `30` updates per second |
+| Wreck presentation | `4` simulation seconds |
+| Non-home islands | `8` |
+
+Named generation and performance profiles keep scale assumptions shared by
+production, tests, and benchmarks:
+
+| Profile | World | Islands | Purpose |
+| --- | ---: | ---: | --- |
+| `P0` | `96 x 96` | `8` | playable prototype |
+| `P1` | `192 x 192` | `32` | four-times-area integration |
+| `P2` | `384 x 384` | `300` | four-times-width-and-height target |
+| `P2-500` | `384 x 384` | `500` | bounded placement stress |
+
+The fixed-step clock caps unusually large frame deltas. When a wreck hold ends,
+it drops buffered substeps so held input cannot move the replacement ship on the
+same rendered frame.
+
+## 4. World model and generation
+
+Integer `(tileX, tileY)` coordinates drive terrain, knowledge, cost, and route
+queries. Continuous pixels drive movement and rendering. A tile centre is:
 
 ```text
-config/       live prototype configuration and validation
-core/         simulation owner, lifecycle events and fixed-step clock
-world/        chunked grid, tile data and deterministic generation
-navigation/   continuous ship movement and grid traversal
-exploration/  sight, knowledge, provisions, risk paths and island dossiers
-rendering/    Phaser world, ship, fog, overlays, markers and developer UI
+worldX = tileX * tileSize + tileSize / 2
+worldY = tileY * tileSize + tileSize / 2
 ```
 
-`GameSimulation` owns the generated world, ship, expedition lifecycle,
-knowledge, provisions, wrecks, island dossiers and derived risk results. It has
-no Phaser dependency.
+`WorldGrid` stores authoritative chunks eagerly. Chunk typed arrays hold
+terrain, knowledge, visibility, movement and sight blocking, expedition stamps,
+island IDs, and resource IDs. Sparse sets and counters provide known-water,
+visibility, expedition, and return-root indices without ordinary full-world
+scans.
 
-The Phaser scene adapter:
+Generation has three explicit stages:
 
-- converts keyboard movement and optional developer pointer commands into
-  simulation operations;
-- advances the fixed-step clock;
-- synchronizes renderers from simulation state;
-- owns camera behavior and screen-space UI;
-- connects developer controls;
-- never writes gameplay arrays directly.
+1. **Plan** creates a versioned `WorldManifest` with stable settings identity,
+   home geometry, bounded island descriptors, and deterministic namespaces.
+2. **Rasterize** paints authoritative tiles and validates navigation,
+   dock/open-edge connectivity, channels, and atoll entrances.
+3. **Analyze** performs one row-major capture into an immutable
+   `WorldAnalysisIndex` for passability, components, coastline runs, islands,
+   and bounded candidate queries.
 
-The obsolete source namespace and scene identity have been removed. All new
-roadmap modules must use the Wayfinders namespace.
+The seed and generation settings produce the home island and exact dock,
+Supported-water boundary, base terrain, a clear departure corridor, non-home
+islands, and passable ocean connected to every world edge. Island placement is
+spatially indexed and attempt-bounded; it either returns a complete deterministic
+plan or a deterministic diagnostic failure.
 
-A typed event bus communicates lifecycle changes to presentation adapters.
+Non-home islands have stable numeric IDs, kind, size, centre, radii, rotation,
+shape seed, and bounds. Placement, shape, terrain, dossier content, and visual
+content use separate deterministic namespaces. High Island, Low Cay, Atoll, and
+Rocky Skerry are current kinds; atolls receive a navigable passage.
 
-## 3. Configuration and timing
+`WorldSpatialIndex` provides deterministic closed-bounds point, region, radius,
+nearby, and chunk queries. `WorldDescriptorRegistry` adapts heterogeneous
+descriptors at composition. Feature systems use indexed candidates but retain
+exact state, range, sight, and approach checks.
 
-One validated configuration object contains world, navigation, island,
-provision, risk, overlay, movement and simulation values. Developer controls
-may change supported live-tuning values; invalid complete configurations are
-rejected before mutation.
+## 5. Movement and collision
 
-Important defaults:
+The ship has continuous position, heading, speed, and a current navigation tile.
+Keyboard input supplies turning and forward/reverse thrust. Movement sweeps the
+authored hull along the continuous segment, stops before the first solid
+primitive, and emits crossed tile centres in order.
 
-- world: `96 × 96` navigation tiles;
-- chunk: `32 × 32` navigation tiles;
-- navigation tile: `32` world pixels;
-- current-sight radius: `5` tiles;
-- starting provisions: `12` bundles;
-- fixed simulation rate: `30` updates per second;
-- wreck presentation: `4` simulation seconds;
-- non-home islands: `8`.
+The `32 x 32` navigation grid remains terrain and route authority. A sparse
+collision override can replace a coarse cell with a `4 x 4` grid of `8 x 8`
+subcells. An override may be mixed, fully open, or fully solid. Without an
+override, the cell follows its declared coarse open/solid terrain contract.
 
-The clock caps unusually large frame deltas. When a wreck hold completes it
-drops buffered fixed substeps so held input cannot move the newly spawned ship
-on the same frame.
+The authored vessel package declares a centred box hull. Startup rejects
+package/config disagreement and creates an authoritative movement view, so live
+speed tuning cannot replace the hull implicitly.
 
-## 4. Coordinates and world data
+Swept collision uses intersected coarse cells as a broad phase and at most 16
+fine primitives per overridden cell as a narrow phase. `GridGraph` caches
+cardinal edge classification by collision revision after applying the same
+centre-to-centre swept-hull clearance test. Manual sailing, return paths,
+forward range, service connectivity, and generation validation therefore share
+one traversal predicate. Unknown blockers are filtered only for predictive
+forward guidance so hidden islands are not revealed.
 
-### Navigation coordinates
+Deep and shallow ocean are passable. Reef, rock, and land block movement; rock
+and land also block sight. Runtime PNG pixels are never sampled for collision.
 
-Integer `(tileX, tileY)` coordinates drive knowledge, terrain, cost and
-pathfinding.
+## 6. Visibility, knowledge, and provisions
 
-### World coordinates
+Current visibility is a Euclidean disc with line traversal against sight
+blockers. Blocking tiles remain visible and obscure tiles behind them. Movement
+evaluates sight at every crossed tile centre; the final disc becomes
+`visibleNow`, while the union supports trail creation without high-speed gaps.
 
-Continuous pixel coordinates drive ship motion and rendering. The centre of a
-navigation tile is:
+Normal sight does not immediately convert visible Unknown water to Personal:
+
+- water at and ahead of the ship stays Unknown;
+- leaving a tile centre stamps a broad perpendicular Personal trail owned by
+  the active expedition;
+- visible blocked landmarks may become Personal immediately; and
+- Personal and Supported knowledge never downgrade through sight.
+
+Developer teleport deliberately reveals the destination sight disc for
+inspection but never creates a connecting trail. Full-colour presentation in
+current sight does not change knowledge or travel cost.
+
+The ship stores whole provision bundles plus a fractional travel accumulator:
 
 ```text
-worldX = tileX × tileSize + tileSize / 2
-worldY = tileY × tileSize + tileSize / 2
+available = provisions - provisionAccumulator
 ```
 
-### Chunk storage
-
-`WorldGrid` owns `WorldChunk` instances. Each chunk uses typed arrays for:
-
-- terrain;
-- knowledge;
-- current visibility;
-- movement blocking;
-- sight blocking;
-- expedition stamps;
-- island IDs;
-- resource IDs.
-
-The bounded prototype world is generated eagerly and its chunks remain loaded.
-Static render objects are camera culled; mutable overlay textures update only
-for dirty chunks and affected neighbors.
-
-Maintained sets, counters and the sparse Supported/Personal boundary provide
-Personal, Supported, visible and return-root indices without scanning the full
-world during normal updates.
-
-## 5. Deterministic world generation
-
-The seed and generation-affecting configuration produce:
-
-- home island and harbour;
-- exact return dock;
-- noisy Supported-water boundary;
-- deterministic base terrain;
-- eight non-home island descriptors and painted terrain;
-- a clear dock departure corridor;
-- passable open ocean connected to all four world edges.
-
-Non-home island descriptors have stable numeric IDs plus kind, size, centre,
-radii, rotation, shape seed and bounds. Placement, profile, shape, terrain and
-island-dossier content use separate deterministic namespaces so changing names
-or descriptive/visual content cannot move an island.
-
-The implemented island kinds are High Island, Low Cay, Atoll and Rocky Skerry.
-Atolls receive a deterministic navigable passage. Placement enforces margins,
-home clearance and minimum channels before the open-ocean flood validation.
-
-Base island descriptors contain geometry and terrain identity only. Mutable
-island-dossier state is stored separately and references the stable island ID.
-
-## 6. Movement and collision
-
-The ship has continuous world position, heading and speed plus its current
-navigation tile.
-
-WASD and arrow keys provide turning and forward/reverse thrust. Movement sweeps
-the ship's authored square gameplay footprint along the continuous line
-segment, stops before the first solid primitive and emits centre-entered tile
-information in order. The `32 x 32` navigation grid remains authoritative for
-terrain, knowledge and route nodes. An optional sparse `4 x 4` override replaces
-coarse collision with `8 x 8` solid subcells. An override may be mixed, fully
-open or fully solid when authored collision intentionally differs from the
-coarse terrain cell. Cells without an override retain their exact legacy
-full-open or full-solid behavior.
-
-The pilot boat package currently authors a centered `14 x 14`-pixel half-size.
-Simulation startup rejects package/config disagreement, then exposes an
-authoritative movement-config view: later live tuning still forwards ship speed
-and related values, but cannot silently replace the authored hull.
-
-The sweep uses coarse cells as its broad phase and only expands set subcells in
-overridden cells for the narrow phase. Cardinal route edges are cached lazily after
-replaying the same centre-to-centre swept-hull test. Return routes, supported
-service connectivity, dock/open-ocean validation and manual sailing therefore
-share one clearance predicate. Forward range uses the same predicate but
-filters collision in unseen Unknown cells so it does not reveal hidden islands.
-The sweep prevents both visible hull overlap and high-speed tunnelling without
-sampling rendered pixels.
-
-Terrain is authoritative:
-
-- deep and shallow ocean are passable;
-- reef, rock and land are blocked;
-- rock and land block sight;
-- render layers are never sampled for collision.
-
-Provision charging is prepared from the movement segments before visibility
-or knowledge updates. Entering water that was Unknown at the start of the
-segment therefore pays Unknown cost even if the movement reveals it.
-
-## 7. Visibility and knowledge
-
-### Current sight
-
-Visibility uses a Euclidean-radius disc and line traversal against sight
-blockers. A blocking tile remains visible; tiles behind it do not.
-
-For a movement update, visibility is evaluated at every crossed navigation
-centre. The final centre becomes `visibleNow`; the union of crossed-centre
-observations is available for trail creation. This prevents holes during fast
-or diagonal travel.
-
-### Implemented knowledge rule
-
-Normal sailing does **not** convert every currently visible Unknown water tile
-to Personal immediately.
-
-- Passable water at and ahead of the current ship position remains Unknown.
-- When the ship leaves a navigation centre, a broad perpendicular strip around
-  that departed centre becomes expedition-stamped Personal knowledge.
-- Visible blocked landmarks may become Personal immediately because they are
-  not traversable and cannot discount an outward route.
-- Existing Personal and Supported knowledge never downgrade through sight.
-
-This produces the intended asymmetry: outward travel through current sight
-costs the full Unknown rate, while the route behind the ship can be retraced at
-the lower Personal rate.
-
-Developer teleport is intentionally different: it converts Unknown tiles in
-the complete destination sight disc to expedition-stamped Personal knowledge
-for inspection, but never reveals a connecting line between origin and
-destination. Developer sight-radius tuning refreshes the current disc with the
-same full-disc knowledge rule.
-
-### Visual treatment
-
-- Unknown outside current sight is near-black and hides terrain/content.
-- Personal outside current sight is grey remembered water.
-- Supported is full colour.
-- Anything in current sight uses full world colour regardless of its underlying
-  knowledge state.
-
-Rendering a tile in full colour inside current sight does not itself change its
-knowledge or travel cost. Sight still drives island sighting and wreck detection
-and the documented blocked-landmark and developer-tool knowledge rules. Movement
-cost and return calculations always use the authoritative Unknown, Personal or
-Supported value.
-
-## 8. Provisions
-
-The ship stores an integer number of physical bundles and a fractional travel
+Movement prepares charges from crossed segments before visibility or knowledge
+updates. Entering water that was Unknown at segment start therefore pays the
+Unknown rate even when that move reveals it. Replenishment clears the
 accumulator.
 
-Default cost per navigation tile:
+## 7. Forward and return guidance
 
-```text
-Supported = 0
-Personal  = 0.5
-Unknown   = 1
-```
+`ForwardRangeSystem` performs an exact cost-limited search from the ship using
+the current available provisions. Predictive search treats unseen blockers as
+Unknown water so the overlay cannot expose hidden terrain. The logical mask and
+candidate list contain every reachable Unknown cell. Separate presentation
+outputs retain only the outermost Unknown-cost band, clip that sparse frontier
+to a heading-centred cone, and draw contour edges rather than filled tiles.
 
-Available provision units are:
+Forward guidance is derived, not movement authority. `GameSimulation` is its
+only scheduler and publisher:
 
-```text
-budget = ship.provisions - ship.provisionAccumulator
-```
+- a request captures world epoch, collision, knowledge and visibility
+  revisions, origin, and provision budget;
+- repeated invalidations coalesce and cancel obsolete work;
+- the exact search advances cooperatively with a default `3 ms` wall-clock
+  target and `32,768` work-unit safety cap per slice;
+- stale or cancelled tasks never publish;
+- a complete result swaps atomically from an inactive reusable buffer; and
+- heading changes reclip current sparse candidates without restarting an
+  otherwise current search.
 
-The accumulator represents the already-used fraction of the next physical
-bundle. It is cleared when the ship replenishes.
+`ForwardRangeSystem` owns the resumable exact task and two reusable inactive
+result buffers. `BucketedCostSearch` owns resumable queue mechanics. Initial
+world setup and explicit regeneration synchronously seed a complete guidance
+result; ordinary post-initialization refreshes publish only through cooperative
+tasks.
 
-The visible cargo rack represents whole bundles. Numerical values remain in
-developer diagnostics rather than normal player UI.
+Return guidance remains synchronous authority. `ReturnPathSystem` finds one
+minimum-provision route from the ship to reachable Supported water. It may cross
+Unknown water only inside current sight and otherwise follows Personal water.
+A configurable passable padding creates the rendered corridor without crossing
+unseen Unknown, blocked, or Supported cells. Risk colour applies to the whole
+corridor from the remaining provision margin; no route means no corridor.
 
-## 9. Forward and return guidance
+## 8. Expedition, wreck, and lineage lifecycle
 
-### Forward reach
+An expedition begins when ordinary movement crosses from Supported to
+non-Supported water. Reaching Supported water away from home does not settle it.
 
-`ForwardRangeSystem` runs a cost-limited Dijkstra search from the ship with the
-current provision budget. Still-Unknown blockers are treated as Unknown water
-for prediction so hidden terrain cannot be inferred from the overlay.
+Exact-home-dock return is one ordered transaction:
 
-The full logical result is cached. Presentation includes only reachable
-Unknown cells in the outermost Unknown-cost band:
+1. place the ship at the dock centre;
+2. commit expedition-owned Personal water to Supported;
+3. close only bounded tiny enclosed Unknown pockets;
+4. commit all expedition-owned feature leads, surveys, wreck reports, and idol
+   findings;
+5. close the expedition and advance its ID;
+6. append one immutable voyage achievement record and create one successor when
+   the fourth voyage completes; and
+7. replenish provisions, clear fractional use, and publish settlement events.
 
-```text
-budget - unknownCost < minimumCost <= budget
-```
+Docking without an active expedition replenishes only supplies.
 
-That terminal band is clipped to a heading-centred cone. Turning reclips the
-cached candidates without rerunning the logical search. Rendering draws only
-segmented outward contour edges; tile interiors and artificial cone-end walls
-remain transparent.
+Natural exhaustion outside Supported water and the developer wreck command use
+one failure path. It records a persistent wreck at the exact pose, rolls back
+the active expedition's Personal water and provisional findings, marks the
+navigator lost, holds the empty ship for four simulation seconds, then creates
+one supplied successor at the home dock. Final-bundle docking success takes
+precedence over wreck creation.
 
-### Return route
+Each navigator can complete at most four safe voyages. The lineage stores
+active, completed, and lost navigators plus immutable per-voyage result IDs.
+Tenure and wreck succession are deterministic and idempotent. Every succession
+creates an in-session handover gate; sailing remains suppressed until it is
+acknowledged.
 
-`ReturnPathSystem` finds one minimum-provision-cost route from the ship to the
-first reachable Supported tile. The connection may cross passable Unknown
-water only while it is in current sight, then follows known Personal water.
+`GreatHallChronicle` is a rebuilt read model over authoritative lineage and
+returned world records. It owns no mutable gameplay facts. The Hall is
+optionally browsable only at the exact home dock, and succession uses a focused
+non-dismissible mode. A fatal voyage exposes no provisional achievements; a
+later returned wreck survey may link identity and fate to the lost navigator.
 
-`ReturnPathSystem` adds configurable cardinal passable padding around that
-route without crossing unseen Unknown, blocked or Supported tiles. The
-renderer draws the resulting corridor and does not colour unrelated Personal
-branches.
+## 9. Discoverable content and completion
 
-One risk level applies to the whole corridor according to remaining margin:
+Fishing shoals, island dossiers, and survey sites share the same durable
+branching rule: sighting is free and provisional, surveying spends provisions,
+exact-dock return commits the lead or report, and wreck rolls back only the
+current expedition's records. Stable IDs make revisits, ordering, lineage
+credit, and presentation deterministic.
 
-- comfortable/clear: pale or stronger yellow;
-- critical: orange;
-- selected known route exceeds available provisions: red crosshatch.
+Every non-home island has one immutable dossier definition with stable island
+identity, exact footprint, dock-reachable coastal approaches, a deterministic
+name, and a hidden descriptive result. Surveying an island derives full-island
+fog reveal from its exact island ID; it does not mutate water knowledge, route
+cost, or Supported topology.
 
-When no known route exists, there is no corridor to draw.
-
-All risk and Personal-grey presentation is suppressed inside current sight.
-
-## 10. Expedition lifecycle
-
-An expedition starts when normal movement crosses from Supported into
-non-Supported water. It remains active if the ship later reaches Supported
-water away from home.
-
-### Successful return
-
-Only the generated home return dock resolves success:
-
-1. Teleport the ship to the exact dock centre.
-2. Commit Personal tiles carrying the active expedition stamp to Supported.
-3. Run one bounded knowledge-only cleanup for tiny enclosed Unknown pockets.
-4. Commit provisional island-dossier and fishing records owned by that expedition.
-5. Replenish provisions and clear fractional use.
-6. Record one completed voyage for the current navigator and advance the
-   expedition ID.
-7. Keep the same navigator and generation after voyages one through three. On
-   voyage four, complete the navigator's tenure and create exactly one
-   successor after every expedition result has committed.
-
-Docking without an active expedition replenishes supplies but does not change
-generation or completed-voyage counts.
-
-### Failure and wreck
-
-Natural exhaustion outside Supported water and the developer force-wreck tool
-use the same failure path:
-
-1. Record a runtime wreck at the exact ship position and heading.
-2. Revert the active expedition's Personal tiles to Unknown.
-3. Remove that expedition's provisional island-dossier and fishing records without
-   increasing the navigator's completed-voyage count.
-4. Record the navigator as lost and begin one in-session wreck succession.
-5. Freeze the empty ship at the loss site for four simulation seconds.
-6. Clear loss-site visibility at completion.
-7. Spawn a supplied ship and exactly one successor at the home dock, then
-   advance expedition ID and generation once.
-
-Timer overshoot is discarded. Successful return on a final-bundle docking step
-takes precedence over wreck creation.
-
-Runtime wrecks remain hidden by fog after respawn until a later generation sees
-them. Their `discovered` state then persists independently of knowledge loss,
-but the sighting is an unidentified wreck and does not expose the associated
-lost navigator. Every runtime wreck retains a stable association with the
-navigator who died there. Island dossiers contain no historic-wreck target;
-GP-3.3 owns independently generated historic-wreck sites with no lineage
-navigator.
-
-During a later active expedition, an unidentified runtime wreck in interaction
-range can be deliberately surveyed through the shared provision-funded survey
-transaction. The action spends the displayed provisions and creates an
-expedition-owned provisional identity/fate report. The surveying crew can
-identify whose wreck it is, but
-the tribe and permanent lineage do not receive the report until exact-home-dock
-return. Successful return commits the report once to the wreck and correct lost
-navigator. A fatal surveying expedition discards its provisional report while
-leaving the wreck discovered, unidentified and available to survey again.
-Repeated input, revisit and dock cannot duplicate either the survey cost or
-returned report within a session. This baseline report does not salvage cargo, restore
-Personal chart knowledge, commit the lost expedition's provisional findings
-or apply an economy reward. Multiple surveys may be made in one journey while
-the shared supply remains. Runtime navigator wrecks are not eligible idol
-hosts, and there is no physical idol recovery or cargo system.
-
-### Navigator tenure and transition time
-
-A lineage voyage is one active expedition successfully committed at the exact
-home dock. Every navigator can complete at most four. The authoritative lineage
-stores `completedVoyages` and one immutable committed-result record for each
-safe voyage on every `active`, `completed` or `lost` navigator, and uses
-deterministic `tenure` and `wreck` succession keys. Each voyage record is keyed
-by its navigator, ordinal and expedition and contains the Supported-route and
-enclosed-Unknown counts plus canonical island-lead, island-dossier,
-fishing-lead, fishing-survey and runtime-wreck IDs. Presentation resolves those
-stable IDs to island names/dossier findings, fishing qualities and
-lost-navigator identities from their authoritative records. Lineage contract V6
-validates sorted, unique island IDs, transition provenance and idempotent credit.
-There is no age, retirement choice or fifth-voyage state.
-
-GP-2.2 owns the four-journey tenure, death, succession and required handover
-gate. Authoritative tenure completion or wreck succession commits exactly once
-before its presentation can affect play. Every generation boundary then creates
-an in-session, unacknowledged handover. The simulation suppresses sailing until
-the handover is acknowledged; browser reload deliberately starts a fresh
-session. A completed tenure lists voyages one through four
-with the achievements committed at each exact-dock return. An early loss lists
-the preceding safe-return records and the next numbered voyage as **Lost at
-sea**, explicitly crediting nothing from that fatal expedition.
-
-GP-2.3 presents that GP-2.2 gate as the bounded, non-dismissible focused mode of
-the permanent Great Hall chronicle. The same chronicle supplies optional home
-browsing and lineage totals rather than maintaining a separate succession
-summary.
-
-`GreatHallChronicle` V4 is a versioned ephemeral read model, not save authority.
-It derives structured achievement keys, active / completed / lost navigator
-entries, distinct island-lead/dossier and survey-site lead/report achievements
-and totals, distinguished idol-location achievements, lineage totals and
-returned wreck-fate links from the authoritative lineage and returned world
-records. Its idol source contains the configured total and returned locations
-only; it never receives an undiscovered host. The player-facing
-record remains permanent because those source records persist; the derived view
-is rebuilt rather than saved independently. The optional home mode is available
-only through **Go ashore · Great Hall** at the exact home dock; there is no
-at-sea Great Hall access. It defaults to the active navigator, labels that
-navigator **In progress** and can browse every generation. Ordinary returns
-update the chronicle but do not force it open. Return presentation may set a
-session-only Great Hall update cue, but that cue resets with the session. A lost
-navigator exposes no wreck identity until a later exact-dock-returned survey
-links the confirmation to the lost record and preserves credit on the reporting
-voyage. No archive copy, aggregate counter, update cue or viewed-state flag is
-serialized.
-
-The final returned idol location opens the same Great Hall in a dedicated
-completion mode after exact-dock voyage settlement and credit. **Continue
-exploring** preserves the completed world and lineage, permanently changes its
-completion state so the ending cannot retrigger, and returns to ordinary play;
-normal exact-home-dock Hall browsing remains available. **Start new game**
-regenerates the session with a distinct effective seed and resets world,
-lineage and idol progress. When the final return also completes voyage four,
-the completion mode is shown first and the already committed handover remains
-pending underneath it; continuing opens that handover, while starting a new
-game discards it with the old world.
-
-Narratively, that boundary represents elapsed world time: the tribe can act on
-returned findings, or determine that a lost navigator will not return, mourn
-them and nominate a successor. Future presentation may show derived world
-changes there or enrich the handover with a fuller ceremony or mourning scene.
-Any future authoritative settlement system requires separate approval and is
-not implied by the boundary. Neither wall-clock waiting nor handover display
-time advances authoritative gameplay; the pending handover itself remains
-authoritative input-gating state until acknowledgement.
-
-## 11. Island dossiers and survey sites
-
-`generateIslandDossierCatalog` derives exactly one immutable content V1
-definition for every non-home island from the seed, regenerated world and stable
-island ID. A definition contains the existing island identity/kind/size, a
-deterministic unique name, every exact-island-ID footprint tile, every passable
-dock-reachable coastal approach within 1.5 tile widths, one canonical
-developer/presentation approach and one hidden descriptive dossier result.
-Current themes are community, resource, anchorage, reef passage and weather
-watchpoint. Definitions and hidden results are regenerated, not serialized.
-
-`IslandDossierSystem` owns the mutable branch. Final current sight during an
-active expedition creates one free `sighted` record and exposes the name, never
-the result. From any valid coastal approach, the shared provision-funded survey
-transaction atomically upgrades that sighting—or an earlier returned lead—to
-`surveyed`. Exact-dock return commits `sighted` as a returned `lead` and
-`surveyed` as a returned `dossier`; wreck rollback removes only records owned by
-the failed expedition and preserves earlier returned leads/dossiers. Records
-carry expedition and generation provenance, and repeat sight, survey or return
-cannot duplicate state or achievement credit within a session.
-
-A provisional `surveyed` or returned `dossier` state supplies a sorted set of
-revealed island IDs to the knowledge overlay. The renderer omits fog only from
-tiles whose generated `islandId` exactly matches that set. It does not write
-`KnowledgeState`, expedition stamps, terrain, Supported topology, route credit
-or travel costs, and rollback restores fog for a failed provisional survey.
-
-The legacy `DiscoverySystem`, discovery events/save fragment and its generated
-`HistoricWreck` / `FishingGround` island outcomes are removed. GP-1 fishing
-shoals remain authoritative fishing targets. Island dossier findings are descriptive Great Hall knowledge and
-do not create settlement or economy authority.
-
-`generateSurveySiteCatalog` content V1 derives exactly one historic wreck, one
-coastal ruin and one tidal cave from the seed. Every definition has a current
-typed ID, directly sightable clue tile, passable dock-reachable service anchor,
-hidden deterministic result and developer presentation descriptor. Placement,
-clues, results and presentation are descriptor data; the generic catalog and
-`SurveySiteSystem` accept a synthetic later non-idol type without a new command,
-reducer or persistence fragment. Sites are independent of island dossiers and
+Survey-site content is registry-driven. The current world contains deterministic
+historic-wreck, coastal-ruin, and tidal-cave sites with one shared lifecycle and
+type-specific clue/result data. These historic wrecks are independent of
 runtime navigator wrecks.
 
-All initial types share one state branch: current sight creates provisional
-`sighted`; the configured two-bundle provision transaction upgrades it—or a
-returned lead—to `surveyed`; exact-dock return commits `lead` or `report`; wreck rollback removes
-only the active expedition's provisional records. Stable IDs and expedition /
-generation provenance make observation, survey and return idempotent within a
-session.
+Runtime navigator wrecks become persistent unidentified markers when sighted.
+Surveying one creates an expedition-owned identity/fate report. Return commits
+the report exactly once to both the wreck and lost navigator; failure discards
+the report but leaves the wreck discoverable and surveyable.
 
-### Idol-location catalog and derived lifecycle
+A hidden idol-location catalog selects unique eligible hosts from island
+dossiers and survey sites. Fishing shoals and runtime navigator wrecks are not
+eligible. Surveying a host reveals its special location provisionally; the host
+survey owns return and rollback. Undiscovered hosts never enter presentation or
+the Great Hall read model.
 
-`generateIdolLocationCatalog` creates immutable contract/content V1 definitions
-after island dossiers and GP-3.3 survey sites exist. The world configuration
-supplies a positive integer `idolCount`, defaulting to three. Generation rejects
-a count larger than the eligible host set rather than reducing it. Candidate
-hosts are canonicalized before seeded ranking, so the same world seed, count
-and content version produce the same selection regardless of source-array
-order, with at most one idol per host.
+The completion state is `in-progress`, `awaiting-choice`, or `continued`. Only
+the exact-dock return that reaches the configured idol-location total enters
+`awaiting-choice`, after ordinary settlement and lineage credit. Movement and
+lifecycle interactions are suppressed until the player chooses. **Continue**
+preserves the completed world and prevents another ending. **Start new game**
+uses a distinct deterministic seed and constructs a fresh world and lineage.
+If the final return also completes a fourth voyage, completion presentation has
+priority and the committed handover waits underneath it.
 
-The eligible set is every non-home island dossier plus the seed-derived
-historic-wreck, coastal-ruin and tidal-cave sites. Fishing shoals and runtime
-navigator wrecks are excluded. The catalog overlays stable host IDs and does
-not mutate terrain, island identity, survey placement or fixed-update work.
-Only development authority may inspect the full mapping.
+## 10. Rendering and authored assets
 
-Idol progress owns no second mutable survey reducer. A successful ordinary host
-survey is provisional idol-location knowledge exactly when its host is in the
-catalog. A wreck rolls it back with that host's `surveyed` record. Exact-dock
-return commits it with the host's dossier or report, and returned leads do not
-count. Public progress derives provisional and returned locations from those
-authoritative host states. There is no idol-specific command, remote clue,
-physical object, cargo, recovery state, loss site, currency, power or upgrade.
+The game uses Phaser WebGL. `WayfindersScene` derives one closed viewport chunk
+region and updates one `ActiveChunkSet`. The active set prioritizes visible
+chunks, adds a prefetch ring when capacity allows, and enforces a hard five-by-
+five (`25`) chunk resource budget. Deactivation runs before activation.
 
-The lineage voyage record already identifies returned island dossiers and site
-reports. Great Hall V4 joins those stable host IDs to returned idol definitions
-to derive a unique `idol-location` achievement for the exact navigator and
-voyage without extending mutable lineage storage. The Hall exposes returned
-progress against the configured total while keeping undiscovered hosts hidden.
+Chunk-local terrain, authored home-island objects, knowledge/risk textures, and
+marker pools all consume the same active-chunk delta. Inactive presentation
+resources are destroyed or returned to bounded pools; non-creating world reads
+prevent the renderer from expanding authoritative storage. Shared package
+textures and the player-boat visual remain scene-owned. The ocean backdrop is
+the deterministic placeholder if visible demand exceeds the active budget.
 
-The simulation completion state is `in-progress`, `awaiting-choice` or
-`continued`. Only the exact-dock return that raises returned idol locations to
-the configured total changes it to `awaiting-choice` and emits completion after
-normal return, credit, replenishment and any tenure transition have committed.
-While the choice is active, movement and lifecycle-mutating interactions are
-suppressed. Continuing changes the state once to `continued`; no later return
-can emit completion again. Starting a new game uses a deterministic uint32 seed
-advance that is guaranteed to differ in effective seed space, then performs the
-ordinary fresh-world reset.
+Knowledge and risk overlays update only dirty chunks and required neighbours.
+Static terrain, feature markers, and authored home-island objects are
+constructed only for active chunks. The ship interpolates between fixed
+simulation steps. No texture is allocated per frame.
 
-## 12. Saving policy
+The runtime authored packages provide the home island, animated player boat,
+and fishing-shoal cue. Other content uses intentional developer presentation.
+The game and `?mode=assets` library share package validation, texture loading,
+presentation factories, and collision descriptors. The asset route supplies
+preview coordinates only; it does not create another gameplay simulation.
 
-Saving is not an active runtime capability. The application always constructs a
-new `GameSimulation` and browser refresh discards the current session. There
-are no persistence modules, serialized game schemas, browser save records,
-manual checkpoints, game-level restoration paths or save-specific acceptance tests.
+Validated package collision metadata feeds the runtime collision descriptors;
+rendered pixels do not. Package schema, editable profile categories, source
+preparation, review, promotion, and repository transactions are documented in
+`Wayfinders_Asset_Pipeline.md`.
 
-Current features must not introduce save fragments, storage adapters,
-compatibility work or reload guarantees. Keep gameplay authority outside
-presentation, retain stable logical identities and rebuild derived data so a
-future explicitly authorized saving milestone can design a new version-one
-format without inheriting obsolete contracts.
+## 11. Developer and event interfaces
 
-Reintroduction requires a named milestone whose authorized scope explicitly
-includes saving. Technical readiness, lost playtest progress or an adjacent
-feature may motivate proposing that milestone, but do not authorize
-implementation.
+`GameEventMap` in `src/wayfinders/core/GameEvents.ts` is the source of truth for
+typed lifecycle events. Event payloads contain stable IDs and committed results
+needed by adapters; listeners cannot mutate simulation state through the bus.
 
-## 13. Rendering
+The developer UI can regenerate by seed, inspect island approaches, move to
+survey anchors, teleport to water, adjust provisions, force a wreck, toggle
+navigation/visibility/guidance diagnostics, and tune supported configuration.
+Opening the drawer does not pause sailing. Lifecycle gates still suppress input.
 
-The game uses WebGL through Phaser.
+`window.__WAYFINDERS__` exposes bounded snapshot, command, overlay, resource,
+and performance diagnostics for browser automation. These interfaces report
+authoritative or sampled state; they do not become gameplay ownership seams.
 
-- Static ocean and terrain use generated Phaser Graphics grouped into
-  camera-culled world chunks.
-- Knowledge and risk overlays use reusable, viewport-culled chunk-sized
-  CanvasTextures.
-- Knowledge, visibility and sparse risk candidate changes invalidate only
-  affected chunks and required neighbors.
-- Successful return redraws only water/wave layers in knowledge-changed chunks;
-  it does not destroy and rebuild the static world.
-- No texture is allocated per simulation frame.
-- The ship is interpolated between deterministic fixed steps. Runtime wrecks
-  island-dossier markers and survey-site markers are separate, viewport-culled,
-  version-driven renderers above world and fog layers.
-- The cargo rack and lifecycle cues are screen-space presentation.
+## 12. Performance contracts
 
-Island sightings announce a named lead while keeping the dossier result hidden.
-Surveying an idol host adds an unmistakable provisional idol-location cue to
-the ordinary host finding without revealing any other host. Exact-dock return
-with any notable committed finding (island lead/dossier, idol location,
-survey-site lead/report, fishing report or wreck identity)
-combines achievements, Supported-route growth and replenishment into one
-five-second message. A return with route growth only uses a 3.5-second cue.
-Only one lifecycle cue may exist at a time.
-
-The fourth safe return replaces the ordinary cue after all voyage results
-commit, except that final-idol completion has first presentation priority. A
-wreck hold identifies the navigator as lost, states that their wreck
-remains and compresses the tribe's mourning and elapsed time. Either path then
-opens the required focused handover mode of the Great Hall. Each safe-voyage row
-  mirrors the dock report with route-support counts, island leads/dossiers,
-  survey-site leads/reports, fishing leads and survey qualities, and returned wreck identities; a safe voyage with
-none says that no new findings were returned. A fatal-voyage row reports **Lost
-at sea** and states that no findings from that journey were returned; it never
-exposes provisional achievements. The rows are derived from the committed
-outgoing lineage record, the view does not create the successor or settle
-economy state, and sailing input remains suppressed until acknowledgement.
-Outside succession, **Go ashore · Great Hall** opens the dismissible browsing
-mode only at the exact home dock; it is never part of the sailing HUD. A later
-graphics milestone may polish this transition without changing the
-authoritative records. The
-ordinary shell status and return overlays expose **Voyage n of 4** so the
-bounded tenure is legible without a retirement decision control.
-
-The final Great Hall shows the completed lineage and credits before its two
-choices. Continuing closes completion, then opens any pending fourth-voyage
-handover before sailing resumes; later home visits can browse the same completed
-Hall normally. Starting a new game clears all pending old-world presentation
-before regenerating, so no stale return or handover can appear in the new world.
-
-A discovered but unreported runtime wreck uses an unidentified marker and a
-contextual **Survey wreck** action. Surveying exposes the navigator's
-identity only as aboard, provisional knowledge. Exact-dock commitment changes
-the persistent presentation to a returned fate report. GP-3.3 historic-wreck
-sites use a separate identity and never claim a lineage link.
-The contextual prompt has no authoritative Leave command or separate survey
-allocation: it stays non-modal, sailing out of range defers the opportunity,
-and surveying spends a displayed provision cost.
-
-The camera follows the interpolated ship smoothly during play. World
-regeneration is a discontinuity, so the camera snaps to the authoritative ship
-before smoothing resumes.
-
-The authored GR-1 pilot now supplies the home island, animated player boat and
-one fishing-shoal cue. Developer art remains intentional for all other terrain
-and mechanics. Later production assets must retain the same navigation,
-identity and depth contracts.
-
-GR-2 adds an explicit `?mode=assets` application mode without creating another
-simulation. The viewer and game share the generated semantic catalog, Phaser
-texture loading, multi-slice home factory, boat/wake factory and shoal factory.
-The game remains the authority for placement and read-model visibility; the
-viewer supplies only fixed-seed coordinates and presentation guides. Boat
-spritesheets use row-major direction groups with motion frames inside each
-group, while rotate-mode art keeps one direction and applies continuous
-heading rotation.
-
-Candidate intake shares contract V1 validation with the runtime. It additionally
-requires exact PNG dimensions and frame layouts, lowercase safe runtime
-filenames, non-interlaced 8-bit RGB/RGBA data and a `4096 x 4096` texture limit.
-The browser may preview data-URL textures and export a portable full-visual
-bundle. Full visual intake remains an explicit repository command that
-revalidates PNG headers and decoded pixels, requires replacement of an existing
-semantic ID, materializes source/package/runtime files and regenerates the
-catalog. Collision-only editing also exposes a development-only loopback POST;
-the server passes the validated candidate to that same authoritative intake
-boundary rather than granting the browser a general filesystem API.
-
-Contract V1 now permits optional collision metadata without invalidating legacy
-packages. Home packages carry sparse hybrid-grid overrides, including uniform
-fully-open or fully-solid overrides when they differ from coarse terrain. The authored player
-boat declares its centred box hull and the fishing-shoal package declares an
-explicit empty profile. One exhaustive registry also assigns coarse or empty
-profiles to developer-rendered islands, wrecks, sites, service anchors and the
-home dock. Fine masks are semantic metadata; runtime PNG alpha is never sampled.
-
-Implemented GR-2.5 keeps collision editing in a renderer-agnostic model with
-normalized drafts and deterministic transaction history, while an exhaustive
-authoring-target layer describes all nine registry categories. A typed library
-catalog presents the three authored packages plus 20 source-only island
-references through a persistent browser and one selected-asset inspector. Its
-layer and animation descriptors allow later visual planes and playback sources
-without changing entry identity; large references and their browser thumbnails
-load on demand.
-
-Only the finite package-backed home hybrid grid, player box and empty
-fishing-shoal profile are editable; the generated-island policy and five
-dynamic/developer categories are inspectable but read-only until they gain
-runtime collision authority. The viewer batches art, grids, solids, anchors,
-bounds and clearance probes into a Phaser overlay. The home editor supports
-aligned `8`-pixel and `32`-pixel brushes, and retains unsaved drafts while the
-user browses another asset. Save/export validation calls the shared swept-hull
-geometry for exact anchor and derived-edge clearance.
-
-Collision-only candidates carry a base revision and deterministic collision
-fingerprint for stale-edit protection. Direct saves are locked in the UI while
-in flight, retained in an accepted-metadata overlay after success and serialized
-against CLI or other development-server intake with a repository lock. Package
-metadata and the reviewed candidate archive commit through rollback-safe sibling
-files before the existing catalog check releases their backups. Visual
-candidates merge with explicit preserve, replace or reset-to-coarse intent, and
-collision intake changes metadata and one runtime revision without rewriting
-PNGs or catalog image bindings. Automated coverage passes, while interactive
-WebGL usability and performance acceptance remains outstanding.
-
-The generated catalog, bounded nearest-neighbour thumbnails and asset report
-are deterministic build artifacts. The normal verification gate rejects stale
-artifacts before TypeScript compilation. The report records exact dimensions,
-frame counts, source hashes and estimated uncompressed texture bytes. Atlas
-packing is absent because the current texture count and draw-call evidence do
-not justify it.
-
-## 14. Events and developer interfaces
-
-Implemented simulation events:
-
-```text
-shipEnteredTile
-shipTeleported
-knowledgeChanged
-provisionConsumed
-provisionsChanged
-shipReplenished
-returnStateChanged
-expeditionStarted
-expeditionReturned
-navigatorTenureCompleted
-shipWrecked
-generationAdvanced
-wreckDiscovered
-wreckSurveyed
-wreckSurveysReturned
-wreckSurveysLost
-expeditionFailed
-islandSighted
-islandDossierSurveyed
-islandDossiersReturned
-islandDossiersLost
-surveySiteSighted
-surveySiteSurveyed
-surveySitesReturned
-surveySitesLost
-idolLocationDiscovered
-idolLocationsReturned
-idolLocationsLost
-fishingShoalSighted
-fishingShoalSurveyed
-fishingShoalsReturned
-fishingShoalsLost
-gameCompleted
-completedWorldContinued
-worldRegenerated
-gameLoaded
-```
-
-`expeditionReturned` identifies the navigator, completed voyage number,
-remaining voyage allowance and whether the tenure completed.
-`navigatorTenureCompleted` identifies the outgoing and successor navigators.
-`generationAdvanced.reason` is either `tenure` or `wreck`.
-`idolLocationDiscovered` is provisional and names only the surveyed location;
-`idolLocationsReturned` and `idolLocationsLost` mirror the host survey's dock
-or wreck boundary. `gameCompleted` is emitted only for the first final-location
-return, after normal settlement, and `completedWorldContinued` records the
-one-way choice to keep exploring that completed world.
-
-Developer UI capabilities:
-
-- regenerate from a seed;
-- inspect island dossiers at deterministic coastal approaches in stable ID
-  order;
-- move to the service anchor for each initial survey-site type;
-- teleport by water-tile coordinate or click;
-- add/remove bundles and force a wreck;
-- toggle navigation grid, current sight, forward reach and return viability;
-- tune supported live configuration values.
-
-The developer drawer is non-modal and does not pause sailing merely by being
-open. WASD remains available while a numeric tuning field has focus; arrow keys
-remain native to that field until focus returns to the canvas or another
-non-editing control. Lifecycle holds still suppress navigation.
-
-The browser automation interface exposes snapshot, teleport, provision,
-wreck, regeneration, overlay and performance operations. Canvas data attributes
-provide stable diagnostic values for browser checks, including frame
-percentiles, long frames and deliberately dropped simulation time.
-
-## 15. Performance constraints
-
-Targets remain 60 rendered frames per second and 30 fixed simulation updates
-per second on intended hardware.
-
-The current implementation avoids full-world work during normal sailing:
+Normal sailing avoids work proportional to total world or island count:
 
 - visibility clears only the previous visible set;
-- knowledge state uses maintained sparse sets and counts;
-- return roots use an incrementally maintained sparse boundary;
-- expedition commit/revert touches only owned indices;
-- Dijkstra systems reuse typed buffers, result masks and numeric heaps;
-- collision queries inspect only the swept coarse AABB, mixed cells contribute
-  at most 16 narrow-phase primitives, and cardinal edge results are cached
-  lazily by collision revision;
-- provision-only changes reclassify cached results where possible;
-- unchanged knowledge reuses cached canonical save runs;
-- return rendering processes one sparse route/corridor;
-- overlay uploads are dirty-chunk local;
-- static and overlay render chunks are camera culled;
-- island-dossier/wreck reconciliation is version driven;
-- diagnostics are capped rather than updated on every fixed step.
+- knowledge and expedition work uses maintained sparse sets;
+- collision visits the swept coarse AABB and cached cardinal topology;
+- interaction and marker queries start from spatially local candidates;
+- forward guidance is cooperative, cancellable, and atomically published;
+- return rendering follows one sparse route/corridor;
+- overlays update dirty active chunks only; and
+- diagnostics are sampled and capped.
 
-World generation, placement and open-ocean validation scale with world area but
-run only at generation/restore time. Desktop probes at doubled world dimensions
-remain within the fixed-update budget. Representative mid-range mobile testing
-is still required; no Web Worker is justified without new profiling evidence.
+Current automated budgets are:
 
-## 16. Testing and platform state
+- `P0` and `P1` authoritative tile-entry work: p95 below `4 ms`;
+- `P2` cooperative forward-guidance slice: p95 below `4 ms`, with p95 no more
+  than 24 slices per request;
+- presentation resources: no more than 25 active chunks;
+- `P2`: deterministic 300-island plan/rasterization over 100 fixed seeds; and
+- `P2-500`: placement terminates within declared random and fallback attempt
+  bounds, returning either a complete plan or bounded diagnostics.
 
-The automated suite covers configuration, deterministic generation, movement,
-visibility, knowledge asymmetry, provisions, forward/return calculations,
-overlay invalidation, island navigation, expedition success/failure,
-four-journey tenure and succession, Great Hall chronicle derivation and
- exact-home-dock access, Unknown pocket cleanup, island dossiers and exact-island
- fog reveal, extensible survey-site generation/lifecycle, runtime-wreck survey
- commit/rollback and idempotence, deterministic idol-location selection,
- provisional/wreck/exact-dock idol integration, Great Hall V4 credit,
- completion choices, frame telemetry and ship interpolation. The current test
- count is recorded in `IMPLEMENTATION_STATUS.md`; typecheck, the automated suite
- and the production build pass. Browser verification also covers the three typed service-anchor
-developer moves, the Survey-only site prompt, placeholder presentation and
-unsuppressed sailing input while developer tools remain open.
+World planning, rasterization, and analysis may scale with total area because
+they run at explicit generation time. Normal frames may not. A worker or route
+hierarchy requires a new attributed budget miss and exact-equivalence,
+cancellation, and stale-publication coverage.
 
-Browser verification targets WebGL startup, controls, island/fishing cues,
-combined return presentation, fourth-return automatic succession, fatal-wreck mourning
-and succession, focused Great Hall handover entries, exact-home-dock browsing,
-unidentified wreck survey and exact-dock reporting, pending handover and wreck
-flows, special idol discovery/return cues, final Great Hall ordering, continued
-completed-world play, later Hall browsing, distinct-seed new game, live sailing
-and speed tuning with the developer drawer open, and console health.
+## 13. Testing and platform boundary
 
-Desktop keyboard/pointer play is the validated target. Responsive resize is
-implemented. Touch-first sailing is not implemented and requires a separately
-approved gameplay/platform input minor. Contextual actions receive input checks
-with their gameplay minor; representative mobile rendering, loading and
-performance validation belongs to later graphics/platform hardening.
+Test project assignment is defined in `vitest.config.ts`; lane purpose and
+fixture policy are in `tests/README.md`. Unit and contract tests use tiny
+headless worlds. Integration tests construct `GameSimulation` only for
+cross-subsystem journeys. Filesystem transactions and generated artifacts use
+the I/O lane; scale sweeps and timing budgets use the serial performance lane.
 
-## 17. Baseline extension and exact-version boundary
+Automated tests cover deterministic generation, collision/topology, knowledge,
+guidance equivalence and scheduling, expedition and feature lifecycles, lineage,
+completion, rendering invalidation/resource bounds, asset contracts, and
+repository transactions. Exact counts are intentionally not part of this
+contract.
 
-The accepted baseline includes fishing surveys, navigator lineage, GP-2.2's
-four-journey tenure, death, succession and required handover gate, and GP-2.3's
-shared permanent Great Hall chronicle with focused handover presentation,
-exact-home-dock browsing and derived lineage totals. It also includes returned
-identity/fate reports for runtime navigator wrecks and GP-3.1's shared
-provision-funded survey transaction. It now also includes GP-3.2's returned
-island leads/dossiers and exact-island fog reveal. GP-3.3 adds exactly one
-historic wreck, coastal ruin and tidal cave through a descriptor-extensible
-lifecycle, with lineage V6 voyage records V3 and Great Hall V3 credit. The
-accepted GP-4.1 overlay adds the hidden finite idol-location catalog,
-survey-owned provisional/return/wreck behavior, Great Hall V4 credit and
-one-shot completion with continue/new-game choices. The forward roadmap may
-add an explicitly authorized saving milestone, production assets and
-environmental polish. It no longer places tribe economics, loadouts,
-generic cargo or automatic trade in GP-3. Those remaining roadmap items are
-proposed extensions, not implemented baseline behavior.
+Desktop keyboard and pointer play is the validated platform target. Responsive
+resize exists. Touch-first sailing and representative mobile rendering/loading
+performance require separate design and acceptance. Browser acceptance remains
+necessary for WebGL startup, input focus, visual alignment, lifecycle modes,
+asset-tool usability, and real rendered-frame behavior.
 
-For accepted GP-3.2, a surveyed island's full-map reveal is a presentation
-derivation from its provisional or returned dossier record. The fog renderer
-excludes exactly the tiles whose generated `islandId` matches that record; it
-does not mutate `KnowledgeState`, expedition stamps, travel cost, Supported
-topology or route-achievement counts. A dock-reachable passable water tile is a
-valid approach when the Euclidean distance between its center and the center of
-at least one tile carrying that exact island ID is at most 1.5 tile widths. Any
-accessible coast can serve a small or large island. GP-3.3 ships only
-historic-wreck, coastal-ruin and tidal-cave sites. They share the same
-provision-spend and return/rollback lifecycle behind stable typed site IDs;
-their placement, clue and descriptive-result catalogs remain data driven so
-later site types do not require new interaction semantics. These sites are
-independently seed-derived and directly sighted; island dossiers do not spawn
-or unlock nested site leads.
+## 14. Extension constraints
 
-GP-4.1 selects idol hosts only from those island dossiers and three GP-3.3
-sites. It uses the hosts' existing stable IDs and states rather than changing
-their generators. Fishing shoals and runtime navigator wrecks remain excluded.
-The default catalog count is three, every configured count is positive and no
-world may request more idols than eligible hosts. Continuing completion retains
-all returned records and normal Hall access without another ending; starting a
-new game is the only completion choice that resets the world and lineage.
+New gameplay must preserve deterministic identity, explicit event ordering,
+authoritative-versus-derived state, exact-dock commitment, provision semantics,
+four-second wreck settlement, four-voyage tenure, and one-shot per-world
+completion unless an explicit design decision changes the relevant contract.
 
-Gameplay extensions must define deterministic identity and event ordering while
-keeping authoritative state separate from derived presentation. They have no
-save-shape, persistence-ownership or reload-compatibility obligation.
+New features should live in an owning feature package and reach composition and
+presentation through public commands, selectors, mutation results, or adapters.
+Do not add a second world scan, active-chunk policy, renderer authority,
+forward-guidance scheduler, or general event mutation path.
 
-No roadmap work may change these foundation contracts without an explicit
-design decision:
-
-- deterministic world and stable island/dossier IDs;
-- terrain-authoritative movement and sight;
-- outward/current-sight knowledge asymmetry;
-- exact-dock commitment;
-- provision and return-cost semantics;
-- four-second wreck lifecycle;
-- hidden idol-host authority derived from eligible survey hosts only; and
-- one-shot per-world completion with exact-dock credit before presentation.
-
-Central integration files are serialized merge gates. New pure systems,
-renderers and tests may be developed in parallel against frozen contracts, but
-one integration owner must wire simulation lifecycle, events and scene input at
-each acceptance gate.
+Gameplay extensions have no save-shape, reload, migration, or compatibility
+obligation. Persistence requires its own authorized design based on the current
+state model.

@@ -1,6 +1,6 @@
 # Asset production quickstart
 
-This is the lightweight GR-3 workflow for getting a source image into the asset
+This is the current lightweight workflow for getting a source image into the asset
 library, reviewing it, trying it in the game and publishing an approved visual.
 It is intentionally a prototype workflow, not a general art or atlas tool.
 

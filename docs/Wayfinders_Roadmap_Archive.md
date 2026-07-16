@@ -5,23 +5,17 @@ evidence for completed `GP-0.1` through `GP-4.1`, `GR-1.1` through `GR-3.4`,
 and `AM-0` through `AM-6` work. It does not define or authorize future work. See
 `Wayfinders_Roadmap.md` for the small, current forward plan.
 
-### Saving policy
+## Reading this archive
 
-Saving is intentionally absent from the active development baseline so new
-gameplay does not incur schema, storage, migration, checkpoint, reload or
-restoration obligations. Every launch or refresh starts a fresh session.
-
-Saving must not be implemented, maintained as an acceptance requirement, or
-added incidentally to another feature. It may return only when the user
-explicitly authorizes a future named milestone whose scope includes saving.
-No saving milestone is currently planned or authorized. Any older save-related
-acceptance evidence below is historical and creates no present compatibility or
-implementation obligation.
+Statuses, contract versions, test counts, and technical paths below describe
+their acceptance gate at that time. They are evidence, not current operating
+instructions. In particular, retired save-related gates create no present
+compatibility or implementation obligation. Use the technical design for
+current behavior and the current roadmap for planning and authorization.
 
 ## Roadmap model
 
-The work that produced the current build is historical context, not the
-numbering system for future work. Forward planning uses three labels:
+The completed tracks used these historical labels:
 
 - **Baseline** — the implemented and protected starting point;
 - **GP-x.y** — gameplay major milestones and their minor acceptance gates;
@@ -30,42 +24,9 @@ numbering system for future work. Forward planning uses three labels:
 The architecture record below additionally uses `AM-x` labels for its completed
 scale and development-feedback milestones.
 
-A minor milestone is complete only when its behavior, tests,
-readability and performance criteria pass and its acceptance evidence is
-recorded. A major milestone closes only when all required minor gates pass.
+## Historical gameplay baseline
 
-Authorization and acceptance are distinct. The user may authorize one minor or
-an explicitly ordered batch of named minors. Every batch member is authorized
-up front, but integration and acceptance remain dependency ordered. Complete,
-verify and record each minor's acceptance gate, then continue immediately into
-the next named minor without asking for renewed permission. A failed check is
-work to resolve within the authorized scope, not a new authorization boundary.
-Work pauses only when the batch is complete, the user intervenes, or continuing
-requires a new product decision, expanded scope or authority, or an unresolved
-external blocker.
-
-Before each authorized minor starts, including every member of an authorized
-batch, its implementation plan records measurable baseline and regression
-budgets appropriate to that work (for example frame time, memory, load time,
-traffic count or bounded recovery voyages). The roadmap intentionally does not
-invent target numbers before representative work exists to measure.
-
-Developer graphics remain intentional throughout gameplay development and
-remain the fallback after production assets exist. No rendered pixel, sprite
-footprint or animation may become gameplay authority.
-
-In this roadmap, **tribe** means the authoritative support state of the home
-community. **Community** is the broader design term and may also describe
-remote settlements. Code and save contracts must not use the terms
-interchangeably.
-
-This roadmap records proposed sequencing and authorizes no work by itself.
-Implementation starts only when the user explicitly authorizes a named minor or
-ordered batch of minors.
-
-## Accepted baseline
-
-The current build already provides:
+At the close of the gameplay track, the build provided:
 
 - deterministic home waters, islands, navigation and terrain authority;
 - continuous sailing, fog, current sight and Unknown, Personal and Supported
@@ -1029,6 +990,21 @@ Post-milestone consolidation removed transition-only wrappers, compatibility
 paths, test scaffolding, and duplicate runtime authority in `3080c2d`,
 `c86c1de`, `94e50da`, and `3dbaef7`. The associated transition-only tests were
 removed in `0ea2d7a`.
+
+### Pre-consolidation browser departure evidence
+
+A browser investigation on 2026-07-15, after the spatial-index work but before
+the active-chunk and cooperative-guidance architecture settled, confirmed that
+the authoritative ship reached its configured `80 px/s` immediately and did
+not collide or drop simulation time. One controlled moving sample measured
+approximately `25.01 ms` p50, `31.69 ms` p95/p99, and `33.36 ms` maximum rendered
+frame time; maximum zoom-out made the symptom worse. Descriptor queries and
+diagnostic projection were negligible, pointing toward viewport-dependent
+presentation/resource work rather than an acceleration rule.
+
+These measurements are historical diagnosis, not current acceptance evidence.
+The settled build still requires a controlled browser zoom matrix and trace to
+determine whether the user-visible departure symptom remains.
 
 ## Archive boundary
 

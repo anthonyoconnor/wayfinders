@@ -1,126 +1,55 @@
-# Wayfinders implementation status
+# Wayfinders operational status
 
-Last verified: 2026-07-15.
+Status: current development handoff, verified 2026-07-15.
 
-This is the operational handoff for a new development session. It records what
-is running, the latest verification baseline and the gaps that matter before
-new work starts. It intentionally does not repeat feature specifications,
-architecture rules or completed milestone evidence.
+The last recorded full correctness, typecheck, bundle, and serial-performance
+verification applies to code through commit `0ea2d7a`. Tracked source was clean
+at the start of this documentation audit; unrelated untracked documentation was
+present. The documentation-only working tree also passed `check:quick` on
+2026-07-15.
 
-## Current state
+This file records only volatile operational facts. Implemented behavior belongs
+in `Wayfinders_Technical_Design.md`, ownership in `ARCHITECTURE_MAP.md`, future
+scope in `Wayfinders_Roadmap.md`, and completed evidence in
+`Wayfinders_Roadmap_Archive.md`.
 
-- The accepted gameplay baseline runs through `GP-4.1`.
-- The graphics/tooling baseline runs through the implemented `GR-3.4` prototype.
-- `GR-3.5` through `GR-3.8` are defined but not started. They specify guided
-  UI-only source intake, best-effort shoreline collision seeding, editable
-  pending-candidate recipes/masks and a true isolated single-island sea trial.
-- No later gameplay milestone is authorized.
-- `GR-2.1` through `GR-2.5` are accepted. The workbench includes a
-  browsable 23-entry asset library, retained per-asset drafts, `8`/`32`-pixel
-  brushes and validated direct package saves. The user verified the saved home
-  collision in gameplay. `GR-2.6` is skipped for now rather than blocking asset
-  production on an unnecessary broader acceptance exercise.
-- `GR-3.1` through `GR-3.4` are implemented as an ordered prototype batch. The
-  focus is rapid source preparation, library preview, reviewed collision drafts
-  and selected in-game testing—not a general art, animation or generation tool.
-- `GR-3.1` is implemented: a strict version-1 recipe manifest covers all three
-  current runtime package families plus five selected island variations. Runtime
-  bindings preserve accepted collision, while new islands begin as blank
-  editable `32`/`8`-pixel collision drafts.
-- `GR-3.2` is implemented: `assets:prepare` performs deterministic
-  border-connected matte cleanup, trim/pad and contain scaling for the five
-  selected islands. It writes transparent `480 x 480` candidates, `192`-pixel
-  thumbnails, blank hybrid collision drafts and fingerprinted reports. A second
-  unchanged run is a complete timestamp-preserving cache hit, and `assets:check`
-  rejects stale output.
-- `GR-3.3` is implemented: one 45-entry browser covers runtime packages,
-  prepared candidates and all current reference collections. Candidate source,
-  prepared art, layers and collision drafts can be compared, then approved or
-  rejected against the exact candidate fingerprint. Approved visuals can be
-  tested in the game without replacing accepted collision or gameplay metadata.
-- `GR-3.4` is implemented: isolated batch preparation, exact-review promotion,
-  deterministic public lineage, review/readiness summaries and stale-output
-  checks form the lightweight handoff gate. The current five candidates remain
-  pending rather than being treated as artistically approved by tooling.
-- The current production workflow still requires commands for preparation and
-  promotion, and pending candidates cannot edit their own mask or structured
-  recipe values. Those are known gaps assigned to `GR-3.5` through `GR-3.8`, not
-  capabilities of the current baseline.
-- Gameplay-session saving is intentionally absent. Every launch or browser
-  refresh starts a fresh voyage. Development-only asset package saves are a
-  separate authoring operation and do not persist gameplay state.
+## Runnable surfaces
 
-The playable baseline includes deterministic sailing and islands, fog and
-inherited water knowledge, provision-aware voyages, exact-dock settlement,
-navigator succession and Great Hall history, provision-funded island/site
-surveys, three hidden idol locations in the default world, final completion
-choices, authored home/boat/pilot-shoal presentation and developer diagnostics,
-plus a separate shared-runtime 45-entry asset library, candidate comparison and
-review workbench, visual game-test override and deterministic preparation/
-promotion pipeline. The runtime also supports sparse
-8-pixel collision masks within the 32-pixel navigation grid, swept fine
-collision, clearance-tested route edges and registered authored/developer
-collision profiles. The viewer enumerates all nine profiles, edits the three
-finite package-backed collision shapes, browses all current reference and
-candidate art, validates
-exact cross-package ship clearance and directly saves revision/fingerprint-
-protected collision-only candidates through authoritative repository intake.
+- The default browser route starts a fresh playable voyage.
+- `?mode=assets` opens the asset library, candidate review, runtime package
+  inspection, and supported collision authoring.
+- Gameplay-session saving is absent; refresh starts a new session.
+- Repository asset authoring is local development tooling and is independent of
+  gameplay persistence.
 
-## Run and verify
+Use `npm.cmd run dev` and open `http://127.0.0.1:5173/`. The asset operator flow
+is in `ASSET_PRODUCTION_QUICKSTART.md`.
 
-```powershell
-npm.cmd install
-npm.cmd run dev
-```
+## Verification state
 
-Open `http://127.0.0.1:5173/` in a WebGL-capable browser. For a concurrent
-instance, use a distinct port such as `npm.cmd run dev -- 5174`.
-
-Run the complete automated gate with:
+Reproduce the recorded source gates with:
 
 ```powershell
 npm.cmd run check
+npm.cmd run test:perf
 ```
 
-Latest committed verification baseline:
+Exact test counts are intentionally not recorded here because project and file
+assignment change frequently. `vitest.config.ts` is the source of truth for lane
+membership; `tests/README.md` explains lane selection.
 
-- Asset catalog, PNG/frame, texture-limit, generated-code, thumbnail and report
-  consistency checks pass before compilation.
-- TypeScript typecheck passes.
-- 406 automated tests pass across 53 files.
-- The production Vite build passes.
-- Browser acceptance covers the accepted fishing, return, wreck, succession,
-  survey-site, idol completion, continued-world and new-game flows with a clean
-  warning/error console.
-- The Phaser bundle-size warning is informational.
+## Open operational gaps
 
-## Known operational gaps
-
-- An interactive pass over the Great Hall's focused handover and optional
-  browsing modes remains outstanding; their shared read model and exact-dock
-  access policy have automated coverage.
-- The broad formal WebGL/performance matrix once proposed for `GR-2.6` is
-  deferred. Existing automated collision budgets remain in the normal gate.
-- Representative mid-range mobile rendering/performance validation remains
-  outstanding.
-- Touch-first sailing is not implemented.
-- Fishing boats, trade vessels, numerical fishing output and an authoritative
-  tribe economy are not implemented.
-- Broad automatic runtime asset replacement remains deferred while the
-  authorized GR-3 prototype proves a practical review and testing loop.
-
-## Document ownership
-
-- `Wayfinders_Roadmap.md` owns only upcoming scope, sequencing and authorization
-  state.
-- `Wayfinders_Roadmap_Archive.md` owns completed milestone scope and acceptance
-  evidence.
-- `Wayfinders_Technical_Design.md` owns the implemented architecture and
-  gameplay contracts.
-- `Wayfinders_Economy_Design.md` owns gameplay direction beyond the implemented
-  baseline.
-- `Wayfinders_Asset_Pipeline.md` owns the deferred graphics-production
-  direction.
-
-Update this document only when the runnable baseline, verification result or a
-known operational gap changes.
+- Production-asset preparation and promotion still require command-line steps;
+  the defined UI-native completion sequence is in the current roadmap.
+- Pending island candidates do not yet have a complete collision-edit and
+  isolated-sea-trial loop.
+- The layered water system is proposed but is not registered or loaded by the
+  game.
+- Desktop keyboard and pointer input are the validated target. Touch-first
+  sailing and representative mobile performance remain unimplemented.
+- Interactive WebGL acceptance remains appropriate for presentation, asset-tool
+  usability, and browser frame-time changes even when automated gates pass.
+- End-to-end browser departure responsiveness has not been remeasured after the
+  current guidance and active-chunk architecture settled. Automated subsystem
+  budgets do not by themselves close the original user-reported sluggishness.

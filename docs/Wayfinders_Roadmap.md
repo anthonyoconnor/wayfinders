@@ -8,12 +8,9 @@ milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
 ### Saving policy
 
-Gameplay-session saving is intentionally absent. Every launch or refresh starts
-a fresh voyage. New gameplay work has no schema, storage, migration, checkpoint,
-reload, or restoration obligation. Reviewed asset-package writes in the local
-development workbench are repository authoring, not gameplay persistence.
-
-Persistence must not be added incidentally to another feature. It may return
+The technical design owns the current runtime persistence boundary. For future
+planning, persistence must not be added incidentally to another feature or
+inferred from development-only asset authoring. It may return
 only through an explicitly authorized milestone designed for the game that
 exists at that time. No persistence milestone is currently planned or
 authorized.
@@ -180,7 +177,8 @@ gameplay contracts rather than fork them.
 - Broad runtime-asset expansion until the UI-native intake, authoring, and
   sea-trial loop exists and a separate content batch is authorized.
 - Authoritative tribe economy/output, selectable voyage loadouts, generic wreck
-  salvage/recovery, and automatic trade gameplay.
+  salvage/recovery, and automatic trade gameplay. Product rationale and open
+  questions belong in `Wayfinders_Economy_Design.md`.
 - Chained discovery quests, nested site targets, large resource catalogs,
   dynamic pricing, markets, fleet management, and labour allocation.
 - Real-time economic refill timers or idle progression.

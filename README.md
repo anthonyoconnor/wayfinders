@@ -1,7 +1,7 @@
 # Wayfinders browser prototype
 
 Wayfinders is a playable Phaser and TypeScript exploration prototype. The
-current implementation is the accepted gameplay and performance baseline: it
+current implementation is the accepted gameplay and automated architecture baseline: it
 provides a stable base for sailing, charting water, managing provisions,
 returning discoveries, inheriting Supported knowledge across generations and
 finding the lost locations of the world's idols across generations.
@@ -24,11 +24,10 @@ chunk overlays, incremental return-route rendering and
 frame-time diagnostics so gameplay, living-world and presentation work can
 extend the foundation without replacing it.
 
-Developer graphics remain intentional throughout the gameplay roadmap.
-Production asset infrastructure, tooling and art replacement are a separate
-graphics track. Its start gate is accepted `GP-3.3`, which freezes the stable
-island and generic survey-site identities/read models. `GR-1.1` through
-`GR-1.4` are accepted; no later graphics or gameplay milestone is authorized.
+Developer graphics remain an intentional fallback. The repository also has a
+shared authored-asset library, collision workbench, and deterministic production
+preparation/review/promotion prototype. Upcoming scope and authorization are
+recorded only in the current roadmap.
 
 ## Run locally
 
@@ -50,7 +49,7 @@ Then open `http://127.0.0.1:5174/`. An explicitly requested port will not silent
 ## Asset viewer and workbench
 
 Open `http://127.0.0.1:5173/?mode=assets` or choose **Asset tools** in the
-running prototype. The GR-2 viewer uses the same catalog, textures and shared
+running prototype. The viewer uses the same catalog, textures and shared
 Phaser presentation factories as the game. Its left library browses the three
 runtime packages and 20 source island examples; the selected inspector keeps
 metadata, layers, animations and collision controls together. Home collision
@@ -67,7 +66,7 @@ bundle into the repository with:
 npm.cmd run assets:intake -- path\to\asset.candidate.json --replace
 ```
 
-`--replace` is required because the GR-2 workbench intentionally supports only
+`--replace` is required because the current workbench intentionally supports only
 the three existing semantic IDs. Run `npm.cmd run assets:build` after manual
 catalog/source changes. `npm.cmd run assets:check` verifies package contracts,
 PNG dimensions and frames, texture limits, generated catalog code, thumbnails
@@ -89,9 +88,22 @@ checking and the automated test suite, and creates the production build.
 
 ## Project documentation
 
-- [Implementation status](docs/IMPLEMENTATION_STATUS.md) is the compact operational handoff for a new development session.
-- [Technical design](docs/Wayfinders_Technical_Design.md) describes the implemented architecture and gameplay rules.
-- [Current roadmap](docs/Wayfinders_Roadmap.md) contains only upcoming or explicitly deferred milestones and authorization state.
-- [Completed roadmap archive](docs/Wayfinders_Roadmap_Archive.md) preserves completed milestone scope and acceptance evidence.
-- [Economy and legacy design](docs/Wayfinders_Economy_Design.md) describes surveying, tribe support, inheritance and the idol completion goal.
-- [Asset pipeline](docs/Wayfinders_Asset_Pipeline.md) records the deferred production-graphics direction.
+- [Architecture map](docs/ARCHITECTURE_MAP.md) identifies current ownership,
+  dependency direction, and public seams.
+- [Technical design](docs/Wayfinders_Technical_Design.md) owns implemented
+  runtime and gameplay contracts.
+- [Operational status](docs/IMPLEMENTATION_STATUS.md) is the compact volatile
+  handoff for running, verification, and known operational gaps.
+- [Current roadmap](docs/Wayfinders_Roadmap.md) owns only upcoming, proposed,
+  deferred, and authorization state.
+- [Completed roadmap archive](docs/Wayfinders_Roadmap_Archive.md) preserves
+  completed milestone scope and historical acceptance evidence.
+- [Asset pipeline](docs/Wayfinders_Asset_Pipeline.md) owns source, preparation,
+  review, promotion, and repository-transaction contracts.
+- [Asset production quickstart](docs/ASSET_PRODUCTION_QUICKSTART.md) is the
+  current operator workflow.
+- [Future world activity](docs/Wayfinders_Economy_Design.md) records
+  unimplemented product direction and open economy questions.
+- [Water-system proposal](docs/Wayfinders_Water_System_Milestone.md) owns the
+  detailed design and acceptance criteria for that proposed presentation track.
+- [Agent guide](AGENTS.md) owns development process and documentation rules.
