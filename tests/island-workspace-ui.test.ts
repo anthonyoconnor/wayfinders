@@ -55,6 +55,8 @@ describe("GR-4.1 focused island workshop", () => {
     expect(scene).toContain('entry.entryType === "production-candidate" && entry.availableInGame');
     expect(scene).toContain('availableInGame ? "Available" : "Unavailable"');
     expect(scene).toContain('data-library-availability="${availableInGame ? "available" : "unavailable"}"');
+    expect(scene).toContain("availableIslandNumbers");
+    expect(scene).toContain("`World island #${worldIslandNumber} · Imported island`");
   });
 
   it("focuses island intake without exposing unrelated family controls", () => {

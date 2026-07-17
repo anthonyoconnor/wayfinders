@@ -63,6 +63,8 @@ export type IslandPlacementRejection = "edge" | "home-clearance" | "starter-lane
 export interface IslandPlacementFailureDiagnostics {
   readonly seed: number;
   readonly islandId: number;
+  readonly sourceKind: GeneratedIsland["sourceKind"];
+  readonly authoredAssetId?: string;
   readonly placedIslandCount: number;
   readonly worldWidth: number;
   readonly worldHeight: number;
@@ -80,8 +82,12 @@ export class IslandPlacementError extends RangeError {
 
   constructor(diagnostics: IslandPlacementFailureDiagnostics) {
     const rejected = diagnostics.rejectionCounts;
+    const authoredAsset = diagnostics.authoredAssetId
+      ? ` (asset ${diagnostics.authoredAssetId})`
+      : "";
     super(
-      `Unable to place configured island ${diagnostics.islandId} for seed ${diagnostics.seed} `
+      `Unable to place configured ${diagnostics.sourceKind} island ${diagnostics.islandId}${authoredAsset} `
+      + `for seed ${diagnostics.seed} `
       + `after ${diagnostics.candidatesEvaluated} bounded candidates in `
       + `${diagnostics.worldWidth}x${diagnostics.worldHeight}; rejected `
       + `edge=${rejected.edge}, home-clearance=${rejected["home-clearance"]}, `
@@ -138,17 +144,25 @@ export class IslandGenerator {
 
     const starterProfile = profiles.find(({ id }) => id === 1);
     if (!starterProfile) throw new RangeError("Scattered island generation requires starter island profile 1");
-    const starterIsland = this.placeStarterIsland(grid, seed, home, dock, starterProfile, placementIndex);
-    placed.push(starterIsland);
-    placementIndex.add(starterIsland);
+    try {
+      const starterIsland = this.placeStarterIsland(grid, seed, home, dock, starterProfile, placementIndex);
+      placed.push(starterIsland);
+      placementIndex.add(starterIsland);
+    } catch (error) {
+      if (!(error instanceof IslandPlacementError)) throw error;
+    }
 
     const remaining = profiles
       .filter(({ id }) => id !== 1)
       .sort((a, b) => b.outerRadius - a.outerRadius || a.id - b.id);
     for (const profile of remaining) {
-      const island = this.placeIsland(grid, seed, home, dock, profile, placementIndex);
-      placed.push(island);
-      placementIndex.add(island);
+      try {
+        const island = this.placeIsland(grid, seed, home, dock, profile, placementIndex);
+        placed.push(island);
+        placementIndex.add(island);
+      } catch (error) {
+        if (!(error instanceof IslandPlacementError)) throw error;
+      }
     }
 
     placed.sort((a, b) => a.id - b.id);
@@ -494,6 +508,8 @@ export class IslandGenerator {
     return new IslandPlacementError(Object.freeze({
       seed,
       islandId: profile.id,
+      sourceKind: profile.sourceKind,
+      authoredAssetId: profile.authoredAssetId,
       placedIslandCount: placementIndex.diagnostics().islandCount,
       worldWidth: grid.width,
       worldHeight: grid.height,

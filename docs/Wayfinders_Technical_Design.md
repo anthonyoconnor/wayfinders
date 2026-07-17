@@ -70,7 +70,7 @@ Default prototype values:
 | Supported / Personal / Unknown travel cost | `0 / 0.1 / 0.2` per tile |
 | Fixed simulation rate | `30` updates per second |
 | Wreck presentation | `4` simulation seconds |
-| Non-home islands | `8` |
+| Non-home islands | Up to `8` |
 
 Named generation and performance profiles keep scale assumptions shared by
 production, tests, and benchmarks:
@@ -115,8 +115,10 @@ Generation has three explicit stages:
 The seed and generation settings produce the home island and exact dock,
 Supported-water boundary, base terrain, a clear departure corridor, non-home
 islands, and passable ocean connected to every world edge. Island placement is
-spatially indexed and attempt-bounded; it either returns a complete deterministic
-plan or a deterministic diagnostic failure.
+spatially indexed, deterministic, and attempt-bounded. The configured island
+count is a maximum: a profile with no legal position after its bounded random
+attempts and complete fallback scan is omitted, and planning continues with
+later profiles.
 
 Non-home island manifests record stable numeric identity, source kind, and—when
 authored—the stable asset ID. Planning receives a validated catalog snapshot
@@ -299,10 +301,11 @@ name, and a hidden descriptive result. Surveying an island derives full-island
 fog reveal from its exact island ID; it does not mutate water knowledge, route
 cost, or Supported topology.
 
-Survey-site content is registry-driven. The current world contains deterministic
-historic-wreck, coastal-ruin, and tidal-cave sites with one shared lifecycle and
-type-specific clue/result data. These historic wrecks are independent of
-runtime navigator wrecks.
+Survey-site content is registry-driven. The generator deterministically places
+up to the configured historic-wreck, coastal-ruin, and tidal-cave sites with one
+shared lifecycle and type-specific clue/result data. A site type with no eligible
+reachable location in a partial island plan is omitted. These historic wrecks
+are independent of runtime navigator wrecks.
 
 Runtime navigator wrecks become persistent unidentified markers when sighted.
 Surveying one creates an expedition-owned identity/fate report. Return commits
@@ -489,7 +492,7 @@ Current automated budgets are:
 - presentation resources: no more than 25 active chunks;
 - `P2`: deterministic 300-island plan/rasterization over 100 fixed seeds; and
 - `P2-500`: placement terminates within declared random and fallback attempt
-  bounds, returning either a complete plan or bounded diagnostics.
+  bounds, returning a deterministic plan of up to 500 islands.
 
 World planning, rasterization, and analysis may scale with total area because
 they run at explicit generation time. Normal frames may not. A worker or route

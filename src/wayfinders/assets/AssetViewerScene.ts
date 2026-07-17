@@ -2044,6 +2044,16 @@ export class AssetViewerScene extends Phaser.Scene {
     browser.className = "asset-library-browser";
     browser.setAttribute("aria-label", "Asset library browser");
     const focusedIslands = this.workspace.id === "islands";
+    const availableIslandNumbers = new Map(
+      this.workspaceCatalog
+        .filter((entry): entry is Readonly<ProductionCandidateLibraryEntry> =>
+          entry.entryType === "production-candidate"
+          && entry.recipe.family === "island"
+          && entry.availableInGame)
+        .slice()
+        .sort((left, right) => left.id.localeCompare(right.id, "en"))
+        .map((entry, index) => [entry.id, index + 1] as const),
+    );
     const groups = this.workspaceGroups.map((group) => `
       <section class="asset-library-group" data-library-group="${escapeHtml(group.id)}">
         <header><h3>${escapeHtml(group.name)}</h3><span>${group.entries.length}</span></header>
@@ -2065,6 +2075,12 @@ export class AssetViewerScene extends Phaser.Scene {
                 : entry.reference.sequence === undefined
                   ? "Reference"
                   : String(entry.reference.sequence).padStart(2, "0");
+            const worldIslandNumber = availableIslandNumbers.get(entry.id);
+            const subtitle = focusedIslands && entry.entryType === "production-candidate"
+              ? worldIslandNumber === undefined
+                ? "Imported island"
+                : `World island #${worldIslandNumber} · Imported island`
+              : entry.subtitle;
             return `
               <button
                 type="button"
@@ -2078,7 +2094,7 @@ export class AssetViewerScene extends Phaser.Scene {
                 <span class="asset-library-thumb"><img loading="lazy" decoding="async" alt="" data-library-thumb-src="${escapeHtml(entry.thumbnailUrl)}"></span>
                 <span class="asset-library-item-copy">
                   <strong>${escapeHtml(entry.name)}</strong>
-                  <small>${escapeHtml(focusedIslands && entry.entryType === "production-candidate" ? "Imported island" : entry.subtitle)}</small>
+                  <small>${escapeHtml(subtitle)}</small>
                 </span>
                 <span class="asset-library-status" data-status="${escapeHtml(entry.entryType)}">
                   ${escapeHtml(status)}

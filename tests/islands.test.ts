@@ -5,7 +5,6 @@ import { createShipStateAtGrid } from "../src/wayfinders/navigation/MovementSyst
 import {
   IslandGenerator,
   IslandKind,
-  IslandPlacementError,
   IslandSize,
 } from "../src/wayfinders/world/IslandGenerator.ts";
 import {
@@ -231,34 +230,14 @@ describe("scattered island generation", () => {
     },
   );
 
-  it("fails explicitly when the configured placement constraints are impossible", () => {
-    const config = makeConfig({ islands: { edgeMargin: 40 } });
-    const captureFailure = (): unknown => {
-      try {
-        new WorldGenerator(config).generate(31_415);
-      } catch (error) {
-        return error;
-      }
-      return undefined;
-    };
-    const failure = captureFailure();
+  it("returns a deterministic partial plan when the configured placement constraints are impossible", () => {
+    const config = makeConfig({ islands: { minimumChannelWidth: 100 } });
+    const generator = new WorldGenerator(config);
+    const first = generator.generate(31_415);
+    const replay = generator.generate(31_415);
 
-    expect(failure).toBeInstanceOf(IslandPlacementError);
-    const placementFailure = failure as IslandPlacementError;
-    expect(placementFailure.message).toMatch(/Unable to place configured island/);
-    expect(placementFailure.message).toMatch(/Reduce island count\/radii/);
-    expect(placementFailure.diagnostics).toMatchObject({
-      seed: 31_415,
-      worldWidth: config.world.width,
-      worldHeight: config.world.height,
-      randomAttemptLimit: config.islands.placementAttempts,
-      fallbackScanLimit: config.world.width * config.world.height,
-    });
-    expect(placementFailure.diagnostics.candidatesEvaluated).toBeLessThanOrEqual(
-      config.islands.placementAttempts + config.world.width * config.world.height,
-    );
-    expect(Object.values(placementFailure.diagnostics.rejectionCounts).reduce((sum, count) => sum + count, 0))
-      .toBe(placementFailure.diagnostics.candidatesEvaluated);
-    expect((captureFailure() as IslandPlacementError).diagnostics).toEqual(placementFailure.diagnostics);
+    expect(first.islands.length).toBeLessThan(config.islands.count);
+    expect(first.islands.length).toBeGreaterThan(0);
+    expect(replay.manifest).toEqual(first.manifest);
   });
 });

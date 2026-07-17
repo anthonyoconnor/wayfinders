@@ -310,6 +310,29 @@ describe("shared survey-site lifecycle", () => {
 });
 
 describe("descriptor extensibility", () => {
+  it("omits a site type when a partial island plan has no eligible location", () => {
+    const generated = new WorldGenerator().generate(24_680);
+    const base = INITIAL_SURVEY_SITE_DESCRIPTORS[0];
+    const impossible: Readonly<SurveySiteTypeDescriptor<string>> = {
+      ...base,
+      type: "no-eligible-location",
+      namespace: 1_340_097,
+      placement: {
+        terrain: [TerrainType.Land],
+        islandKinds: [IslandKind.RockySkerry],
+      },
+    };
+    const definitions = generateSurveySiteCatalogFromDescriptors(
+      generated.grid,
+      generated.seed,
+      [],
+      generated.landmarks.homeReturnTile,
+      [impossible],
+    );
+
+    expect(definitions).toEqual([]);
+  });
+
   it("uses deterministic binary ID order for future type names", () => {
     const generated = new WorldGenerator().generate(24_680);
     const base = INITIAL_SURVEY_SITE_DESCRIPTORS[0];

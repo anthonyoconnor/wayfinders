@@ -246,9 +246,7 @@ export function generateSurveySiteCatalogFromDescriptors<TType extends string>(
       ));
       const unusedIsland = unused.filter(({ islandId }) => !usedIslandIds.has(islandId));
       const candidate = (unusedIsland.length > 0 ? unusedIsland : unused)[0];
-      if (!candidate) {
-        throw new RangeError(`Unable to place survey-site type ${descriptor.type}`);
-      }
+      if (!candidate) break;
 
       const clue = chooseContent(descriptor.clues, seed, descriptor.namespace, candidate.index, 101 + ordinal);
       const result = chooseContent(descriptor.results, seed, descriptor.namespace, candidate.index, 211 + ordinal);

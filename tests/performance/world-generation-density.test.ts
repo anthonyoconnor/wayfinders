@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { IslandPlacementError } from "../../src/wayfinders/world/IslandGenerator";
 import { WorldGenerator } from "../../src/wayfinders/world/WorldGenerator";
 import { serializeWorldManifestV1 } from "../../src/wayfinders/world/manifest";
 import { createWorldGenerationProfileConfig } from "../../src/wayfinders/world/WorldGenerationProfiles";
@@ -31,17 +30,11 @@ describe("P2 deterministic generation acceptance", () => {
   it("handles the documented 500-island stress profile without an unbounded search", () => {
     const config = createWorldGenerationProfileConfig("P2-500");
     const generator = new WorldGenerator(config);
-    try {
-      const planned = generator.plan(50_003);
-      expect(planned.islands).toHaveLength(500);
-      expect(() => generator.rasterize(planned)).not.toThrow();
-    } catch (error) {
-      expect(error).toBeInstanceOf(IslandPlacementError);
-      const diagnostics = (error as IslandPlacementError).diagnostics;
-      expect(diagnostics.candidatesEvaluated).toBeLessThanOrEqual(
-        diagnostics.randomAttemptLimit + diagnostics.fallbackScanLimit,
-      );
-      expect(JSON.stringify(diagnostics)).toBe(JSON.stringify((error as IslandPlacementError).diagnostics));
-    }
+    const planned = generator.plan(50_003);
+    const replay = generator.plan(50_003);
+
+    expect(planned.islands.length).toBeLessThanOrEqual(500);
+    expect(serializeWorldManifestV1(replay.manifest)).toBe(serializeWorldManifestV1(planned.manifest));
+    expect(() => generator.rasterize(planned)).not.toThrow();
   }, 10_000);
 });
