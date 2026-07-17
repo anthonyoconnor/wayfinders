@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -8,6 +9,7 @@ export const COLLISION_SAVE_ROUTE = "/__wayfinders/collision/save";
 export const MAX_COLLISION_SAVE_BYTES = 1_048_576;
 
 const execFileAsync = promisify(execFile);
+const viteNodeCli = createRequire(import.meta.url).resolve("vite-node/vite-node.mjs");
 
 class HttpError extends Error {
   constructor(statusCode, message) {
@@ -105,8 +107,7 @@ export async function runCollisionIntake(candidateFile, repositoryRoot) {
   const pipelineFile = path.join(repositoryRoot, "scripts", "asset-pipeline.mjs");
   try {
     const { stdout } = await execFileAsync(process.execPath, [
-      "--experimental-transform-types",
-      "--disable-warning=ExperimentalWarning",
+      viteNodeCli,
       pipelineFile,
       "intake",
       candidateFile,

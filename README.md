@@ -31,17 +31,24 @@ recorded only in the current roadmap.
 
 ## Run locally
 
-```powershell
-npm.cmd install
-npm.cmd run dev
+Node.js `22.18.0` or newer is required. Development and asset scripts use the
+repository's pinned `vite-node` runner for complete TypeScript transformation,
+so they work on Node 26 without version-specific experimental runtime flags.
+
+```bash
+npm install
+npm run dev
 ```
+
+On Windows PowerShell, use `npm.cmd` in place of `npm` when script execution
+policy prevents the `npm.ps1` shim from running.
 
 Open `http://127.0.0.1:5173/`. Use WASD or the arrow keys to sail, the mouse wheel or Q/E to zoom, and the on-screen developer tools to inspect deterministic islands, fishing signs and navigator wrecks, return through the exact dock flow, or reset the world from a seed.
 
 To run another instance on a different port, pass the port after `--`:
 
-```powershell
-npm.cmd run dev -- 5174
+```bash
+npm run dev -- 5174
 ```
 
 Then open `http://127.0.0.1:5174/`. An explicitly requested port will not silently fall back to another port if it is already occupied.
@@ -62,8 +69,8 @@ metadata, bind PNGs (or use the current catalog PNGs), then validate and preview
 the candidate before exporting its `.candidate.json` bundle. Import a reviewed
 bundle into the repository with:
 
-```powershell
-npm.cmd run assets:intake -- path\to\asset.candidate.json --replace
+```bash
+npm run assets:intake -- path/to/asset.candidate.json --replace
 ```
 
 `--replace` is required because the current workbench intentionally supports only
@@ -79,8 +86,8 @@ writes reviewed collision metadata to the tracked asset package.
 
 ## Verify
 
-```powershell
-npm.cmd run check
+```bash
+npm run check
 ```
 
 The clean verification pipeline checks generated asset outputs, runs type

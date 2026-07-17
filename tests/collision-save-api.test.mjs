@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Readable } from "node:stream";
@@ -14,6 +14,7 @@ import {
   createCollisionSaver,
   isSameCollisionSaveOrigin,
   readJsonRequestBody,
+  runCollisionIntake,
   serializeCollisionSaves,
 } from "../scripts/collision-save-api.mjs";
 
@@ -169,6 +170,25 @@ describe("local collision-save API", () => {
       expect(observed[0].candidate).toEqual({ assetId: "home.island.primary", collisionIntent: "replace" });
       expect(path.dirname(observed[0].candidateFile).startsWith(temporaryRoot)).toBe(true);
       expect(await readdir(temporaryRoot)).toEqual([]);
+    } finally {
+      await rm(temporaryRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("launches collision intake through the pinned TypeScript runner without obsolete Node flags", async () => {
+    const temporaryRoot = await mkdtemp(path.join(tmpdir(), "wayfinders-node-runtime-test-"));
+    const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    const candidateFile = path.join(temporaryRoot, "invalid.candidate.json");
+    try {
+      await writeFile(candidateFile, JSON.stringify({ bundleKind: "collision" }), "utf8");
+      let failure;
+      try {
+        await runCollisionIntake(candidateFile, repositoryRoot);
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(CollisionIntakeError);
+      expect(failure.message).not.toMatch(/bad option|experimental-transform-types/u);
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
