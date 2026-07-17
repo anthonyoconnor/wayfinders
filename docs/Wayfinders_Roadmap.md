@@ -79,10 +79,11 @@ The implementation sequence is:
 2. `GR-5.2` — implemented twenty predefined portraits, fixed Hall and symbol
    art, and a first-class, direct-linkable Great Hall viewing workspace; open
    only for interactive product review and the explicit decision;
-3. `GR-5.3` — graphical Hall implementation and bounded era paging after that
-   preview approval; and
+3. `GR-5.3` — one versioned JSON-compatible presentation contract, a shared
+   graphical renderer for the asset viewer and game, the chronicle adapter, and
+   bounded era paging after that preview approval; and
 4. `GR-5.4` — ceremony modes, responsive/accessibility polish, visual review,
-   and twenty-generation performance acceptance.
+   shared-host equivalence, and twenty-generation performance acceptance.
 
 ```mermaid
 flowchart LR
@@ -90,7 +91,7 @@ flowchart LR
     GH51 --> GH52["GR-5.2 fixed art and approval preview"]
     GH52 --> GO{"Product owner Go?"}
     GO -->|Revise| GH52
-    GO -->|Go| GH53["GR-5.3 graphical Hall"]
+    GO -->|Go| GH53["GR-5.3 shared model and renderer"]
     GH53 --> GH54["GR-5.4 ceremony and acceptance"]
 ```
 
@@ -141,9 +142,9 @@ second presentation-lifetime policy or simulation clock.
 
 ## Authorization boundary
 
-No milestone other than the authorized `GR-5.1` and `GR-5.2` Great Hall batch
-may start. The water proposal, gameplay persistence, a new gameplay or
-production-asset milestone, broad runtime content rollout, or any other
-deferred scope requires explicit user authorization. `GR-5.3` and `GR-5.4`
-require the product-owner **Go** recorded after reviewing the Great Hall asset
-workspace.
+No further milestone is authorized for implementation. `GR-5.2` remains open
+only for product review and bounded revisions to its approval preview. `GR-5.3`
+and `GR-5.4` require the product-owner **Go** recorded after that review. The
+water proposal, gameplay persistence, a new gameplay or production-asset
+milestone, broad runtime content rollout, or any other deferred scope requires
+explicit user authorization.

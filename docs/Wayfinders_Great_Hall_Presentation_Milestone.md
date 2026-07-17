@@ -316,9 +316,10 @@ The preview must:
 - use that fixed roster to cover active,
   completed, lost/unlocated, lost/confirmed, achievement-dense, handover, and
   completion examples;
-- demonstrate the complete screen composition: counting cord, twelve-member
-  era wall, era rail, selected memorial, four voyage bands, achievement
-  symbols, and exact-detail plaque;
+- demonstrate the approved first-version screen composition: one Hall backdrop,
+  twelve-member era wall, era rail, selected memorial, four voyage bands,
+  achievement symbols, and exact-detail plaque; lineage totals and the counting
+  cord remain deferred;
 - allow the reviewer to change era, select navigators, inspect achievement
   details, and switch among the important Hall modes;
 - include desktop and narrow-width views, or a simple way to inspect both;
@@ -358,22 +359,34 @@ game-behavior acceptance gates.
 
 - `GreatHallChronicle` remains the immutable renderer-neutral read model over
   authoritative lineage and returned-world records.
-- A Great Hall presentation adapter maps chronicle entries to era pages,
-  predefined portrait asset references, grouped symbol tokens, and accessible
-  labels.
-- The adapter belongs with lineage presentation or rendering and imports no
-  Phaser. It owns no gameplay fact and parses no display prose.
-- `GreatHallView` remains the semantic HTML interaction owner. Decorative art
-  is hidden from assistive technology; portrait buttons, symbols, modes, and
-  actions retain explicit semantics.
+- `GreatHallPresentationModel` is the single JSON-compatible input contract for
+  the graphical Hall. It contains only versioned plain objects, arrays, scalar
+  values, stable asset references, and accessible labels; it contains no
+  functions, classes, DOM nodes, `Map`, `Set`, Phaser objects, or live
+  simulation references.
+- A pure Great Hall presentation adapter maps `GreatHallChronicle` into that
+  contract, including era membership, predefined portrait references, voyage
+  states, grouped symbol tokens, ceremony mode, and accessible labels. It
+  imports no Phaser, owns no gameplay fact, and parses no display prose.
+- The asset viewer supplies a checked-in, schema-validated fixture in the same
+  contract. Its navigator-count and scenario controls derive another valid
+  presentation object in memory; they do not maintain a second preview model.
+- One shared semantic HTML graphical renderer consumes the presentation model.
+  The asset workspace and in-game `GreatHallView` are hosts around that same
+  renderer, not separate implementations. Decorative art is hidden from
+  assistive technology; portrait buttons, symbols, modes, and actions retain
+  explicit semantics.
+- Opening the in-game Hall builds the presentation object from current game
+  state and passes it directly to the renderer. It does not write, reload, or
+  persist a JSON file.
 - The preview and game use the same fixed portrait, symbol, state, and Hall
   image files. Replacing one of those files in place deliberately changes the
   next preview or game run; there is no runtime portrait generation or separate
   approval/promotion lifecycle for this feature.
-- The Great Hall preview is an asset workspace with isolated presentation
-  state. It does not claim collision profiles, start `GameSimulation`, or own
-  authoritative lineage state. Its twenty predefined chronicle examples are
-  fixtures owned only for product review.
+- The Great Hall preview is an asset workspace with isolated interaction state.
+  It does not claim collision profiles, start `GameSimulation`, or own
+  authoritative lineage state. Its presentation fixture is owned only for
+  product review.
 - Runtime pixels never choose an achievement, navigator state, era membership,
   wreck fate, or idol completion state.
 - The home-dock access policy, movement suppression, non-dismissible handover,
@@ -400,10 +413,12 @@ baselines. Prototype the twelve-member era page, selected memorial, four voyage
 bands, tally glossary, exact-text roster, and keyboard behavior with temporary
 shapes or existing developer styling.
 
-Specify the final presentation adapter contract, stable era arithmetic,
+Record the required presentation fields, stable era arithmetic,
 selection/focus model, symbol accessible names, reduced-motion behavior, and
-browser screenshot matrix. Do not create caching, a generic virtual-list
-framework, or a new authoritative lineage model without a measured need.
+browser screenshot matrix. The single final JSON-compatible contract and
+shared renderer are implemented in `GR-5.3`. Do not create caching, a generic
+virtual-list framework, or a new authoritative lineage model without a
+measured need.
 
 Acceptance gate:
 
@@ -483,30 +498,50 @@ Acceptance gate:
 - the product owner's explicit **Go** decision and any bounded follow-up notes
   are recorded before this milestone closes.
 
-### GR-5.3 — Graphical Hall implementation and era paging
+### GR-5.3 — Shared presentation contract and graphical Hall integration
 
 Status: proposed, not started, and not authorized. Depends on the explicit
 preview **Go** from `GR-5.2`.
 
-Implement the selected Hall composition through the existing Great Hall view
-and a narrow presentation adapter. Replace the fourteen text cards,
-all-generation button list, and achievement bullet lists with the counting
-cord, fixed twelve-member era wall, selected memorial, four voyage bands,
-symbol groups, and exact-text plaque. Keep semantic actions and state labels
-available to assistive technology.
+Define and validate one versioned, JSON-compatible
+`GreatHallPresentationModel`. Extract the approved graphical Hall from the
+asset workspace into one shared semantic HTML renderer that accepts only that
+model plus interaction callbacks. The renderer owns layout, era paging,
+portrait selection, the selected memorial, four pictorial voyage bands,
+achievement symbols, accessible detail, and ceremony presentation; it does not
+read `GameSimulation` or `GreatHallChronicle` directly.
+
+Replace the TypeScript-only preview roster with a checked-in fixture using the
+same contract. The asset workspace validates and passes that fixture to the
+shared renderer, deriving navigator-count and scenario variations in memory.
+Add a pure adapter that converts the existing `GreatHallChronicle` and fixed
+portrait catalog into the same presentation model when the game opens or
+refreshes the Hall. The game passes the resulting object directly to the
+existing Great Hall host; no runtime file write or persistence path is added.
+
+Remove the old text-card renderer and the preview-only graphical rendering path
+after both hosts use the shared renderer. Do not retain a dual runtime path or
+translation facade. Preserve existing home, handover, completion, focus,
+action, and lifecycle callbacks at the host boundary.
 
 Use one outer scroll container only. Render no off-page navigator portraits or
 hidden all-generation controls. Load the current era's predefined portrait
-files and release replaced page resources. If the `GR-5.1` chronicle-build
-baseline misses its accepted twenty-generation budget, introduce the smallest
-measured page/index or memoization seam with equivalence and stale-data tests.
+files and release replaced page resources. If the combined chronicle-to-
+presentation build misses its accepted twenty-generation budget, introduce the
+smallest measured page/index or memoization seam with equivalence and stale-
+data tests.
 
 Acceptance gate:
 
+- one documented, versioned presentation contract is JSON-compatible and
+  rejects malformed fixture data before rendering;
+- the game adapter maps every navigator picture, lifecycle/fate state, four
+  voyage positions, returned achievement, and ceremony mode from structured
+  chronicle fields without changing authoritative state;
+- the asset workspace and game host render the same presentation object through
+  the same graphical renderer, with host-specific controls outside it;
 - home mode opens on the current navigator and can browse any generation by
   era, direct generation, pointer, and keyboard;
-- every navigator picture, lifecycle/fate state, four voyage positions, and
-  returned achievement maps from structured chronicle fields;
 - selecting an achievement group exposes every exact underlying label;
 - fatal voyages show no provisional credit and undiscovered idol hosts never
   appear;
@@ -514,21 +549,25 @@ Acceptance gate:
   and takes priority over pending handover;
 - focus restoration, action gating, and movement suppression remain unchanged;
 - visible portrait controls and voyage bands stay within the fixed structural
-  budget for the twenty-generation fixture; and
-- focused view/adapter tests, contract tests, integration tests, typechecks,
-  architecture checks, and bundle pass.
+  budget for the twenty-generation fixture;
+- fixture-validation, adapter-equivalence, shared-renderer, focused view,
+  contract, integration, typecheck, architecture, and bundle tests pass; and
+- the old text renderer, preview-only presentation model, and duplicate Hall
+  rendering markup are removed.
 
 ### GR-5.4 — Ceremony, responsive polish, and acceptance
 
 Status: proposed, not started, and not authorized. Depends on `GR-5.3`.
 
-Finish the Hall as a historical place rather than a reskinned data panel.
-Handover adds the outgoing portrait to the wall and reveals the next fresh
-frame without delaying authoritative succession. Loss uses a short restrained
-material transition; a later returned wreck report repairs the existing frame
-with shell inlay. Completion emphasizes the full idol counting cord and final
-voyage before showing the existing choices. All animation is optional
-presentation and has an immediate reduced-motion path.
+Finish the shared Hall renderer as a historical place rather than a reskinned
+data panel. Handover adds the outgoing portrait to the wall and reveals the next
+fresh frame without delaying authoritative succession. Loss uses a short
+restrained material transition; a later returned wreck report changes only the
+frame treatment and never draws across the portrait. Completion emphasizes the
+final voyage and approved achievement symbols before showing the existing
+choices; it does not reintroduce the deferred counting cord or lineage totals.
+All animation is optional presentation and has an immediate reduced-motion
+path.
 
 Tune desktop, medium, and narrow layouts; focus visibility; tooltip/plaque
 placement; text scaling; contrast; grayscale symbol recognition; touch-sized
@@ -541,6 +580,8 @@ Acceptance gate:
 - browser screenshots pass for 1, 12, 13, and 20 generations across
   home, handover, loss, confirmed fate, and completion states at the approved
   desktop, medium, and narrow viewports;
+- for an identical presentation object, the asset-workspace and game hosts have
+  equivalent Hall content, ordering, state treatments, and accessible names;
 - no layout uses horizontal overflow or a nested generation scroller;
 - every interaction works without hover and with keyboard-only navigation;
 - screen-reader traversal exposes era position, selected navigator, state,
@@ -549,7 +590,8 @@ Acceptance gate:
 - reduced motion presents every state change immediately and loses no
   information;
 - repeated era traversal and Hall reopening plateau at approved DOM, image,
-  listener, decoded-byte, and timing budgets with no stale selection or leak;
+  listener, decoded-byte, adapter, and rendering timing budgets with no stale
+  selection or leak;
 - current home-dock, lineage, discovery, completion, and movement outcomes
   remain unchanged; and
 - all relevant visual, quick, contract, integration, repository/I/O,
@@ -563,7 +605,7 @@ flowchart LR
     GH51 --> GH52["GR-5.2 fixed art and approval preview"]
     GH52 --> GO{"Product owner Go?"}
     GO -->|Revise| GH52
-    GO -->|Go| GH53["GR-5.3 graphical Hall"]
+    GO -->|Go| GH53["GR-5.3 shared model and renderer"]
     GH53 --> GH54["GR-5.4 ceremony and acceptance"]
 ```
 
@@ -580,13 +622,13 @@ The implemented baseline records:
 - a structural ceiling of twelve visible era portrait controls, four selected
   voyage bands, and one selected detail surface for every count through twenty;
   and
-- repository-I/O validation for twenty distinct fixed portrait files and both
-  authored symbol sheets.
+- repository-I/O validation for twenty distinct fixed portrait files, the Hall
+  backdrop, and the authored achievement-symbol sheet.
 
 Interactive browser measurements remain to be recorded during product review
 for each named lineage fixture and viewport:
 
-- chronicle build and Hall open p50/p95/p99;
+- chronicle-to-presentation build and Hall open p50/p95/p99;
 - era page switch and selected navigator switch p50/p95/p99;
 - visible and total Hall DOM nodes, listeners, and image elements;
 - loaded predefined portrait count and decoded bytes;
@@ -594,9 +636,10 @@ for each named lineage fixture and viewport:
 - repeated open/page/close plateau behavior.
 
 The fixed structural budget is twelve portrait controls, four selected voyage
-bands, fourteen tally values, one selected text roster, and controls whose
-count depends on visible eras rather than total generations. A numeric timing
-or byte ceiling is accepted only after the baseline is measured.
+bands, one selected detail surface, and controls whose count depends on visible
+eras rather than total generations. The deferred tally values and counting cord
+are not part of this budget. A numeric timing or byte ceiling is accepted only
+after the baseline is measured.
 
 Fallback order for a measured miss:
 
@@ -604,7 +647,7 @@ Fallback order for a measured miss:
 2. load only the twelve visible predefined portraits plus the selected detail;
 3. reduce fixed image dimensions or decorative variants while retaining
    nearest-neighbor presentation;
-4. add a bounded era selector/index while retaining exact totals; and
+4. add a bounded era selector/index while retaining complete history; and
 5. retain a static interior and symbol-only state treatments.
 
 Do not fix a presentation miss by pruning lineage history, hiding exact labels,
@@ -617,7 +660,7 @@ ordering.
 | --- | --- |
 | Portrait art invents gameplay identity | Treat the ordered twenty-portrait catalog as presentation only; it never changes gameplay facts |
 | A portrait changes between views | Map generations one through twenty directly to fixed files and test the mapping |
-| Symbols become a code players must memorize | Use paired visual grammar, focus/click labels, tally glossary, and screen-reader names |
+| Symbols become a code players must memorize | Use paired visual grammar, focus/click detail, and screen-reader names |
 | Minimal text hides island names or findings | Preserve every source `label` in the selected symbol roster |
 | Twelve portraits still feel flat | Use physical frames, age patina, repaired loss states, interior depth, and restrained light |
 | Twenty generations create unnecessary hidden DOM work | Render one fixed era only and benchmark the complete twenty-generation read-model build separately |
@@ -626,6 +669,8 @@ ordering.
 | A rejected direction is implemented in the game | Require an interactive assets-preview tab and explicit product-owner Go before game integration |
 | In-place art changes are overlooked | Keep fixed files plainly named and verify the preview reloads the current project assets |
 | Raster text becomes inaccessible or stale | Keep labels/actions as semantic HTML, never baked into art |
+| Preview and game drift after approval | Require both hosts to consume the same versioned presentation object through one renderer and test equivalent output |
+| A fixture is treated as game authority | Validate fixture data only at the asset-workspace boundary; build the in-game model exclusively from `GreatHallChronicle` |
 
 ## Out of scope
 
@@ -639,6 +684,7 @@ ordering.
   culture;
 - a general avatar creator, UI editor, icon framework, atlas system, event bus,
   or virtual-list framework;
+- writing, reloading, or persisting a JSON file when the in-game Hall opens;
 - parsing prose to recover achievement meaning; and
 - loading anything directly from `concept_art` in production.
 
@@ -646,11 +692,13 @@ ordering.
 
 The graphical Great Hall track is done when generations one through twenty map
 to twenty stable predefined portraits; the product owner approved the cohesive
-preview-tool example before game integration; the complete supported chronicle
-is readable through an accessible symbol language and exact-text detail; fixed
-twelve-generation era pages make the twenty-generation scope practical without
-lineage-sized DOM; home, handover, loss, confirmed fate, and completion modes
-preserve their current rules; the Hall looks like the authored home island's
-accumulated ancestral interior; all responsive, accessibility, visual,
-resource, performance, repository, and game-behavior gates pass; and no
-presentation pixel has become gameplay authority.
+preview-tool example before game integration; one versioned JSON-compatible
+presentation contract and one graphical renderer serve both the asset workspace
+and game; the complete supported chronicle is readable through an accessible
+symbol language and exact-text detail; fixed twelve-generation era pages make
+the twenty-generation scope practical without lineage-sized DOM; home,
+handover, loss, confirmed fate, and completion modes preserve their current
+rules; the old text and preview-only rendering paths are removed; the Hall looks
+like the authored home island's accumulated ancestral interior; all responsive,
+accessibility, visual, resource, performance, repository, and game-behavior
+gates pass; and no presentation pixel or fixture has become gameplay authority.
