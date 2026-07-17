@@ -32,3 +32,17 @@ export type {
   AudioVoiceRejectionReason,
   AudioVoiceRequest,
 } from "./AudioMixer";
+
+export {
+  SAILING_AMBIENCE_GAIN_EPSILON,
+  SAILING_AMBIENCE_OCEAN_GAIN,
+  SAILING_AMBIENCE_WAKE_ATTACK_SECONDS,
+  SAILING_AMBIENCE_WAKE_RELEASE_SECONDS,
+  SAILING_AMBIENCE_WAKE_START_SPEED,
+  SAILING_AMBIENCE_WAKE_STOP_SPEED,
+  SailingAmbienceState,
+} from "./SailingAmbience";
+export type {
+  SailingAmbienceInput,
+  SailingAmbienceStateSnapshot,
+} from "./SailingAmbience";

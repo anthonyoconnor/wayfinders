@@ -124,9 +124,9 @@ numbers; exact quantities remain available to assistive technology.
 
 ### AUD — Game sound and music layer
 
-Status: `AUD-1` implemented on 2026-07-17; keyboard/media browser acceptance
-remains to be recorded. `AUD-2` through `AUD-5` remain proposed and are not
-authorized.
+Status: implemented through `AUD-2` on 2026-07-17; keyboard/media and audible
+loop browser acceptance remains to be recorded. `AUD-3` through `AUD-5` remain
+proposed and are not authorized.
 
 The implemented foundation loads one validated stored-audio catalog, exposes a
 play-only Audio asset workspace, and gives game mode an explicit enable flow,
@@ -141,15 +141,18 @@ values for enable, mute, master, and all four category controls; stored-file
 decode and audition in the Audio workspace; locked startup; and console-clean
 scene teardown and restart without leaked playback.
 
+`AUD-2` adds one persistent ocean bed and one speed-controlled wake loop. It
+closes after live browser acceptance verifies silence at rest, smooth motion
+gain, direction reversal without restart, focus reconciliation, and ten
+seam-free repeats of both reference loops.
+
 The remaining proposed sequence is:
 
-1. `AUD-2` — ocean and vessel ambience derived only from current
-   presentation-safe ship/read-model state;
-2. `AUD-3` — priority- and cooldown-bounded gameplay and UI cues consuming the
+1. `AUD-3` — priority- and cooldown-bounded gameplay and UI cues consuming the
    existing typed event stream;
-3. `AUD-4` — home-harbor/open-water music states plus lifecycle crossfades and
+2. `AUD-4` — home-harbor/open-water music states plus lifecycle crossfades and
    ducking; and
-4. `AUD-5` — production of the final sounds and music, in-place replacement of
+3. `AUD-5` — production of the final sounds and music, in-place replacement of
    the reference WAVs at their existing runtime paths, final game mix, budgets,
    and acceptance closure.
 
@@ -177,7 +180,7 @@ second presentation-lifetime policy or simulation clock.
 ## Authorization boundary
 
 No further milestone is authorized for implementation. The water proposal and
-`AUD-2` through `AUD-5`, and any other new gameplay or production-asset
+`AUD-3` through `AUD-5`, and any other new gameplay or production-asset
 milestone require explicit user authorization. Do not implement gameplay
 saving; it may return only through an explicitly authorized milestone designed
 for the game that exists at that time.

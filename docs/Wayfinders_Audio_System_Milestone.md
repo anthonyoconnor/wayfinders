@@ -1,13 +1,13 @@
 # Wayfinders audio-system proposal
 
-Implementation is present through `AUD-1`; its live browser acceptance remains
-to be recorded. Planning and authorization status for `AUD-2` through `AUD-5`
+Implementation is present through `AUD-2`; live browser acceptance remains to
+be recorded. Planning and authorization status for `AUD-3` through `AUD-5`
 is owned only by `Wayfinders_Roadmap.md`.
 
 This document owns the remaining audio design and acceptance criteria. Current
 runtime behavior is owned by `Wayfinders_Technical_Design.md`; current code
 ownership by `ARCHITECTURE_MAP.md`; stored-artifact and replacement contracts by
-`Wayfinders_Asset_Pipeline.md`; and volatile `AUD-1` verification state by
+`Wayfinders_Asset_Pipeline.md`; and volatile audio verification state by
 `IMPLEMENTATION_STATUS.md`.
 
 ## Recommendation
@@ -23,7 +23,7 @@ The audio track has five milestones:
 1. `AUD-1` established the stored sound library, runtime catalog, play-only
    asset workspace, mixer, unlock flow, controls, diagnostics, and lifecycle
    boundary.
-2. `AUD-2` adds ocean and vessel ambience driven by current presentation state.
+2. `AUD-2` added ocean and vessel ambience driven by current presentation state.
 3. `AUD-3` adds bounded gameplay and interface cues from existing typed events.
 4. `AUD-4` adds two-state music and lifecycle transitions.
 5. `AUD-5` produces the final sounds and music, overwrites the reference files
@@ -113,8 +113,9 @@ decision.
 
 ## Runtime contract
 
-This section specifies planned behavior for `AUD-2` through `AUD-4` on top of
-the implemented foundation. `Wayfinders_Technical_Design.md` remains the
+This section specifies current continuous-audio behavior and planned behavior
+for `AUD-3` through `AUD-4` on top of the implemented foundation.
+`Wayfinders_Technical_Design.md` remains the
 canonical owner of current mixer, unlock, control, and lifecycle behavior.
 
 ### Audio categories
@@ -247,25 +248,10 @@ pipeline guide. The current roadmap owns the remaining acceptance follow-up.
 
 ### AUD-2 — Sailing ambience
 
-Deliver:
-
-- the catalog-owned `ambience.ocean` and `ambience.wake` loops;
-- a renderer-neutral ambience target derived from current pose and current
-  presentation-safe state;
-- smoothed wake gain, start/stop hysteresis, focus reconciliation, and mute
-  reconciliation; and
-- bounded diagnostics for active ambience voices and target/current gain.
-
-Acceptance gate:
-
-- Tests cover rest, forward/reverse speed, direction changes, wreck hold,
-  teleport, regeneration, unlock after movement has begun, and return to dock.
-- Identical continuous inputs create no sound instance, listener, timer, or
-  collection allocation on stable updates.
-- Hidden obstacles and unseen islands cannot change an ambience target.
-- Browser acceptance hears an inaudible wake at rest, a smooth rise under
-  motion, no restart at direction reversal, and no loop seam over ten repeats.
-- The total ambience voice count never exceeds three.
+Implemented, with audible browser acceptance pending. Current smoothing,
+hysteresis, input, lifecycle, diagnostic, and voice-bound behavior is owned by
+the technical design. The current roadmap owns the remaining acceptance
+follow-up.
 
 ### AUD-3 — Gameplay and interface cues
 

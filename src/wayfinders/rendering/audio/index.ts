@@ -43,3 +43,14 @@ export type {
   GameAudioControlsTarget,
   GameAudioControlsView,
 } from "./GameAudioControls";
+
+export {
+  OCEAN_AMBIENCE_VOICE_ID,
+  SailingAmbienceController,
+  WAKE_AMBIENCE_VOICE_ID,
+} from "./SailingAmbienceController";
+export type {
+  SailingAmbienceAudioSnapshot,
+  SailingAmbienceAudioTarget,
+  SailingAmbienceDiagnostics,
+} from "./SailingAmbienceController";

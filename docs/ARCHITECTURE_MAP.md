@@ -32,7 +32,7 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 | `navigation` | collision topology, movement authority, and route/range mechanics | feature rewards or UI |
 | `exploration` / `features` | feature state, commands, selectors, and mutation results | scene lifecycle |
 | `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering | feature-specific presentation rules |
-| `audio` | validated stored-audio catalog contracts, renderer-neutral gain state, and bounded voice-accounting policy | Phaser objects, gameplay authority, decoded media, or repository writes |
+| `audio` | validated stored-audio catalog contracts, renderer-neutral gain and sailing-ambience state, and bounded voice-accounting policy | Phaser objects, gameplay authority, decoded media, hidden-world queries, or repository writes |
 | `rendering` | Phaser lifecycle, resource activation, and read-model adaptation | authoritative gameplay decisions |
 | `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, isolated trials, and play-only stored-audio preview | navigation authority outside declared collision metadata, gameplay-session state, or audio creation/editing/mixing/writes |
 
@@ -95,10 +95,14 @@ adapter may own Phaser sound instances.
   set. Feature-specific presentation belongs in controllers and renderers.
 - `src/wayfinders/audio/index.ts` is the public stored-audio and mixer seam. It
   validates the canonical catalog, resolves catalog-relative runtime URLs, and
-  owns in-memory master/category gain plus bounded deterministic voice
-  decisions. `src/wayfinders/rendering/audio/index.ts` adapts that policy to
-  Phaser preload/playback/unlock and owns every created sound instance through
-  scene teardown. Neither seam imports or mutates `GameSimulation`.
+  owns in-memory master/category gain, bounded deterministic voice decisions,
+  and the allocation-free-on-stable-input wake smoothing and hysteresis policy.
+  `src/wayfinders/rendering/audio/index.ts` adapts that policy to Phaser
+  preload/playback/unlock and owns the ocean and wake loops plus every other
+  created sound instance through scene teardown. `WayfindersScene` supplies only
+  current rendered ship speed and existing dock, wreck, and handover gates.
+  Neither audio seam imports or mutates `GameSimulation`, scans the world, or
+  reads hidden terrain.
 - Asset tools share runtime package validation, presentation factories, and the
   accepted hybrid collision contract. Narrow same-origin development-server
   operations serialize source intake, candidate save or deletion, review, and exact-

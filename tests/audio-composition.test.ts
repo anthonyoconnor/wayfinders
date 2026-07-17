@@ -5,7 +5,7 @@ function source(relativePath: string): string {
   return readFileSync(new URL(relativePath, import.meta.url), "utf8");
 }
 
-describe("AUD-1 application composition", () => {
+describe("audio application composition", () => {
   it("loads one shared catalog for game and asset modes but leaves trial mode audio-free", () => {
     const main = source("../src/main.ts");
     const trial = source("../src/wayfinders/assets/AssetTrialScene.ts");
@@ -28,9 +28,17 @@ describe("AUD-1 application composition", () => {
     expect(scene).toContain("preloadGameAudioCatalog(this, this.audioCatalogResult.catalog)");
     expect(scene).toContain("new GameAudioController({");
     expect(scene).toContain("mountGameAudioControls(root, this.audioController)");
+    expect(scene).toContain("new SailingAmbienceController(this.audioController)");
+    expect(scene).toContain("this.updateSailingAmbience(delta / 1000)");
+    expect(scene).toContain("this.sailingAmbienceInput.speed = this.currentShipPose.speed");
+    expect(scene).toContain("this.simulation.wreckPresentationActive");
+    expect(scene).toContain("this.simulation.generationHandoverActive");
     expect(scene).toContain("mountUnavailableGameAudioControls(root, message)");
     expect(scene).toContain("this.audioControls?.destroy()");
+    expect(scene).toContain("this.sailingAmbienceController?.destroy()");
     expect(scene).toContain("this.audioController?.destroy()");
+    expect(scene.indexOf("this.sailingAmbienceController?.destroy()"))
+      .toBeLessThan(scene.indexOf("this.audioController?.destroy()"));
   });
 
   it("adapts the catalog only in the Audio workspace scene branch", () => {

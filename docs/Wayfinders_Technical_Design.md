@@ -348,7 +348,7 @@ region and updates one `ActiveChunkSet`. The active set prioritizes visible
 chunks, adds a prefetch ring when capacity allows, and enforces a hard five-by-
 five (`25`) chunk resource budget. Deactivation runs before activation.
 
-### Audio foundation
+### Audio foundation and sailing ambience
 
 Game and asset-library startup fetch and strictly validate
 `/assets/audio/audio-catalog.json` once before scene composition. Isolated asset
@@ -382,11 +382,33 @@ playback-error state through `window.__WAYFINDERS__.audio()`. Scene shutdown
 destroys the controls, listeners, owned sounds, playback adapter, and mixer
 voice ledger idempotently without destroying Phaser's global Sound Manager.
 
-This foundation does not yet select or start gameplay cues, ambience, or music.
-Those presentation policies remain the scope of `AUD-2` through `AUD-4`; the
-stored files can be auditioned now through the play-only Audio workspace. The
-stored artifact and replacement contract is owned by
-`Wayfinders_Asset_Pipeline.md`.
+After sound is enabled, game mode owns two non-positional ambience loops. The
+ocean bed remains present with transition gain `1`. The wake target is the
+absolute current rendered ship speed divided by configured full ship speed,
+clamped to `[0, 1]`; reversing direction therefore never restarts it. Wake
+hysteresis engages at normalized speed `0.04` and disengages below `0.015`.
+Exact dock, wreck-presentation, and generation-handover gates force its target
+to zero. Wake attack uses `0.35` seconds, release uses `0.55` seconds, gain
+updates use epsilon `0.001`, and any single update advances at most `0.25`
+seconds. The wake voice starts only after engagement and is destroyed after its
+release reaches silence. Together the ocean and wake use at most two of the
+ambience category's three voices.
+
+The pure ambience state consumes no world object, tile, obstacle, island,
+knowledge, route, or feature query. `WayfindersScene` supplies only its current
+ship render-pose speed, configured full speed, exact-dock state, and existing
+wreck and handover presentation gates through one reused input object. A stable
+settled update preserves snapshot identity and performs no playback operation.
+Unlock reconciles the loops to current motion; mute and category changes reuse
+the mixer gain path; blur retains Phaser-paused loops and focus does not restart
+them. Bounded diagnostics expose target/current gains, active ambience voices,
+peak count, starts, and wake stops. Scene shutdown destroys the ambience
+controller before the general audio controller.
+
+Automatic gameplay/UI cues and music-state selection are not yet bound. Those
+presentation policies remain the scope of `AUD-3` and `AUD-4`; all stored files
+remain auditionable through the play-only Audio workspace. The stored artifact
+and replacement contract is owned by `Wayfinders_Asset_Pipeline.md`.
 
 Chunk-local terrain, authored home-island objects, imported authored-island
 layers, knowledge/risk textures, cloud/shadow pairs, and marker pools all consume

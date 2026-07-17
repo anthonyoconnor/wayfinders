@@ -13,6 +13,7 @@ import {
 import {
   AudioMixer,
   type AudioCatalogLoadResult,
+  type SailingAmbienceInput,
 } from "../audio";
 import {
   onPrototypeConfigChanged,
@@ -92,8 +93,10 @@ import {
   mountGameAudioControls,
   mountUnavailableGameAudioControls,
   preloadGameAudioCatalog,
+  SailingAmbienceController,
   type GameAudioControls,
   type GameAudioSnapshot,
+  type SailingAmbienceDiagnostics,
 } from "./audio";
 import {
   ActiveChunkSet,
@@ -169,7 +172,11 @@ interface BrowserDebugApi {
 }
 
 type BrowserAudioDebugSnapshot =
-  | Readonly<{ status: "available"; audio: Readonly<GameAudioSnapshot> }>
+  | Readonly<{
+    status: "available";
+    audio: Readonly<GameAudioSnapshot>;
+    ambience: Readonly<SailingAmbienceDiagnostics>;
+  }>
   | Readonly<{ status: "unavailable"; error: string }>;
 
 declare global {
@@ -287,7 +294,14 @@ export class WayfindersScene extends Phaser.Scene {
   private pilotAssets!: PilotAssetRuntime;
   private authoredIslandPresentations!: Readonly<AuthoredIslandPresentationRuntime>;
   private audioController?: GameAudioController;
+  private sailingAmbienceController?: SailingAmbienceController;
   private audioControls?: GameAudioControls;
+  private readonly sailingAmbienceInput: SailingAmbienceInput = {
+    speed: 0,
+    fullSpeed: 1,
+    atDock: true,
+    lifecycleHeld: false,
+  };
   constructor(
     simulation = new GameSimulation(),
     private readonly authoredIslandPresentationCatalog: Readonly<AuthoredIslandPresentationCatalog> =
@@ -424,6 +438,7 @@ export class WayfindersScene extends Phaser.Scene {
       if (!keepAdvancing) this.previousShipPose = this.currentShipPose;
       return keepAdvancing;
     });
+    this.updateSailingAmbience(delta / 1000);
     this.frameTiming.record(delta, this.clock.lastDroppedMs, document.visibilityState === "visible");
     this.syncPresentation();
   }
@@ -2131,12 +2146,27 @@ export class WayfindersScene extends Phaser.Scene {
       mixer: new AudioMixer(catalog),
       playback: createPhaserAudioPlaybackPort(this),
     });
+    this.sailingAmbienceController = new SailingAmbienceController(this.audioController);
     this.audioControls = mountGameAudioControls(root, this.audioController);
   }
 
+  private updateSailingAmbience(deltaSeconds: number): void {
+    if (!this.sailingAmbienceController) return;
+    this.sailingAmbienceInput.speed = this.currentShipPose.speed;
+    this.sailingAmbienceInput.fullSpeed = this.simulation.config.movement.shipSpeed;
+    this.sailingAmbienceInput.atDock = this.simulation.atDock;
+    this.sailingAmbienceInput.lifecycleHeld = this.simulation.wreckPresentationActive
+      || this.simulation.generationHandoverActive;
+    this.sailingAmbienceController.update(this.sailingAmbienceInput, deltaSeconds);
+  }
+
   private audioDebugSnapshot(): BrowserAudioDebugSnapshot {
-    if (this.audioController) {
-      return Object.freeze({ status: "available", audio: this.audioController.getSnapshot() });
+    if (this.audioController && this.sailingAmbienceController) {
+      return Object.freeze({
+        status: "available",
+        audio: this.audioController.getSnapshot(),
+        ambience: this.sailingAmbienceController.getSnapshot(),
+      });
     }
     return Object.freeze({
       status: "unavailable",
@@ -2526,6 +2556,8 @@ export class WayfindersScene extends Phaser.Scene {
   private destroyBindings(): void {
     this.audioControls?.destroy();
     this.audioControls = undefined;
+    this.sailingAmbienceController?.destroy();
+    this.sailingAmbienceController = undefined;
     this.audioController?.destroy();
     this.audioController = undefined;
     this.domAbort?.abort();
