@@ -96,15 +96,18 @@ adapter may own Phaser sound instances.
 - `src/wayfinders/audio/index.ts` is the public stored-audio and mixer seam. It
   validates the canonical catalog, resolves catalog-relative runtime URLs, and
   owns in-memory master/category gain, bounded deterministic voice decisions,
-  the allocation-free-on-stable-input wake smoothing and hysteresis, and the pure
-  event-batch cue priority, cooldown, voice-cap, and replacement policy.
+  the allocation-free-on-stable-input wake smoothing and music crossfade/duck
+  policies, and the pure event-batch cue priority, cooldown, voice-cap, and
+  replacement policy.
   `src/wayfinders/rendering/audio/index.ts` adapts that policy to Phaser
   preload/playback/unlock, batches existing typed game events at a microtask
-  boundary, and owns the ocean and wake loops plus every other created sound
-  instance through scene teardown. `WayfindersScene` supplies only current
-  rendered ship speed, existing dock, wreck, and handover gates, and accepted
-  presentation actions. The cue adapter subscribes to the existing
-  `GameEvents`; it does not introduce another event bus.
+  boundary, and owns the ocean, wake, home-harbor, and open-water loops plus
+  every other created sound instance through scene teardown. `WayfindersScene`
+  supplies only current rendered ship speed, exact dock, current Supported-water
+  knowledge, expedition state, existing wreck/handover/completion gates, home
+  interaction, and accepted presentation actions. Cue and music adapters
+  subscribe to the existing `GameEvents`; they do not introduce another event
+  bus.
   Neither audio seam imports or mutates `GameSimulation`, scans the world, or
   reads hidden terrain.
 - Asset tools share runtime package validation, presentation factories, and the

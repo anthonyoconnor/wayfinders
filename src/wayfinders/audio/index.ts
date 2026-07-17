@@ -61,3 +61,19 @@ export type {
   AudioCueSuppressionReason,
   AudioUiCueAction,
 } from "./AudioCuePolicy";
+
+export {
+  MUSIC_CROSSFADE_SECONDS,
+  MUSIC_DUCK_ATTACK_SECONDS,
+  MUSIC_DUCK_GAIN,
+  MUSIC_DUCK_RELEASE_SECONDS,
+  MUSIC_GAIN_EPSILON,
+  MusicState,
+  selectMusicState,
+} from "./MusicState";
+export type {
+  MusicDuckReason,
+  MusicStateId,
+  MusicStateInput,
+  MusicStateSnapshot,
+} from "./MusicState";

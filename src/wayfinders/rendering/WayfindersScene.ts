@@ -91,6 +91,7 @@ import {
   createPhaserAudioPlaybackPort,
   GameAudioCueController,
   GameAudioController,
+  GameMusicController,
   mountGameAudioControls,
   mountUnavailableGameAudioControls,
   preloadGameAudioCatalog,
@@ -98,6 +99,8 @@ import {
   type GameAudioControls,
   type GameAudioCueDiagnostics,
   type GameAudioSnapshot,
+  type GameMusicDiagnostics,
+  type GameMusicInput,
   type SailingAmbienceDiagnostics,
 } from "./audio";
 import {
@@ -179,6 +182,7 @@ type BrowserAudioDebugSnapshot =
     audio: Readonly<GameAudioSnapshot>;
     ambience: Readonly<SailingAmbienceDiagnostics>;
     cues: Readonly<GameAudioCueDiagnostics>;
+    music: Readonly<GameMusicDiagnostics>;
   }>
   | Readonly<{ status: "unavailable"; error: string }>;
 
@@ -298,6 +302,7 @@ export class WayfindersScene extends Phaser.Scene {
   private authoredIslandPresentations!: Readonly<AuthoredIslandPresentationRuntime>;
   private audioController?: GameAudioController;
   private audioCueController?: GameAudioCueController;
+  private gameMusicController?: GameMusicController;
   private sailingAmbienceController?: SailingAmbienceController;
   private audioControls?: GameAudioControls;
   private readonly sailingAmbienceInput: SailingAmbienceInput = {
@@ -305,6 +310,13 @@ export class WayfindersScene extends Phaser.Scene {
     fullSpeed: 1,
     atDock: true,
     lifecycleHeld: false,
+  };
+  private readonly gameMusicInput: GameMusicInput = {
+    atDock: true,
+    inSupportedWater: true,
+    expeditionActive: false,
+    homeInteractionActive: false,
+    lifecycleDuckReason: "none",
   };
   constructor(
     simulation = new GameSimulation(),
@@ -443,6 +455,7 @@ export class WayfindersScene extends Phaser.Scene {
       return keepAdvancing;
     });
     this.updateSailingAmbience(delta / 1000);
+    this.updateGameMusic(delta / 1000);
     this.frameTiming.record(delta, this.clock.lastDroppedMs, document.visibilityState === "visible");
     this.syncPresentation();
   }
@@ -1567,6 +1580,7 @@ export class WayfindersScene extends Phaser.Scene {
       ? document.querySelector<HTMLElement>("#developer-tools-close")
       : this.gameHost;
     focusTarget?.focus({ preventScroll: true });
+    this.gameMusicController?.releaseDuck("succession");
     this.audioCueController?.enqueueUiAction("confirm");
     return true;
   }
@@ -2167,6 +2181,10 @@ export class WayfindersScene extends Phaser.Scene {
       this.audioController,
       this.simulation.events,
     );
+    this.gameMusicController = new GameMusicController(
+      this.audioController,
+      this.simulation.events,
+    );
     this.sailingAmbienceController = new SailingAmbienceController(this.audioController);
     this.audioControls = mountGameAudioControls(
       root,
@@ -2185,13 +2203,38 @@ export class WayfindersScene extends Phaser.Scene {
     this.sailingAmbienceController.update(this.sailingAmbienceInput, deltaSeconds);
   }
 
+  private updateGameMusic(deltaSeconds: number): void {
+    if (!this.gameMusicController) return;
+    this.gameMusicInput.atDock = this.simulation.atDock;
+    this.gameMusicInput.inSupportedWater = this.simulation.world.getKnowledge(
+      this.simulation.ship.currentTileX,
+      this.simulation.ship.currentTileY,
+    ) === KnowledgeState.Supported;
+    this.gameMusicInput.expeditionActive = this.simulation.expeditionActive;
+    this.gameMusicInput.homeInteractionActive = this.greatHallView?.mode === "home";
+    this.gameMusicInput.lifecycleDuckReason = this.simulation.completionChoiceActive
+      ? "completion"
+      : this.simulation.generationHandoverActive
+        ? "succession"
+        : this.simulation.wreckPresentationActive
+          ? "wreck"
+          : "none";
+    this.gameMusicController.update(this.gameMusicInput, deltaSeconds);
+  }
+
   private audioDebugSnapshot(): BrowserAudioDebugSnapshot {
-    if (this.audioController && this.sailingAmbienceController && this.audioCueController) {
+    if (
+      this.audioController
+      && this.sailingAmbienceController
+      && this.audioCueController
+      && this.gameMusicController
+    ) {
       return Object.freeze({
         status: "available",
         audio: this.audioController.getSnapshot(),
         ambience: this.sailingAmbienceController.getSnapshot(),
         cues: this.audioCueController.getSnapshot(),
+        music: this.gameMusicController.getSnapshot(),
       });
     }
     return Object.freeze({
@@ -2584,6 +2627,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.audioControls = undefined;
     this.audioCueController?.destroy();
     this.audioCueController = undefined;
+    this.gameMusicController?.destroy();
+    this.gameMusicController = undefined;
     this.sailingAmbienceController?.destroy();
     this.sailingAmbienceController = undefined;
     this.audioController?.destroy();

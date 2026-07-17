@@ -63,3 +63,15 @@ export type {
   GameAudioCueDecisionRecord,
   GameAudioCueDiagnostics,
 } from "./GameAudioCueController";
+
+export {
+  GameMusicController,
+  HOME_HARBOR_MUSIC_VOICE_ID,
+  OPEN_WATER_MUSIC_VOICE_ID,
+} from "./GameMusicController";
+export type {
+  GameMusicAudioSnapshot,
+  GameMusicAudioTarget,
+  GameMusicDiagnostics,
+  GameMusicInput,
+} from "./GameMusicController";

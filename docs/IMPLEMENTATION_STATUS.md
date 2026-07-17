@@ -12,7 +12,7 @@ post-survey risk. Browser acceptance at normal gameplay zoom verified the
 unlabelled rack, fractional return allocation, two-bundle survey glow, hidden
 exact status, and no warning or error output.
 
-The audio layer is implemented through `AUD-3`. Game and asset-library modes
+The audio layer is implemented through `AUD-4`. Game and asset-library modes
 share one validated stored-audio catalog; game mode has explicit enable, mute,
 master/category controls, bounded voice ownership, diagnostics, and silent
 fallback. The asset library has a play-only Audio workspace over the same
@@ -21,10 +21,13 @@ speed-controlled wake from current presentation state without world queries.
 It also batches typed discovery, survey, idol, exact-return, wreck, and accepted
 UI sources into at most one priority- and cooldown-bounded cue per synchronous
 transaction. High-rate and developer-only state remains silent. Catalog/WAV,
-mixer, controller, ambience and cue policy/controllers, controls, preview,
-workspace, and composition checks pass. Live keyboard/media, audible-loop, and
-cue browser acceptance is still pending because the in-app browser connection
-did not initialize during this handoff.
+Game mode also selects home-harbor or open-water music from current visible
+presentation state, crossfades two stable loops, and ducks them behind return,
+wreck, succession, and completion. Mixer, controller, ambience, cue and music
+policies/controllers, controls, preview, workspace, and composition checks
+pass. Live keyboard/media, audible-loop, cue, crossfade, and ducking browser
+acceptance is still pending because the in-app browser connection did not
+initialize during this handoff.
 
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
@@ -69,8 +72,8 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
   operation.
 - Game mode exposes a **Sound** panel with explicit enable, mute, master, music,
   ambience, sound-effect, and interface levels. Ocean and speed-controlled wake
-  ambience start after enable. Automatic gameplay/UI cues are bound; music-state
-  selection is not yet bound.
+  ambience, automatic gameplay/UI cues, and home-harbor/open-water music start
+  after enable.
 - An imported island can launch a disposable open-water sea trial from its
   library record and return directly to that same record.
 - Gameplay-session saving is absent; refresh starts a new session.
@@ -97,8 +100,8 @@ membership; `tests/README.md` explains lane selection.
 
 - Complete live audio browser acceptance for keyboard focus, stored-file media
   decode/audition, mute and level controls, silence at rest, smoothed wake,
-  direction reversal, loop seams, cue coalescing and supplementary muted
-  feedback, console-clean teardown, and restart.
+  direction reversal, loop seams, cue coalescing, supplementary muted feedback,
+  music crossfades and lifecycle ducking, console-clean teardown, and restart.
 - The layered water system is proposed but is not registered or loaded by the
   game.
 - End-to-end browser departure responsiveness has not been remeasured after the

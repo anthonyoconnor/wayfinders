@@ -440,10 +440,31 @@ and dropped bounded-source count are exposed with the other browser audio
 diagnostics. Scene teardown unsubscribes the cue adapter and stops its owned
 voices before destroying the general audio controller.
 
-Music-state selection is not yet bound and remains the scope of `AUD-4`. All
-stored files remain auditionable through the play-only Audio workspace. The
-stored artifact and replacement contract is owned by
-`Wayfinders_Asset_Pipeline.md`.
+`MusicState` selects `home-harbor` at the exact dock, in current Supported
+water, during home interaction, or while no expedition is active; an active
+expedition outside Supported water selects `open-water`. It consumes only
+current presentation-safe state. The state gains crossfade linearly over `1.5`
+seconds, with delta clamped to `0.25` seconds, and preserve snapshot identity
+when settled. Reversing a transition continues from the current gains.
+
+`GameMusicController` owns stable `music:home-harbor` and `music:open-water`
+voices bound to the two catalog music IDs. It starts only a non-zero layer,
+never exceeds the music category's two voices, stops a fully faded outgoing
+layer, and reconciles the current state only after audio enable or focus return.
+Exact return, wreck, succession, and completion request duck holds of `0.8`,
+`1.0`, `1.25`, and `1.5` seconds respectively. Completion outranks succession,
+which outranks wreck, return, and no duck. Wreck, handover, and completion
+presentation gates retain their matching duck until the gate ends. Duck attack
+is `0.12` seconds to gain `0.28`; release is `0.75` seconds. Continue, Start New
+Game, and handover dismissal release their transient modal hold and reconcile
+the resulting current state.
+
+Bounded diagnostics expose selected state, state/output gains, duck reason and
+timer, active/peak voices, starts, stops, crossfades, and per-reason triggers.
+Scene shutdown unsubscribes lifecycle events and stops both stable music voices
+before the general audio controller. All stored files remain auditionable
+through the play-only Audio workspace. The stored artifact and replacement
+contract is owned by `Wayfinders_Asset_Pipeline.md`.
 
 Chunk-local terrain, authored home-island objects, imported authored-island
 layers, knowledge/risk textures, cloud/shadow pairs, and marker pools all consume

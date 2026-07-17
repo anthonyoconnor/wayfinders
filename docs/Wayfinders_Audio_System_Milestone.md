@@ -1,7 +1,7 @@
 # Wayfinders audio-system proposal
 
-Implementation is present through `AUD-3`; live browser acceptance remains to
-be recorded. Planning and authorization status for `AUD-4` through `AUD-5`
+Implementation is present through `AUD-4`; live browser acceptance remains to
+be recorded. Planning and authorization status for `AUD-5`
 is owned only by `Wayfinders_Roadmap.md`.
 
 This document owns the remaining audio design and acceptance criteria. Current
@@ -25,7 +25,7 @@ The audio track has five milestones:
    boundary.
 2. `AUD-2` added ocean and vessel ambience driven by current presentation state.
 3. `AUD-3` added bounded gameplay and interface cues from existing typed events.
-4. `AUD-4` adds two-state music and lifecycle transitions.
+4. `AUD-4` added two-state music and lifecycle transitions.
 5. `AUD-5` produces the final sounds and music, overwrites the reference files
    at their stable runtime paths, completes browser acceptance, and closes
    production readiness.
@@ -90,9 +90,6 @@ milestones may extend the existing seams only in these directions:
 
 | Seam | Remaining extension | Constraint |
 | --- | --- | --- |
-| `src/wayfinders/audio` | add renderer-neutral music state selection | no Phaser objects, gameplay authority, or filesystem writes |
-| `src/wayfinders/rendering/audio` | add long-lived music instances and crossfades | no gameplay rules, hidden-world queries, or simulation mutation |
-| `WayfindersScene` | pass current presentation-safe music read models | no individual cue/music policy or sound-instance bookkeeping |
 | Audio workspace | continue auditioning the shared stored files without new production controls | no upload, creation, editing, mixing, metadata writes, or gameplay state |
 | `public/assets/audio` | receive final `AUD-5` bytes at existing paths | no source-production tooling or gameplay data |
 
@@ -113,8 +110,7 @@ decision.
 
 ## Runtime contract
 
-This section summarizes implemented cue and continuous-audio behavior plus the
-planned `AUD-4` behavior on top of the implemented foundation.
+This section summarizes implemented cue and continuous-audio behavior.
 `Wayfinders_Technical_Design.md` remains the
 canonical owner of current mixer, unlock, control, and lifecycle behavior.
 
@@ -212,7 +208,7 @@ destroys owned sound instances even though the manager itself is global.
 
 ### Music state
 
-`AUD-4` begins with two score states:
+The implemented selector has two score states:
 
 - **Home harbor** for the exact dock, home interaction, and quiet Supported
   water near the start of a voyage; and
@@ -223,7 +219,7 @@ not expose exact simulation data to the music adapter. State changes crossfade
 over `1.5` seconds by default. Re-entering the same state keeps the current
 loop; it never restarts on a stable frame.
 
-Wreck, succession, exact return, and game completion may temporarily duck music
+Wreck, succession, exact return, and game completion temporarily duck music
 behind their high-priority cue, then reconcile to current state. A separate
 danger track, generative score, beat-synchronized stems, or music based on
 unseen discovery proximity is out of scope until playtesting justifies it.
@@ -264,25 +260,12 @@ The current roadmap owns the remaining acceptance follow-up.
 
 ### AUD-4 — Adaptive music and lifecycle transitions
 
-Deliver:
-
-- renderer-neutral home-harbor and open-water music-state selection;
-- the two catalog music bindings and bounded crossfade ownership;
-- music ducking/return for wreck, exact return, succession, and completion;
-- completion priority consistent with the current lifecycle gate; and
-- replacement-safe catalog binding so final music can change without gameplay
-  or cue-policy changes.
-
-Acceptance gate:
-
-- State-selector tests cover dock, Supported departure, expedition start,
-  return, wreck hold, handover, completion, Continue, and Start new game.
-- A stable state never restarts or reallocates a loop.
-- Rapid state changes leave no orphan loop and never exceed two music voices.
-- Completion and succession in the same return transaction follow current
-  completion priority and reconcile after the modal action.
-- Browser acceptance confirms smooth crossfades, intelligible high-priority
-  cues, pause/focus behavior, and ten seam-free repetitions per loop.
+Implemented, with audible browser acceptance pending. Current selection,
+crossfade, ducking, lifecycle, diagnostic, and two-voice behavior is owned by
+the technical design. Focused contracts cover dock, Supported departure,
+expedition start, return, wreck hold, handover, completion, Continue, Start New
+Game, stable frames, rapid reversals, completion priority, focus reconciliation,
+and teardown. The current roadmap owns the remaining acceptance follow-up.
 
 ### AUD-5 — Production audio and closure
 

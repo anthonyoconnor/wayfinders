@@ -56,7 +56,7 @@ implemented. No further production-presentation milestone is currently
 proposed.
 
 The Voyage Sense thread and its supply commitments are implemented through
-`GP-5.2`. Remaining `AUD-4` through `AUD-5` work and the water-system proposal
+`GP-5.2`. Remaining `AUD-5` work and the water-system proposal
 remain separate candidate tracks. Great Hall concept and planning work is
 complete. The product owner accepted the
 `GR-5.2` view-only approval workspace and recorded **Go** on 2026-07-16. The
@@ -124,9 +124,9 @@ numbers; exact quantities remain available to assistive technology.
 
 ### AUD — Game sound and music layer
 
-Status: implemented through `AUD-3` on 2026-07-17; keyboard/media, audible-loop,
-and live cue browser acceptance remains to be recorded. `AUD-4` and `AUD-5`
-remain proposed and are not authorized.
+Status: implemented through `AUD-4` on 2026-07-17; keyboard/media, audible-loop,
+live cue, crossfade, and ducking browser acceptance remains to be recorded.
+`AUD-5` remains proposed and is not authorized.
 
 The implemented foundation loads one validated stored-audio catalog, exposes a
 play-only Audio asset workspace, and gives game mode an explicit enable flow,
@@ -153,11 +153,17 @@ wreck, high-rate silence, and developer-action suppression. It closes after
 live muted/unmuted browser acceptance confirms cues remain supplementary to the
 existing visual and semantic feedback.
 
+`AUD-4` adds renderer-neutral home-harbor/open-water selection, two stable music
+voices, bounded `1.5`-second crossfades, and priority lifecycle ducking for
+return, wreck, succession, and completion. State/controller contracts cover the
+full lifecycle matrix, stable frames, rapid reversals, focus reconciliation,
+completion priority, modal release, two-voice capacity, and teardown. It closes
+after live browser acceptance confirms audible transitions and ten seamless
+repetitions of both stored reference loops.
+
 The remaining proposed sequence is:
 
-1. `AUD-4` — home-harbor/open-water music states plus lifecycle crossfades and
-   ducking; and
-2. `AUD-5` — production of the final sounds and music, in-place replacement of
+1. `AUD-5` — production of the final sounds and music, in-place replacement of
    the reference WAVs at their existing runtime paths, final game mix, budgets,
    and acceptance closure.
 
@@ -184,8 +190,8 @@ second presentation-lifetime policy or simulation clock.
 
 ## Authorization boundary
 
-No further milestone is authorized for implementation. The water proposal and
-`AUD-4` through `AUD-5`, and any other new gameplay or production-asset
+No further milestone is authorized for implementation. The water proposal,
+`AUD-5`, and any other new gameplay or production-asset
 milestone require explicit user authorization. Do not implement gameplay
 saving; it may return only through an explicitly authorized milestone designed
 for the game that exists at that time.
