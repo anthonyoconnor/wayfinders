@@ -117,8 +117,8 @@ export function validateCloudAssetPackage(input: typeof packageInput): Readonly<
   finite(presentation.depth, "presentation.depth");
   unitInterval(presentation.opacity.minimum, "presentation.opacity.minimum");
   unitInterval(presentation.opacity.maximum, "presentation.opacity.maximum");
-  if (presentation.opacity.minimum > presentation.opacity.maximum || presentation.opacity.maximum > 0.35) {
-    throw new RangeError("Cloud opacity must be ordered and preserve the 0.35 acceptance cap");
+  if (presentation.opacity.minimum > presentation.opacity.maximum || presentation.opacity.maximum > 0.55) {
+    throw new RangeError("Cloud opacity must be ordered and preserve the 0.55 acceptance cap");
   }
   if (presentation.scale.minimum <= 0 || presentation.scale.minimum > presentation.scale.maximum) {
     throw new RangeError("Cloud scale range must be positive and ordered");

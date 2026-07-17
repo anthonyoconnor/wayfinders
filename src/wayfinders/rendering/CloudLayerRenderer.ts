@@ -7,6 +7,8 @@ import type { ActiveChunkDelta, ActiveChunkEntry } from "./activation";
 
 const CLOUD_NAMESPACE = 0x43_4c_44_31;
 const TWO_PI = Math.PI * 2;
+export const CLOUD_FREQUENCY_MINIMUM = 0;
+export const CLOUD_FREQUENCY_MAXIMUM = 12;
 
 export interface CloudDescriptor {
   readonly id: string;
@@ -54,6 +56,7 @@ interface CloudView {
 
 export interface CloudLayerResourceTelemetry {
   readonly enabled: boolean;
+  readonly cloudsPerChunk: number;
   readonly chunkCapacity: number;
   readonly activeChunks: number;
   readonly activeClouds: number;
@@ -80,6 +83,18 @@ function lerp(minimum: number, maximum: number, amount: number): number {
   return minimum + (maximum - minimum) * amount;
 }
 
+function radicalInverse(index: number, base: number): number {
+  let result = 0;
+  let fraction = 1 / base;
+  let remaining = index;
+  while (remaining > 0) {
+    result += (remaining % base) * fraction;
+    remaining = Math.floor(remaining / base);
+    fraction /= base;
+  }
+  return result;
+}
+
 function ownerChunkKeyAt(
   position: Readonly<{ x: number; y: number }>,
   chunkSizePixels: number,
@@ -98,12 +113,16 @@ export function resolveCloudDescriptor(
   const slotSeed = seed + CLOUD_NAMESPACE + slot * 7_919;
   if (seededValue(slotSeed, chunkX, chunkY) >= cloudPackage.presentation.chunkDensity) return undefined;
   const sample = (sampleSlot: number) => seededValue(slotSeed + sampleSlot * 977, chunkX, chunkY);
-  const quadrantX = slot % 2;
-  const quadrantY = Math.floor(slot / 2) % 2;
-  // Bias the four candidates toward chunk corners so a revealed area spanning
-  // neighboring chunks can admit a complete drift route without clustering.
-  const positionX = (quadrantX === 0 ? 0.14 : 0.86) + lerp(-0.025, 0.025, sample(2));
-  const positionY = (quadrantY === 0 ? 0.14 : 0.86) + lerp(-0.025, 0.025, sample(3));
+  // A low-discrepancy sequence keeps every existing slot stable when the live
+  // frequency changes while distributing additional candidates across a chunk.
+  const positionX = Math.min(0.92, Math.max(
+    0.08,
+    lerp(0.12, 0.88, radicalInverse(slot + 1, 2)) + lerp(-0.025, 0.025, sample(2)),
+  ));
+  const positionY = Math.min(0.92, Math.max(
+    0.08,
+    lerp(0.12, 0.88, radicalInverse(slot + 1, 3)) + lerp(-0.025, 0.025, sample(3)),
+  ));
   const frameOffset = Math.floor(
     seededValue(seed + CLOUD_NAMESPACE + 13, chunkX, chunkY) * cloudPackage.image.frameCount,
   );
@@ -361,15 +380,22 @@ export class CloudLayerRenderer {
   private lastWorld: WorldGrid | undefined;
   private motionEpochMs: number | undefined;
   private homeAnchor: Readonly<HomeAtmosphereAnchor> | undefined;
+  private frequency: number;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly reducedMotion = false,
     private readonly cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
-  ) {}
+  ) {
+    this.frequency = cloudPackage.presentation.candidatesPerChunk;
+  }
 
   get isEnabled(): boolean {
     return this.enabled;
+  }
+
+  get cloudsPerChunk(): number {
+    return this.frequency;
   }
 
   setEnabled(enabled: boolean): boolean {
@@ -377,6 +403,22 @@ export class CloudLayerRenderer {
     this.enabled = enabled;
     if (enabled) this.createActiveViews();
     else this.destroyViews();
+    return true;
+  }
+
+  setCloudsPerChunk(frequency: number): boolean {
+    if (!Number.isInteger(frequency)
+      || frequency < CLOUD_FREQUENCY_MINIMUM
+      || frequency > CLOUD_FREQUENCY_MAXIMUM) {
+      throw new RangeError(
+        `Cloud frequency must be an integer from ${CLOUD_FREQUENCY_MINIMUM} through ${CLOUD_FREQUENCY_MAXIMUM}`,
+      );
+    }
+    if (this.frequency === frequency) return false;
+    this.destroyViews();
+    this.frequency = frequency;
+    if (this.enabled) this.createActiveViews();
+    this.assertResourceCap();
     return true;
   }
 
@@ -498,6 +540,7 @@ export class CloudLayerRenderer {
     }
     return Object.freeze({
       enabled: this.enabled,
+      cloudsPerChunk: this.frequency,
       chunkCapacity: this.chunkCapacity,
       activeChunks: this.activeEntries.size,
       activeClouds: this.views.size,
@@ -529,15 +572,21 @@ export class CloudLayerRenderer {
     if (!this.scene.textures.exists(this.cloudPackage.image.textureKey)) return;
     for (const entry of this.activeEntries.values()) {
       if (entry.key === this.homeAnchor?.ownerChunkKey) {
-        for (const descriptor of resolveOpeningCloudDescriptors(
+        const openingDescriptors = resolveOpeningCloudDescriptors(
           this.seed,
           entry.key,
           this.homeAnchor.position,
           this.cloudPackage,
-        )) this.createView(descriptor);
+        );
+        for (const descriptor of openingDescriptors.slice(0, this.frequency)) this.createView(descriptor);
+        const ordinarySlots = Math.max(0, this.frequency - openingDescriptors.length);
+        for (let slot = 0; slot < ordinarySlots; slot++) {
+          const descriptor = resolveCloudDescriptor(this.seed, entry, this.chunkSizePixels, this.cloudPackage, slot);
+          if (descriptor) this.createView(descriptor);
+        }
         continue;
       }
-      for (let slot = 0; slot < this.cloudPackage.presentation.candidatesPerChunk; slot++) {
+      for (let slot = 0; slot < this.frequency; slot++) {
         const descriptor = resolveCloudDescriptor(this.seed, entry, this.chunkSizePixels, this.cloudPackage, slot);
         if (descriptor) this.createView(descriptor);
       }
@@ -612,7 +661,7 @@ export class CloudLayerRenderer {
   }
 
   private assertResourceCap(): void {
-    const capacity = this.chunkCapacity * this.cloudPackage.presentation.candidatesPerChunk;
+    const capacity = this.chunkCapacity * this.frequency;
     if (this.views.size > capacity) {
       throw new Error(`Cloud layer resource cap exceeded: ${this.views.size}/${capacity}`);
     }

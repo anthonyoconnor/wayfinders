@@ -60,7 +60,11 @@ import {
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
 import { buildCargoPresentation, type CargoPresentationModel } from "./CargoPresentation";
-import { CloudLayerRenderer } from "./CloudLayerRenderer";
+import {
+  CLOUD_FREQUENCY_MAXIMUM,
+  CLOUD_FREQUENCY_MINIMUM,
+  CloudLayerRenderer,
+} from "./CloudLayerRenderer";
 import { collectDebugEntityBounds, type DebugEntityBoundsRole } from "./DebugEntityBounds";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { IslandDossierRenderer } from "./IslandDossierRenderer";
@@ -123,8 +127,10 @@ interface BrowserDebugApi {
   regenerate: (seed?: number) => ReturnType<GameSimulation["snapshot"]>;
   setOverlay: (name: keyof GameSimulation["debug"], visible: boolean) => void;
   setCloudAtmosphere: (visible: boolean) => boolean;
+  setCloudFrequency: (cloudsPerChunk: number) => boolean;
   cloudAtmosphere: () => Readonly<{
     enabled: boolean;
+    cloudsPerChunk: number;
     resources: ReturnType<CloudLayerRenderer["getResourceTelemetry"]>;
   }>;
   returnToDock: () => boolean;
@@ -993,6 +999,14 @@ export class WayfindersScene extends Phaser.Scene {
             ${this.toggleMarkup("forwardRange", "Forward reach limit")}
             ${this.toggleMarkup("returnViability", "Return route viability")}
             ${this.cloudToggleMarkup()}
+            ${this.numberMarkup(
+              "cloud-frequency",
+              "Cloud frequency (per chunk)",
+              this.cloudLayer.cloudsPerChunk,
+              CLOUD_FREQUENCY_MINIMUM,
+              CLOUD_FREQUENCY_MAXIMUM,
+              1,
+            )}
           </div>
         </details>
 
@@ -1732,6 +1746,12 @@ export class WayfindersScene extends Phaser.Scene {
     return changed;
   }
 
+  private setCloudFrequency(cloudsPerChunk: number): boolean {
+    const changed = this.cloudLayer.setCloudsPerChunk(cloudsPerChunk);
+    if (changed) this.syncPresentation(true);
+    return changed;
+  }
+
   private syncCloudAtmosphereControl(): void {
     const input = document.querySelector<HTMLInputElement>("#scene-tools-slot input[data-cloud-atmosphere]");
     if (input) input.checked = this.cloudLayer.isEnabled;
@@ -1739,6 +1759,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   private liveConfigValue(id: string): number {
     switch (id) {
+      case "cloud-frequency": return this.cloudLayer.cloudsPerChunk;
       case "sight-radius": return prototypeConfig.navigation.sightRadius;
       case "starting-bundles": return prototypeConfig.provisions.startingBundles;
       case "survey-cost": return prototypeConfig.provisions.surveyCost;
@@ -1764,6 +1785,14 @@ export class WayfindersScene extends Phaser.Scene {
 
   private applyLiveConfig(id: string, value: number): boolean {
     if (!Number.isFinite(value)) return false;
+    if (id === "cloud-frequency") {
+      try {
+        return this.setCloudFrequency(value);
+      } catch (error) {
+        this.log(error instanceof Error ? error.message : "Cloud frequency was rejected.");
+        return false;
+      }
+    }
     const lockReason = this.developerActionLockReason();
     if (lockReason) {
       this.log(lockReason);
@@ -2001,8 +2030,10 @@ export class WayfindersScene extends Phaser.Scene {
       },
       setOverlay: (name, visible) => this.simulation.setDebugVisibility(name, visible),
       setCloudAtmosphere: (visible) => this.setCloudAtmosphereEnabled(visible),
+      setCloudFrequency: (cloudsPerChunk) => this.setCloudFrequency(cloudsPerChunk),
       cloudAtmosphere: () => Object.freeze({
         enabled: this.cloudLayer.isEnabled,
+        cloudsPerChunk: this.cloudLayer.cloudsPerChunk,
         resources: this.cloudLayer.getResourceTelemetry(),
       }),
       returnToDock: () => this.returnToDockForTesting(),

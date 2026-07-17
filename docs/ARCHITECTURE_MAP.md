@@ -79,7 +79,10 @@ not import Phaser.
   knowledge overlay's pure current-clear predicate and owns bounded
   cloud/shadow sprite pairs whose creation and motion are independent of fog.
   Fog affects only whether a pair's current padded footprint is presented; live
-  sight can uncover a moving pair without rebuilding it. The scene supplies
+  sight can uncover a moving pair without rebuilding it. The renderer owns a
+  bounded live frequency of zero through twelve pairs per active chunk and
+  deterministically rebuilds only its resources when that debug value changes.
+  The scene supplies
   only the home landmark's presentation position so the home-centre chunk can
   replace its ordinary candidates with three opening routes; fog and simulation
   rules never depend on clouds. Shared package textures, the

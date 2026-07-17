@@ -176,7 +176,9 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(CLOUD_ASSET_PACKAGE.variants).toHaveLength(4);
     expect(CLOUD_ASSET_PACKAGE.image.opaqueBounds).toHaveLength(4);
     expect(new Set(CLOUD_ASSET_PACKAGE.variants).size).toBe(4);
-    expect(CLOUD_ASSET_PACKAGE.presentation.opacity.maximum).toBeLessThanOrEqual(0.35);
+    expect(CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk).toBe(6);
+    expect(CLOUD_ASSET_PACKAGE.presentation.opacity.minimum).toBeGreaterThanOrEqual(0.3);
+    expect(CLOUD_ASSET_PACKAGE.presentation.opacity.maximum).toBeLessThanOrEqual(0.55);
     expect(CLOUD_ASSET_PACKAGE.presentation.scale.minimum).toBeLessThanOrEqual(0.22);
     expect(CLOUD_ASSET_PACKAGE.presentation.scale.maximum).toBeGreaterThanOrEqual(0.5);
     expect(CLOUD_ASSET_PACKAGE.presentation.cloudTintsRgb).toHaveLength(4);
@@ -213,6 +215,12 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(new Set(Array.from({ length: 4 }, (_, slot) => (
       resolveCloudDescriptor(13_371, entry(2, 3), 1024, CLOUD_ASSET_PACKAGE, slot)?.frame
     )))).toEqual(new Set([0, 1, 2, 3]));
+    const denseChunk = Array.from({ length: 12 }, (_, slot) => (
+      resolveCloudDescriptor(13_371, entry(2, 3), 1024, CLOUD_ASSET_PACKAGE, slot)!
+    ));
+    expect(new Set(denseChunk.map(({ baseX, baseY }) => (
+      `${baseX.toFixed(2)}:${baseY.toFixed(2)}`
+    )))).toHaveLength(12);
 
     const descriptors = Array.from({ length: 12 }, (_, y) => (
       Array.from({ length: 12 }, (_, x) => resolveCloudDescriptor(13_371, entry(x, y), 1024))
@@ -405,10 +413,13 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
 
     expect(sprites.filter(({ name, visible }) => /^cloud:home:\d+$/.test(name) && visible)).toHaveLength(3);
     expect(renderer.getResourceTelemetry()).toMatchObject({
-      activeClouds: 3,
-      visibleClouds: 3,
-      visibleShadows: 3,
+      activeClouds: CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
+      activeShadows: CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
     });
+    expect(renderer.getResourceTelemetry().visibleClouds).toBeGreaterThanOrEqual(3);
+    expect(renderer.getResourceTelemetry().visibleShadows).toBe(
+      renderer.getResourceTelemetry().visibleClouds,
+    );
   });
 
   it("keeps an eligible cloud pair visible throughout multiple slow drift cycles", () => {
@@ -573,5 +584,39 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(final.totalCloudReleases).toBe(final.totalCloudAllocations);
     expect(final.totalShadowReleases).toBe(final.totalShadowAllocations);
     expect(sprites.every(({ destroyed }) => destroyed)).toBe(true);
+  });
+
+  it("rebuilds deterministic bounded resources when live cloud frequency changes", () => {
+    const { scene, sprites } = createSpriteScene();
+    const renderer = new CloudLayerRenderer(scene as never, false);
+    const delta = oneChunkDelta();
+    renderer.applyActiveChunkDelta(delta, 13_371, 32 * 32);
+    const initialCount = CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk;
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      cloudsPerChunk: initialCount,
+      activeClouds: initialCount,
+      activeShadows: initialCount,
+    });
+
+    expect(renderer.setCloudsPerChunk(9)).toBe(true);
+    expect(renderer.setCloudsPerChunk(9)).toBe(false);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      cloudsPerChunk: 9,
+      activeClouds: 9,
+      activeShadows: 9,
+    });
+    expect(sprites.slice(0, initialCount * 2).every(({ destroyed }) => destroyed)).toBe(true);
+
+    expect(renderer.setCloudsPerChunk(0)).toBe(true);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      cloudsPerChunk: 0,
+      activeClouds: 0,
+      activeShadows: 0,
+    });
+    expect(() => renderer.setCloudsPerChunk(13)).toThrow(/integer from 0 through 12/);
+    expect(() => renderer.setCloudsPerChunk(1.5)).toThrow(/integer from 0 through 12/);
+    expect(renderer.getResourceTelemetry().activeClouds).toBeLessThanOrEqual(
+      delta.telemetry.capacity * renderer.cloudsPerChunk,
+    );
   });
 });

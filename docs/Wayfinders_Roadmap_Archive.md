@@ -1285,6 +1285,13 @@ create, destroy, restart, or reroute one. This also replaces full-route startup
 rejection, ensuring all three reserved home clouds are visible in the generated
 opening world.
 
+The same follow-up raised the cloud opacity range to `0.34` through `0.52` and
+the default frequency from four to six pairs per active chunk. Candidate slots
+now use stable low-discrepancy spacing so additional clouds do not pile onto the
+original positions. A session-only debug control and browser command select
+zero through twelve pairs per chunk, rebuilding only cloud-owned resources
+within the active-chunk cap.
+
 Opening-view acceptance on 2026-07-17 reserved three deterministic routes around
 the home island, increased the shadow separation, and replaced the small orbit
 with readable directional drift. Ordinary routes last `120` through `180`
@@ -1307,7 +1314,8 @@ The retained source, provenance, four-frame RGBA runtime sheet, package
 metadata, authored opaque-frame bounds, and read-only validation command live
 under the CLD-1 asset paths.
 Contract coverage verifies package shape, all four variants across deterministic
-samples, transform and motion variety, current-footprint fog occlusion, independent
+samples, transform, opacity, frequency and motion variety, current-footprint
+fog occlusion, independent
 toggle lifecycle, deterministic reconstruction, corner-crossing revealed-area
 placement, three-cloud generated-world opening composition, live-sight reveal,
 perceptible directional movement,

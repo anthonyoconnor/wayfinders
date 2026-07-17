@@ -377,12 +377,15 @@ a dark tint, pronounced southeast offset, reduced opacity, and flattened
 vertical scale; the increased separation establishes height immediately. It
 moves in lockstep with the cloud and can cross sea, terrain, or the ship.
 Cloud sprites sample a seeded four-tone white-to-storm-blue palette and a wider
-`0.22` through `0.50` scale range while retaining the `0.35` opacity ceiling.
+`0.22` through `0.50` scale range. Their `0.34` through `0.52` opacity range
+keeps silhouettes readable while preserving a `0.55` package ceiling.
 
-Each active chunk has four deterministic corner-biased candidate slots that
-cycle through all four authored silhouettes. The home-centre chunk reserves
-three of those slots at fixed offsets around the home island, guaranteeing an
-opening composition without adding another resource class. The world seed,
+Each active chunk defaults to six deterministic candidate slots distributed by
+a stable low-discrepancy sequence; increasing frequency adds positions without
+moving existing slots. Slots cycle through all four authored silhouettes. The
+home-centre chunk reserves the first three at fixed offsets around the home
+island, guaranteeing the default opening composition without adding another
+resource class, then fills any remaining frequency with ordinary slots. The world seed,
 chunk, and candidate slot choose scale, horizontal reflection, opacity, drift
 amplitude, drift period, direction, colour, position, and phase. The three
 opening slots deliberately use light, middle, and darkest tones together with
@@ -414,7 +417,10 @@ deterministic descriptors, enabled state, and resource counters, but shares the
 scene's active-chunk lifetime. Disabling clouds destroys only cloud-owned pairs
 and turns stable sync into a bounded no-op; re-enabling reconstructs the current
 active candidates without invalidating terrain, water, fog, risk, markers, UI,
-or authoritative revisions.
+or authoritative revisions. The debug menu's session-only **Cloud frequency
+(per chunk)** value accepts zero through twelve; changing it immediately and
+deterministically rebuilds cloud-owned pairs. Browser diagnostics expose the
+same value and command.
 
 The runtime authored packages provide the home island, animated player boat,
 fishing-shoal cue, and presentation-only four-frame cloud sheet. Available
@@ -549,9 +555,10 @@ Normal sailing avoids work proportional to total world or island count:
 - interaction and marker queries start from spatially local candidates;
 - forward guidance is cooperative, cancellable, and atomically published;
 - return rendering follows one sparse, chunk-indexed Voyage Sense thread;
-- clouds retain at most four cloud/shadow pairs per active chunk, compute one
-  bounded current footprint per pair, and rescan fog tiles only when overlay
-  coverage changes or motion crosses a tile boundary;
+- clouds retain six cloud/shadow pairs per active chunk by default and at most
+  twelve under live debug tuning, compute one bounded current footprint per
+  pair, and rescan fog tiles only when overlay coverage changes or motion
+  crosses a tile boundary;
 - overlays update dirty active chunks only; and
 - diagnostics are sampled and capped.
 
