@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "libraryId": "wayfinders.audio.v1",
+  "masterVolume": 0.8,
+  "categories": {
+    "music": {
+      "displayName": "Music",
+      "defaultVolume": 0.42,
+      "voiceLimit": 2
+    },
+    "ambience": {
+      "displayName": "Ambience",
+      "defaultVolume": 0.55,
+      "voiceLimit": 3
+    },
+    "sfx": {
+      "displayName": "Sound effects",
+      "defaultVolume": 0.75,
+      "voiceLimit": 8
+    },
+    "ui": {
+      "displayName": "Interface",
+      "defaultVolume": 0.6,
+      "voiceLimit": 2
+    }
+  },
+  "assets": [
+    {
+      "id": "music.home-harbor",
+      "displayName": "Home Harbor",
+      "category": "music",
+      "file": "./v1/music/home-harbor.wav",
+      "loop": true,
+      "baseVolume": 0.38,
+      "description": "Home dock and Supported-water music state"
+    },
+    {
+      "id": "music.open-water",
+      "displayName": "Open Water",
+      "category": "music",
+      "file": "./v1/music/open-water.wav",
+      "loop": true,
+      "baseVolume": 0.34,
+      "description": "Active expedition and open-water music state"
+    },
+    {
+      "id": "ambience.ocean",
+      "displayName": "Ocean",
+      "category": "ambience",
+      "file": "./v1/ambience/ocean.wav",
+      "loop": true,
+      "baseVolume": 0.28,
+      "description": "Persistent ocean bed beneath music and cues"
+    },
+    {
+      "id": "ambience.wake",
+      "displayName": "Vessel Wake",
+      "category": "ambience",
+      "file": "./v1/ambience/wake.wav",
+      "loop": true,
+      "baseVolume": 0.22,
+      "description": "Ship-speed-controlled wake layer"
+    },
+    {
+      "id": "sfx.discovery",
+      "displayName": "Discovery",
+      "category": "sfx",
+      "file": "./v1/sfx/discovery.wav",
+      "loop": false,
+      "baseVolume": 0.72,
+      "description": "Island, site, shoal, or wreck sighting"
+    },
+    {
+      "id": "sfx.survey-complete",
+      "displayName": "Survey Complete",
+      "category": "sfx",
+      "file": "./v1/sfx/survey-complete.wav",
+      "loop": false,
+      "baseVolume": 0.7,
+      "description": "Successful survey result"
+    },
+    {
+      "id": "sfx.dock-return",
+      "displayName": "Dock Return",
+      "category": "sfx",
+      "file": "./v1/sfx/dock-return.wav",
+      "loop": false,
+      "baseVolume": 0.76,
+      "description": "Exact-dock return or dock replenishment"
+    },
+    {
+      "id": "sfx.wreck",
+      "displayName": "Ship Wrecked",
+      "category": "sfx",
+      "file": "./v1/sfx/wreck.wav",
+      "loop": false,
+      "baseVolume": 0.74,
+      "description": "Authoritative ship-wreck event"
+    },
+    {
+      "id": "ui.confirm",
+      "displayName": "Confirm",
+      "category": "ui",
+      "file": "./v1/ui/confirm.wav",
+      "loop": false,
+      "baseVolume": 0.58,
+      "description": "Accepted dialog or button action"
+    },
+    {
+      "id": "ui.cancel",
+      "displayName": "Cancel",
+      "category": "ui",
+      "file": "./v1/ui/cancel.wav",
+      "loop": false,
+      "baseVolume": 0.52,
+      "description": "Dismissal or rejected optional action"
+    },
+    {
+      "id": "ui.toggle",
+      "displayName": "Toggle",
+      "category": "ui",
+      "file": "./v1/ui/toggle.wav",
+      "loop": false,
+      "baseVolume": 0.42,
+      "description": "Audio-control feedback"
+    }
+  ]
+}

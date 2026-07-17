@@ -11,6 +11,10 @@ import {
   type AuthoredIslandPresentationRuntime,
 } from "../assets/AuthoredIslandPresentation";
 import {
+  AudioMixer,
+  type AudioCatalogLoadResult,
+} from "../audio";
+import {
   onPrototypeConfigChanged,
   patchPrototypeConfig,
   prototypeConfig,
@@ -83,6 +87,15 @@ import { SurveySiteRenderer } from "./SurveySiteRenderer";
 import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
 import {
+  createPhaserAudioPlaybackPort,
+  GameAudioController,
+  mountGameAudioControls,
+  mountUnavailableGameAudioControls,
+  preloadGameAudioCatalog,
+  type GameAudioControls,
+  type GameAudioSnapshot,
+} from "./audio";
+import {
   ActiveChunkSet,
   DEFAULT_ACTIVE_CHUNK_BUDGET,
   DEFAULT_ACTIVE_CHUNK_PREFETCH_RING,
@@ -152,7 +165,12 @@ interface BrowserDebugApi {
   greatHall: () => Readonly<GreatHallChronicle>;
   continueCompletedWorld: () => boolean;
   startNewGame: () => number | undefined;
+  audio: () => BrowserAudioDebugSnapshot;
 }
+
+type BrowserAudioDebugSnapshot =
+  | Readonly<{ status: "available"; audio: Readonly<GameAudioSnapshot> }>
+  | Readonly<{ status: "unavailable"; error: string }>;
 
 declare global {
   interface Window {
@@ -268,10 +286,13 @@ export class WayfindersScene extends Phaser.Scene {
   private currentShipPose!: ShipRenderPose;
   private pilotAssets!: PilotAssetRuntime;
   private authoredIslandPresentations!: Readonly<AuthoredIslandPresentationRuntime>;
+  private audioController?: GameAudioController;
+  private audioControls?: GameAudioControls;
   constructor(
     simulation = new GameSimulation(),
     private readonly authoredIslandPresentationCatalog: Readonly<AuthoredIslandPresentationCatalog> =
       EMPTY_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+    private readonly audioCatalogResult?: AudioCatalogLoadResult,
   ) {
     super({ key: "WayfindersScene" });
     this.simulation = simulation;
@@ -281,6 +302,9 @@ export class WayfindersScene extends Phaser.Scene {
     preloadPilotAssetPackages(this);
     preloadCloudAsset(this);
     preloadAuthoredIslandPresentations(this, this.authoredIslandPresentationCatalog);
+    if (this.audioCatalogResult?.ok) {
+      preloadGameAudioCatalog(this, this.audioCatalogResult.catalog);
+    }
   }
 
   create(): void {
@@ -355,6 +379,7 @@ export class WayfindersScene extends Phaser.Scene {
       if (sections.has("overlays")) this.simulation.refreshRiskOverlays();
     }));
     this.domAbort = new AbortController();
+    this.mountAudioControls();
     this.mountDeveloperTools();
     this.mountSurveyRibbon();
     this.mountHomeAction();
@@ -2068,6 +2093,7 @@ export class WayfindersScene extends Phaser.Scene {
       greatHall: () => this.greatHallChronicle(),
       continueCompletedWorld: () => this.continueCompletedWorld(),
       startNewGame: () => this.startNewGameFromCompletion(),
+      audio: () => this.audioDebugSnapshot(),
     };
     this.browserDebugApi = api;
     window.__WAYFINDERS__ = api;
@@ -2086,6 +2112,37 @@ export class WayfindersScene extends Phaser.Scene {
         surveySites: this.surveySiteRenderer.getLifetimeTelemetry(),
         fishingShoals: this.fishingShoalRenderer.getLifetimeTelemetry(),
       }),
+    });
+  }
+
+  private mountAudioControls(): void {
+    const root = document.querySelector<HTMLElement>(".game-region");
+    if (!root) return;
+    if (!this.audioCatalogResult?.ok) {
+      const message = this.audioCatalogResult
+        ? `Sound is unavailable: ${this.audioCatalogResult.error.message}`
+        : "Sound is unavailable because the audio catalog was not loaded.";
+      this.audioControls = mountUnavailableGameAudioControls(root, message);
+      return;
+    }
+    const catalog = this.audioCatalogResult.catalog;
+    this.audioController = new GameAudioController({
+      catalog,
+      mixer: new AudioMixer(catalog),
+      playback: createPhaserAudioPlaybackPort(this),
+    });
+    this.audioControls = mountGameAudioControls(root, this.audioController);
+  }
+
+  private audioDebugSnapshot(): BrowserAudioDebugSnapshot {
+    if (this.audioController) {
+      return Object.freeze({ status: "available", audio: this.audioController.getSnapshot() });
+    }
+    return Object.freeze({
+      status: "unavailable",
+      error: this.audioCatalogResult && !this.audioCatalogResult.ok
+        ? this.audioCatalogResult.error.message
+        : "The audio catalog was not loaded.",
     });
   }
 
@@ -2467,6 +2524,10 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private destroyBindings(): void {
+    this.audioControls?.destroy();
+    this.audioControls = undefined;
+    this.audioController?.destroy();
+    this.audioController = undefined;
     this.domAbort?.abort();
     this.developerToolsAbort?.abort();
     this.gameHost = undefined;

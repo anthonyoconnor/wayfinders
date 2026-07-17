@@ -18,6 +18,44 @@ in `Wayfinders_Technical_Design.md`; future workflow scope is in
 - A production candidate may preserve or replace a visual binding without
   silently replacing accepted collision or gameplay metadata.
 
+Audio is a separate stored-runtime artifact family. It does not use PNG source
+recipes, preparation, candidate review, promotion, or repository-write APIs.
+
+## Stored audio library
+
+`public/assets/audio/audio-catalog.json` is the one catalog consumed by game
+mode and the play-only Audio asset workspace, and it is the executable authority
+for every stable replacement path. Its validated V1 root contains
+`schemaVersion`, `libraryId`, default `masterVolume`, `categories`, and `assets`.
+Each category contains its display name, default gain, and voice limit. Each
+asset contains its stable semantic ID, display name, description, category,
+safe catalog-relative WAV path, whole-file loop flag, and base gain. Runtime
+files live under `public/assets/audio/v1` in `music`, `ambience`, `sfx`, and `ui`
+directories.
+
+An in-contract audio replacement overwrites an existing WAV at its current
+path while preserving its semantic purpose and whole-file loop behavior. It
+requires no TypeScript, catalog, or loader change. IDs, paths, categories,
+formats, additions/removals, and loop flags are catalog-contract changes and
+must be made explicitly. Catalog metadata intentionally excludes content
+hashes, duration, sample rate, measured level, source-project data, and approval
+state so replacing file bytes does not require unrelated metadata maintenance.
+
+The repository supplies read-only catalog and WAV validation only. Validation
+requires the catalog and disk WAV sets to match exactly, safe in-root paths,
+integer PCM RIFF/WAVE structure, no one-shot longer than four seconds, and no
+more than twelve MiB across stored WAVs. It contains no audio recording,
+synthesis, generation, trimming, normalization, encoding, mixing, upload, or
+export workflow. Completed runtime WAVs are produced outside this repository
+and placed directly at the stable paths.
+
+The `?mode=assets&workspace=audio` workspace groups the shared catalog and
+loads one selected stored file for browser playback. It supports play from
+start, pause/resume, stop, progress, browser-reported duration, loop status,
+and load/decode failure output. Changing selection or leaving the workspace
+stops and releases the owned media element. The workspace exposes no volume,
+metadata, file, catalog, HTTP-mutation, or repository-write control.
+
 ## Runtime packages
 
 Package contract V1 supports:

@@ -27,6 +27,10 @@ import {
   type AssetWorkspaceTabs,
 } from "./wayfinders/assets/AssetWorkspaceTabs";
 import { assetWorkspaceSceneKey } from "./wayfinders/assets/workspaces/AssetWorkspace";
+import {
+  tryLoadAudioCatalog,
+  type AudioCatalogLoadResult,
+} from "./wayfinders/audio";
 import { GameSimulation } from "./wayfinders/core/GameSimulation";
 import { WayfindersScene } from "./wayfinders/rendering/WayfindersScene";
 import "./styles.css";
@@ -205,51 +209,67 @@ document.documentElement.dataset.applicationMode = applicationMode;
 export let wayfindersGame: Phaser.Game | undefined;
 let assetWorkspaceTabs: AssetWorkspaceTabs | undefined;
 
-try {
-  const scenes = applicationMode === "assets"
-    ? [createAssetWorkspaceScene(initialAssetWorkspace)]
-    : applicationMode === "asset-trial"
-      ? [new AssetTrialScene(resolveAssetTrialApplicationRequest(window.location.search)!)]
-      : [new WayfindersScene(
-        new GameSimulation(prototypeConfig, undefined, {
-          authoredIslandCatalog: AVAILABLE_AUTHORED_ISLAND_CATALOG,
-        }),
-        AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
-      )];
-  wayfindersGame = createWayfindersGame(scenes);
-  if (applicationMode === "assets") {
-    let activeWorkspace = initialAssetWorkspace;
-    const registeredWorkspaceIds = new Set<AssetWorkspaceId>([
-      initialAssetWorkspace.id as AssetWorkspaceId,
-    ]);
-    assetWorkspaceTabs = mountAssetWorkspaceTabs(
-      assetWorkspaceTabsRoot,
-      appShell,
-      initialAssetWorkspace,
-      (workspace) => {
-        const previousKey = assetWorkspaceSceneKey(activeWorkspace.id);
-        const nextKey = assetWorkspaceSceneKey(workspace.id);
-        wayfindersGame!.scene.stop(previousKey);
-        if (!registeredWorkspaceIds.has(workspace.id as AssetWorkspaceId)) {
-          wayfindersGame!.scene.add(nextKey, createAssetWorkspaceScene(workspace), false);
-          registeredWorkspaceIds.add(workspace.id as AssetWorkspaceId);
-        }
-        wayfindersGame!.scene.start(nextKey);
-        activeWorkspace = workspace;
-      },
+async function startApplication(): Promise<void> {
+  try {
+    const audioCatalogResult: AudioCatalogLoadResult | undefined = applicationMode === "asset-trial"
+      ? undefined
+      : await tryLoadAudioCatalog();
+    if (audioCatalogResult && !audioCatalogResult.ok) {
+      log(`Audio unavailable: ${audioCatalogResult.error.message}`);
+    }
+
+    const scenes = applicationMode === "assets"
+      ? [createAssetWorkspaceScene(initialAssetWorkspace, audioCatalogResult)]
+      : applicationMode === "asset-trial"
+        ? [new AssetTrialScene(resolveAssetTrialApplicationRequest(window.location.search)!)]
+        : [new WayfindersScene(
+          new GameSimulation(prototypeConfig, undefined, {
+            authoredIslandCatalog: AVAILABLE_AUTHORED_ISLAND_CATALOG,
+          }),
+          AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+          audioCatalogResult,
+        )];
+    wayfindersGame = createWayfindersGame(scenes);
+    if (applicationMode === "assets") {
+      let activeWorkspace = initialAssetWorkspace;
+      const registeredWorkspaceIds = new Set<AssetWorkspaceId>([
+        initialAssetWorkspace.id as AssetWorkspaceId,
+      ]);
+      assetWorkspaceTabs = mountAssetWorkspaceTabs(
+        assetWorkspaceTabsRoot,
+        appShell,
+        initialAssetWorkspace,
+        (workspace) => {
+          const previousKey = assetWorkspaceSceneKey(activeWorkspace.id);
+          const nextKey = assetWorkspaceSceneKey(workspace.id);
+          wayfindersGame!.scene.stop(previousKey);
+          if (!registeredWorkspaceIds.has(workspace.id as AssetWorkspaceId)) {
+            wayfindersGame!.scene.add(
+              nextKey,
+              createAssetWorkspaceScene(workspace, audioCatalogResult),
+              false,
+            );
+            registeredWorkspaceIds.add(workspace.id as AssetWorkspaceId);
+          }
+          wayfindersGame!.scene.start(nextKey);
+          activeWorkspace = workspace;
+        },
+      );
+    }
+    window.dispatchEvent(
+      new CustomEvent("wayfinders:shell-ready", {
+        detail: { shell: wayfindersShell, game: wayfindersGame },
+      }),
     );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "The renderer could not be started.";
+    setStatus(message, "error");
+    log(message);
+    console.error(error);
   }
-  window.dispatchEvent(
-    new CustomEvent("wayfinders:shell-ready", {
-      detail: { shell: wayfindersShell, game: wayfindersGame },
-    }),
-  );
-} catch (error) {
-  const message = error instanceof Error ? error.message : "The renderer could not be started.";
-  setStatus(message, "error");
-  log(message);
-  console.error(error);
 }
+
+void startApplication();
 
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {

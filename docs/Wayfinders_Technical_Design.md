@@ -348,6 +348,46 @@ region and updates one `ActiveChunkSet`. The active set prioritizes visible
 chunks, adds a prefetch ring when capacity allows, and enforces a hard five-by-
 five (`25`) chunk resource budget. Deactivation runs before activation.
 
+### Audio foundation
+
+Game and asset-library startup fetch and strictly validate
+`/assets/audio/audio-catalog.json` once before scene composition. Isolated asset
+trials do not fetch it. A fetch, schema, or catalog-validation failure becomes
+an explicit unavailable result: game simulation and semantic UI still start,
+and the affected sound surface reports the failure in place.
+
+With a valid catalog, game mode queues every catalog WAV during
+`WayfindersScene.preload()`. `GameAudioController` then owns a Phaser playback
+port, all sound instances it creates, and a renderer-neutral `AudioMixer`.
+Playback begins disabled behind an explicit **Enable sound** action and respects
+the browser Sound Manager lock. A cue attempted while disabled, locked,
+suspended, unavailable, or destroyed is rejected immediately and is never
+queued for replay. On blur/suspension, owned one-shots are discarded while
+Phaser pauses retained loops; focus only reconciles those current loops.
+
+Mixer state is in memory only. Initial master gain is `0.80`; initial category
+gains are music `0.42`, ambience `0.55`, sound effects `0.75`, and interface
+`0.60`. Effective instance gain is master by category by catalog base gain by
+transition gain, with every control clamped to `[0, 1]`. Category voice limits
+are respectively `2`, `3`, `8`, and `2`, with a hard total limit of `15`.
+At a limit, an incoming voice may deterministically replace the oldest lowest-
+priority equal-or-lower-priority voice; otherwise it is rejected. Stable mixer
+updates preserve revision and snapshot identity.
+
+The game-only DOM surface exposes keyboard-accessible enable, master mute,
+master level, and all four category levels with exact percentage output. It has
+no persistence or gameplay-save seam. Bounded diagnostics expose lock,
+suspension, gain, active/peak voice, loop, rejection, unavailable-asset, and
+playback-error state through `window.__WAYFINDERS__.audio()`. Scene shutdown
+destroys the controls, listeners, owned sounds, playback adapter, and mixer
+voice ledger idempotently without destroying Phaser's global Sound Manager.
+
+This foundation does not yet select or start gameplay cues, ambience, or music.
+Those presentation policies remain the scope of `AUD-2` through `AUD-4`; the
+stored files can be auditioned now through the play-only Audio workspace. The
+stored artifact and replacement contract is owned by
+`Wayfinders_Asset_Pipeline.md`.
+
 Chunk-local terrain, authored home-island objects, imported authored-island
 layers, knowledge/risk textures, cloud/shadow pairs, and marker pools all consume
 the same active-chunk delta. Inactive presentation resources are destroyed or
@@ -443,12 +483,12 @@ padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
 The asset-library route provides persistent **Islands**, **Ships**, **Fishing
-shoals**, and **Great Hall** tabs above permanent left-library, centre-preview,
-and right-workbench regions. The active workspace is URL-addressable and
+shoals**, **Great Hall**, and **Audio** tabs above permanent left-library,
+centre-preview, and right-workbench regions. The active workspace is URL-addressable and
 follows browser history; accessible arrow-key navigation uses roving focus. A
 typed registry partitions library catalog entries and collision profiles,
-while a scene factory mounts either a library scene or the isolated Great Hall
-approval scene. Workspace shutdown aborts its DOM listeners and Phaser
+while a scene factory mounts a library scene, the isolated Great Hall approval
+scene, or the play-only stored-audio scene. Workspace shutdown aborts its DOM listeners and Phaser
 bindings before the next workspace mounts. The left and right columns scroll
 independently, and the Phaser preview is sized to the centre column so it
 cannot render behind those controls. Existing recipe names and stable IDs are

@@ -7,15 +7,17 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 ## Startup order
 
 1. `src/main.ts` selects the game, asset-library, or isolated-trial application
-   mode and supplies validated prototype configuration.
+   mode and supplies validated prototype configuration. Game and asset-library
+   modes also load the shared audio catalog once; a catalog failure is retained
+   as an explicit silent/unavailable result rather than blocking startup.
 2. In game mode, `GameSimulation` plans a `WorldManifest`, rasterizes
    `WorldGrid`, builds one `WorldAnalysisIndex`, and composes gameplay features.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
 4. The asset-library mode resolves a typed asset-workspace registry and starts
-   one workspace-scoped `AssetViewerScene` without gameplay simulation. The
-   trial mode starts `AssetTrialScene` with one isolated open-water `WorldGrid`,
-   movement authority, and selected candidate.
+   one workspace-scoped library, Great Hall, or Audio preview scene without
+   gameplay simulation. The trial mode starts `AssetTrialScene` with one
+   isolated open-water `WorldGrid`, movement authority, and selected candidate.
 5. Presentation controllers and renderers consume read models, revisions, and
    the shared active-chunk delta where applicable.
 6. Diagnostics and development tools consume bounded read models and counters;
@@ -30,8 +32,9 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 | `navigation` | collision topology, movement authority, and route/range mechanics | feature rewards or UI |
 | `exploration` / `features` | feature state, commands, selectors, and mutation results | scene lifecycle |
 | `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering | feature-specific presentation rules |
+| `audio` | validated stored-audio catalog contracts, renderer-neutral gain state, and bounded voice-accounting policy | Phaser objects, gameplay authority, decoded media, or repository writes |
 | `rendering` | Phaser lifecycle, resource activation, and read-model adaptation | authoritative gameplay decisions |
-| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, and isolated trials | navigation authority outside declared collision metadata or gameplay-session state |
+| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, isolated trials, and play-only stored-audio preview | navigation authority outside declared collision metadata, gameplay-session state, or audio creation/editing/mixing/writes |
 
 ## Dependency direction
 
@@ -52,7 +55,9 @@ diagnostics and developer tools
 Assets may be consumed by presentation. Only validated semantic collision
 metadata crosses from assets into navigation. Presentation may import public
 domain contracts but never private feature state. Feature and world code must
-not import Phaser.
+not import Phaser. The renderer-neutral `audio` policy is consumed by both the
+Phaser audio adapter and the play-only asset workspace; only the rendering
+adapter may own Phaser sound instances.
 
 ## Public seams
 
@@ -88,6 +93,12 @@ not import Phaser.
   rules never depend on clouds. Shared package textures, the
   player-boat visual, and the four-frame cloud sheet remain a small scene-owned
   set. Feature-specific presentation belongs in controllers and renderers.
+- `src/wayfinders/audio/index.ts` is the public stored-audio and mixer seam. It
+  validates the canonical catalog, resolves catalog-relative runtime URLs, and
+  owns in-memory master/category gain plus bounded deterministic voice
+  decisions. `src/wayfinders/rendering/audio/index.ts` adapts that policy to
+  Phaser preload/playback/unlock and owns every created sound instance through
+  scene teardown. Neither seam imports or mutates `GameSimulation`.
 - Asset tools share runtime package validation, presentation factories, and the
   accepted hybrid collision contract. Narrow same-origin development-server
   operations serialize source intake, candidate save or deletion, review, and exact-
@@ -105,6 +116,10 @@ not import Phaser.
   the fixture or renderer gameplay authority. `AssetWorkspaceSceneFactory` selects the isolated scene
   kind at composition. Stopping a workspace aborts its DOM listeners and Phaser
   bindings before another workspace starts.
+- The Audio workspace adapts the same validated catalog used by game mode and
+  creates one browser media element only for the selected stored file. It owns
+  playback, pause/resume, stop, browser-reported timing, and teardown only; it
+  exposes no upload, creation, metadata edit, mix, or repository-write seam.
 - The Islands workspace owns its focused properties, availability-status,
   sea-trial, collision, and imported-island deletion UI. Its save and guarded
   deletion adapters commit through rollback-safe repository transactions.

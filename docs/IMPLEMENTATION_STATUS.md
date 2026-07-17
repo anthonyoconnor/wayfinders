@@ -1,6 +1,6 @@
 # Wayfinders operational status
 
-Status: current development handoff, verified 2026-07-16.
+Status: current development handoff, verified 2026-07-17.
 
 The asset workflow through GR-4.4, the graphical Great Hall through GR-5.3,
 and gameplay through GP-5.2 are implemented. GP-5.1 replaces the filled return
@@ -11,6 +11,15 @@ fractional partitions, shortfalls, safe and unknown returns, and projected
 post-survey risk. Browser acceptance at normal gameplay zoom verified the
 unlabelled rack, fractional return allocation, two-bundle survey glow, hidden
 exact status, and no warning or error output.
+
+The `AUD-1` audio foundation is implemented. Game and asset-library modes share
+one validated stored-audio catalog; game mode has explicit enable, mute,
+master/category controls, bounded voice ownership, diagnostics, and silent
+fallback. The asset library has a play-only Audio workspace over the same
+stored files. Catalog/WAV, mixer, controller, controls, preview, workspace, and
+composition checks pass. Live keyboard/media browser acceptance is still
+pending because the in-app browser connection did not initialize during this
+handoff.
 
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
@@ -25,14 +34,17 @@ creation and destruction. Browser smoke acceptance covers the game, zoom input,
 and the simplified Islands workspace without warning or error output.
 The twenty-generation presentation-fixture baseline measured `0.193 ms` p95 over
 2,000 serial samples on 2026-07-16. The implemented regression contract is
-owned by the technical design. GP-5.2 architecture validation, source and test
-typechecks, quick and focused contract lanes, integration coverage, browser
-acceptance, and the production bundle pass. The aggregate `npm.cmd run check`
-command remains blocked at asset validation because `promotion-summary.json`
-is stale. The combined correctness run proceeds past that check but retains
-asset-only failures whose fixtures expect the former three-package empty-source
-baseline while the current workspace contains additional island sources and
-candidates. Those asset artifacts and expectations are outside GP-5.2 and
+owned by the technical design. Architecture validation, source and test
+typechecks, the quick and integration lanes, focused GP-5.2 and AUD-1 contracts,
+AUD-1 repository-I/O checks, GP-5.2 browser acceptance, and the production
+bundle passed. AUD-1 browser acceptance remains pending. The aggregate
+`npm.cmd run check` reaches and passes `audio:check` but remains blocked at
+asset validation because `promotion-summary.json` is stale. The combined
+correctness run retains asset-only fixture drift that expects the former
+three-package empty-source baseline while the current workspace contains
+additional island sources, candidates, and recipes. A cross-process collision
+test that timed out under parallel lane contention passes in isolation. Those
+authored-asset artifacts and expectations are outside GP-5.2 and AUD-1 and
 remain untouched.
 
 This file records only volatile operational facts. Implemented behavior belongs
@@ -43,13 +55,17 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
 ## Runnable surfaces
 
 - The default browser route starts a fresh playable voyage.
-- `?mode=assets` opens URL-addressable Islands, Ships, Fishing shoals, and Great
-  Hall workspaces. Islands use a focused import, properties,
+- `?mode=assets` opens URL-addressable Islands, Ships, Fishing shoals, Great
+  Hall, and Audio workspaces. Islands use a focused import, properties,
   availability-status, sea-trial, collision-mask, and single-save workflow.
   Ships and Fishing shoals retain general asset inspection and production
   controls. Great Hall is a view-only host for the validated V1 fixture and the
   same bounded renderer used by the game, with a one-to-twenty navigator-count
-  selector.
+  selector. Audio is a play-only stored-file browser with no edit or repository
+  operation.
+- Game mode exposes a **Sound** panel with explicit enable, mute, master, music,
+  ambience, sound-effect, and interface levels. `AUD-1` does not yet bind
+  automatic gameplay cues, ambience, or music-state selection.
 - An imported island can launch a disposable open-water sea trial from its
   library record and return directly to that same record.
 - Gameplay-session saving is absent; refresh starts a new session.
@@ -74,6 +90,8 @@ membership; `tests/README.md` explains lane selection.
 
 ## Open operational gaps
 
+- Complete live browser acceptance for AUD-1 keyboard focus, stored-file media
+  decode/audition, mute and level controls, console-clean teardown, and restart.
 - The layered water system is proposed but is not registered or loaded by the
   game.
 - End-to-end browser departure responsiveness has not been remeasured after the

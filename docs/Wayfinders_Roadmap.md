@@ -22,6 +22,7 @@ authorized.
 - `GP-x.y` identifies gameplay milestones and acceptance gates.
 - `GR-x.y` identifies graphics, asset-pipeline, and production-presentation
   milestones and acceptance gates.
+- `AUD-x` identifies game-audio milestones and their acceptance gates.
 - `WTR-x.y` identifies the proposed water-presentation track.
 - `CLD-x.y` identifies cloud-atmosphere milestones and acceptance gates.
 - A milestone is complete only when its behavior, tests, maintainability,
@@ -55,8 +56,9 @@ implemented. No further production-presentation milestone is currently
 proposed.
 
 The Voyage Sense thread and its supply commitments are implemented through
-`GP-5.2`. The water-system proposal remains a separate candidate track. Great
-Hall concept and planning work is complete. The product owner accepted the
+`GP-5.2`. Remaining `AUD-2` through `AUD-5` work and the water-system proposal
+remain separate candidate tracks. Great Hall concept and planning work is
+complete. The product owner accepted the
 `GR-5.2` view-only approval workspace and recorded **Go** on 2026-07-16. The
 shared presentation contract, renderer, fixture, game adapter, and bounded era
 integration in `GR-5.3` are implemented.
@@ -118,6 +120,44 @@ implemented behavior is owned by the technical design and its acceptance
 evidence is archived. The rack intentionally contains no visible words or
 numbers; exact quantities remain available to assistive technology.
 
+## Audio presentation
+
+### AUD — Game sound and music layer
+
+Status: `AUD-1` implemented on 2026-07-17; keyboard/media browser acceptance
+remains to be recorded. `AUD-2` through `AUD-5` remain proposed and are not
+authorized.
+
+The implemented foundation loads one validated stored-audio catalog, exposes a
+play-only Audio asset workspace, and gives game mode an explicit enable flow,
+in-memory mixer controls, bounded voice ownership, diagnostics, silent fallback,
+and complete scene cleanup. Current ownership and behavior are documented in
+`ARCHITECTURE_MAP.md`, `Wayfinders_Technical_Design.md`, and
+`Wayfinders_Asset_Pipeline.md`; volatile verification state is recorded in
+`IMPLEMENTATION_STATUS.md`.
+
+`AUD-1` closes after live browser acceptance verifies keyboard focus and exact
+values for enable, mute, master, and all four category controls; stored-file
+decode and audition in the Audio workspace; locked startup; and console-clean
+scene teardown and restart without leaked playback.
+
+The remaining proposed sequence is:
+
+1. `AUD-2` — ocean and vessel ambience derived only from current
+   presentation-safe ship/read-model state;
+2. `AUD-3` — priority- and cooldown-bounded gameplay and UI cues consuming the
+   existing typed event stream;
+3. `AUD-4` — home-harbor/open-water music states plus lifecycle crossfades and
+   ducking; and
+4. `AUD-5` — production of the final sounds and music, in-place replacement of
+   the reference WAVs at their existing runtime paths, final game mix, budgets,
+   and acceptance closure.
+
+The remaining event-to-cue policy, browser constraints, budgets, and acceptance
+gates are defined in `Wayfinders_Audio_System_Milestone.md`. No remaining
+milestone adds audio creation, editing, mixing, upload, or repository-write
+tooling.
+
 ## Water presentation
 
 ### WTR-1 — Layered water system
@@ -137,7 +177,7 @@ second presentation-lifetime policy or simulation clock.
 ## Authorization boundary
 
 No further milestone is authorized for implementation. The water proposal and
-any other new gameplay or production-asset milestone require
-explicit user authorization. Do not implement gameplay saving; it may return
-only through an explicitly authorized milestone designed for the game that
-exists at that time.
+`AUD-2` through `AUD-5`, and any other new gameplay or production-asset
+milestone require explicit user authorization. Do not implement gameplay
+saving; it may return only through an explicitly authorized milestone designed
+for the game that exists at that time.

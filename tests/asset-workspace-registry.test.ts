@@ -20,6 +20,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
       { id: "ships", label: "Ships" },
       { id: "fishing-shoals", label: "Fishing shoals" },
       { id: "great-hall", label: "Great Hall" },
+      { id: "audio", label: "Audio" },
     ]);
     const libraryWorkspaces = ASSET_WORKSPACES.filter((workspace) => workspace.kind === "library");
     for (const entry of ASSET_LIBRARY_CATALOG) {
@@ -42,16 +43,19 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(resolveAssetWorkspace("?mode=assets&workspace=ships").id).toBe("ships");
     expect(resolveAssetWorkspace("?mode=assets&workspace=fishing-shoals").id).toBe("fishing-shoals");
     expect(resolveAssetWorkspace("?mode=assets&workspace=great-hall").id).toBe("great-hall");
+    expect(resolveAssetWorkspace("?mode=assets&workspace=audio").id).toBe("audio");
     expect(resolveAssetWorkspace("?mode=assets&workspace=unknown").id).toBe("islands");
     expect(assetWorkspaceHref("islands")).toBe("?mode=assets&workspace=islands");
     expect(assetWorkspaceHref("great-hall")).toBe("?mode=assets&workspace=great-hall");
+    expect(assetWorkspaceHref("audio")).toBe("?mode=assets&workspace=audio");
   });
 
   it("supports wrapping arrow navigation and namespaces scene and selection state", () => {
-    expect(adjacentAssetWorkspaceId("islands", -1)).toBe("great-hall");
+    expect(adjacentAssetWorkspaceId("islands", -1)).toBe("audio");
     expect(adjacentAssetWorkspaceId("islands", 1)).toBe("ships");
     expect(adjacentAssetWorkspaceId("fishing-shoals", 1)).toBe("great-hall");
-    expect(adjacentAssetWorkspaceId("great-hall", 1)).toBe("islands");
+    expect(adjacentAssetWorkspaceId("great-hall", 1)).toBe("audio");
+    expect(adjacentAssetWorkspaceId("audio", 1)).toBe("islands");
     expect(assetWorkspaceSceneKey("ships")).toBe("AssetViewerScene:ships");
     expect(assetWorkspaceSceneKey("great-hall")).toBe("AssetViewerScene:great-hall");
     expect(assetWorkspaceSelectionKey("ships")).toBe("wayfinders:asset-workspace:ships:selection");
@@ -76,7 +80,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(tabs).toContain('"popstate"');
     expect(main).toContain("wayfindersGame!.scene.stop(previousKey)");
     expect(main).toContain("wayfindersGame!.scene.start(nextKey)");
-    expect(main).toContain("createAssetWorkspaceScene(workspace)");
+    expect(main).toContain("createAssetWorkspaceScene(workspace, audioCatalogResult)");
     expect(scene).toContain("this.controlsAbort?.abort()");
     expect(scene).toContain("assetWorkspaceSelectionKey(this.workspace.id)");
     expect(scene).toContain("this.workspaceCatalog");
