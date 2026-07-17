@@ -427,6 +427,11 @@ from this review version. The twenty existing portrait files remain unchanged.
 The default twentieth-generation memorial distributes all ten achievement
 symbols across three dense returned voyages so the main Hall view exercises
 multi-achievement bands; its fourth voyage remains awaiting.
+Portraits and voyage bands carry no visible generation or voyage numerals in
+the Hall composition. Their complete generation and voyage positions remain in
+accessible names and in the review workbench. Voyage bands use the existing
+player-boat pictogram rather than a CSS shorthand, and lost portraits use frame
+patina without a line crossing the portrait art.
 
 An imported island can enter a disposable sea trial regardless of availability.
 The trial contains only open water, the authored player boat, and the candidate's

@@ -43,7 +43,6 @@ function portraitMarkup(
       <span class="gh-portrait__image">
         <img src="${navigator.portraitUrl}" alt="" draggable="false" loading="lazy" decoding="async">
       </span>
-      <span class="gh-portrait__generation">${navigator.generation}</span>
       <span class="gh-portrait__voyages" aria-hidden="true">
         ${navigator.voyages.map((voyage) => `<i data-state="${voyage.state}"></i>`).join("")}
       </span>
@@ -74,8 +73,7 @@ function voyageMarkup(voyageRecord: Readonly<GreatHallPreviewVoyage>): string {
         : voyageRecord.state === "unsailed" ? "Not yet sailed" : "Closed after loss";
   return `
     <section class="gh-voyage gh-voyage--${voyageRecord.state}" aria-label="Voyage ${voyageRecord.position}: ${stateCopy}">
-      <span class="gh-voyage__number">${voyageRecord.position}</span>
-      <span class="gh-voyage__canoe" aria-hidden="true"></span>
+      <img class="gh-voyage__icon" src="/assets/gr1/images/player-boat.png" alt="" aria-hidden="true" draggable="false">
       <span class="gh-voyage__achievements">
         ${voyageRecord.achievements.map(achievementMarkup).join("")}
       </span>
@@ -286,7 +284,6 @@ export class GreatHallPreviewScene extends Phaser.Scene {
             <section class="gh-memorial gh-memorial--${selected.state}" aria-label="Selected generation ${selected.generation}">
               <div class="gh-memorial__portrait">
                 <img src="${selected.portraitUrl}" alt="Navigator generation ${selected.generation}" decoding="async">
-                <span>${selected.generation}</span>
               </div>
               <div class="gh-voyage-list">
                 ${selected.voyages.map(voyageMarkup).join("")}

@@ -457,6 +457,10 @@ a later product decision.
 For visual review, the default current-navigator fixture displays all ten
 achievement symbols across three returned voyages, with multiple achievements
 per band, while retaining one awaiting voyage state.
+The portrait wall and voyage bands omit visible position numerals; generation
+and voyage positions remain available through accessible labels and the review
+workbench. Lost-state treatment does not cross the portrait art, and the voyage
+marker is the existing player-boat pictogram rather than an abstract shape.
 
 Acceptance gate:
 
