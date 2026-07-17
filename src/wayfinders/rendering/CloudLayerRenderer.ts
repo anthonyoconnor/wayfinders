@@ -2,10 +2,7 @@ import type Phaser from "phaser";
 import { CLOUD_ASSET_PACKAGE, type CloudAssetPackage } from "../assets/CloudAssetCatalog";
 import { seededValue } from "../world/SeededRandom";
 import type { WorldGrid } from "../world/WorldGrid";
-import {
-  isKnowledgeOverlayDurablyClearInBounds,
-  isKnowledgeOverlayFullyClearInBounds,
-} from "./KnowledgeClearCoverage";
+import { isKnowledgeOverlayFullyClearInBounds } from "./KnowledgeClearCoverage";
 import type { ActiveChunkDelta, ActiveChunkEntry } from "./activation";
 
 const CLOUD_NAMESPACE = 0x43_4c_44_31;
@@ -28,7 +25,7 @@ export interface CloudDescriptor {
   readonly initialFade: number;
 }
 
-export interface CloudRouteEnvelope {
+export interface CloudFootprintEnvelope {
   readonly minX: number;
   readonly minY: number;
   readonly maxX: number;
@@ -50,7 +47,6 @@ interface CloudView {
   readonly descriptor: Readonly<CloudDescriptor>;
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly shadow: Phaser.GameObjects.Sprite;
-  readonly routeEnvelope: Readonly<CloudRouteEnvelope>;
   coverageRevision: string;
   clearOfFog: boolean;
   visibilityStartedAt: number | undefined;
@@ -240,15 +236,16 @@ function rgbTint(rgb: Readonly<{ red: number; green: number; blue: number }>): n
   return (rgb.red << 16) | (rgb.green << 8) | rgb.blue;
 }
 
-export function resolveCloudRouteEnvelope(
+export function resolveCloudEnvelopeAtPosition(
   descriptor: Readonly<CloudDescriptor>,
+  position: Readonly<{ x: number; y: number }>,
   cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
-): Readonly<CloudRouteEnvelope> {
+): Readonly<CloudFootprintEnvelope> {
   const { image, presentation } = cloudPackage;
   const opaqueBounds = image.opaqueBounds[descriptor.frame];
   if (!opaqueBounds) throw new RangeError(`Missing opaque bounds for cloud frame ${descriptor.frame}`);
   const cloud = resolveVisualFootprint(
-    { x: descriptor.baseX, y: descriptor.baseY },
+    position,
     opaqueBounds,
     image.frameSize,
     { x: descriptor.scale, y: descriptor.scale },
@@ -256,8 +253,8 @@ export function resolveCloudRouteEnvelope(
   );
   const shadow = resolveVisualFootprint(
     {
-      x: descriptor.baseX + presentation.shadow.offsetPixels.x,
-      y: descriptor.baseY + presentation.shadow.offsetPixels.y,
+      x: position.x + presentation.shadow.offsetPixels.x,
+      y: position.y + presentation.shadow.offsetPixels.y,
     },
     opaqueBounds,
     image.frameSize,
@@ -267,41 +264,57 @@ export function resolveCloudRouteEnvelope(
     },
     descriptor.flipX,
   );
-  const driftX = Math.abs(descriptor.driftAmplitudeX);
-  const driftY = Math.abs(descriptor.driftAmplitudeY);
   return Object.freeze({
     minX: Math.min(
       cloud.center.x - cloud.displaySize.width / 2,
       shadow.center.x - shadow.displaySize.width / 2,
-    ) - driftX,
+    ),
     minY: Math.min(
       cloud.center.y - cloud.displaySize.height / 2,
       shadow.center.y - shadow.displaySize.height / 2,
-    ) - driftY,
+    ),
     maxX: Math.max(
       cloud.center.x + cloud.displaySize.width / 2,
       shadow.center.x + shadow.displaySize.width / 2,
-    ) + driftX,
+    ),
     maxY: Math.max(
       cloud.center.y + cloud.displaySize.height / 2,
       shadow.center.y + shadow.displaySize.height / 2,
-    ) + driftY,
+    ),
   });
 }
 
-export function isCloudRouteEnvelopeDurablyClear(
+export function isCloudEnvelopeFullyClear(
   world: WorldGrid,
-  envelope: Readonly<CloudRouteEnvelope>,
+  envelope: Readonly<CloudFootprintEnvelope>,
   revealedIslandIds: ReadonlySet<number>,
   tileSize: number,
   paddingTiles: number,
 ): boolean {
-  return isKnowledgeOverlayDurablyClearInBounds(world, {
+  return isKnowledgeOverlayFullyClearInBounds(world, {
     minX: envelope.minX / tileSize,
     minY: envelope.minY / tileSize,
     maxX: envelope.maxX / tileSize,
     maxY: envelope.maxY / tileSize,
   }, revealedIslandIds, paddingTiles);
+}
+
+function cloudCoverageRevision(
+  world: WorldGrid,
+  revealedIslandsRevision: number,
+  envelope: Readonly<CloudFootprintEnvelope>,
+  tileSize: number,
+  paddingTiles: number,
+): string {
+  return [
+    world.knowledgeVersion,
+    world.visibilityVersion,
+    revealedIslandsRevision,
+    Math.floor(envelope.minX / tileSize) - paddingTiles,
+    Math.floor(envelope.minY / tileSize) - paddingTiles,
+    Math.ceil(envelope.maxX / tileSize) + paddingTiles,
+    Math.ceil(envelope.maxY / tileSize) + paddingTiles,
+  ].join(":");
 }
 
 function smoothstep(value: number): number {
@@ -412,7 +425,6 @@ export class CloudLayerRenderer {
     this.lastWorld = world;
     if (worldChanged || this.motionEpochMs === undefined) this.motionEpochMs = timeMs;
     const motionTimeMs = timeMs - this.motionEpochMs;
-    const coverageRevision = `${world.knowledgeVersion}:${revealedIslandsRevision}`;
     const { presentation } = this.cloudPackage;
     const tileSize = this.chunkSizePixels / world.chunkSize;
     for (const view of this.views.values()) {
@@ -421,10 +433,20 @@ export class CloudLayerRenderer {
         view.clearOfFog = false;
         view.visibilityStartedAt = undefined;
       }
+      const descriptor = view.descriptor;
+      const motion = resolveCloudMotion(descriptor, motionTimeMs, this.reducedMotion, this.cloudPackage);
+      const currentEnvelope = resolveCloudEnvelopeAtPosition(descriptor, motion, this.cloudPackage);
+      const coverageRevision = cloudCoverageRevision(
+        world,
+        revealedIslandsRevision,
+        currentEnvelope,
+        tileSize,
+        presentation.clearPaddingTiles,
+      );
       if (view.coverageRevision !== coverageRevision) {
-        view.clearOfFog = isCloudRouteEnvelopeDurablyClear(
+        view.clearOfFog = isCloudEnvelopeFullyClear(
           world,
-          view.routeEnvelope,
+          currentEnvelope,
           revealedIslandIds,
           tileSize,
           presentation.clearPaddingTiles,
@@ -433,8 +455,6 @@ export class CloudLayerRenderer {
         if (!view.clearOfFog) view.visibilityStartedAt = undefined;
       }
 
-      const descriptor = view.descriptor;
-      const motion = resolveCloudMotion(descriptor, motionTimeMs, this.reducedMotion, this.cloudPackage);
       const { x, y } = motion;
       view.sprite.setPosition(x, y);
       view.shadow.setPosition(
@@ -561,7 +581,6 @@ export class CloudLayerRenderer {
       descriptor,
       sprite,
       shadow,
-      routeEnvelope: resolveCloudRouteEnvelope(descriptor, this.cloudPackage),
       coverageRevision: "",
       clearOfFog: false,
       visibilityStartedAt: undefined,

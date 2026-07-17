@@ -386,15 +386,20 @@ opening composition without adding another resource class. The world seed,
 chunk, and candidate slot choose scale, horizontal reflection, opacity, drift
 amplitude, drift period, direction, colour, position, and phase. The three
 opening slots deliberately use light, middle, and darkest tones together with
-small, middle, and large scales. Eligibility is decided for the pair's
-complete padded route envelope: cloud and shadow footprints plus their full
-drift range.
-Every covered tile must be Supported knowledge or belong to an exactly revealed
-island. Unknown, Personal, transient `visibleNow` sight, filtered fog edges, and
-world bounds suppress the pair. A pair that passes remains eligible throughout
-its complete route and is rechecked only when durable knowledge, exact-island
-reveal state, or world identity changes. Ship proximity never hides or rebuilds
-the pair, so the offset shadow can pass continuously across the ship.
+small, middle, and large scales. Candidate creation, motion, phase, and route
+progress are independent of fog. Each existing pair continues moving while
+hidden and is never rebuilt merely because knowledge or live sight changes.
+
+Presentation visibility follows the knowledge overlay's current clear coverage.
+The renderer checks the pair's current padded cloud-and-shadow footprint, not
+its complete route: every covered tile must be Supported, currently visible, or
+belong to an exactly revealed island. Unknown or occluded Personal fog,
+filtered fog edges, and world bounds hide the pair without changing its motion.
+The check is invalidated by knowledge, live-visibility, exact-island reveal, or
+world identity changes and when motion crosses a tile boundary. This lets the
+ship's sight naturally uncover a cloud already moving beyond the fog. Ship
+proximity itself never hides or rebuilds the pair, so the offset shadow can pass
+continuously across the ship wherever the fog is clear.
 
 Cloud drift uses rendering time and never simulation time. Ordinary seeded
 routes last `120` through `180` seconds; the three opening routes last `100`
@@ -544,9 +549,9 @@ Normal sailing avoids work proportional to total world or island count:
 - interaction and marker queries start from spatially local candidates;
 - forward guidance is cooperative, cancellable, and atomically published;
 - return rendering follows one sparse, chunk-indexed Voyage Sense thread;
-- clouds retain at most four cloud/shadow pairs per active chunk and recheck
-  their durable route envelopes only on knowledge/reveal revision or world
-  identity change;
+- clouds retain at most four cloud/shadow pairs per active chunk, compute one
+  bounded current footprint per pair, and rescan fog tiles only when overlay
+  coverage changes or motion crosses a tile boundary;
 - overlays update dirty active chunks only; and
 - diagnostics are sampled and capped.
 

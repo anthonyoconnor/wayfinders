@@ -1276,6 +1276,15 @@ make an eligible pair pop in or out, while Unknown or Personal fog, filtered
 boundaries, and world edges still suppress the pair in full. The shadow crosses
 sea, terrain, and the ship in lockstep with its cloud.
 
+A follow-up acceptance correction on 2026-07-17 made cloud existence and motion
+independent of fog. Active candidates now continue their seeded routes while
+hidden, and only the pair's current padded footprint is compared with the same
+clear coverage rendered by the knowledge overlay. Current ship sight can
+therefore uncover an already-moving cloud naturally, and fog changes never
+create, destroy, restart, or reroute one. This also replaces full-route startup
+rejection, ensuring all three reserved home clouds are visible in the generated
+opening world.
+
 Opening-view acceptance on 2026-07-17 reserved three deterministic routes around
 the home island, increased the shadow separation, and replaced the small orbit
 with readable directional drift. Ordinary routes last `120` through `180`
@@ -1298,9 +1307,10 @@ The retained source, provenance, four-frame RGBA runtime sheet, package
 metadata, authored opaque-frame bounds, and read-only validation command live
 under the CLD-1 asset paths.
 Contract coverage verifies package shape, all four variants across deterministic
-samples, transform and motion variety, conservative fog exclusion, independent
+samples, transform and motion variety, current-footprint fog occlusion, independent
 toggle lifecycle, deterministic reconstruction, corner-crossing revealed-area
-placement, three-cloud opening composition, perceptible directional movement,
+placement, three-cloud generated-world opening composition, live-sight reveal,
+perceptible directional movement,
 route-end opacity easing, colour and size variety, shadow
 transform/depth/visibility pairing, world-identity invalidation, paired
 resource caps and releases, and zero stable-sync allocations. Existing live

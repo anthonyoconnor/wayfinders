@@ -5,18 +5,21 @@ import {
   type CloudAssetPackage,
   validateCloudAssetPackage,
 } from "../src/wayfinders/assets/CloudAssetCatalog";
+import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import {
   CloudLayerRenderer,
+  isCloudEnvelopeFullyClear,
   isCloudFootprintFullyClear,
-  isCloudRouteEnvelopeDurablyClear,
+  resolveCloudEnvelopeAtPosition,
   resolveCloudDescriptor,
   resolveCloudMotion,
-  resolveCloudRouteEnvelope,
   resolveOpeningCloudDescriptors,
 } from "../src/wayfinders/rendering/CloudLayerRenderer";
 import { ActiveChunkSet, type ActiveChunkEntry } from "../src/wayfinders/rendering/activation";
+import { gridToWorld } from "../src/wayfinders/world/CoordinateSystem";
 import { KnowledgeState } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import { makeConfig } from "./helpers";
 
 function entry(x: number, y: number): Readonly<ActiveChunkEntry> {
   return {
@@ -267,7 +270,7 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(isCloudFootprintFullyClear(world, { x: 8, y: 8 }, size, new Set(), 32, 1)).toBe(false);
   });
 
-  it("uses one durable envelope for the complete cloud and shadow route", () => {
+  it("checks the current cloud and shadow footprint against the rendered fog", () => {
     const cloudPackage = testCloudPackage({
       driftAmplitudePixels: { minimum: 96, maximum: 96 },
       scale: { minimum: 0.2, maximum: 0.2 },
@@ -276,15 +279,19 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     });
     const descriptor = resolveCloudDescriptor(13_371, entry(1, 1), 32 * 32, cloudPackage);
     expect(descriptor).toBeDefined();
-    const envelope = resolveCloudRouteEnvelope(descriptor!, cloudPackage);
+    const envelope = resolveCloudEnvelopeAtPosition(descriptor!, {
+      x: descriptor!.baseX,
+      y: descriptor!.baseY,
+    }, cloudPackage);
     const world = supportedWorld(96, 32);
-    expect(isCloudRouteEnvelopeDurablyClear(world, envelope, new Set(), 32, 1)).toBe(true);
+    expect(isCloudEnvelopeFullyClear(world, envelope, new Set(), 32, 1)).toBe(true);
 
     const fogX = Math.floor((envelope.maxX - 1) / 32);
     const fogY = Math.floor(((envelope.minY + envelope.maxY) / 2) / 32);
     world.setKnowledge(fogX, fogY, KnowledgeState.Personal, 1);
+    expect(isCloudEnvelopeFullyClear(world, envelope, new Set(), 32, 1)).toBe(false);
     world.setVisibleNow(fogX, fogY, true);
-    expect(isCloudRouteEnvelopeDurablyClear(world, envelope, new Set(), 32, 1)).toBe(false);
+    expect(isCloudEnvelopeFullyClear(world, envelope, new Set(), 32, 1)).toBe(true);
   });
 
   it("reserves three immediately readable opening clouds around the revealed home island", () => {
@@ -342,6 +349,68 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(renderer.getResourceTelemetry().visibleShadows).toBe(renderer.getResourceTelemetry().visibleClouds);
   });
 
+  it("shows every opening cloud at its initial position in the generated starting world", () => {
+    for (const seed of [1, 42, 13_371, 99_173, 0xffff_ffff]) {
+      const generatedSimulation = new GameSimulation(makeConfig({ world: { seed } }));
+      const generatedHomePosition = gridToWorld(
+        generatedSimulation.generated.landmarks.homeCenter,
+        generatedSimulation.config.navigation.tileSize,
+      );
+      const generatedDescriptors = resolveOpeningCloudDescriptors(
+        generatedSimulation.generated.seed,
+        "home",
+        generatedHomePosition,
+      );
+      expect(generatedDescriptors.map((descriptor) => isCloudEnvelopeFullyClear(
+        generatedSimulation.world,
+        resolveCloudEnvelopeAtPosition(
+          descriptor,
+          resolveCloudMotion(descriptor, 0, false),
+        ),
+        new Set(generatedSimulation.revealedIslandIds),
+        generatedSimulation.config.navigation.tileSize,
+        CLOUD_ASSET_PACKAGE.presentation.clearPaddingTiles,
+      )), `seed ${seed}`).toEqual([true, true, true]);
+    }
+
+    const simulation = new GameSimulation();
+    const homeWorldPosition = gridToWorld(
+      simulation.generated.landmarks.homeCenter,
+      simulation.config.navigation.tileSize,
+    );
+    const openingDescriptors = resolveOpeningCloudDescriptors(
+      simulation.generated.seed,
+      "home",
+      homeWorldPosition,
+    );
+
+    expect(openingDescriptors).toHaveLength(3);
+    const chunkSizePixels = simulation.world.chunkSize * simulation.config.navigation.tileSize;
+    const homeChunkX = Math.floor(homeWorldPosition.x / chunkSizePixels);
+    const homeChunkY = Math.floor(homeWorldPosition.y / chunkSizePixels);
+    const { scene, sprites } = createSpriteScene();
+    const renderer = new CloudLayerRenderer(scene as never, false);
+    renderer.applyActiveChunkDelta(
+      oneChunkDelta(homeChunkX, homeChunkY),
+      simulation.generated.seed,
+      chunkSizePixels,
+      homeWorldPosition,
+    );
+    renderer.sync(
+      simulation.world,
+      new Set(simulation.revealedIslandIds),
+      simulation.islandFogRevealRevision,
+      0,
+    );
+
+    expect(sprites.filter(({ name, visible }) => /^cloud:home:\d+$/.test(name) && visible)).toHaveLength(3);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeClouds: 3,
+      visibleClouds: 3,
+      visibleShadows: 3,
+    });
+  });
+
   it("keeps an eligible cloud pair visible throughout multiple slow drift cycles", () => {
     const cloudPackage = testCloudPackage({
       driftAmplitudePixels: { minimum: 48, maximum: 48 },
@@ -371,13 +440,16 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(new Set(positions).size).toBeGreaterThan(2);
   });
 
-  it("ignores transient sight and invalidates durable eligibility across world instances", () => {
+  it("reveals existing clouds through transient sight and invalidates coverage across worlds", () => {
     const cloudPackage = testCloudPackage({
       driftAmplitudePixels: { minimum: 0, maximum: 0 },
       clearPaddingTiles: 0,
     });
     const descriptor = resolveCloudDescriptor(13_371, entry(1, 1), 32 * 32, cloudPackage)!;
-    const envelope = resolveCloudRouteEnvelope(descriptor, cloudPackage);
+    const envelope = resolveCloudEnvelopeAtPosition(descriptor, {
+      x: descriptor.baseX,
+      y: descriptor.baseY,
+    }, cloudPackage);
     const personalWorld = new WorldGrid(96, 96, 32);
     personalWorld.replaceKnowledge(
       new Uint8Array(personalWorld.tileCount).fill(KnowledgeState.Personal),
@@ -393,7 +465,20 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     const renderer = new CloudLayerRenderer(scene as never, false, cloudPackage);
     renderer.applyActiveChunkDelta(oneChunkDelta(), 13_371, 32 * 32);
     renderer.sync(personalWorld, new Set(), 0, 0);
-    expect(renderer.getResourceTelemetry()).toMatchObject({ visibleClouds: 0, visibleShadows: 0 });
+    expect(renderer.getResourceTelemetry()).toMatchObject({ visibleClouds: 1, visibleShadows: 1 });
+
+    for (let y = Math.floor(envelope.minY / 32); y <= Math.ceil(envelope.maxY / 32); y++) {
+      for (let x = Math.floor(envelope.minX / 32); x <= Math.ceil(envelope.maxX / 32); x++) {
+        if (personalWorld.inBounds(x, y)) personalWorld.setVisibleNow(x, y, false);
+      }
+    }
+    renderer.sync(personalWorld, new Set(), 0, 5_000);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeClouds: 1,
+      activeShadows: 1,
+      visibleClouds: 0,
+      visibleShadows: 0,
+    });
 
     const supported = supportedWorld(96, 32);
     expect(supported.knowledgeVersion).toBe(personalWorld.knowledgeVersion);
@@ -405,7 +490,15 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     supported.setKnowledge(fogX, fogY, KnowledgeState.Personal, 1);
     supported.setVisibleNow(fogX, fogY, true);
     renderer.sync(supported, new Set(), 0, 20_000);
-    expect(renderer.getResourceTelemetry()).toMatchObject({ visibleClouds: 0, visibleShadows: 0 });
+    expect(renderer.getResourceTelemetry()).toMatchObject({ visibleClouds: 1, visibleShadows: 1 });
+    supported.setVisibleNow(fogX, fogY, false);
+    renderer.sync(supported, new Set(), 0, 30_000);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeClouds: 1,
+      activeShadows: 1,
+      visibleClouds: 0,
+      visibleShadows: 0,
+    });
   });
 
   it("renders a flattened paired shadow above the ship with lockstep motion and visibility", () => {
