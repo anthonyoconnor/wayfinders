@@ -700,7 +700,6 @@ export class WayfindersScene extends Phaser.Scene {
       revealedIslandIds,
       this.simulation.islandFogRevealRevision,
       this.time.now,
-      { x: this.simulation.ship.worldX, y: this.simulation.ship.worldY },
     );
     this.riskOverlay.sync(
       this.simulation.world,
@@ -811,8 +810,10 @@ export class WayfindersScene extends Phaser.Scene {
       const cloudResources = this.cloudLayer.getResourceTelemetry();
       host.dataset.cloudsEnabled = String(cloudResources.enabled);
       host.dataset.activeClouds = String(cloudResources.activeClouds);
+      host.dataset.activeCloudShadows = String(cloudResources.activeShadows);
       host.dataset.clearCloudFootprints = String(cloudResources.clearCloudFootprints);
       host.dataset.visibleClouds = String(cloudResources.visibleClouds);
+      host.dataset.visibleCloudShadows = String(cloudResources.visibleShadows);
       const timing = this.frameTiming.snapshot();
       host.dataset.frameP50Ms = timing.p50Ms.toFixed(2);
       host.dataset.frameP95Ms = timing.p95Ms.toFixed(2);

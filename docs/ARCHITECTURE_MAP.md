@@ -76,10 +76,11 @@ not import Phaser.
 - `WayfindersScene` owns Phaser lifecycle and one `ActiveChunkSet`. Its deltas
   bound chunk-local terrain, overlay textures, markers, and authored home-island
   objects. Its independent `CloudLayerRenderer` consumes the same delta and the
-  knowledge overlay's pure fully-clear predicate; fog never depends on clouds.
-  Shared package textures, the player-boat visual, and the four-frame cloud
-  sheet remain a small scene-owned set. Feature-specific presentation belongs
-  in controllers and renderers.
+  knowledge overlay's pure durable-clear predicate, owns bounded cloud/shadow
+  sprite pairs, and gates each pair by its complete motion envelope; fog never
+  depends on clouds. Shared package textures, the player-boat visual, and the
+  four-frame cloud sheet remain a small scene-owned set. Feature-specific
+  presentation belongs in controllers and renderers.
 - Asset tools share runtime package validation, presentation factories, and the
   accepted hybrid collision contract. Narrow same-origin development-server
   operations serialize source intake, candidate save or deletion, review, and exact-

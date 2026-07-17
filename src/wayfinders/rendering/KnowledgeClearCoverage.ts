@@ -23,6 +23,45 @@ export function isKnowledgeOverlayFullyClearAtTile(
 }
 
 /**
+ * Stable clear space for atmosphere. Transient line of sight is intentionally
+ * excluded so moving the ship cannot create and remove short-lived clouds.
+ */
+export function isKnowledgeOverlayDurablyClearAtTile(
+  world: WorldGrid,
+  x: number,
+  y: number,
+  revealedIslandIds: ReadonlySet<number>,
+): boolean {
+  if (!world.inBounds(x, y)) return false;
+  return world.getKnowledge(x, y) === KnowledgeState.Supported
+    || isExactIslandTileRevealed(world.getIslandId(x, y), revealedIslandIds);
+}
+
+function isKnowledgeOverlayClearInBounds(
+  world: WorldGrid,
+  bounds: Readonly<{ minX: number; minY: number; maxX: number; maxY: number }>,
+  revealedIslandIds: ReadonlySet<number>,
+  paddingTiles: number,
+  isClearAtTile: (
+    world: WorldGrid,
+    x: number,
+    y: number,
+    revealedIslandIds: ReadonlySet<number>,
+  ) => boolean,
+): boolean {
+  const minX = Math.floor(bounds.minX) - paddingTiles;
+  const minY = Math.floor(bounds.minY) - paddingTiles;
+  const maxX = Math.ceil(bounds.maxX) + paddingTiles;
+  const maxY = Math.ceil(bounds.maxY) + paddingTiles;
+  for (let y = minY; y <= maxY; y++) {
+    for (let x = minX; x <= maxX; x++) {
+      if (!isClearAtTile(world, x, y, revealedIslandIds)) return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Conservative clear-coverage query for independently rendered atmosphere.
  * Padding protects the fog mask's filtered tile edge without sharing renderer
  * internals or duplicating knowledge-state interpretation.
@@ -33,14 +72,27 @@ export function isKnowledgeOverlayFullyClearInBounds(
   revealedIslandIds: ReadonlySet<number>,
   paddingTiles = 0,
 ): boolean {
-  const minX = Math.floor(bounds.minX) - paddingTiles;
-  const minY = Math.floor(bounds.minY) - paddingTiles;
-  const maxX = Math.ceil(bounds.maxX) + paddingTiles;
-  const maxY = Math.ceil(bounds.maxY) + paddingTiles;
-  for (let y = minY; y <= maxY; y++) {
-    for (let x = minX; x <= maxX; x++) {
-      if (!isKnowledgeOverlayFullyClearAtTile(world, x, y, revealedIslandIds)) return false;
-    }
-  }
-  return true;
+  return isKnowledgeOverlayClearInBounds(
+    world,
+    bounds,
+    revealedIslandIds,
+    paddingTiles,
+    isKnowledgeOverlayFullyClearAtTile,
+  );
+}
+
+/** Conservative stable-clear query used by long-lived atmosphere routes. */
+export function isKnowledgeOverlayDurablyClearInBounds(
+  world: WorldGrid,
+  bounds: Readonly<{ minX: number; minY: number; maxX: number; maxY: number }>,
+  revealedIslandIds: ReadonlySet<number>,
+  paddingTiles = 0,
+): boolean {
+  return isKnowledgeOverlayClearInBounds(
+    world,
+    bounds,
+    revealedIslandIds,
+    paddingTiles,
+    isKnowledgeOverlayDurablyClearAtTile,
+  );
 }

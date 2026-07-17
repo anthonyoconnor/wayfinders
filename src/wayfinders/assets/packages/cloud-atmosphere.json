@@ -3,7 +3,7 @@
   "assetId": "presentation.clouds.primary",
   "kind": "cloud-atmosphere",
   "sourceAssetId": "generated.cloud-atmosphere.source.v1",
-  "runtimeRevision": 1,
+  "runtimeRevision": 2,
   "image": {
     "imageId": "presentation.clouds.primary.frames",
     "textureKey": "wayfinders:image:cloud-atmosphere",
@@ -19,15 +19,22 @@
     ]
   },
   "presentation": {
-    "depth": 30,
+    "depth": 52,
     "candidatesPerChunk": 4,
     "chunkDensity": 1,
     "opacity": { "minimum": 0.18, "maximum": 0.32 },
     "scale": { "minimum": 0.28, "maximum": 0.42 },
-    "driftAmplitudePixels": { "minimum": 28, "maximum": 68 },
-    "driftPeriodSeconds": { "minimum": 42, "maximum": 72 },
+    "driftAmplitudePixels": { "minimum": 24, "maximum": 52 },
+    "driftPeriodSeconds": { "minimum": 180, "maximum": 300 },
+    "fadeInSeconds": 6,
     "clearPaddingTiles": 1,
-    "playerClearRadiusPixels": 224
+    "shadow": {
+      "depth": 51,
+      "offsetPixels": { "x": 52, "y": 34 },
+      "opacityMultiplier": 0.36,
+      "scale": { "x": 0.96, "y": 0.56 },
+      "tintRgb": { "red": 24, "green": 55, "blue": 68 }
+    }
   },
   "variants": [
     "long-broken-wisp",

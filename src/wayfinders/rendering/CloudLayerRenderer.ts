@@ -2,7 +2,10 @@ import type Phaser from "phaser";
 import { CLOUD_ASSET_PACKAGE, type CloudAssetPackage } from "../assets/CloudAssetCatalog";
 import { seededValue } from "../world/SeededRandom";
 import type { WorldGrid } from "../world/WorldGrid";
-import { isKnowledgeOverlayFullyClearInBounds } from "./KnowledgeClearCoverage";
+import {
+  isKnowledgeOverlayDurablyClearInBounds,
+  isKnowledgeOverlayFullyClearInBounds,
+} from "./KnowledgeClearCoverage";
 import type { ActiveChunkDelta, ActiveChunkEntry } from "./activation";
 
 const CLOUD_NAMESPACE = 0x43_4c_44_31;
@@ -23,12 +26,21 @@ export interface CloudDescriptor {
   readonly phase: number;
 }
 
+export interface CloudRouteEnvelope {
+  readonly minX: number;
+  readonly minY: number;
+  readonly maxX: number;
+  readonly maxY: number;
+}
+
 interface CloudView {
   readonly descriptor: Readonly<CloudDescriptor>;
   readonly sprite: Phaser.GameObjects.Sprite;
-  coverageSignature: string;
+  readonly shadow: Phaser.GameObjects.Sprite;
+  readonly routeEnvelope: Readonly<CloudRouteEnvelope>;
   coverageRevision: string;
   clearOfFog: boolean;
+  visibilityStartedAt: number | undefined;
 }
 
 export interface CloudLayerResourceTelemetry {
@@ -36,13 +48,23 @@ export interface CloudLayerResourceTelemetry {
   readonly chunkCapacity: number;
   readonly activeChunks: number;
   readonly activeClouds: number;
+  readonly activeShadows: number;
   readonly clearCloudFootprints: number;
   readonly visibleClouds: number;
+  readonly visibleShadows: number;
   readonly variantCounts: readonly number[];
   readonly peakActiveClouds: number;
+  readonly peakActiveShadows: number;
   readonly totalCloudAllocations: number;
   readonly totalCloudReleases: number;
+  readonly totalShadowAllocations: number;
+  readonly totalShadowReleases: number;
   readonly stableFrameAllocations: number;
+}
+
+interface VisualFootprint {
+  readonly center: Readonly<{ x: number; y: number }>;
+  readonly displaySize: Readonly<{ width: number; height: number }>;
 }
 
 function lerp(minimum: number, maximum: number, amount: number): number {
@@ -62,8 +84,10 @@ export function resolveCloudDescriptor(
   const sample = (sampleSlot: number) => seededValue(slotSeed + sampleSlot * 977, chunkX, chunkY);
   const quadrantX = slot % 2;
   const quadrantY = Math.floor(slot / 2) % 2;
-  const positionX = (quadrantX === 0 ? 0.22 : 0.78) + lerp(-0.045, 0.045, sample(2));
-  const positionY = (quadrantY === 0 ? 0.22 : 0.78) + lerp(-0.045, 0.045, sample(3));
+  // Bias the four candidates toward chunk corners so a revealed area spanning
+  // neighboring chunks can admit a complete drift route without clustering.
+  const positionX = (quadrantX === 0 ? 0.14 : 0.86) + lerp(-0.025, 0.025, sample(2));
+  const positionY = (quadrantY === 0 ? 0.14 : 0.86) + lerp(-0.025, 0.025, sample(3));
   const frameOffset = Math.floor(
     seededValue(seed + CLOUD_NAMESPACE + 13, chunkX, chunkY) * cloudPackage.image.frameCount,
   );
@@ -108,6 +132,99 @@ export function isCloudFootprintFullyClear(
   }, revealedIslandIds, paddingTiles);
 }
 
+function resolveVisualFootprint(
+  spritePosition: Readonly<{ x: number; y: number }>,
+  opaqueBounds: Readonly<{ x: number; y: number; width: number; height: number }>,
+  frameSize: Readonly<{ width: number; height: number }>,
+  scale: Readonly<{ x: number; y: number }>,
+  flipX: boolean,
+): Readonly<VisualFootprint> {
+  const horizontalOffset = (
+    opaqueBounds.x + opaqueBounds.width / 2 - frameSize.width / 2
+  ) * scale.x * (flipX ? -1 : 1);
+  const verticalOffset = (
+    opaqueBounds.y + opaqueBounds.height / 2 - frameSize.height / 2
+  ) * scale.y;
+  return {
+    center: {
+      x: spritePosition.x + horizontalOffset,
+      y: spritePosition.y + verticalOffset,
+    },
+    displaySize: {
+      width: opaqueBounds.width * scale.x,
+      height: opaqueBounds.height * scale.y,
+    },
+  };
+}
+
+function rgbTint(rgb: Readonly<{ red: number; green: number; blue: number }>): number {
+  return (rgb.red << 16) | (rgb.green << 8) | rgb.blue;
+}
+
+export function resolveCloudRouteEnvelope(
+  descriptor: Readonly<CloudDescriptor>,
+  cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
+): Readonly<CloudRouteEnvelope> {
+  const { image, presentation } = cloudPackage;
+  const opaqueBounds = image.opaqueBounds[descriptor.frame];
+  if (!opaqueBounds) throw new RangeError(`Missing opaque bounds for cloud frame ${descriptor.frame}`);
+  const cloud = resolveVisualFootprint(
+    { x: descriptor.baseX, y: descriptor.baseY },
+    opaqueBounds,
+    image.frameSize,
+    { x: descriptor.scale, y: descriptor.scale },
+    descriptor.flipX,
+  );
+  const shadow = resolveVisualFootprint(
+    {
+      x: descriptor.baseX + presentation.shadow.offsetPixels.x,
+      y: descriptor.baseY + presentation.shadow.offsetPixels.y,
+    },
+    opaqueBounds,
+    image.frameSize,
+    {
+      x: descriptor.scale * presentation.shadow.scale.x,
+      y: descriptor.scale * presentation.shadow.scale.y,
+    },
+    descriptor.flipX,
+  );
+  const driftX = Math.abs(descriptor.driftAmplitudeX);
+  const driftY = Math.abs(descriptor.driftAmplitudeY);
+  return Object.freeze({
+    minX: Math.min(
+      cloud.center.x - cloud.displaySize.width / 2,
+      shadow.center.x - shadow.displaySize.width / 2,
+    ) - driftX,
+    minY: Math.min(
+      cloud.center.y - cloud.displaySize.height / 2,
+      shadow.center.y - shadow.displaySize.height / 2,
+    ) - driftY,
+    maxX: Math.max(
+      cloud.center.x + cloud.displaySize.width / 2,
+      shadow.center.x + shadow.displaySize.width / 2,
+    ) + driftX,
+    maxY: Math.max(
+      cloud.center.y + cloud.displaySize.height / 2,
+      shadow.center.y + shadow.displaySize.height / 2,
+    ) + driftY,
+  });
+}
+
+export function isCloudRouteEnvelopeDurablyClear(
+  world: WorldGrid,
+  envelope: Readonly<CloudRouteEnvelope>,
+  revealedIslandIds: ReadonlySet<number>,
+  tileSize: number,
+  paddingTiles: number,
+): boolean {
+  return isKnowledgeOverlayDurablyClearInBounds(world, {
+    minX: envelope.minX / tileSize,
+    minY: envelope.minY / tileSize,
+    maxX: envelope.maxX / tileSize,
+    maxY: envelope.maxY / tileSize,
+  }, revealedIslandIds, paddingTiles);
+}
+
 /** Independent, deterministic, chunk-bounded atmosphere presentation. */
 export class CloudLayerRenderer {
   private readonly views = new Map<string, CloudView>();
@@ -117,9 +234,13 @@ export class CloudLayerRenderer {
   private chunkSizePixels = 0;
   private chunkCapacity = 0;
   private peakActiveClouds = 0;
+  private peakActiveShadows = 0;
   private totalCloudAllocations = 0;
   private totalCloudReleases = 0;
+  private totalShadowAllocations = 0;
+  private totalShadowReleases = 0;
   private lastSyncAllocationCount = 0;
+  private lastWorld: WorldGrid | undefined;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -166,14 +287,32 @@ export class CloudLayerRenderer {
     revealedIslandIds: ReadonlySet<number>,
     revealedIslandsRevision: number,
     timeMs: number,
-    playerWorldPosition: Readonly<{ x: number; y: number }>,
   ): void {
     if (!this.enabled) return;
-    const allocationsBefore = this.totalCloudAllocations;
-    const coverageRevision = `${world.knowledgeVersion}:${world.visibilityVersion}:${revealedIslandsRevision}`;
-    const { image, presentation } = this.cloudPackage;
+    const allocationsBefore = this.totalCloudAllocations + this.totalShadowAllocations;
+    const worldChanged = this.lastWorld !== world;
+    this.lastWorld = world;
+    const coverageRevision = `${world.knowledgeVersion}:${revealedIslandsRevision}`;
+    const { presentation } = this.cloudPackage;
     const tileSize = this.chunkSizePixels / world.chunkSize;
     for (const view of this.views.values()) {
+      if (worldChanged) {
+        view.coverageRevision = "";
+        view.clearOfFog = false;
+        view.visibilityStartedAt = undefined;
+      }
+      if (view.coverageRevision !== coverageRevision) {
+        view.clearOfFog = isCloudRouteEnvelopeDurablyClear(
+          world,
+          view.routeEnvelope,
+          revealedIslandIds,
+          tileSize,
+          presentation.clearPaddingTiles,
+        );
+        view.coverageRevision = coverageRevision;
+        if (!view.clearOfFog) view.visibilityStartedAt = undefined;
+      }
+
       const descriptor = view.descriptor;
       const phase = this.reducedMotion
         ? descriptor.phase
@@ -181,63 +320,58 @@ export class CloudLayerRenderer {
       const x = descriptor.baseX + Math.cos(phase) * descriptor.driftAmplitudeX;
       const y = descriptor.baseY + Math.sin(phase) * descriptor.driftAmplitudeY;
       view.sprite.setPosition(x, y);
-      const opaqueBounds = image.opaqueBounds[descriptor.frame];
-      if (!opaqueBounds) throw new RangeError(`Missing opaque bounds for cloud frame ${descriptor.frame}`);
-      const horizontalOffset = (
-        opaqueBounds.x + opaqueBounds.width / 2 - image.frameSize.width / 2
-      ) * descriptor.scale * (descriptor.flipX ? -1 : 1);
-      const verticalOffset = (
-        opaqueBounds.y + opaqueBounds.height / 2 - image.frameSize.height / 2
-      ) * descriptor.scale;
-      const coverageCenter = { x: x + horizontalOffset, y: y + verticalOffset };
-      const displaySize = {
-        width: opaqueBounds.width * descriptor.scale,
-        height: opaqueBounds.height * descriptor.scale,
-      };
-      const tileBoundsSignature = [
-        Math.floor((coverageCenter.x - displaySize.width / 2) / tileSize),
-        Math.floor((coverageCenter.y - displaySize.height / 2) / tileSize),
-        Math.ceil((coverageCenter.x + displaySize.width / 2) / tileSize),
-        Math.ceil((coverageCenter.y + displaySize.height / 2) / tileSize),
-      ].join(":");
-      if (view.coverageRevision !== coverageRevision || view.coverageSignature !== tileBoundsSignature) {
-        view.clearOfFog = isCloudFootprintFullyClear(
-          world,
-          coverageCenter,
-          displaySize,
-          revealedIslandIds,
-          tileSize,
-          presentation.clearPaddingTiles,
-        );
-        view.coverageRevision = coverageRevision;
-        view.coverageSignature = tileBoundsSignature;
+      view.shadow.setPosition(
+        x + presentation.shadow.offsetPixels.x,
+        y + presentation.shadow.offsetPixels.y,
+      );
+      if (!view.clearOfFog) {
+        view.visibilityStartedAt = undefined;
+        view.sprite.setVisible(false);
+        view.shadow.setVisible(false);
+        continue;
       }
-      const playerDistance = Math.hypot(x - playerWorldPosition.x, y - playerWorldPosition.y);
-      view.sprite.setVisible(view.clearOfFog && playerDistance >= presentation.playerClearRadiusPixels);
+      if (view.visibilityStartedAt === undefined) view.visibilityStartedAt = timeMs;
+      const fadeDurationMs = presentation.fadeInSeconds * 1000;
+      const fade = fadeDurationMs === 0
+        ? 1
+        : Math.min(1, Math.max(0, (timeMs - view.visibilityStartedAt) / fadeDurationMs));
+      view.sprite.setAlpha(descriptor.alpha * fade).setVisible(true);
+      view.shadow
+        .setAlpha(descriptor.alpha * presentation.shadow.opacityMultiplier * fade)
+        .setVisible(true);
     }
-    this.lastSyncAllocationCount = this.totalCloudAllocations - allocationsBefore;
+    this.lastSyncAllocationCount = (
+      this.totalCloudAllocations + this.totalShadowAllocations - allocationsBefore
+    );
   }
 
   getResourceTelemetry(): Readonly<CloudLayerResourceTelemetry> {
     const variantCounts = Array.from({ length: this.cloudPackage.image.frameCount }, () => 0);
     let clearCloudFootprints = 0;
     let visibleClouds = 0;
-    for (const { descriptor, sprite, clearOfFog } of this.views.values()) {
+    let visibleShadows = 0;
+    for (const { descriptor, sprite, shadow, clearOfFog } of this.views.values()) {
       variantCounts[descriptor.frame]++;
       if (clearOfFog) clearCloudFootprints++;
-      if (sprite.visible) visibleClouds++;
+      if (sprite.visible && sprite.alpha > 0) visibleClouds++;
+      if (shadow.visible && shadow.alpha > 0) visibleShadows++;
     }
     return Object.freeze({
       enabled: this.enabled,
       chunkCapacity: this.chunkCapacity,
       activeChunks: this.activeEntries.size,
       activeClouds: this.views.size,
+      activeShadows: this.views.size,
       clearCloudFootprints,
       visibleClouds,
+      visibleShadows,
       variantCounts: Object.freeze(variantCounts),
       peakActiveClouds: this.peakActiveClouds,
+      peakActiveShadows: this.peakActiveShadows,
       totalCloudAllocations: this.totalCloudAllocations,
       totalCloudReleases: this.totalCloudReleases,
+      totalShadowAllocations: this.totalShadowAllocations,
+      totalShadowReleases: this.totalShadowReleases,
       stableFrameAllocations: this.lastSyncAllocationCount,
     });
   }
@@ -246,6 +380,7 @@ export class CloudLayerRenderer {
     this.destroyViews();
     this.activeEntries.clear();
     this.chunkCapacity = 0;
+    this.lastWorld = undefined;
   }
 
   private createActiveViews(): void {
@@ -254,26 +389,48 @@ export class CloudLayerRenderer {
       for (let slot = 0; slot < this.cloudPackage.presentation.candidatesPerChunk; slot++) {
         const descriptor = resolveCloudDescriptor(this.seed, entry, this.chunkSizePixels, this.cloudPackage, slot);
         if (!descriptor || this.views.has(descriptor.id)) continue;
+        const { image, presentation } = this.cloudPackage;
+        const shadow = this.scene.add.sprite(
+          descriptor.baseX + presentation.shadow.offsetPixels.x,
+          descriptor.baseY + presentation.shadow.offsetPixels.y,
+          image.textureKey,
+          descriptor.frame,
+        ).setOrigin(0.5)
+          .setScale(
+            descriptor.scale * presentation.shadow.scale.x,
+            descriptor.scale * presentation.shadow.scale.y,
+          )
+          .setAlpha(0)
+          .setFlipX(descriptor.flipX)
+          .setTint(rgbTint(presentation.shadow.tintRgb))
+          .setDepth(presentation.shadow.depth)
+          .setName(`${descriptor.id}:shadow`)
+          .setVisible(false);
         const sprite = this.scene.add.sprite(
           descriptor.baseX,
           descriptor.baseY,
-          this.cloudPackage.image.textureKey,
+          image.textureKey,
           descriptor.frame,
         ).setOrigin(0.5)
           .setScale(descriptor.scale)
-          .setAlpha(descriptor.alpha)
+          .setAlpha(0)
           .setFlipX(descriptor.flipX)
-          .setDepth(this.cloudPackage.presentation.depth)
-          .setName(descriptor.id);
+          .setDepth(presentation.depth)
+          .setName(descriptor.id)
+          .setVisible(false);
         this.views.set(descriptor.id, {
           descriptor,
           sprite,
-          coverageSignature: "",
+          shadow,
+          routeEnvelope: resolveCloudRouteEnvelope(descriptor, this.cloudPackage),
           coverageRevision: "",
           clearOfFog: false,
+          visibilityStartedAt: undefined,
         });
         this.totalCloudAllocations++;
+        this.totalShadowAllocations++;
         this.peakActiveClouds = Math.max(this.peakActiveClouds, this.views.size);
+        this.peakActiveShadows = Math.max(this.peakActiveShadows, this.views.size);
       }
     }
     this.assertResourceCap();
@@ -293,8 +450,10 @@ export class CloudLayerRenderer {
     const view = this.views.get(key);
     if (!view) return;
     view.sprite.destroy();
+    view.shadow.destroy();
     this.views.delete(key);
     this.totalCloudReleases++;
+    this.totalShadowReleases++;
   }
 
   private assertResourceCap(): void {

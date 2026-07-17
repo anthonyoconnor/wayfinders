@@ -349,7 +349,7 @@ chunks, adds a prefetch ring when capacity allows, and enforces a hard five-by-
 five (`25`) chunk resource budget. Deactivation runs before activation.
 
 Chunk-local terrain, authored home-island objects, imported authored-island
-layers, knowledge/risk textures, cloud sprites, and marker pools all consume
+layers, knowledge/risk textures, cloud/shadow pairs, and marker pools all consume
 the same active-chunk delta. Inactive presentation resources are destroyed or
 returned to bounded pools; non-creating world reads prevent the renderer from
 expanding authoritative storage. Shared package and available-island textures,
@@ -369,24 +369,33 @@ disagreement uses the complete procedural developer presentation instead of a
 partial imported visual. Camera zoom changes no placement calculation. The ship
 interpolates between fixed simulation steps. No texture is allocated per frame.
 
-Cloud atmosphere is an independent presentation layer above map art and below
-fog, the ship, feature markers, Voyage Sense guidance, prompts, and UI. Each
-active chunk has four deterministic quadrant candidates that cycle through all
-four authored silhouettes. The world seed, chunk, and candidate slot also choose
-scale, horizontal reflection, opacity, drift amplitude, drift period, position,
-and phase. A
-candidate is drawn only when its complete padded tile footprint is fully clear
-under the knowledge overlay's canonical predicate; Unknown or Personal fog,
-filtered fog edges, and world bounds suppress the whole cloud. A `224 px`
-player-clear radius preserves immediate navigation readability.
+Cloud atmosphere is an independent presentation layer. Each candidate owns a
+paired shadow at depth `51` and cloud at depth `52`, above map art, knowledge,
+the ship, feature markers, and Voyage Sense guidance but below diagnostics,
+prompts, and UI. The shadow reuses the candidate silhouette and reflection with
+a dark tint, southeast offset, reduced opacity, and flattened vertical scale;
+it moves in lockstep with the cloud and can cross sea, terrain, or the ship.
 
-Cloud drift uses rendering time and never simulation time. Reduced-motion
-preference freezes every candidate at its seeded phase. The layer owns its
-sprites, deterministic descriptors, enabled state, and resource counters, but
-shares the scene's active-chunk lifetime. Disabling clouds destroys only cloud
-sprites and turns stable sync into a bounded no-op; re-enabling reconstructs
-the current active candidates without invalidating terrain, water, fog, risk,
-markers, UI, or authoritative revisions.
+Each active chunk has four deterministic corner-biased candidates that cycle
+through all four authored silhouettes. The world seed, chunk, and candidate
+slot also choose scale, horizontal reflection, opacity, drift amplitude, drift
+period, position, and phase. Eligibility is decided for the pair's complete
+padded route envelope: cloud and shadow footprints plus their full drift range.
+Every covered tile must be Supported knowledge or belong to an exactly revealed
+island. Unknown, Personal, transient `visibleNow` sight, filtered fog edges, and
+world bounds suppress the pair. A pair that passes remains eligible throughout
+its complete orbit and is rechecked only when durable knowledge, exact-island
+reveal state, or world identity changes. Ship proximity never hides or rebuilds
+the pair, so the offset shadow can pass continuously across the ship.
+
+Cloud drift uses rendering time and never simulation time. Seeded periods range
+from `180` through `300` seconds, and newly eligible pairs fade in over `6`
+seconds. Reduced-motion preference freezes every candidate at its seeded phase.
+The layer owns its paired sprites, deterministic descriptors, enabled state,
+and resource counters, but shares the scene's active-chunk lifetime. Disabling
+clouds destroys only cloud-owned pairs and turns stable sync into a bounded
+no-op; re-enabling reconstructs the current active candidates without
+invalidating terrain, water, fog, risk, markers, UI, or authoritative revisions.
 
 The runtime authored packages provide the home island, animated player boat,
 fishing-shoal cue, and presentation-only four-frame cloud sheet. Available
@@ -507,7 +516,8 @@ still suppress input.
 
 `window.__WAYFINDERS__` exposes bounded snapshot, command, overlay, resource,
 and performance diagnostics for browser automation. Its cloud command and
-telemetry report and mutate presentation state only. These interfaces report
+paired cloud/shadow telemetry report and mutate presentation state only. These
+interfaces report
 authoritative or sampled state; they do not become gameplay ownership seams.
 
 ## 12. Performance contracts
@@ -520,8 +530,9 @@ Normal sailing avoids work proportional to total world or island count:
 - interaction and marker queries start from spatially local candidates;
 - forward guidance is cooperative, cancellable, and atomically published;
 - return rendering follows one sparse, chunk-indexed Voyage Sense thread;
-- clouds retain at most four candidates per active chunk and recheck fog coverage
-  only on knowledge/visibility/reveal revision or tile-boundary drift;
+- clouds retain at most four cloud/shadow pairs per active chunk and recheck
+  their durable route envelopes only on knowledge/reveal revision or world
+  identity change;
 - overlays update dirty active chunks only; and
 - diagnostics are sampled and capped.
 

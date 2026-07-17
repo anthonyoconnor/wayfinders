@@ -24,8 +24,15 @@ export interface CloudAssetPackage {
     scale: Readonly<{ minimum: number; maximum: number }>;
     driftAmplitudePixels: Readonly<{ minimum: number; maximum: number }>;
     driftPeriodSeconds: Readonly<{ minimum: number; maximum: number }>;
+    fadeInSeconds: number;
     clearPaddingTiles: number;
-    playerClearRadiusPixels: number;
+    shadow: Readonly<{
+      depth: number;
+      offsetPixels: Readonly<{ x: number; y: number }>;
+      opacityMultiplier: number;
+      scale: Readonly<{ x: number; y: number }>;
+      tintRgb: Readonly<{ red: number; green: number; blue: number }>;
+    }>;
   }>;
   readonly variants: readonly string[];
 }
@@ -37,6 +44,18 @@ function positiveInteger(value: number, label: string): number {
 
 function unitInterval(value: number, label: string): number {
   if (!Number.isFinite(value) || value < 0 || value > 1) throw new RangeError(`${label} must be between zero and one`);
+  return value;
+}
+
+function finite(value: number, label: string): number {
+  if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
+  return value;
+}
+
+function colorChannel(value: number, label: string): number {
+  if (!Number.isInteger(value) || value < 0 || value > 255) {
+    throw new RangeError(`${label} must be an integer from zero through 255`);
+  }
   return value;
 }
 
@@ -74,6 +93,7 @@ export function validateCloudAssetPackage(input: typeof packageInput): Readonly<
   });
   unitInterval(presentation.chunkDensity, "presentation.chunkDensity");
   positiveInteger(presentation.candidatesPerChunk, "presentation.candidatesPerChunk");
+  finite(presentation.depth, "presentation.depth");
   unitInterval(presentation.opacity.minimum, "presentation.opacity.minimum");
   unitInterval(presentation.opacity.maximum, "presentation.opacity.maximum");
   if (presentation.opacity.minimum > presentation.opacity.maximum || presentation.opacity.maximum > 0.35) {
@@ -90,10 +110,25 @@ export function validateCloudAssetPackage(input: typeof packageInput): Readonly<
     || presentation.driftPeriodSeconds.minimum > presentation.driftPeriodSeconds.maximum) {
     throw new RangeError("Cloud drift period range must be positive and ordered");
   }
+  if (!Number.isFinite(presentation.fadeInSeconds) || presentation.fadeInSeconds < 0) {
+    throw new RangeError("Cloud fade-in duration must be finite and non-negative");
+  }
   if (!Number.isInteger(presentation.clearPaddingTiles) || presentation.clearPaddingTiles < 0) {
     throw new RangeError("Cloud clear padding must be a non-negative integer");
   }
-  if (presentation.playerClearRadiusPixels < 0) throw new RangeError("Cloud player clear radius must be non-negative");
+  const { shadow } = presentation;
+  finite(shadow.depth, "presentation.shadow.depth");
+  if (shadow.depth >= presentation.depth) throw new RangeError("Cloud shadow depth must be below cloud depth");
+  finite(shadow.offsetPixels.x, "presentation.shadow.offsetPixels.x");
+  finite(shadow.offsetPixels.y, "presentation.shadow.offsetPixels.y");
+  unitInterval(shadow.opacityMultiplier, "presentation.shadow.opacityMultiplier");
+  if (!Number.isFinite(shadow.scale.x) || !Number.isFinite(shadow.scale.y)
+    || shadow.scale.x <= 0 || shadow.scale.y <= 0) {
+    throw new RangeError("Cloud shadow scale must be finite and positive");
+  }
+  colorChannel(shadow.tintRgb.red, "presentation.shadow.tintRgb.red");
+  colorChannel(shadow.tintRgb.green, "presentation.shadow.tintRgb.green");
+  colorChannel(shadow.tintRgb.blue, "presentation.shadow.tintRgb.blue");
   return input as Readonly<CloudAssetPackage>;
 }
 

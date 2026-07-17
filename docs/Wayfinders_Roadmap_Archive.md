@@ -1263,18 +1263,25 @@ movement, and lifecycle actions remain owned by the existing game host.
 Status: implemented and accepted on 2026-07-16.
 
 The game now renders sparse world-space clouds through an independent
-`CloudLayerRenderer`. Four deterministic quadrant candidates per active chunk
-cycle through all four approved top-down pixel-art silhouettes, with seeded
-scale, reflection, opacity, position, drift amplitude, period, and phase providing
-additional variety. The cloud layer shares only the scene's active-chunk delta
-and the knowledge overlay's pure fully-clear predicate. A padded footprint that
-touches Unknown or Personal fog, a filtered fog boundary, or the world edge is
-suppressed in full, while a fixed clear radius protects the player boat.
+`CloudLayerRenderer`. Four deterministic corner-biased candidates per active
+chunk cycle through all four approved top-down pixel-art silhouettes, with
+seeded scale, reflection, opacity, position, drift amplitude, period, and phase
+providing additional variety. The cloud layer shares only the scene's
+active-chunk delta and pure knowledge-coverage predicates.
+
+A 2026-07-17 refinement paired every cloud with an offset shadow, moved both
+above the ship, lengthened drift to `180` through `300` seconds, and gated the
+complete cloud/shadow drift envelope against durable clear knowledge. Transient
+sight and tile-boundary motion can no longer make an eligible pair pop in or
+out, while Unknown or Personal fog, filtered boundaries, and world edges still
+suppress the pair in full. The shadow crosses sea, terrain, and the ship in
+lockstep with its cloud.
 
 The scene-owned **Cloud atmosphere** developer checkbox defaults on, immediately
-releases cloud sprites when disabled, and deterministically rebuilds only cloud
-resources when re-enabled. The equivalent `window.__WAYFINDERS__` command and
-bounded telemetry never enter `GameSimulation.debug` or change gameplay,
+releases cloud/shadow pairs when disabled, and deterministically rebuilds only
+cloud-owned resources when re-enabled. The equivalent
+`window.__WAYFINDERS__` command and bounded telemetry never enter
+`GameSimulation.debug` or change gameplay,
 knowledge, visibility, terrain, collision, navigation, or other presentation
 resources. Reduced-motion preference freezes seeded cloud phases.
 
@@ -1284,10 +1291,11 @@ under the CLD-1 asset paths.
 Contract coverage verifies package shape, all four variants across deterministic
 samples, transform and motion variety, conservative fog exclusion, independent
 toggle lifecycle, deterministic reconstruction, corner-crossing revealed-area
-placement, resource caps, and zero stable-sync allocations. Live browser
-acceptance confirmed that the scene-owned checkbox releases all cloud sprites
-and deterministically rebuilds them without affecting the other overlays. The
-approved current-game mockup remains reference-only at
+placement, durable multi-orbit visibility, shadow transform/depth/visibility
+pairing, world-identity invalidation, paired resource caps and releases, and
+zero stable-sync allocations. Existing live browser acceptance confirms that
+the scene-owned checkbox remains isolated from the other overlays. The approved
+current-game mockup remains reference-only at
 `concept_art/clouds/cloud-atmosphere-current-game-mockup.png`.
 
 ## Architecture and scale track
