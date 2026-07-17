@@ -16,10 +16,12 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
    simulation commands.
 4. The asset-library mode resolves a typed asset-workspace registry and starts
    one workspace-scoped library, Great Hall, Audio, or Water preview scene
-   without gameplay simulation. The branch-only Water workspace starts a static
-   `WaterPreviewScene` over prepared candidate sheets without a gameplay catalog
-   or simulation. The trial mode starts `AssetTrialScene` with one isolated
-   open-water `WorldGrid`, movement authority, and selected candidate.
+   without gameplay simulation. The branch-only Water workspace starts an
+   animated `WaterPreviewScene`
+   over prepared candidate sheets and preview-only islands and shoals, without a
+   gameplay catalog or simulation. The trial mode starts `AssetTrialScene` with
+   one isolated open-water `WorldGrid`, movement authority, and selected
+   candidate.
 5. Presentation controllers and renderers consume read models, revisions, and
    the shared active-chunk delta where applicable.
 6. Diagnostics and development tools consume bounded read models and counters;
@@ -127,15 +129,18 @@ adapter may own Phaser sound instances.
   accessible tab navigation, URL history, and the three permanent mount regions.
   Library workspaces own their catalog partition, collision profiles,
   namespaced selection, and scene lifetime. The branch-only Water workspace is
-  a static feedback surface that reads prepared candidate sheets directly and
-  owns no package, promotion, runtime, terrain, or gameplay authority. The
+  an animated feedback surface that reads prepared candidate sheets and
+  preview-only island and shoal images directly. It owns its DOM canvas masks
+  and request-animation-frame lifecycle, but no package, promotion, runtime,
+  terrain, or gameplay authority. The
   view-only Great Hall workspace
   validates and varies a checked-in twenty-generation V1 fixture, then passes it
   to the same bounded semantic renderer used by the game. A pure adapter maps
   structured `GreatHallChronicle` fields into that contract; neither host gives
   the fixture or renderer gameplay authority. `AssetWorkspaceSceneFactory` selects the isolated scene
-  kind at composition. Stopping a workspace aborts its DOM listeners and Phaser
-  bindings before another workspace starts.
+  kind at composition. Stopping a workspace aborts its DOM listeners, cancels
+  its preview-local animation frame, and removes its Phaser bindings before
+  another workspace starts.
 - The Audio workspace adapts the same validated catalog used by game mode and
   creates one browser media element only for the selected stored file. It owns
   playback, pause/resume, stop, browser-reported timing, and teardown only; it

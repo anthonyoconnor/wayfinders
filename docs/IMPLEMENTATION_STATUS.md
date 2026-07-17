@@ -42,17 +42,21 @@ crossfades, and ducking acceptance remain pending
 because the in-app browser connection did not initialize during this handoff;
 the rebuilt ambience also awaits product-owner audition.
 
-WTR-1.0 is implemented on `codex/water-look-prototype` and awaits product
-feedback. The asset shell now exposes a Water tab whose static branch-only
-preview compares all prepared tile profiles and variants, a selected 3x3 repeat,
-a 96x96 whole-world composition, multi-cell handoffs between every water
-treatment, and a player-boat scale reference. It does not register a water
-package, integrate water into the game, animate water, or blend water with
-islands. Source typecheck and the production bundle pass. Browser verification
-covered direct Water routing, profile and variant selection, world inspection
-scales, the optional visual overlays, workspace teardown and return, and
-reported no warning or error output. Broad automated coverage was intentionally
-outside this feedback prototype's scope.
+WTR-1.0 through WTR-1.5 are implemented on `codex/water-look-prototype` and await
+product feedback. The branch-only Water workspace compares all prepared tile
+profiles and variants, then presents a zoomable 96x96 world with smoothly masked
+profile handoffs, wind and wave motion, three representative islands, irregular
+shore-following shallow and coastal bands, broken exposure-sensitive shore
+waves, and eight water-specific animated fishing shoals. A compact labelled
+gallery exposes the shoal catalog directly. One pause control stops water,
+shoreline, and shoal motion together; workspace shutdown cancels the local
+animation lifecycle. The prototype does not register a water or shoal package,
+change the game runtime, or provide production authoring and promotion tools.
+Broad automated coverage remains intentionally outside this feedback
+prototype's scope. Source typecheck, architecture-boundary validation, and the
+production bundle pass. Browser review covered the overview and native game
+scale, the shared pause control, workspace teardown and remount, and clean
+warning/error output.
 
 The whole-world study supports stepped zoom through native 32-pixel game-tile
 scale while preserving the inspected map area, plus direct Fit and 1:1 Game

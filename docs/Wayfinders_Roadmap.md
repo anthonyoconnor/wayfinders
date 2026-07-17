@@ -172,9 +172,9 @@ runtime scope.
 
 ### WTR-1 — Layered water system
 
-Status: the WTR-1.0 branch prototype is implemented and awaiting product
-feedback. The replacement WTR-1.1 through WTR-1.3 sequence remains proposed
-and is not authorized.
+Status: WTR-1.0 through WTR-1.5 are implemented on the branch asset-viewer
+prototype and await product feedback. None of this sequence is authorized for
+game-runtime integration.
 
 The proposal evolves the branch Water workspace through animation, island depth
 handoffs, and shoreline-wave studies while preserving terrain, collision,
@@ -183,36 +183,37 @@ Its source pack, visual design, implementation sequence, and acceptance criteria
 are defined in `Wayfinders_Water_System_Milestone.md`. Production packaging and
 runtime replacement require a later, separately authorized proposal.
 
-`WTR-1.0` is implemented on `codex/water-look-prototype` as a deliberately rough
-prototype. Its **Water** asset-workspace tab shows the different static
-candidate tiles, repeat comparisons, and one 96x96 whole-world composition that
-places every water treatment, multi-cell handoff, and the player boat in a
-single game-scale context. The prototype is ready
-for product feedback; its exit gate remains open until that feedback and the
-preferred direction are recorded. It is not a production-ready asset workspace
-or integration into the game. WTR-1.0 does not address authored or generated
-island blending; that begins in WTR-1.2.
+`WTR-1.0` through `WTR-1.5` are implemented on `codex/water-look-prototype` as a
+deliberately direct visual prototype. Its **Water** asset-workspace tab retains
+the static candidate and repeat comparisons, then uses one zoomable 96x96 world
+to show smoothly masked water-profile handoffs, wind and wave motion, three
+representative islands with irregular shoreline-following depth bands, broken
+exposure-sensitive shore waves, and eight water-specific animated fishing
+shoals. A compact gallery keeps every shoal direction comparable outside the
+world. The prototype is ready for product feedback and remains entirely outside
+the production asset catalog and game runtime.
 
-WTR-1.0 uses static frames and the smallest practical preview code. It does not
-build an animation system, production package contract, promotion workflow,
-chunk renderer, performance instrumentation, or comprehensive automated test
-suite. Add a focused test or diagnostic only when doing so makes a particular
-visual experiment faster. The prototype may be revised or discarded after its
+The sequence uses static sprite sheets, a Water-workspace-local animation loop,
+canvas masks derived from island transparency, and judged visual defaults. It
+does not build a general animation system, production package contract,
+promotion workflow, chunk renderer, performance instrumentation, or broad
+automated test suite. The prototype may be revised or discarded after its
 feedback is recorded.
 
-If separately authorized, `WTR-1.1` adds a small set of judged-default water
-animations to the Water tab, including wave and wind motion. `WTR-1.2` brings
-representative islands into that playground and explores irregular
-shore-following shallow-to-deep transitions. `WTR-1.3` goes deeper on the
-handoff with non-uniform animated waves around island edges. These are visual
-feedback milestones in the asset workspace; they do not authorize production
-asset promotion or game-runtime integration.
+`WTR-1.1` supplies judged-default wave and wind motion. `WTR-1.2` supplies the
+representative islands and irregular shore-following depth transitions.
+`WTR-1.3` supplies broken, non-uniform animated shore waves. `WTR-1.4` supplies
+eight new fishing-shoal looks suited to the different water profiles, and
+`WTR-1.5` animates them in the same preview. These remain visual-feedback
+milestones only; they do not authorize production asset promotion or
+game-runtime integration.
 
 ## Authorization boundary
 
-WTR-1.0 was authorized only as the branch prototype described above. No
-subsequent water milestone is authorized for implementation. WTR-1.1 through
-WTR-1.3 and any new gameplay or production-asset milestone require explicit
-user authorization. Do not implement gameplay saving; it may return only
-through an explicitly authorized milestone designed for the game that exists
-at that time.
+WTR-1.0 through WTR-1.5 are authorized only as the branch asset-viewer prototype
+described above. They may create branch-local preview assets and presentation
+code, but they must not register production packages or change the game runtime.
+Any gameplay or production-asset milestone still requires explicit user
+authorization.
+Do not implement gameplay saving; it may return only through an explicitly
+authorized milestone designed for the game that exists at that time.

@@ -3218,12 +3218,28 @@ html.water-preview-active[data-application-mode="assets"] .developer-tools {
   scrollbar-color: #477f82 #09252d;
 }
 
-.water-preview-world-map {
+.water-preview-world-stack {
+  position: relative;
+  margin-inline: auto;
+  isolation: isolate;
+}
+
+.water-preview-world-map,
+.water-preview-world-motion {
   display: block;
   max-width: none;
-  margin-inline: auto;
-  background: #082f40;
   image-rendering: pixelated;
+}
+
+.water-preview-world-map {
+  background: #082f40;
+}
+
+.water-preview-world-motion {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  pointer-events: none;
 }
 
 .water-preview-world-legend {
@@ -3319,6 +3335,55 @@ html.water-preview-active[data-application-mode="assets"] .developer-tools {
   grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
   gap: 0.7rem;
 }
+
+.water-preview-shoal-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.65rem;
+}
+
+.water-preview-shoal-card {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid rgba(103, 164, 165, 0.22);
+  border-radius: 0.55rem;
+  color: #d9eee4;
+  background: rgba(2, 18, 24, 0.5);
+}
+
+.water-preview-shoal-card > div {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  margin-bottom: 0.35rem;
+  overflow: hidden;
+  border-radius: 0.35rem;
+  background-color: #12536a;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.035) 25%, transparent 25%);
+  background-size: 12px 12px;
+}
+
+.water-preview-shoal-card > div[data-water="abyss"] { background-color: #082f40; }
+.water-preview-shoal-card > div[data-water="coastal"] { background-color: #4aa1a0; }
+.water-preview-shoal-card > div[data-water="lagoon"] { background-color: #2d858b; }
+.water-preview-shoal-card > div[data-water="reef"] { background-color: #36756b; }
+.water-preview-shoal-card > div[data-water="current"] { background-color: #1c6374; }
+.water-preview-shoal-card > div[data-water="rough"] { background-color: #245d6b; }
+.water-preview-shoal-card > div[data-water="brackish"] { background-color: #507f55; }
+
+.water-preview-shoal-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.water-preview-shoal-card strong { font-size: 0.72rem; }
+.water-preview-shoal-card small { color: #7ea7a6; font-size: 0.61rem; }
 
 .water-preview-card {
   display: grid;

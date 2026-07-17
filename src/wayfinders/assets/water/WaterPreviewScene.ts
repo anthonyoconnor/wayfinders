@@ -14,6 +14,15 @@ const WATER_OVERLAYS_URL = new URL(
 ).href;
 const PLAYER_BOAT_URL = "/assets/gr1/images/player-boat.png";
 const PLAYER_WAKE_URL = "/assets/gr1/images/player-wake.png";
+const HOME_ISLAND_URL = "/assets/gr1/images/home-island.png";
+const HORSESHOE_ISLAND_URL = new URL(
+  "../../../../assets-src/gr3/candidates/production-island-horseshoe/base.png",
+  import.meta.url,
+).href;
+const RIVER_DELTA_ISLAND_URL = new URL(
+  "../../../../assets-src/gr3/candidates/production-island-river-delta-inhabited/base.png",
+  import.meta.url,
+).href;
 
 const TILE_SIZE = 32;
 const SHEET_MARGIN = 2;
@@ -36,6 +45,61 @@ const PROFILES = Object.freeze([
 
 type WaterProfileId = (typeof PROFILES)[number]["id"];
 
+interface IslandPlacement {
+  readonly id: string;
+  readonly label: string;
+  readonly url: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+interface ShoalPlacement {
+  readonly id: string;
+  readonly label: string;
+  readonly profile: WaterProfileId;
+  readonly url: string;
+  readonly x: number;
+  readonly y: number;
+  readonly size: number;
+  readonly speed: number;
+  readonly amplitude: number;
+  readonly heading: number;
+}
+
+interface ShorePoint {
+  readonly x: number;
+  readonly y: number;
+  readonly nx: number;
+  readonly ny: number;
+  readonly exposure: number;
+  readonly phase: number;
+}
+
+interface WaterWorldModel {
+  readonly land: Uint8Array;
+  readonly distanceFromLand: Float32Array;
+  readonly shore: readonly ShorePoint[];
+}
+
+const ISLANDS: readonly IslandPlacement[] = Object.freeze([
+  { id: "home", label: "Home Island", url: HOME_ISLAND_URL, x: 56, y: 58, width: 23, height: 23 },
+  { id: "horseshoe", label: "Horseshoe", url: HORSESHOE_ISLAND_URL, x: 17, y: 59, width: 22, height: 22 },
+  { id: "river-delta", label: "River Delta", url: RIVER_DELTA_ISLAND_URL, x: 62, y: 27, width: 22, height: 22 },
+]);
+
+const SHOALS: readonly ShoalPlacement[] = Object.freeze([
+  { id: "abyss-lantern", label: "Lantern crescent", profile: "abyss", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/abyss-lantern.png", import.meta.url).href, x: 11, y: 13, size: 7, speed: 0.55, amplitude: 0.65, heading: -0.18 },
+  { id: "deep-mackerel", label: "Blue mackerel", profile: "deep", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/deep-mackerel.png", import.meta.url).href, x: 39, y: 16, size: 8, speed: 0.72, amplitude: 0.8, heading: 0.05 },
+  { id: "coastal-sardine", label: "Coastal bait ball", profile: "coastal", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/coastal-sardine.png", import.meta.url).href, x: 83, y: 66, size: 7, speed: 0.95, amplitude: 0.55, heading: 0.1 },
+  { id: "lagoon-fry", label: "Lagoon fry", profile: "lagoon", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/lagoon-fry.png", import.meta.url).href, x: 45, y: 84, size: 6, speed: 0.42, amplitude: 0.42, heading: -0.08 },
+  { id: "reef-butterfly", label: "Reef butterflies", profile: "reef", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/reef-butterfly.png", import.meta.url).href, x: 48, y: 69, size: 6, speed: 0.62, amplitude: 0.36, heading: 0.14 },
+  { id: "current-needle", label: "Current riders", profile: "current", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/current-needle.png", import.meta.url).href, x: 34, y: 39, size: 9, speed: 1.35, amplitude: 1.15, heading: -0.58 },
+  { id: "rough-bonito", label: "Rough-water bonito", profile: "rough", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/rough-bonito.png", import.meta.url).href, x: 78, y: 15, size: 8, speed: 1.1, amplitude: 0.75, heading: -0.35 },
+  { id: "brackish-mullet", label: "Brackish mullet", profile: "brackish", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/brackish-mullet.png", import.meta.url).href, x: 12, y: 86, size: 7, speed: 0.48, amplitude: 0.5, heading: 0.02 },
+]);
+
 export class WaterPreviewScene extends Phaser.Scene {
   private controlsAbort?: AbortController;
   private browser?: HTMLElement;
@@ -45,7 +109,9 @@ export class WaterPreviewScene extends Phaser.Scene {
   private variant = 0;
   private worldCellSize = 4;
   private showOverlays = true;
+  private motionPaused = false;
   private renderRevision = 0;
+  private animationFrame?: number;
 
   constructor(workspace: Readonly<WaterAssetWorkspaceModule>) {
     super({ key: assetWorkspaceSceneKey(workspace.id) });
@@ -56,7 +122,7 @@ export class WaterPreviewScene extends Phaser.Scene {
     this.mountWorkspace();
     this.render();
     const gameStatus = document.querySelector<HTMLElement>("#game-status");
-    if (gameStatus) gameStatus.textContent = "Water look prototype — static branch preview";
+    if (gameStatus) gameStatus.textContent = "Animated water, islands, and shoals — asset-viewer prototype";
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroyBindings, this);
   }
 
@@ -74,7 +140,7 @@ export class WaterPreviewScene extends Phaser.Scene {
 
     this.stage = document.createElement("section");
     this.stage.className = "water-preview-stage";
-    this.stage.setAttribute("aria-label", "Static water look prototype");
+    this.stage.setAttribute("aria-label", "Animated water look prototype");
     region.append(this.stage);
 
     const signal = this.controlsAbort.signal;
@@ -88,6 +154,15 @@ export class WaterPreviewScene extends Phaser.Scene {
   }
 
   private readonly onClick = (event: Event): void => {
+    const motionTarget = event.target instanceof Element
+      ? event.target.closest<HTMLElement>("[data-water-motion]")
+      : null;
+    if (motionTarget) {
+      this.motionPaused = !this.motionPaused;
+      this.render();
+      return;
+    }
+
     const zoomTarget = event.target instanceof Element
       ? event.target.closest<HTMLElement>("[data-water-zoom]")
       : null;
@@ -151,11 +226,11 @@ export class WaterPreviewScene extends Phaser.Scene {
     if (!this.browser) return;
     this.browser.innerHTML = `
       <header class="asset-library-header">
-        <div><p class="eyebrow">WTR-1.0 branch</p><h2>Water</h2></div>
+        <div><p class="eyebrow">WTR-1.0–1.5 branch</p><h2>Water</h2></div>
         <span class="water-preview-badge">Prototype</span>
       </header>
       <div class="water-preview-browser__body">
-        <p class="water-preview-intro">Static comparisons for early direction feedback. Nothing here is registered in the game.</p>
+        <p class="water-preview-intro">A branch-only playground for animated water, island transitions, shoreline waves, and fishing shoals. Nothing here is registered in the game.</p>
         <section class="water-preview-control-group">
           <h3>Selected water</h3>
           <div class="water-preview-profile-list">
@@ -194,24 +269,39 @@ export class WaterPreviewScene extends Phaser.Scene {
       <div class="water-preview-stage__inner">
         <header class="water-preview-hero">
           <div><p class="eyebrow">Early visual feedback</p><h2>How should Wayfinders water feel?</h2></div>
-          <div class="water-preview-pills"><span>Static only</span><span>No islands</span><span>No game integration</span></div>
+          <div class="water-preview-pills"><span>Animated</span><span>3 islands</span><span>8 shoals</span><span>No game integration</span></div>
         </header>
 
         <section class="water-preview-panel water-preview-world-study">
-          <div class="water-preview-panel__heading"><div><p class="eyebrow">96 × 96 world study</p><h3>All water treatments in context</h3></div><span>Multi-cell static blends</span></div>
-          <p class="water-preview-world-note">A full prototype-scale water world: abyss and deep ocean, coastal shelves, calm lagoons, reef fields, a current ribbon, rough water, and a future brackish study. Zoom to 1:1 Game to inspect the native 32-pixel tile scale used in play.</p>
+          <div class="water-preview-panel__heading"><div><p class="eyebrow">96 × 96 world study</p><h3>Water, islands, and shoals in context</h3></div><span>WTR-1.0–1.5 prototype</span></div>
+          <p class="water-preview-world-note">A game-sized visual study with irregular island-driven shallows, exposed and sheltered shoreline waves, wind, currents, rough water, and eight water-specific shoals. Zoom to 1:1 Game to inspect the native 32-pixel tile scale.</p>
           <div class="water-preview-zoom" role="group" aria-label="Water world zoom controls">
             <button type="button" data-water-zoom="out" aria-label="Zoom out" ${zoomIndex === 0 ? "disabled" : ""}>−</button>
             <output aria-live="polite">${zoomPercent}%${this.worldCellSize === TILE_SIZE ? " · game scale" : ""}</output>
             <button type="button" data-water-zoom="in" aria-label="Zoom in" ${zoomIndex === WORLD_CELL_SIZES.length - 1 ? "disabled" : ""}>+</button>
             <button type="button" data-water-zoom="fit">Fit</button>
             <button type="button" data-water-zoom="game">1:1 Game</button>
+            <button type="button" data-water-motion aria-pressed="${this.motionPaused}">${this.motionPaused ? "Play motion" : "Pause motion"}</button>
           </div>
           <div class="water-preview-world-wrap">
-            <canvas class="water-preview-world-map" data-water-world width="${worldPixels}" height="${worldPixels}" aria-label="World-scale map showing every water treatment"></canvas>
+            <div class="water-preview-world-stack" style="width:${worldPixels}px;height:${worldPixels}px">
+              <canvas class="water-preview-world-map" data-water-world width="${worldPixels}" height="${worldPixels}" aria-label="World-scale map showing every water treatment, islands, and fishing shoals"></canvas>
+              <canvas class="water-preview-world-motion" data-water-world-motion width="${worldPixels}" height="${worldPixels}" aria-hidden="true"></canvas>
+            </div>
           </div>
           <div class="water-preview-world-legend" aria-label="World water legend">
             ${PROFILES.map((profile) => `<span><i data-water="${profile.id}"></i>${profile.label}${profile.id === "brackish" ? " · future" : profile.id === "current" || profile.id === "rough" ? " · visual" : ""}</span>`).join("")}
+          </div>
+        </section>
+
+        <section class="water-preview-panel">
+          <div class="water-preview-panel__heading"><div><p class="eyebrow">Fishing shoals</p><h3>Eight water-specific directions</h3></div><span>Animated in the world above</span></div>
+          <div class="water-preview-shoal-gallery">
+            ${SHOALS.map((shoal) => `
+              <article class="water-preview-shoal-card">
+                <div data-water="${shoal.profile}"><img src="${shoal.url}" alt="${shoal.label} fishing shoal"></div>
+                <strong>${shoal.label}</strong><small>${PROFILES[profileIndex(shoal.profile)]!.label} water</small>
+              </article>`).join("")}
           </div>
         </section>
 
@@ -262,84 +352,57 @@ export class WaterPreviewScene extends Phaser.Scene {
 
   private async renderWorldCanvas(revision: number): Promise<void> {
     const canvas = this.stage?.querySelector<HTMLCanvasElement>("[data-water-world]");
-    if (!canvas) return;
-    const [staticSheet, overlaySheet, boat, wake] = await Promise.all([
+    const motionCanvas = this.stage?.querySelector<HTMLCanvasElement>("[data-water-world-motion]");
+    if (!canvas || !motionCanvas) return;
+    if (this.animationFrame !== undefined) cancelAnimationFrame(this.animationFrame);
+    this.animationFrame = undefined;
+    const [staticSheet, overlaySheet, boat, wake, ...prototypeImages] = await Promise.all([
       loadPreviewImage(WATER_STATIC_URL),
       loadPreviewImage(WATER_OVERLAYS_URL),
       loadPreviewImage(PLAYER_BOAT_URL),
       loadPreviewImage(PLAYER_WAKE_URL),
+      ...ISLANDS.map(({ url }) => loadPreviewImage(url)),
+      ...SHOALS.map(({ url }) => loadPreviewImage(url)),
     ]);
-    if (revision !== this.renderRevision || !canvas.isConnected) return;
+    if (revision !== this.renderRevision || !canvas.isConnected || !motionCanvas.isConnected) return;
     const context = canvas.getContext("2d");
-    if (!context) return;
+    const motionContext = motionCanvas.getContext("2d");
+    if (!context || !motionContext) return;
+    const islandImages = prototypeImages.slice(0, ISLANDS.length);
+    const shoalImages = prototypeImages.slice(ISLANDS.length);
+    const model = buildWorldModel(islandImages);
     context.imageSmoothingEnabled = false;
+    motionContext.imageSmoothingEnabled = false;
     const cell = this.worldCellSize;
-    context.fillStyle = "#082f40";
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    drawStaticWorld(context, staticSheet, boat, wake, islandImages, model, cell, this.showOverlays);
 
-    for (let y = 0; y < WORLD_GRID_SIZE; y++) {
-      for (let x = 0; x < WORLD_GRID_SIZE; x++) {
-        const variant = coordinateVariant(x, y);
-        const px = x * cell;
-        const py = y * cell;
-
-        drawProfileTile(context, staticSheet, "deep", variant, px, py, cell, 1);
-        const abyssAlpha = clamp01((48 - x - y + Math.sin(y * 0.22) * 5) / 22);
-        drawProfileTile(context, staticSheet, "abyss", variant, px, py, cell, abyssAlpha);
-
-        const shelfDistance = Math.min(
-          ellipseDistance(x, y, 69, 62, 30, 24),
-          ellipseDistance(x, y, 28, 72, 18, 14),
-        ) + Math.sin(x * 0.27 + y * 0.19) * 0.055;
-        const coastalAlpha = 1 - smoothstep(-0.2, 0.22, shelfDistance);
-        const lagoonAlpha = 1 - smoothstep(-0.72, -0.38, shelfDistance);
-        drawProfileTile(context, staticSheet, "coastal", variant, px, py, cell, coastalAlpha);
-        drawProfileTile(context, staticSheet, "lagoon", variant, px, py, cell, lagoonAlpha);
-
-        const brackishDistance = ellipseDistance(x, y, 17, 84, 13, 8);
-        const brackishAlpha = 1 - smoothstep(-0.2, 0.18, brackishDistance);
-        drawProfileTile(context, staticSheet, "brackish", variant, px, py, cell, brackishAlpha);
-
-        const reefAlpha = reefIntensity(x, y);
-        drawProfileTile(context, staticSheet, "reef", variant, px, py, cell, reefAlpha);
-
-        if (this.showOverlays) {
-          const currentY = 38 + Math.sin(x * 0.12) * 5;
-          const currentAlpha = 1 - smoothstep(0.7, 3.2, Math.abs(y - currentY));
-          drawProfileTile(context, staticSheet, "current", variant, px, py, cell, currentAlpha * 0.22);
-          drawOverlayTile(context, overlaySheet, 2, variant, px, py, cell, currentAlpha * 0.88);
-
-          const roughDistance = ellipseDistance(x, y, 75, 19, 18, 9);
-          const roughAlpha = 1 - smoothstep(-0.25, 0.18, roughDistance);
-          drawProfileTile(context, staticSheet, "rough", variant, px, py, cell, roughAlpha * 0.34);
-          drawOverlayTile(context, overlaySheet, 3, variant, px, py, cell, roughAlpha * 0.82);
-
-          if (coordinateHash(x, y) % 29 === 0) {
-            drawOverlayTile(context, overlaySheet, 0, variant, px, py, cell, 0.72);
-          }
-        }
+    const startedAt = performance.now();
+    let lastRenderedAt = Number.NEGATIVE_INFINITY;
+    const frameInterval = cell >= 24 ? 100 : 72;
+    const renderMotion = (now: number): void => {
+      if (revision !== this.renderRevision || !motionCanvas.isConnected) return;
+      if (now - lastRenderedAt < frameInterval) {
+        if (!this.motionPaused) this.animationFrame = requestAnimationFrame(renderMotion);
+        return;
       }
-    }
-
-    drawWorldLabel(context, "ABYSS", 8, 10, cell);
-    drawWorldLabel(context, "DEEP OCEAN", 41, 17, cell);
-    drawWorldLabel(context, "ROUGH · VISUAL", 75, 13, cell);
-    drawWorldLabel(context, "CURRENT · VISUAL", 47, 37, cell);
-    drawWorldLabel(context, "COASTAL SHELF", 69, 48, cell);
-    drawWorldLabel(context, "LAGOON", 72, 64, cell);
-    drawWorldLabel(context, "REEF", 58, 55, cell);
-    drawWorldLabel(context, "BRACKISH · FUTURE", 17, 84, cell);
-
-    const boatSize = cell * 4;
-    const boatX = cell * 44;
-    const boatY = cell * 52;
-    context.globalAlpha = 0.82;
-    context.drawImage(wake, boatX - cell * 3.3, boatY - cell * 2, cell * 6, boatSize);
-    context.globalAlpha = 1;
-    context.drawImage(boat, boatX - cell * 2, boatY - cell * 2, boatSize, boatSize);
+      lastRenderedAt = now;
+      drawWorldMotion(
+        motionContext,
+        overlaySheet,
+        shoalImages,
+        model,
+        cell,
+        this.showOverlays,
+        (now - startedAt) / 1_000,
+      );
+      if (!this.motionPaused) this.animationFrame = requestAnimationFrame(renderMotion);
+    };
+    renderMotion(startedAt);
   }
 
   private destroyBindings(): void {
+    if (this.animationFrame !== undefined) cancelAnimationFrame(this.animationFrame);
+    this.animationFrame = undefined;
     this.controlsAbort?.abort();
     this.browser?.remove();
     this.browser = undefined;
@@ -353,6 +416,295 @@ export class WaterPreviewScene extends Phaser.Scene {
       slot.replaceChildren();
     }
   }
+}
+
+function buildWorldModel(islandImages: readonly HTMLImageElement[]): WaterWorldModel {
+  const maskCanvas = document.createElement("canvas");
+  maskCanvas.width = WORLD_GRID_SIZE;
+  maskCanvas.height = WORLD_GRID_SIZE;
+  const context = maskCanvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("Water prototype could not create its island mask");
+  context.imageSmoothingEnabled = true;
+  ISLANDS.forEach((island, index) => {
+    const image = islandImages[index];
+    if (image) context.drawImage(image, island.x, island.y, island.width, island.height);
+  });
+  const pixels = context.getImageData(0, 0, WORLD_GRID_SIZE, WORLD_GRID_SIZE).data;
+  const land = new Uint8Array(WORLD_GRID_SIZE * WORLD_GRID_SIZE);
+  const landCells: Array<readonly [number, number]> = [];
+  for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+    for (let x = 0; x < WORLD_GRID_SIZE; x++) {
+      const index = y * WORLD_GRID_SIZE + x;
+      if (pixels[index * 4 + 3]! < 42) continue;
+      land[index] = 1;
+      landCells.push([x, y]);
+    }
+  }
+
+  const distanceFromLand = new Float32Array(land.length);
+  for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+    for (let x = 0; x < WORLD_GRID_SIZE; x++) {
+      const index = y * WORLD_GRID_SIZE + x;
+      if (land[index]) continue;
+      let nearestSquared = Number.POSITIVE_INFINITY;
+      for (const [landX, landY] of landCells) {
+        const dx = x - landX;
+        const dy = y - landY;
+        nearestSquared = Math.min(nearestSquared, dx * dx + dy * dy);
+      }
+      distanceFromLand[index] = Math.sqrt(nearestSquared);
+    }
+  }
+
+  const shore: ShorePoint[] = [];
+  const windX = 0.9;
+  const windY = 0.42;
+  for (let y = 1; y < WORLD_GRID_SIZE - 1; y++) {
+    for (let x = 1; x < WORLD_GRID_SIZE - 1; x++) {
+      if (land[y * WORLD_GRID_SIZE + x]) continue;
+      let inwardX = 0;
+      let inwardY = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if ((dx === 0 && dy === 0) || !land[(y + dy) * WORLD_GRID_SIZE + x + dx]) continue;
+          inwardX += dx;
+          inwardY += dy;
+        }
+      }
+      const length = Math.hypot(inwardX, inwardY);
+      if (length === 0) continue;
+      const nx = -inwardX / length;
+      const ny = -inwardY / length;
+      const exposure = clamp01(0.4 + (nx * windX + ny * windY) * 0.45);
+      const hash = coordinateHash(x, y);
+      if (hash % 5 === 0 && exposure < 0.55) continue;
+      shore.push({ x, y, nx, ny, exposure, phase: (hash % 628) / 100 });
+    }
+  }
+  return { land, distanceFromLand, shore };
+}
+
+function drawStaticWorld(
+  context: CanvasRenderingContext2D,
+  staticSheet: HTMLImageElement,
+  boat: HTMLImageElement,
+  wake: HTMLImageElement,
+  islandImages: readonly HTMLImageElement[],
+  model: WaterWorldModel,
+  cell: number,
+  showOverlays: boolean,
+): void {
+  context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+  context.fillStyle = "#082f40";
+  context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+  for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+    for (let x = 0; x < WORLD_GRID_SIZE; x++) {
+      const variant = coordinateVariant(x, y);
+      drawProfileTile(context, staticSheet, "deep", variant, x * cell, y * cell, cell, 1);
+    }
+  }
+
+  const irregularityAt = (x: number, y: number): number => Math.sin(x * 0.33 + y * 0.19) * 1.15
+    + Math.sin(x * 0.11 - y * 0.41) * 0.8
+    + ((coordinateHash(x, y) % 100) / 100 - 0.5) * 0.7;
+  drawProfileField(context, staticSheet, "abyss", cell, (x, y) => clamp01((49 - x - y + Math.sin(y * 0.2) * 5) / 21));
+  drawProfileField(context, staticSheet, "coastal", cell, (x, y) => {
+    const distance = model.distanceFromLand[y * WORLD_GRID_SIZE + x]!;
+    const irregularity = irregularityAt(x, y);
+    return 1 - smoothstep(4.2 + irregularity, 10.2 + irregularity, distance);
+  });
+  drawProfileField(context, staticSheet, "lagoon", cell, (x, y) => {
+    const distance = model.distanceFromLand[y * WORLD_GRID_SIZE + x]!;
+    return 1 - smoothstep(0.7, 3.6 + irregularityAt(x, y) * 0.35, distance);
+  });
+  drawProfileField(context, staticSheet, "brackish", cell, (x, y) => (
+    1 - smoothstep(-0.3, 0.28, ellipseDistance(x, y, 14, 87, 16, 9))
+  ));
+  drawProfileField(context, staticSheet, "reef", cell, reefIntensity);
+  if (showOverlays) {
+    drawProfileField(context, staticSheet, "current", cell, (x, y) => {
+      const currentY = 39 + Math.sin(x * 0.12) * 5;
+      return (1 - smoothstep(0.5, 3.5, Math.abs(y - currentY))) * 0.3;
+    });
+    drawProfileField(context, staticSheet, "rough", cell, (x, y) => (
+      (1 - smoothstep(-0.28, 0.22, ellipseDistance(x, y, 77, 18, 18, 10))) * 0.48
+    ));
+  }
+
+  ISLANDS.forEach((island, index) => {
+    const image = islandImages[index];
+    if (!image) return;
+    context.drawImage(image, island.x * cell, island.y * cell, island.width * cell, island.height * cell);
+  });
+
+  const boatSize = cell * 4;
+  const boatX = cell * 44;
+  const boatY = cell * 52;
+  context.globalAlpha = 0.82;
+  context.drawImage(wake, boatX - cell * 3.3, boatY - cell * 2, cell * 6, boatSize);
+  context.globalAlpha = 1;
+  context.drawImage(boat, boatX - cell * 2, boatY - cell * 2, boatSize, boatSize);
+}
+
+function drawProfileField(
+  context: CanvasRenderingContext2D,
+  sheet: HTMLImageElement,
+  profile: WaterProfileId,
+  cell: number,
+  alphaAt: (x: number, y: number) => number,
+): void {
+  const layer = document.createElement("canvas");
+  layer.width = context.canvas.width;
+  layer.height = context.canvas.height;
+  const layerContext = layer.getContext("2d");
+  if (!layerContext) return;
+  layerContext.imageSmoothingEnabled = false;
+
+  const mask = document.createElement("canvas");
+  mask.width = WORLD_GRID_SIZE;
+  mask.height = WORLD_GRID_SIZE;
+  const maskContext = mask.getContext("2d");
+  if (!maskContext) return;
+  const maskImage = maskContext.createImageData(WORLD_GRID_SIZE, WORLD_GRID_SIZE);
+  for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+    for (let x = 0; x < WORLD_GRID_SIZE; x++) {
+      const alpha = clamp01(alphaAt(x, y));
+      if (alpha > 0.01) {
+        drawProfileTile(layerContext, sheet, profile, coordinateVariant(x, y), x * cell, y * cell, cell, 1);
+      }
+      const pixel = (y * WORLD_GRID_SIZE + x) * 4;
+      maskImage.data[pixel] = 255;
+      maskImage.data[pixel + 1] = 255;
+      maskImage.data[pixel + 2] = 255;
+      maskImage.data[pixel + 3] = Math.round(alpha * 255);
+    }
+  }
+  maskContext.putImageData(maskImage, 0, 0);
+  layerContext.globalCompositeOperation = "destination-in";
+  layerContext.imageSmoothingEnabled = true;
+  layerContext.drawImage(mask, 0, 0, layer.width, layer.height);
+  layerContext.globalCompositeOperation = "source-over";
+  context.drawImage(layer, 0, 0);
+  layer.width = 0;
+  layer.height = 0;
+  mask.width = 0;
+  mask.height = 0;
+}
+
+function drawWorldMotion(
+  context: CanvasRenderingContext2D,
+  overlaySheet: HTMLImageElement,
+  shoalImages: readonly HTMLImageElement[],
+  model: WaterWorldModel,
+  cell: number,
+  showOverlays: boolean,
+  seconds: number,
+): void {
+  context.clearRect(0, 0, context.canvas.width, context.canvas.height);
+  const frame = Math.floor(seconds * 7) % 8;
+  if (showOverlays) {
+    drawWind(context, model, cell, seconds);
+    for (let x = 1; x < WORLD_GRID_SIZE; x += 2) {
+      const y = Math.round(39 + Math.sin(x * 0.12) * 5 + Math.sin(seconds * 1.2 + x * 0.18));
+      if (model.land[y * WORLD_GRID_SIZE + x]) continue;
+      drawOverlayFrame(context, overlaySheet, 2, (frame + x) % 8, x * cell, y * cell, cell, 0.72);
+    }
+    for (let y = 8; y < 29; y += 2) {
+      for (let x = 60; x < 95; x += 3) {
+        const intensity = 1 - smoothstep(-0.18, 0.18, ellipseDistance(x, y, 77, 18, 18, 10));
+        if (intensity <= 0 || coordinateHash(x, y) % 3 === 0) continue;
+        drawOverlayFrame(context, overlaySheet, 3, (frame + coordinateVariant(x, y)) % 8, x * cell, y * cell, cell, intensity * 0.76);
+      }
+    }
+    for (const point of model.shore) drawShoreWave(context, point, cell, seconds);
+    for (let index = 0; index < 34; index++) {
+      const x = coordinateHash(index, 17) % WORLD_GRID_SIZE;
+      const y = coordinateHash(index, 29) % WORLD_GRID_SIZE;
+      if (model.land[y * WORLD_GRID_SIZE + x]) continue;
+      const pulse = 0.35 + Math.sin(seconds * 2 + index * 1.7) * 0.25;
+      drawOverlayFrame(context, overlaySheet, 0, (frame + index) % 8, x * cell, y * cell, cell, pulse);
+    }
+  }
+
+  SHOALS.forEach((shoal, index) => {
+    const image = shoalImages[index];
+    if (!image) return;
+    drawShoal(context, image, shoal, cell, seconds, index);
+  });
+}
+
+function drawWind(context: CanvasRenderingContext2D, model: WaterWorldModel, cell: number, seconds: number): void {
+  context.save();
+  context.lineCap = "round";
+  context.strokeStyle = "rgba(181, 233, 225, 0.24)";
+  context.lineWidth = Math.max(1, cell * 0.07);
+  for (let index = 0; index < 74; index++) {
+    const baseX = coordinateHash(index, 41) % WORLD_GRID_SIZE;
+    const baseY = coordinateHash(index, 73) % WORLD_GRID_SIZE;
+    const x = (baseX + seconds * (1.4 + (index % 4) * 0.18)) % WORLD_GRID_SIZE;
+    const y = (baseY + seconds * 0.55) % WORLD_GRID_SIZE;
+    const sampleX = Math.floor(x);
+    const sampleY = Math.floor(y);
+    if (model.land[sampleY * WORLD_GRID_SIZE + sampleX]) continue;
+    const length = 0.7 + (index % 5) * 0.18;
+    context.globalAlpha = 0.35 + (index % 4) * 0.12;
+    context.beginPath();
+    context.moveTo(x * cell, y * cell);
+    context.lineTo((x + length) * cell, (y + length * 0.28) * cell);
+    context.stroke();
+  }
+  context.restore();
+}
+
+function drawShoreWave(context: CanvasRenderingContext2D, point: ShorePoint, cell: number, seconds: number): void {
+  const pulse = (Math.sin(seconds * (1.7 + point.exposure * 0.8) + point.phase) + 1) / 2;
+  if (pulse < 0.28) return;
+  const tangentX = -point.ny;
+  const tangentY = point.nx;
+  const length = cell * (0.28 + point.exposure * 0.4);
+  const centerX = (point.x + 0.5 + point.nx * (0.05 + pulse * 0.12)) * cell;
+  const centerY = (point.y + 0.5 + point.ny * (0.05 + pulse * 0.12)) * cell;
+  context.save();
+  context.strokeStyle = `rgba(224, 247, 226, ${0.18 + pulse * (0.28 + point.exposure * 0.32)})`;
+  context.lineWidth = Math.max(1, cell * (0.08 + point.exposure * 0.035));
+  context.lineCap = "round";
+  context.beginPath();
+  context.moveTo(centerX - tangentX * length * 0.5, centerY - tangentY * length * 0.5);
+  context.quadraticCurveTo(
+    centerX + point.nx * cell * 0.1,
+    centerY + point.ny * cell * 0.1,
+    centerX + tangentX * length * 0.5,
+    centerY + tangentY * length * 0.5,
+  );
+  context.stroke();
+  context.restore();
+}
+
+function drawShoal(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  shoal: ShoalPlacement,
+  cell: number,
+  seconds: number,
+  index: number,
+): void {
+  const phase = seconds * shoal.speed + index * 0.73;
+  const driftX = Math.cos(shoal.heading) * Math.sin(phase) * shoal.amplitude;
+  const driftY = Math.sin(shoal.heading) * Math.sin(phase) * shoal.amplitude + Math.cos(phase * 0.8) * 0.16;
+  const size = shoal.size * cell;
+  const x = (shoal.x + driftX) * cell;
+  const y = (shoal.y + driftY) * cell;
+  context.save();
+  context.translate(x, y);
+  context.rotate(shoal.heading + Math.sin(phase * 0.7) * 0.045);
+  context.strokeStyle = "rgba(183, 234, 224, 0.28)";
+  context.lineWidth = Math.max(1, cell * 0.06);
+  context.beginPath();
+  context.ellipse(-size * 0.06, size * 0.05, size * 0.42, size * 0.2, 0, 0.15, Math.PI * 1.45);
+  context.stroke();
+  context.globalAlpha = 0.9 + Math.sin(phase * 1.4) * 0.08;
+  context.drawImage(image, -size / 2, -size / 2, size, size);
+  context.restore();
 }
 
 function profileIndex(id: WaterProfileId): number {
@@ -408,7 +760,7 @@ function drawProfileTile(
   context.globalAlpha = 1;
 }
 
-function drawOverlayTile(
+function drawOverlayFrame(
   context: CanvasRenderingContext2D,
   sheet: HTMLImageElement,
   row: number,
@@ -422,7 +774,7 @@ function drawOverlayTile(
   context.globalAlpha = clamp01(alpha);
   context.drawImage(
     sheet,
-    SHEET_MARGIN + (variant % 4) * SHEET_PITCH,
+    SHEET_MARGIN + (variant % 8) * SHEET_PITCH,
     SHEET_MARGIN + row * SHEET_PITCH,
     TILE_SIZE,
     TILE_SIZE,
@@ -466,17 +818,4 @@ function smoothstep(edge0: number, edge1: number, value: number): number {
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
-}
-
-function drawWorldLabel(context: CanvasRenderingContext2D, label: string, tileX: number, tileY: number, cell: number): void {
-  const fontSize = Math.max(9, Math.round(cell * 0.78));
-  context.font = `700 ${fontSize}px ui-monospace, SFMono-Regular, Consolas, monospace`;
-  context.textBaseline = "middle";
-  const metrics = context.measureText(label);
-  const x = tileX * cell;
-  const y = tileY * cell;
-  context.fillStyle = "rgba(3, 19, 25, 0.82)";
-  context.fillRect(x - 4, y - fontSize, metrics.width + 8, fontSize * 1.8);
-  context.fillStyle = "#d9f1e7";
-  context.fillText(label, x, y);
 }

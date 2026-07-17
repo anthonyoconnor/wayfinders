@@ -23,15 +23,17 @@ Evolve the branch Water workspace into a focused visual playground that:
 - places representative authored and generated islands in irregular
   shore-following shallow-to-deep water;
 - adds broken, non-uniform animated waves around island edges;
+- introduces up to ten fishing-shoal looks matched to different water profiles
+  and animates them in context;
 - preserves terrain, collision, navigation, knowledge, provisions, and world
   generation as the only gameplay authorities; and
 - keeps every preview decision visual-only and isolated from gameplay authority.
 
 The proposed sequence is complete when the Water tab can demonstrate convincing
-open-water motion, irregular island depth handoffs, and varied animated
-shoreline waves well enough to gather product feedback. It does not imply a
-promoted package, default runtime renderer, generalized animation system, or
-game integration.
+open-water motion, irregular island depth handoffs, varied animated shoreline
+waves, and water-specific animated fishing shoals well enough to gather product
+feedback. It does not imply a promoted package, default runtime renderer,
+generalized animation system, or game integration.
 
 ## Evidence and current constraints
 
@@ -280,7 +282,7 @@ logically close a passable channel.
 ## Deferred production render architecture
 
 This architecture is retained as reference for a future runtime proposal. It is
-not part of WTR-1.1 through WTR-1.3.
+not part of WTR-1.1 through WTR-1.5.
 
 ```mermaid
 flowchart LR
@@ -453,10 +455,9 @@ either integrate the deterministic build into the repository's production-recipe
 preparation path or materialize equivalent current outputs through that path
 before promotion.
 
-The candidate is an art/contract starting point, not automatic approval.
-WTR-1.0 owns the initial visible iteration and feedback loop. WTR-1.1 may begin
-animation experiments only after the product owner separately authorizes it;
-none of WTR-1.1 through WTR-1.3 authorizes production work.
+The candidate is an art/contract starting point, not automatic approval. The
+product owner authorized WTR-1.1 through WTR-1.5 as extensions of the WTR-1.0
+feedback loop; none of the sequence authorizes production work.
 
 ## Water asset-library playground
 
@@ -467,25 +468,26 @@ existing asset-workspace shell. Do not build generalized workspace, package,
 or rendering infrastructure for this prototype. Its implementation may be
 replaced or discarded after the visual direction is understood.
 
-The prototype presents two compact views:
+The prototype presents three compact views:
 
 1. **Tile gallery.** Display the different static candidate water profiles and
    variants with simple labels. A small repeat view should make obvious seams
    and repeated focal marks visible.
-2. **Whole-world blending playground.** Display a fixed 96x96 water-only world
-   that places abyss, deep ocean, coastal shelves, lagoons, reefs, current,
-   rough water, a future brackish study, and the player boat in one coherent
-   game-scale composition. Blend broad regions across multiple cells so
-   feedback concerns world layout and treatment handoffs instead of one enlarged
-   tile edge. This is a fixed fixture, not `GameSimulation` or a generated
-   world.
+2. **Whole-world blending playground.** Display a fixed 96x96 world that places
+   every water treatment, the player boat, three representative islands, and
+   eight shoals in one coherent game-scale composition. Island transparency
+   drives irregular depth masks; local wind, wave, shoreline, and shoal motion
+   use judged defaults. This is a fixed fixture, not `GameSimulation` or a
+   generated world.
+3. **Shoal gallery.** Display the eight water-specific shoal directions with
+   their intended water profiles while the same sprites move in the world.
 
-Use static frames only. WTR-1.0 does not create an animation clock, clip sampler,
-reduced-motion implementation, chunk lifecycle, production package contract,
-promotion flow, performance telemetry, or runtime renderer. A manual refresh
-after rebuilding or replacing candidate art is sufficient. Controls should be
-limited to whatever directly speeds comparison, such as water profile, variant,
-visual-overlay on/off, and world inspection scale.
+The animation clock and canvas-mask work remain local to the Water workspace.
+The prototype does not create a general clip sampler, reduced-motion system,
+chunk lifecycle, production package contract, promotion flow, performance
+telemetry, or runtime renderer. Controls are limited to whatever directly
+speeds comparison: profile, variant, overlay visibility, world inspection
+scale, and one shared motion pause.
 
 WTR-1.0 does not prototype shoreline foam, the authored home-island overlay,
 water beneath transparent island art, or generated-island handoffs. WTR-1.2
@@ -501,7 +503,7 @@ become collision, navigation, terrain, or package authority.
 
 ## Deferred production package and pipeline design
 
-This section is not scheduled by WTR-1.1 through WTR-1.3. It remains reference
+This section is not scheduled by WTR-1.1 through WTR-1.5. It remains reference
 for any later proposal that promotes water assets or integrates them into the
 game.
 
@@ -652,6 +654,50 @@ Exit gate:
 - exposed and protected shoreline areas read differently without requiring a
   tuning-heavy UI.
 
+### WTR-1.4 — Water-specific fishing-shoal catalog
+
+Tasks:
+
+- create a branch-local catalog of no more than ten fishing-shoal types, with
+  distinct silhouettes, school density, fish scale, and palette choices;
+- provide shoals suited to the water profiles where they appear, including
+  deep, coastal, lagoon, reef, current, rough, and brackish studies where useful;
+- keep every new shoal visual-only and separate from fishing resources,
+  collision, spawning, or gameplay identity;
+- place representative shoals in appropriate regions of the Water-tab world;
+- add a compact labelled shoal gallery to the Water tab for comparison; and
+- keep these assets branch-local preview sources rather than promoting them or
+  replacing the existing in-game fishing-shoal package.
+
+Exit gate:
+
+- the Water tab displays a coherent catalog of distinct water-specific shoals;
+- every placed shoal is visually compatible with its surrounding water profile;
+- silhouettes remain readable at overview and 1:1 game scale; and
+- no game catalog, resource rule, or runtime renderer changes.
+
+### WTR-1.5 — Animated fishing shoals
+
+Tasks:
+
+- animate the WTR-1.4 shoals inside the Water tab using restrained swimming,
+  schooling, turning, and surface-disturbance motion;
+- vary direction, speed, phase, and movement envelope by shoal type and water
+  context without adding a tuning-heavy UI;
+- keep shoal motion legible beside wind, wave, current, and island-edge motion;
+- ensure animation remains bounded to the preview lifecycle and stops when the
+  Water workspace is destroyed; and
+- provide a simple pause control shared with the water animation.
+
+Exit gate:
+
+- each shoal type has a recognizably different but coherent movement character;
+- shoals stay visually associated with their intended water regions and do not
+  overpower islands or water texture;
+- pausing motion produces a useful static comparison; and
+- animation never enters gameplay, simulation, resource, or production-asset
+  authority.
+
 ## Acceptance criteria
 
 ### WTR-1.0 prototype feedback gate
@@ -659,55 +705,72 @@ Exit gate:
 These criteria apply only to the branch prototype and are intentionally not a
 production acceptance gate:
 
-- [ ] The Water tab shows the different static candidate tiles and one 96x96
+- [x] The Water tab shows the different static candidate tiles and one 96x96
       game-scale water world containing every treatment, broad multi-cell
       handoffs, and the player boat.
-- [ ] No authored or generated island blending is included; WTR-1.2 retains that
+- [x] No authored or generated island blending is included in the WTR-1.0
+      feedback snapshot; WTR-1.2 retains that
       scope.
-- [ ] The product owner can compare the useful directions and provide concrete
+- [x] The product owner can compare the useful directions and provide concrete
       feedback without waiting for animation or game integration.
-- [ ] Any prototype test or diagnostic exists because it shortens the current
+- [x] Any prototype test or diagnostic exists because it shortens the current
       visual experiment, not to establish broad regression coverage.
-- [ ] Feedback and the preferred next direction are recorded before WTR-1.1 is
+- [x] Feedback and the preferred next direction are recorded before WTR-1.1 is
       separately authorized.
 
 ### WTR-1.1 animation feedback gate
 
-- [ ] The Water tab shows at least wave and wind-driven motion across the world
+- [x] The Water tab shows at least wave and wind-driven motion across the world
       study and at 1:1 game scale.
-- [ ] Motion uses coherent, restrained defaults and does not make every water
+- [x] Motion uses coherent, restrained defaults and does not make every water
       cell animate in the same way or at the same phase.
-- [ ] Different water profiles remain readable while animated.
-- [ ] The UI exposes viewing and pause behavior only where useful; speed,
+- [x] Different water profiles remain readable while animated.
+- [x] The UI exposes viewing and pause behavior only where useful; speed,
       density, phase, and intensity do not become a tuning dashboard.
-- [ ] No gameplay runtime, production package, or general animation system is
+- [x] No gameplay runtime, production package, or general animation system is
       implied by the prototype.
 
 ### WTR-1.2 island-depth feedback gate
 
-- [ ] Representative existing islands can be selected and viewed inside the
-      Water tab's animated world.
-- [ ] Shallow water follows real shoreline shape and transitions outward into
+- [x] Representative existing islands are displayed together inside the Water
+      tab's animated world.
+- [x] Shallow water follows real shoreline shape and transitions outward into
       intermediate and deep water.
-- [ ] Transition width varies around coves, points, channels, reefs, and exposed
+- [x] Transition width varies around coves, points, channels, reefs, and exposed
       coasts rather than forming a uniform circular band.
-- [ ] Water continues beneath transparent island edges without exposing a
+- [x] Water continues beneath transparent island edges without exposing a
       rectangular footprint or abrupt depth step.
 
 ### WTR-1.3 island-edge wave feedback gate
 
-- [ ] Animated edge waves use broken, locally varied segments rather than a
+- [x] Animated edge waves use broken, locally varied segments rather than a
       complete uniform ring.
-- [ ] Protected recesses read calmer than exposed points and open coasts.
-- [ ] Adjacent surf motion is coherent without moving in perfect lockstep.
-- [ ] Waves preserve island silhouettes, docks, reefs, channels, and the
+- [x] Protected recesses read calmer than exposed points and open coasts.
+- [x] Adjacent surf motion is coherent without moving in perfect lockstep.
+- [x] Waves preserve island silhouettes, docks, reefs, channels, and the
       shallow-to-deep transition beneath them.
+
+### WTR-1.4 fishing-shoal catalog feedback gate
+
+- [x] The Water tab contains no more than ten distinct new fishing-shoal looks.
+- [x] Shoals are placed only in visually suitable water profiles.
+- [x] The Water tab includes a compact labelled comparison gallery.
+- [x] New shoal assets remain branch-local preview assets and do not replace or
+      register the current game package.
+
+### WTR-1.5 fishing-shoal animation feedback gate
+
+- [x] Every displayed shoal has restrained swimming or schooling motion.
+- [x] Movement character varies across the catalog without requiring exposed
+      tuning controls.
+- [x] Water, shoreline, and shoal motion can be paused together.
+- [x] Leaving the Water workspace stops its animation lifecycle.
 
 ### Deferred production criteria
 
 The remaining criteria and performance guidance are retained as unscheduled
 design reference for a future production/runtime proposal. They are not exit
-gates for WTR-1.1 through WTR-1.3 and do not authorize implementation.
+gates for WTR-1.1 through WTR-1.5 and do not authorize implementation.
 
 ### Package and grid
 
@@ -867,6 +930,7 @@ change requires its own authority, tests, and milestone approval.
 The proposed Water-workspace sequence is done when the product owner can review
 judged-default wave and wind animation, representative islands with irregular
 shore-following shallow-to-deep transitions, and varied animated waves around
-their edges. Feedback and the preferred direction must be recorded after each
-stage. Completion does not mean the assets are promoted, water is integrated
+their edges, plus a water-specific catalog of up to ten animated fishing-shoal
+looks. Feedback and the preferred direction must be recorded after each stage.
+Completion does not mean the assets are promoted, water or shoals are integrated
 into the game, or the deferred production design has been authorized.
