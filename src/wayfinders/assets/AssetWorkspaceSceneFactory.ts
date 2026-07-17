@@ -5,6 +5,7 @@ import { AudioAssetWorkspaceScene } from "./audioPreview/AudioAssetWorkspaceScen
 import { GreatHallPreviewScene } from "./greatHall/GreatHallPreviewScene";
 import { audioWorkspaceCatalogSource } from "./workspaces/AudioWorkspaceCatalog";
 import type { AssetWorkspaceModule } from "./workspaces/AssetWorkspace";
+import { WaterPreviewScene } from "./water/WaterPreviewScene";
 
 export function createAssetWorkspaceScene(
   workspace: Readonly<AssetWorkspaceModule>,
@@ -16,6 +17,7 @@ export function createAssetWorkspaceScene(
       workspace,
       audioWorkspaceCatalogSource(audioCatalogResult),
     );
+    case "water-preview": return new WaterPreviewScene(workspace);
     case "library": return new AssetViewerScene(workspace);
   }
 }

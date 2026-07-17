@@ -15,9 +15,11 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
 4. The asset-library mode resolves a typed asset-workspace registry and starts
-   one workspace-scoped library, Great Hall, or Audio preview scene without
-   gameplay simulation. The trial mode starts `AssetTrialScene` with one
-   isolated open-water `WorldGrid`, movement authority, and selected candidate.
+   one workspace-scoped library, Great Hall, Audio, or Water preview scene
+   without gameplay simulation. The branch-only Water workspace starts a static
+   `WaterPreviewScene` over prepared candidate sheets without a gameplay catalog
+   or simulation. The trial mode starts `AssetTrialScene` with one isolated
+   open-water `WorldGrid`, movement authority, and selected candidate.
 5. Presentation controllers and renderers consume read models, revisions, and
    the shared active-chunk delta where applicable.
 6. Diagnostics and development tools consume bounded read models and counters;
@@ -124,7 +126,10 @@ adapter may own Phaser sound instances.
 - `AssetWorkspaceRegistry` is the asset-library composition seam. The shell owns
   accessible tab navigation, URL history, and the three permanent mount regions.
   Library workspaces own their catalog partition, collision profiles,
-  namespaced selection, and scene lifetime. The view-only Great Hall workspace
+  namespaced selection, and scene lifetime. The branch-only Water workspace is
+  a static feedback surface that reads prepared candidate sheets directly and
+  owns no package, promotion, runtime, terrain, or gameplay authority. The
+  view-only Great Hall workspace
   validates and varies a checked-in twenty-generation V1 fixture, then passes it
   to the same bounded semantic renderer used by the game. A pure adapter maps
   structured `GreatHallChronicle` fields into that contract; neither host gives

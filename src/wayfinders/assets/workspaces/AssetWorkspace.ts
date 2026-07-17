@@ -5,7 +5,7 @@ import type { RuntimeCollisionObjectKind } from "../CollisionProfileRegistry";
 export interface AssetWorkspaceBase {
   readonly id: string;
   readonly label: string;
-  readonly kind: "library" | "great-hall-preview" | "audio-preview";
+  readonly kind: "library" | "great-hall-preview" | "audio-preview" | "water-preview";
 }
 
 export interface AssetLibraryWorkspaceModule extends AssetWorkspaceBase {
@@ -23,10 +23,15 @@ export interface AudioAssetWorkspaceModule extends AssetWorkspaceBase {
   readonly kind: "audio-preview";
 }
 
+export interface WaterAssetWorkspaceModule extends AssetWorkspaceBase {
+  readonly kind: "water-preview";
+}
+
 export type AssetWorkspaceModule =
   | AssetLibraryWorkspaceModule
   | GreatHallAssetWorkspaceModule
-  | AudioAssetWorkspaceModule;
+  | AudioAssetWorkspaceModule
+  | WaterAssetWorkspaceModule;
 
 export function assetWorkspaceSelectionKey(workspaceId: string): string {
   return `wayfinders:asset-workspace:${workspaceId}:selection`;

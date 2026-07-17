@@ -42,6 +42,17 @@ crossfades, and ducking acceptance remain pending
 because the in-app browser connection did not initialize during this handoff;
 the rebuilt ambience also awaits product-owner audition.
 
+WTR-1.0 is implemented on `codex/water-look-prototype` and awaits product
+feedback. The asset shell now exposes a Water tab whose static branch-only
+preview compares all prepared tile profiles and variants, a selected 3x3 repeat,
+four representative deep-to-coastal layouts, and an open-water player-boat
+fixture. It does not register a water package, integrate water into the game,
+animate water, or blend water with islands. Source typecheck and the production
+bundle pass. Browser verification covered direct Water routing, profile and
+variant selection, depth-layout changes, the boat fixture, workspace teardown
+and return, and reported no warning or error output. Broad automated coverage
+was intentionally outside this feedback prototype's scope.
+
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,
@@ -75,8 +86,8 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
 ## Runnable surfaces
 
 - The default browser route starts a fresh playable voyage.
-- `?mode=assets` opens URL-addressable Islands, Ships, Fishing shoals, Great
-  Hall, and Audio workspaces. Islands use a focused import, properties,
+- `?mode=assets` opens URL-addressable Islands, Ships, Fishing shoals, Water,
+  Great Hall, and Audio workspaces. Islands use a focused import, properties,
   availability-status, sea-trial, collision-mask, and single-save workflow.
   Ships and Fishing shoals retain general asset inspection and production
   controls. Great Hall is a view-only host for the validated V1 fixture and the
@@ -115,8 +126,8 @@ membership; `tests/README.md` explains lane selection.
   decode/audition, mute and level controls, silence at rest, smoothed wake,
   direction reversal, loop seams, cue coalescing, supplementary muted feedback,
   music crossfades and lifecycle ducking, console-clean teardown, and restart.
-- The layered water system is proposed but is not registered or loaded by the
-  game.
+- The WTR-1.0 Water feedback prototype is available only in the asset workspace;
+  layered water is not registered or loaded by the game.
 - End-to-end browser departure responsiveness has not been remeasured after the
   current guidance and active-chunk architecture settled. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.

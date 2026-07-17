@@ -5,6 +5,11 @@ proposal. `Wayfinders_Roadmap.md` owns its planning and authorization state. A
 reviewable source/runtime candidate pack exists under `assets-src/gr1/water`,
 but no water asset is registered or loaded by the game.
 
+The first milestone is a rapid, branch-only **Water** workspace prototype in the
+asset library. Its purpose is to put plausible water in front of the product
+owner quickly, gather visual feedback, and iterate on tiles and depth blending
+before investing in production contracts, animation, or game integration.
+
 ## Outcome
 
 Implement a layered, grid-aligned water presentation system that:
@@ -76,6 +81,10 @@ The proposal is based on the current repository and these art references:
   eight-neighbor visual mask from a bounded `WorldGrid` apron, but it must reuse
   those public facts where they apply and must not add another full-world
   coastline or connectivity pass.
+- The asset library currently exposes Islands, Ships, Fishing shoals, and Great
+  Hall workspaces. WTR-1.0 adds a Water tab on its prototype branch. The tab is
+  a feedback surface, not a commitment that its code, route, or structure ships
+  unchanged in the production asset library.
 
 ## Visual language
 
@@ -406,7 +415,10 @@ remove shallow/reef readability or alter simulation state.
 ## Prepared candidate package
 
 The candidate lives at `assets-src/gr1/water` and is intentionally outside the
-live catalog until WTR-1.1 establishes validation and promotion rules.
+live gameplay catalog until WTR-1.1 establishes validation and promotion rules.
+WTR-1.0 may expose these candidate outputs through the smallest practical
+preview loader or branch-local copy. Preview availability is not review,
+promotion, or runtime registration.
 
 | Candidate file | Dimensions | Contents |
 | --- | ---: | --- |
@@ -431,9 +443,54 @@ not an alternate production authority. WTR-1.1 must either integrate the
 deterministic build into the repository's production-recipe preparation path or
 materialize equivalent current outputs through that path before promotion.
 
-The candidate is an art/contract starting point, not automatic approval. WTR-1.1
-must review its palette at normal gameplay zoom, animation loops, alpha edges,
-and terrain readability before promotion.
+The candidate is an art/contract starting point, not automatic approval.
+WTR-1.0 owns the early visible iteration and feedback loop. WTR-1.1 may begin
+production work only after that feedback identifies a direction worth pursuing
+and the product owner separately authorizes the next milestone.
+
+## Water asset-library playground
+
+The Water tab is a deliberately rough development and feedback surface on a
+prototype branch, not a gameplay simulation, a production asset tool, or a
+second asset-production authority. Prefer the shortest change through the
+existing asset-workspace shell. Do not build generalized workspace, package,
+or rendering infrastructure for this prototype. Its implementation may be
+replaced or discarded after the visual direction is understood.
+
+The prototype presents three compact views:
+
+1. **Tile gallery.** Display the different static candidate water profiles and
+   variants with simple labels. A small repeat view should make obvious seams
+   and repeated focal marks visible.
+2. **Depth-blending playground.** Display deep and shallow bases with the
+   selected transition between them. Start with a few representative straight,
+   corner, diagonal, and channel layouts. Add an editable paint grid or
+   exhaustive 47-mask browser only if it makes visual iteration materially
+   faster.
+3. **In-game look mockup.** Compose the player boat over a representative
+   open-water field at normal gameplay scale so feedback is about how the water
+   reads in Wayfinders rather than how individual atlas frames look in
+   isolation. This is a fixed fixture, not `GameSimulation` or a generated
+   world.
+
+Use static frames only. WTR-1.0 does not create an animation clock, clip sampler,
+reduced-motion implementation, chunk lifecycle, production package contract,
+promotion flow, performance telemetry, or runtime renderer. A manual refresh
+after rebuilding or replacing candidate art is sufficient. Controls should be
+limited to whatever directly speeds comparison, such as water profile, blend
+layout, overlay on/off, and zoom.
+
+WTR-1.0 does not prototype shoreline foam, the authored home-island overlay,
+water beneath transparent island art, or generated-island handoffs. Island
+blending remains wholly owned by WTR-1.3 after the base water direction has
+been selected.
+
+Manual visual review is the primary verification method. Do not build broad
+unit, integration, browser, accessibility, lifecycle, or performance coverage
+for WTR-1.0. A small test or diagnostic harness is appropriate only when it is
+the fastest way to try an item repeatedly—for example, checking a mask resolver
+while adjusting depth blends. Rendered preview pixels and fixture cells never
+become collision, navigation, terrain, or package authority.
 
 ## Package and pipeline design
 
@@ -480,17 +537,48 @@ Validation must reject:
 
 ## Implementation sequence
 
-### WTR-1.1 — Style lock, contract, and promotion gate
+### WTR-1.0 — Rapid water-look prototype and feedback
 
 Tasks:
 
-- review the candidate contact sheet and home preview at gameplay zoom;
-- approve the taxonomy, palette handoff, 47-mask convention, render planes,
-  static-base/sparse-overlay policy, clip rates, and budgets;
+- create a prototype branch and add a **Water** tab to the existing asset
+  section with the least new structure practical;
+- load the current candidate sheets for preview only, without adding a gameplay
+  runtime package or production promotion path;
+- display the different static base profiles and variants in a labelled gallery
+  with one small repeated-tile view;
+- show a handful of representative deep-to-shallow blends, including straight,
+  corner, diagonal, and channel shapes;
+- show one fixed in-game look mockup using the player boat and representative
+  open water at normal gameplay scale;
+- add only the comparison controls that shorten the feedback loop;
+- rebuild or replace candidate art manually as feedback arrives; and
+- add a focused test or diagnostic only when it is faster than repeated manual
+  inspection for the specific item under investigation.
+
+Exit gate:
+
+- the branch prototype opens from a Water tab and makes the available tile
+  directions easy to compare;
+- representative depth blends and one game-scale open-water composition are
+  visible well enough to gather concrete product feedback;
+- the feedback and preferred direction are recorded, including what should be
+  changed in the next iteration; and
+- no production readiness, exhaustive topology, animation, game integration,
+  performance, accessibility, or automated-test gate is implied. The prototype
+  can be revised or discarded.
+
+### WTR-1.1 — Contract and promotion gate
+
+Tasks:
+
+- carry the WTR-1.0 feedback into the accepted taxonomy, palette handoff,
+  47-mask convention, render planes, static-base/sparse-overlay policy, clip
+  rates, and budgets;
 - record named-profile presentation baselines before changing runtime water;
 - add `WaterAssetContractV1`, manifest validation, margin/spacing loader support,
-  an explicit runtime catalog union, asset-library representation, and focused
-  contract tests;
+  an explicit runtime catalog union, production asset representation, and
+  focused contract tests;
 - express the accepted source/build decisions through the production recipe,
   preparation, exact-fingerprint review, and promotion lifecycle;
 - validate the candidate files and promote only the approved current runtime
@@ -499,7 +587,9 @@ Tasks:
 
 Exit gate:
 
-- one accepted `world.water.primary` package loads in the asset viewer;
+- the candidate selected after playground feedback is the exact candidate
+  reviewed and promoted as `world.water.primary`, and the Water workspace can
+  compare its promoted package with the approved candidate;
 - every sheet/frame/mask validates, `assets:check` accepts its recipe, lineage,
   review, and promotion records; and
 - no world renderer or gameplay behavior has changed yet.
@@ -597,6 +687,23 @@ Exit gate:
   runtime water path.
 
 ## Acceptance criteria
+
+### WTR-1.0 prototype feedback gate
+
+These criteria apply only to the branch prototype and are intentionally not a
+production acceptance gate:
+
+- [ ] The Water tab shows the different static candidate tiles, representative
+      depth blends, and one game-scale open-water composition with the player
+      boat.
+- [ ] No authored or generated island blending is included; WTR-1.3 retains that
+      scope.
+- [ ] The product owner can compare the useful directions and provide concrete
+      feedback without waiting for animation or game integration.
+- [ ] Any prototype test or diagnostic exists because it shortens the current
+      visual experiment, not to establish broad regression coverage.
+- [ ] Feedback and the preferred next direction are recorded before WTR-1.1 is
+      separately authorized.
 
 ### Package and grid
 
@@ -731,6 +838,7 @@ deferred-placeholder behavior.
 | Reef becomes hard to read under overlays | Give authoritative reef classification priority and enforce grayscale tests |
 | Authored overlay texture exceeds budget | Own it through the home active chunk, animate only in its visible band, and retain a static representative frame fallback |
 | Water tooling forks production authority | Extend the recipe/review/promotion gate narrowly; do not promote from the standalone candidate builder |
+| Prototype state becomes package or gameplay authority | Keep the branch preview isolated and require WTR-1.1 contract, review, and promotion work before any runtime use |
 | Unmeasured baseline makes a frame target meaningless | Record named-profile absolute and incremental budgets in WTR-1.1 before runtime integration |
 | AI source texture repeats or contains artifacts | Treat masters as source only; use contact/seam review and deterministic preparation before fingerprinted review and promotion |
 

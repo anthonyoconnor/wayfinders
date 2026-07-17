@@ -172,7 +172,8 @@ runtime scope.
 
 ### WTR-1 — Layered water system
 
-Status: proposed, not started, and not authorized.
+Status: the WTR-1.0 branch prototype is implemented and awaiting product
+feedback. WTR-1.1 onward remains proposed and is not authorized.
 
 The proposal replaces developer water fills with deterministic, grid-aligned,
 chunk-activated water presentation while preserving terrain, collision,
@@ -180,14 +181,33 @@ navigation, knowledge, and world generation as the only gameplay authorities.
 Its source pack, render design, implementation sequence, budgets, and acceptance
 criteria are defined in `Wayfinders_Water_System_Milestone.md`.
 
-Before authorization, confirm the proposed art direction. Implementation must
-consume the existing shared active-chunk boundary and must not introduce a
-second presentation-lifetime policy or simulation clock.
+`WTR-1.0` is implemented on `codex/water-look-prototype` as a deliberately rough
+prototype. Its **Water** asset-workspace tab shows the different static
+candidate tiles, repeat comparisons, representative depth blends, and one
+game-scale open-water composition with the player boat. The prototype is ready
+for product feedback; its exit gate remains open until that feedback and the
+preferred direction are recorded. It is not a production-ready asset workspace
+or integration into the game. WTR-1.0 does not address authored or generated
+island blending; that remains in WTR-1.3.
+
+WTR-1.0 uses static frames and the smallest practical preview code. It does not
+build an animation system, production package contract, promotion workflow,
+chunk renderer, performance instrumentation, or comprehensive automated test
+suite. Add a focused test or diagnostic only when doing so makes a particular
+visual experiment faster. The prototype may be revised or discarded after its
+feedback is recorded.
+
+If the resulting direction is separately authorized, `WTR-1.1` establishes the
+accepted package contract, measured baselines, review, and promotion gate.
+`WTR-1.2` through `WTR-1.5` integrate static water, island blending, shared
+presentation timing, accessibility, and performance in that order. Runtime
+implementation must consume the existing shared active-chunk boundary and must
+not introduce a second presentation-lifetime policy or simulation clock.
 
 ## Authorization boundary
 
-No further milestone is authorized for implementation. The water proposal and
-any other new gameplay or production-asset
-milestone require explicit user authorization. Do not implement gameplay
-saving; it may return only through an explicitly authorized milestone designed
-for the game that exists at that time.
+WTR-1.0 was authorized only as the branch prototype described above. No
+subsequent water milestone is authorized for implementation. WTR-1.1 and any
+other new gameplay or production-asset milestone require explicit user
+authorization. Do not implement gameplay saving; it may return only through an
+explicitly authorized milestone designed for the game that exists at that time.
