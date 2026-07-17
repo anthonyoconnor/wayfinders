@@ -376,7 +376,9 @@ The Islands workspace replaces the general production surface with one focused
 workbench. Left-library selection alone chooses the preview and editor. The
 right side exposes the island name, current availability state, **View with
 ship**, fit, paint, erase, `8`/`32`-pixel brush size, undo, redo, reset, and one
-**Save changes** operation. It does not expose runtime profiles, dimensions,
+**Save changes** operation. Imported islands also expose a destructive
+**Delete imported island** operation behind an explicit confirmation; the
+built-in home island never does. It does not expose runtime profiles, dimensions,
 layer composition, animation, validation, fingerprints, review, promotion, or
 portable-package controls. Import fixes the family and collision semantics to
 island defaults, reads the PNG canvas, offers grid padding when needed, prepares
@@ -387,7 +389,10 @@ operation. Enabling availability validates current prepared art and the exact
 mask before commit; failure leaves the island unavailable with an actionable
 error. Disabling it preserves source art, prepared output, properties,
 collision, and sea-trial access while removing the island from future world
-catalogs. Names and stable IDs remain unique. The built-in home island keeps
+catalogs. Confirmed deletion removes the imported island's recipe, generated
+index and review records, source PNG, semantic mask, and prepared directory in
+one rollback-safe operation guarded by the current candidate fingerprint.
+Names and stable IDs remain unique. The built-in home island keeps
 its direct collision save and is always available.
 
 Island review, approval, promotion, and runtime binding are not lifecycle

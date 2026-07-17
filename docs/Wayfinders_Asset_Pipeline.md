@@ -108,6 +108,13 @@ artifact. The resulting immutable game catalog is sorted by stable ID and is
 read only during world creation. Island review and promotion operations reject
 island IDs.
 
+The focused Islands workbench exposes **Delete imported island** only for a
+selected imported island. After confirmation, the operation verifies the
+current fingerprint and atomically removes the recipe, generated index and
+review records, source PNG, semantic mask, and prepared candidate directory.
+A stale browser cannot delete a newer candidate, and any failure restores both
+records and files. The built-in home island cannot be deleted.
+
 Availability projects two revision-matched read-only snapshots from the same
 prepared records. World generation receives only stable identity, saved grid
 dimensions, and exact collision. Presentation receives prepared visible-layer

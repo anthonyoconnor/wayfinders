@@ -154,6 +154,96 @@ async function missing(filename) {
 }
 
 describe("GR-3.7 production candidate repository authoring", () => {
+  it("permanently deletes an imported island and all of its repository-owned files", async () => {
+    const root = await repository();
+    const gr3 = path.join(root, "assets-src", "gr3");
+    const manifestPath = path.join(gr3, "production-recipes.json");
+    const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+    manifest.recipes[0].collision = {
+      mode: "mask-file",
+      maskFile: "assets-src/gr3/candidate-masks/production-island-test-cay-mask.png",
+      tileSize: 32,
+      subcellSize: 8,
+    };
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    const maskPath = path.join(gr3, "candidate-masks", "production-island-test-cay-mask.png");
+    await mkdir(path.dirname(maskPath), { recursive: true });
+    await writeFile(maskPath, "mask");
+    const candidateDirectory = path.join(gr3, "candidates", "production-island-test-cay");
+    await writeFile(path.join(candidateDirectory, "preparation-report.json"), "report");
+    const sourcePath = path.join(gr3, "intake", "production-island-test-cay-source.png");
+    const service = createProductionCandidateAuthoringService({
+      repositoryRoot: root,
+      validateRecipe: async () => undefined,
+      prepareRecipe: async () => undefined,
+    });
+
+    await expect(service.remove({
+      formatVersion: 1,
+      recipeId,
+      candidateFingerprint: oldFingerprint,
+    })).resolves.toMatchObject({
+      recipeId,
+      deletedFingerprint: oldFingerprint,
+      message: "Test Cay was permanently deleted",
+    });
+    expect(JSON.parse(await readFile(manifestPath, "utf8")).recipes).toEqual([]);
+    expect(JSON.parse(await readFile(path.join(gr3, "generated", "production-index.json"), "utf8")).entries)
+      .toEqual([]);
+    expect(JSON.parse(await readFile(path.join(gr3, "reviews.json"), "utf8")).decisions).toEqual([]);
+    await Promise.all([candidateDirectory, sourcePath, maskPath].map(missing));
+  });
+
+  it("restores records and files when an imported-island deletion fails", async () => {
+    const root = await repository();
+    const gr3 = path.join(root, "assets-src", "gr3");
+    const files = [
+      path.join(gr3, "production-recipes.json"),
+      path.join(gr3, "generated", "production-index.json"),
+      path.join(gr3, "reviews.json"),
+      path.join(gr3, "intake", "production-island-test-cay-source.png"),
+      path.join(gr3, "candidates", "production-island-test-cay", "base.png"),
+      path.join(gr3, "candidates", "production-island-test-cay", "collision-draft.json"),
+    ];
+    const before = new Map(await Promise.all(files.map(async (filename) => [filename, await readFile(filename)])));
+    let removals = 0;
+    const service = createProductionCandidateAuthoringService({
+      repositoryRoot: root,
+      validateRecipe: async () => undefined,
+      prepareRecipe: async () => undefined,
+      removePath: async (targetPath, options) => {
+        removals++;
+        if (removals === 2) throw new Error("synthetic delete failure");
+        await rm(targetPath, options);
+      },
+    });
+
+    await expect(service.remove({
+      formatVersion: 1,
+      recipeId,
+      candidateFingerprint: oldFingerprint,
+    })).rejects.toThrow("synthetic delete failure");
+    for (const [filename, bytes] of before) expect(await readFile(filename), filename).toEqual(bytes);
+  });
+
+  it("rejects a stale deletion request before changing repository files", async () => {
+    const root = await repository();
+    const manifestPath = path.join(root, "assets-src", "gr3", "production-recipes.json");
+    const before = await readFile(manifestPath);
+    const service = createProductionCandidateAuthoringService({
+      repositoryRoot: root,
+      validateRecipe: async () => undefined,
+      prepareRecipe: async () => undefined,
+    });
+
+    await expect(service.remove({
+      formatVersion: 1,
+      recipeId,
+      candidateFingerprint: newFingerprint,
+    })).rejects.toThrow(/Stale candidate fingerprint/u);
+    expect(await readFile(manifestPath)).toEqual(before);
+  });
+
   it("persists island availability and an exact mask atomically without a review state", async () => {
     const root = await repository();
     const prepared = [];

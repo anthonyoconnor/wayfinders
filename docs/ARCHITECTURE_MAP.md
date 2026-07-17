@@ -80,7 +80,7 @@ not import Phaser.
   renderers.
 - Asset tools share runtime package validation, presentation factories, and the
   accepted hybrid collision contract. Narrow same-origin development-server
-  operations serialize source intake, candidate save, review, and exact-
+  operations serialize source intake, candidate save or deletion, review, and exact-
   fingerprint promotion. The disposable candidate trial owns only an isolated
   open-water `WorldGrid`, movement authority, and candidate presentation; it
   does not create `GameSimulation`, mutate the runtime world catalog, or add a
@@ -91,8 +91,9 @@ not import Phaser.
   namespaced selection, and scene lifetime. Stopping a workspace aborts its DOM
   listeners and Phaser bindings before another workspace starts.
 - The Islands workspace owns its focused properties, availability-status,
-  sea-trial, and collision UI. Its single save adapter commits those controls
-  through one rollback-safe transaction. `availableAuthoredIslandCatalog`
+  sea-trial, collision, and imported-island deletion UI. Its save and guarded
+  deletion adapters commit through rollback-safe repository transactions.
+  `availableAuthoredIslandCatalog`
   exposes only validated, stable-ID-ordered planning inputs; repository
   fingerprints remain private and review/promotion do not apply to islands.
 - `WorldGenerator` accepts the renderer-neutral authored-island catalog at

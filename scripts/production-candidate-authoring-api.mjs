@@ -7,6 +7,7 @@ import { ProductionCandidateAuthoringError } from "./production-candidate-author
 
 export const PRODUCTION_CANDIDATE_SAVE_ROUTE = "/__wayfinders/assets/candidate/save";
 export const PRODUCTION_CANDIDATE_VALIDATE_ROUTE = "/__wayfinders/assets/candidate/validate";
+export const PRODUCTION_CANDIDATE_DELETE_ROUTE = "/__wayfinders/assets/candidate/delete";
 export const MAX_PRODUCTION_CANDIDATE_AUTHORING_BYTES = 8 * 1_048_576;
 
 class HttpError extends Error {
@@ -88,12 +89,16 @@ export function createProductionCandidateAuthoringMiddleware({
   authoring,
   maximumBytes = MAX_PRODUCTION_CANDIDATE_AUTHORING_BYTES,
 }) {
-  if (typeof authoring?.save !== "function" || typeof authoring?.validate !== "function") {
-    throw new TypeError("authoring must expose save and validate functions");
+  if (typeof authoring?.save !== "function"
+    || typeof authoring?.validate !== "function"
+    || typeof authoring?.remove !== "function") {
+    throw new TypeError("authoring must expose save, validate and remove functions");
   }
   return (request, response, next) => {
     const route = request.url;
-    if (route !== PRODUCTION_CANDIDATE_SAVE_ROUTE && route !== PRODUCTION_CANDIDATE_VALIDATE_ROUTE) {
+    if (route !== PRODUCTION_CANDIDATE_SAVE_ROUTE
+      && route !== PRODUCTION_CANDIDATE_VALIDATE_ROUTE
+      && route !== PRODUCTION_CANDIDATE_DELETE_ROUTE) {
       next();
       return;
     }
@@ -108,7 +113,9 @@ export function createProductionCandidateAuthoringMiddleware({
       const envelope = trustedEnvelope(await readJsonBody(request, maximumBytes), route);
       const result = route === PRODUCTION_CANDIDATE_SAVE_ROUTE
         ? await authoring.save(envelope)
-        : await authoring.validate(envelope);
+        : route === PRODUCTION_CANDIDATE_DELETE_ROUTE
+          ? await authoring.remove(envelope)
+          : await authoring.validate(envelope);
       sendJson(response, 200, { ok: true, ...result });
     })().catch((error) => {
       if (response.headersSent) {

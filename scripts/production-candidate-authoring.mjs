@@ -201,10 +201,12 @@ export function createProductionCandidateAuthoringService({
   repositoryRoot = moduleRoot,
   prepareRecipe = (recipe) => prepareProductionRecipe(recipe, { force: true }),
   validateRecipe = (recipe) => prepareProductionRecipe(recipe, { checkOnly: true }),
+  removePath = (targetPath, options) => rm(targetPath, options),
 } = {}) {
   if (!path.isAbsolute(repositoryRoot)) throw new TypeError("repositoryRoot must be absolute");
   if (typeof prepareRecipe !== "function") throw new TypeError("prepareRecipe must be a function");
   if (typeof validateRecipe !== "function") throw new TypeError("validateRecipe must be a function");
+  if (typeof removePath !== "function") throw new TypeError("removePath must be a function");
 
   const gr3 = path.join(repositoryRoot, "assets-src", "gr3");
   const manifestPath = path.join(gr3, "production-recipes.json");
@@ -385,5 +387,113 @@ export function createProductionCandidateAuthoringService({
     });
   }
 
-  return Object.freeze({ validate, save });
+  async function remove(input) {
+    const identity = validateProductionCandidateIdentityRequest(input);
+    return withCollisionIntakeLock(repositoryRoot, async () => {
+      const [manifestInput, indexInput, reviewsInput] = await Promise.all([
+        readJson(manifestPath, "Production recipe manifest"),
+        readJson(indexPath, "Generated production index"),
+        readJson(reviewsPath, "Production review store"),
+      ]);
+      const manifest = validateProductionAssetRecipeManifest(manifestInput);
+      const recipe = manifest.recipes.find((candidate) => candidate.id === identity.recipeId);
+      if (!recipe || recipe.lifecycle !== "source" || recipe.family !== "island") {
+        throw new ProductionCandidateAuthoringError(`Unknown imported island ${identity.recipeId}`);
+      }
+      const entry = productionIndexEntry(indexInput, recipe.id);
+      if (entry.jobKey !== identity.candidateFingerprint) {
+        throw new ProductionCandidateAuthoringError(
+          `Stale candidate fingerprint for ${recipe.id}; refresh the asset library before deleting it`,
+        );
+      }
+      const reviews = validateProductionReviewStore(reviewsInput);
+      const candidateDirectory = path.join(gr3, "candidates", recipe.id.replaceAll(".", "-"));
+      const collisionDraftPath = safeRepositoryPath(
+        repositoryRoot,
+        entry.collisionDraftFile,
+        `${recipe.id} collision draft file`,
+      );
+      const collisionRelative = path.relative(candidateDirectory, collisionDraftPath);
+      if (collisionRelative.startsWith("..") || path.isAbsolute(collisionRelative)) {
+        throw new ProductionCandidateAuthoringError(`${recipe.id} prepared output is outside its candidate directory`);
+      }
+
+      const otherRecipeFiles = new Set(manifest.recipes
+        .filter((candidate) => candidate.id !== recipe.id)
+        .flatMap((candidate) => [
+          candidate.provenance.sourceFile,
+          ...candidate.layers.map((layer) => layer.sourceFile),
+          ...(candidate.collision.mode === "mask-file" ? [candidate.collision.maskFile] : []),
+        ]));
+      const ownedFiles = [...new Set([
+        recipe.provenance.sourceFile,
+        ...recipe.layers.map((layer) => layer.sourceFile),
+        ...(recipe.collision.mode === "mask-file" ? [recipe.collision.maskFile] : []),
+      ])]
+        .filter((filename) => !otherRecipeFiles.has(filename))
+        .map((filename) => safeRepositoryPath(repositoryRoot, filename, `${recipe.id} owned file`))
+        .filter((filename) => {
+          const relative = path.relative(candidateDirectory, filename);
+          return relative.startsWith("..") || path.isAbsolute(relative);
+        });
+      const candidateSnapshot = await snapshotDirectory(candidateDirectory);
+      const ownedSnapshots = new Map(await Promise.all(ownedFiles.map(async (filename) =>
+        [filename, await optionalBytes(filename)])));
+      const updatedManifest = validateProductionAssetRecipeManifest({
+        formatVersion: manifest.formatVersion,
+        recipes: manifest.recipes.filter((candidate) => candidate.id !== recipe.id),
+      });
+      const updatedIndex = {
+        ...indexInput,
+        entries: indexInput.entries.filter((candidate) => candidate.id !== recipe.id),
+      };
+      const updatedReviews = validateProductionReviewStore({
+        formatVersion: reviews.formatVersion,
+        decisions: reviews.decisions.filter((decision) => decision.recipeId !== recipe.id),
+      });
+
+      try {
+        await commitAtomicFileTransaction([
+          { targetPath: manifestPath, bytes: jsonBytes(updatedManifest) },
+          { targetPath: indexPath, bytes: jsonBytes(updatedIndex) },
+          { targetPath: reviewsPath, bytes: jsonBytes(updatedReviews) },
+        ], async () => {
+          await removePath(candidateDirectory, { recursive: true, force: true });
+          for (const filename of ownedFiles) await removePath(filename, { force: true });
+          const [writtenManifest, writtenIndex, writtenReviews] = await Promise.all([
+            readJson(manifestPath, "Production recipe manifest"),
+            readJson(indexPath, "Generated production index"),
+            readJson(reviewsPath, "Production review store"),
+          ]);
+          if (writtenManifest.recipes.some((candidate) => candidate.id === recipe.id)
+            || writtenIndex.entries.some((candidate) => candidate.id === recipe.id)
+            || writtenReviews.decisions.some((decision) => decision.recipeId === recipe.id)) {
+            throw new ProductionCandidateAuthoringError(`${recipe.id} deletion did not clear every repository record`);
+          }
+        });
+      } catch (cause) {
+        const rollbackErrors = [];
+        try { await restoreDirectory(candidateDirectory, candidateSnapshot); }
+        catch (error) { rollbackErrors.push(error); }
+        for (const [filename, bytes] of ownedSnapshots) {
+          try { await restoreOptionalFile(filename, bytes); }
+          catch (error) { rollbackErrors.push(error); }
+        }
+        if (rollbackErrors.length > 0) {
+          throw new AggregateError(
+            [cause, ...rollbackErrors],
+            `Candidate deletion failed and could not fully restore ${recipe.id}`,
+          );
+        }
+        throw cause;
+      }
+      return {
+        recipeId: recipe.id,
+        deletedFingerprint: entry.jobKey,
+        message: `${recipe.name} was permanently deleted`,
+      };
+    });
+  }
+
+  return Object.freeze({ validate, save, remove });
 }

@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createProductionCandidateAuthoringMiddleware,
+  PRODUCTION_CANDIDATE_DELETE_ROUTE,
   PRODUCTION_CANDIDATE_SAVE_ROUTE,
   PRODUCTION_CANDIDATE_VALIDATE_ROUTE,
 } from "../scripts/production-candidate-authoring-api.mjs";
@@ -82,6 +83,10 @@ describe("local production candidate authoring API", () => {
         received.push(["validate", value]);
         return { fingerprint: value.candidateFingerprint, validationState: "current" };
       },
+      remove: async (value) => {
+        received.push(["remove", value]);
+        return { deletedFingerprint: value.candidateFingerprint };
+      },
     });
     const saved = await post(origin, PRODUCTION_CANDIDATE_SAVE_ROUTE, saveRequest());
     expect(saved.status).toBe(200);
@@ -89,12 +94,15 @@ describe("local production candidate authoring API", () => {
     const validated = await post(origin, PRODUCTION_CANDIDATE_VALIDATE_ROUTE, identityRequest());
     expect(validated.status).toBe(200);
     expect(await validated.json()).toMatchObject({ ok: true, validationState: "current" });
-    expect(received.map(([kind]) => kind)).toEqual(["save", "validate"]);
+    const removed = await post(origin, PRODUCTION_CANDIDATE_DELETE_ROUTE, identityRequest());
+    expect(removed.status).toBe(200);
+    expect(await removed.json()).toMatchObject({ ok: true, deletedFingerprint: fingerprint });
+    expect(received.map(([kind]) => kind)).toEqual(["save", "validate", "remove"]);
 
     expect((await post(origin, PRODUCTION_CANDIDATE_SAVE_ROUTE, saveRequest(), {
       Origin: "http://localhost:5173",
     })).status).toBe(403);
-    expect(received).toHaveLength(2);
+    expect(received).toHaveLength(3);
   });
 
   it("rejects malformed, non-JSON, oversized, wrong-method and query routes before the service", async () => {
@@ -102,6 +110,7 @@ describe("local production candidate authoring API", () => {
     const authoring = {
       save: async () => { calls++; },
       validate: async () => { calls++; },
+      remove: async () => { calls++; },
     };
     const origin = await start(authoring, 256);
     expect((await post(origin, PRODUCTION_CANDIDATE_VALIDATE_ROUTE, {
@@ -125,6 +134,7 @@ describe("local production candidate authoring API", () => {
     const origin = await start({
       save: async () => { throw new ProductionCandidateAuthoringError("Stale candidate fingerprint; refresh"); },
       validate: async () => identityRequest(),
+      remove: async () => identityRequest(),
     });
     const response = await post(origin, PRODUCTION_CANDIDATE_SAVE_ROUTE, saveRequest());
     expect(response.status).toBe(422);

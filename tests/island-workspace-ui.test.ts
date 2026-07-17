@@ -18,6 +18,9 @@ describe("GR-4.1 focused island workshop", () => {
     expect(scene).toContain('data-island="available"');
     expect(scene).toContain('data-island-action="trial"');
     expect(scene).toContain('data-island-action="save"');
+    expect(scene).toContain('data-island-action="delete"');
+    expect(scene).toContain("private async deleteImportedIsland");
+    expect(scene).toContain("Permanently delete");
     expect(scene).toContain(">Save changes</button>");
   });
 

@@ -160,6 +160,7 @@ const COLLISION_SAVE_ROUTE = "/__wayfinders/collision/save";
 const ASSET_REVIEW_ROUTE = "/__wayfinders/assets/review";
 const PRODUCTION_CANDIDATE_VALIDATE_ROUTE = "/__wayfinders/assets/candidate/validate";
 const PRODUCTION_CANDIDATE_SAVE_ROUTE = "/__wayfinders/assets/candidate/save";
+const PRODUCTION_CANDIDATE_DELETE_ROUTE = "/__wayfinders/assets/candidate/delete";
 const PRODUCTION_CANDIDATE_PROMOTION_ROUTE = "/__wayfinders/assets/candidate/promote";
 
 type StandaloneLibraryEntry = ReferenceImageLibraryEntry | ProductionCandidateLibraryEntry;
@@ -180,6 +181,7 @@ interface ProductionAuthoringResponse {
   readonly recipeId?: string;
   readonly fingerprint?: string;
   readonly previousFingerprint?: string;
+  readonly deletedFingerprint?: string;
   readonly candidateFingerprint?: string;
   readonly validationState?: "current";
   readonly reviewState?: ProductionReviewState;
@@ -1755,6 +1757,7 @@ export class AssetViewerScene extends Phaser.Scene {
           <a data-island-action="trial" class="production-test-link" href="#">View with ship</a>
           <button data-island-action="save" type="button">Save changes</button>
         </div>
+        <button data-island-action="delete" class="island-delete-button" type="button">Delete imported island</button>
         <output data-island="status" class="asset-viewer-diagnostics" aria-live="polite"></output>
       </section>
       <section class="island-collision-workbench" aria-labelledby="island-collision-title">
@@ -1828,6 +1831,8 @@ export class AssetViewerScene extends Phaser.Scene {
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-island-action=save]")
       ?.addEventListener("click", () => { void this.saveIslandChanges(); }, { signal });
+    slot.querySelector<HTMLButtonElement>("[data-island-action=delete]")
+      ?.addEventListener("click", () => { void this.deleteImportedIsland(); }, { signal });
     slot.querySelector<HTMLAnchorElement>("[data-island-action=trial]")
       ?.addEventListener("click", (event) => {
         const link = event.currentTarget as HTMLAnchorElement;
@@ -1891,6 +1896,7 @@ export class AssetViewerScene extends Phaser.Scene {
     const availabilityStatus = document.querySelector<HTMLElement>("[data-island=availability-status]");
     const trial = document.querySelector<HTMLAnchorElement>("[data-island-action=trial]");
     const save = document.querySelector<HTMLButtonElement>("[data-island-action=save]");
+    const remove = document.querySelector<HTMLButtonElement>("[data-island-action=delete]");
     if (title) title.textContent = entry.name;
     if (subtitle) subtitle.textContent = entry.subtitle;
     if (name && document.activeElement !== name) name.value = this.islandNameDrafts.get(entry.id) ?? entry.name;
@@ -1902,6 +1908,10 @@ export class AssetViewerScene extends Phaser.Scene {
     if (availabilityStatus) availabilityStatus.textContent = isAvailable
       ? "Available in game"
       : "Unavailable in game";
+    if (remove) {
+      remove.hidden = entry.entryType !== "production-candidate";
+      remove.disabled = this.productionAuthoringInFlight || this.collisionSaveInFlight;
+    }
 
     const candidate = entry.entryType === "production-candidate" ? entry : undefined;
     const locallyDirty = candidate !== undefined && this.productionLocallyDirty.has(candidate.id);
@@ -1987,6 +1997,43 @@ export class AssetViewerScene extends Phaser.Scene {
     if (!status) return;
     status.value = message;
     status.dataset.state = error ? "error" : "ready";
+  }
+
+  private async deleteImportedIsland(): Promise<void> {
+    const entry = this.selectedProductionCandidate();
+    if (!entry || entry.recipe.family !== "island" || this.productionAuthoringInFlight) return;
+    const confirmed = window.confirm(
+      `Permanently delete “${entry.name}”?\n\nThis removes its source PNG, collision mask, and prepared files. This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    try {
+      this.productionAuthoringInFlight = true;
+      this.syncIslandWorkbench();
+      this.reportIslandStatus("Deleting imported island…");
+      const response = await fetch(PRODUCTION_CANDIDATE_DELETE_ROUTE, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          formatVersion: PRODUCTION_CANDIDATE_AUTHORING_FORMAT_VERSION,
+          recipeId: entry.id,
+          candidateFingerprint: entry.fingerprint,
+        }),
+      });
+      const payload = await response.json().catch(() => undefined) as ProductionAuthoringResponse | undefined;
+      if (!response.ok || payload?.ok !== true || payload.deletedFingerprint !== entry.fingerprint) {
+        throw new Error(payload?.error ?? `Delete failed with HTTP ${response.status}`);
+      }
+      this.productionLocallyDirty.delete(entry.id);
+      this.islandNameDrafts.delete(entry.id);
+      sessionStorage.removeItem(assetWorkspaceSelectionKey(this.workspace.id));
+      sessionStorage.removeItem(PRODUCTION_ASSET_LIBRARY_SELECTION_KEY);
+      window.location.reload();
+    } catch (error) {
+      this.reportIslandStatus(this.errorMessage(error), true);
+    } finally {
+      this.productionAuthoringInFlight = false;
+      this.syncIslandWorkbench();
+    }
   }
 
   private mountAssetLibraryBrowser(signal: AbortSignal): void {
