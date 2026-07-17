@@ -2,13 +2,13 @@ import Phaser from "phaser";
 
 /** Countable, physical provision bundles in a diegetic on-board rack. */
 export class CargoRenderer {
+  private readonly viewportContainer: Phaser.GameObjects.Container;
   private readonly container: Phaser.GameObjects.Container;
   private readonly rack: Phaser.GameObjects.Graphics;
   private readonly label: Phaser.GameObjects.Text;
   private readonly icons: Phaser.GameObjects.Graphics[] = [];
   private readonly status: HTMLElement;
   private displayedCount = -1;
-  private bottomClearance = 12;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.rack = scene.add.graphics();
@@ -18,13 +18,15 @@ export class CargoRenderer {
       fontSize: "10px",
       fontStyle: "bold",
     }).setOrigin(0.5, 0);
-    this.container = scene.add.container(0, 0, [this.rack, this.label]).setScrollFactor(0).setDepth(100);
+    this.container = scene.add.container(0, 0, [this.rack, this.label]);
+    this.viewportContainer = scene.add.container(0, 0, [this.container]).setScrollFactor(0).setDepth(100);
     this.status = this.getOrCreateStatus();
     this.scene.scale.on(Phaser.Scale.Events.RESIZE, this.onResize);
     this.positionRack();
   }
 
   sync(count: number): void {
+    this.positionRack();
     const target = Math.max(0, Math.floor(count));
     if (target === this.displayedCount) return;
     const previous = Math.max(0, this.displayedCount);
@@ -62,17 +64,9 @@ export class CargoRenderer {
     this.scene.tweens.add({ targets: this.container, scale: 1, duration: 140 });
   }
 
-  /** Keeps the rack above screen-space actions that occupy the bottom of the game host. */
-  setBottomClearance(clearance: number): void {
-    const nextClearance = Math.max(12, Math.ceil(Number.isFinite(clearance) ? clearance : 0));
-    if (nextClearance === this.bottomClearance) return;
-    this.bottomClearance = nextClearance;
-    this.positionRack();
-  }
-
   destroy(): void {
     this.scene.scale.off(Phaser.Scale.Events.RESIZE, this.onResize);
-    this.container.destroy(true);
+    this.viewportContainer.destroy(true);
     this.status.remove();
   }
 
@@ -123,10 +117,14 @@ export class CargoRenderer {
   }
 
   private positionRack = (): void => {
-    this.container.setPosition(
-      this.scene.scale.width / 2,
-      this.scene.scale.height - this.bottomClearance,
-    );
+    const camera = this.scene.cameras.main;
+    const zoom = Math.max(Number.EPSILON, camera.zoom);
+    const centerX = this.scene.scale.width / 2;
+    const centerY = this.scene.scale.height / 2;
+    const screenBottom = this.scene.scale.height - 12;
+    this.viewportContainer
+      .setPosition(centerX, centerY + (screenBottom - centerY) / zoom)
+      .setScale(1 / zoom);
   };
 
   private readonly onResize = (): void => this.positionRack();

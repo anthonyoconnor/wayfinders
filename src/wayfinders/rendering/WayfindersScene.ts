@@ -194,7 +194,6 @@ export class WayfindersScene extends Phaser.Scene {
   private surveyButton?: HTMLButtonElement;
   private homeAction?: HTMLElement;
   private homeActionButton?: HTMLButtonElement;
-  private cargoBottomLayoutKey = "";
   private greatHallView?: GreatHallView;
   private greatHallUpdated = false;
   private teleportOnClick = false;
@@ -676,7 +675,6 @@ export class WayfindersScene extends Phaser.Scene {
     const spatialEntitiesAfter = this.simulation.descriptorSpatialQueryTotals.entitiesExamined;
     this.presentationWork.recordEntityQueries(spatialEntitiesAfter - spatialEntitiesBefore);
     this.syncHomeAction();
-    this.syncCargoBottomClearance();
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const greatHallOpen = this.greatHallView?.isOpen ?? false;
     const inputSuppressed = this.simulation.wreckPresentationActive
@@ -1434,39 +1432,6 @@ export class WayfindersScene extends Phaser.Scene {
     }
     action.hidden = !this.canVisitGreatHall();
     action.dataset.updated = String(this.greatHallUpdated);
-  }
-
-  private syncCargoBottomClearance(): void {
-    const host = this.gameHost;
-    if (!host) {
-      this.cargoRenderer.setBottomClearance(0);
-      return;
-    }
-    const layoutKey = [
-      this.scale.width,
-      this.scale.height,
-      this.surveyRibbon?.hidden,
-      this.surveyRibbon?.textContent,
-      this.homeAction?.hidden,
-      this.homeAction?.textContent,
-    ].join("|");
-    if (layoutKey === this.cargoBottomLayoutKey) return;
-    this.cargoBottomLayoutKey = layoutKey;
-    const hostBounds = host.getBoundingClientRect();
-    let overlayTop = hostBounds.bottom;
-    for (const overlay of [this.surveyRibbon, this.homeAction]) {
-      if (!overlay || overlay.hidden) continue;
-      const bounds = overlay.getBoundingClientRect();
-      if (bounds.height > 0) overlayTop = Math.min(overlayTop, bounds.top);
-    }
-    if (overlayTop >= hostBounds.bottom) {
-      this.cargoRenderer.setBottomClearance(0);
-      return;
-    }
-    const scenePixelsPerCssPixel = this.scale.height / Math.max(1, hostBounds.height);
-    this.cargoRenderer.setBottomClearance(
-      (hostBounds.bottom - overlayTop + 8) * scenePixelsPerCssPixel,
-    );
   }
 
   private toggleMarkup(name: keyof GameSimulation["debug"], label: string): string {
