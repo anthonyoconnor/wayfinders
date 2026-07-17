@@ -2405,6 +2405,224 @@ html[data-application-mode="assets"] .asset-library-browser {
   grid-column: 1 / -1;
 }
 
+/* GR-5.2 approval revision: one authored hall plate with interactive overlays. */
+.gh-hall {
+  position: relative;
+  display: block;
+  min-height: 0;
+  aspect-ratio: 1672 / 945;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  color: #f5e7bf;
+  background: url("/assets/gr5/great-hall/hall-interior-backdrop.png") center / 100% 100% no-repeat;
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.48);
+}
+
+.gh-hall--handover,
+.gh-hall--completion {
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.48);
+}
+
+.gh-hall__header,
+.gh-counting-cord {
+  display: none;
+}
+
+.gh-hall__body {
+  position: absolute;
+  inset: 14.5% 8.5% 8.5% 13.5%;
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1fr);
+  gap: 11%;
+}
+
+.gh-era-wall,
+.gh-memorial {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.gh-memorial {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  grid-template-rows: 51% 45%;
+  align-content: stretch;
+  gap: 4%;
+  padding: 1.4% 1.8%;
+}
+
+.gh-memorial__portrait {
+  width: 94%;
+  height: 94%;
+  aspect-ratio: auto;
+  align-self: center;
+  border: 0.28rem solid #704725;
+  outline: 1px solid #c59454;
+  box-shadow: 0 0.35rem 0.7rem rgba(0, 0, 0, 0.55);
+}
+
+.gh-memorial--active .gh-memorial__portrait {
+  border-color: #37a9aa;
+  outline-color: #88ddd5;
+}
+
+.gh-voyage-list {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 4%;
+}
+
+.gh-voyage {
+  position: relative;
+  display: grid;
+  min-height: 0;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(0.18rem, 0.55vw, 0.45rem);
+  margin-inline: 2%;
+  padding: 1.5% 4%;
+  border: 1px solid rgba(91, 56, 29, 0.8);
+  color: #2e251c;
+  background:
+    linear-gradient(90deg, rgba(219, 202, 157, 0.96), rgba(232, 218, 177, 0.92) 68%, rgba(194, 168, 111, 0.94)),
+    repeating-linear-gradient(8deg, transparent 0 4px, rgba(77, 54, 27, 0.08) 4px 5px);
+  clip-path: polygon(1% 7%, 98% 0, 100% 83%, 97% 100%, 2% 94%, 0 18%);
+  box-shadow: 0 0.18rem 0.3rem rgba(0, 0, 0, 0.42);
+}
+
+.gh-voyage__number {
+  width: clamp(1rem, 1.7vw, 1.4rem);
+  height: clamp(1rem, 1.7vw, 1.4rem);
+  color: #e9dbb5;
+  background: #5a351f;
+}
+
+.gh-voyage__canoe {
+  border-color: #76502d;
+}
+
+.gh-voyage__achievements {
+  justify-content: flex-start;
+}
+
+.gh-voyage--lost {
+  border-style: solid;
+  background: linear-gradient(90deg, rgba(66, 53, 43, 0.96), rgba(111, 88, 65, 0.9));
+  clip-path: polygon(1% 7%, 48% 0, 52% 18%, 58% 1%, 98% 6%, 100% 80%, 96% 100%, 2% 91%, 0 17%);
+}
+
+.gh-voyage--awaiting {
+  border-color: #56c3bd;
+  box-shadow: inset 0 0 0 1px rgba(84, 202, 193, 0.55), 0 0 0.5rem rgba(54, 176, 174, 0.35);
+}
+
+.gh-voyage--unsailed {
+  opacity: 0.58;
+  filter: saturate(0.55);
+}
+
+.gh-voyage--closed {
+  opacity: 0.28;
+  filter: grayscale(1);
+}
+
+.gh-era-wall {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.gh-era-wall__portraits {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+  gap: 2.4%;
+  align-content: stretch;
+  padding: 1.2% 2.2% 2.2%;
+}
+
+.gh-portrait,
+.gh-portrait-placeholder {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 3%;
+  overflow: hidden;
+  border: clamp(2px, 0.32vw, 4px) solid #704725;
+  background: #291d18;
+  box-shadow: inset 0 0 0 1px #c09152, 0 0.18rem 0.32rem rgba(0, 0, 0, 0.58);
+}
+
+.gh-portrait-placeholder {
+  place-items: stretch;
+  border-color: #4a3325;
+  background: #171513;
+  box-shadow: inset 0 0 0 1px #6d5035;
+}
+
+.gh-portrait-placeholder > span {
+  display: block;
+  background:
+    linear-gradient(135deg, transparent 44%, rgba(152, 112, 67, 0.45) 45% 51%, transparent 52%),
+    repeating-linear-gradient(45deg, #2f2a22 0 4px, #24211d 4px 8px);
+  clip-path: polygon(4% 1%, 97% 5%, 94% 96%, 2% 91%);
+}
+
+.gh-portrait__image {
+  min-height: 0;
+  aspect-ratio: auto;
+}
+
+.gh-era-rail {
+  grid-template-columns: auto minmax(3rem, 1fr) auto auto auto;
+  gap: 1.4%;
+  padding: 1.3% 2%;
+  border: 0;
+  background: rgba(30, 20, 15, 0.72);
+}
+
+.gh-era-rail button {
+  min-height: 1.55rem;
+  border-color: #7c5a35;
+  color: #e8dbb5;
+  background: linear-gradient(#5e3d23, #382319);
+}
+
+.gh-ceremony {
+  position: absolute;
+  right: 12%;
+  bottom: 6%;
+  left: 12%;
+}
+
+.great-hall-preview-stage[data-viewport="narrow"] .gh-hall__body {
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1fr);
+}
+
+.great-hall-preview-stage[data-viewport="narrow"] .gh-era-wall__portraits {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(0, 1fr));
+}
+
+.great-hall-preview-stage[data-viewport="narrow"] .gh-era-rail {
+  grid-template-columns: auto minmax(3rem, 1fr) auto auto auto;
+}
+
+.great-hall-preview-stage[data-viewport="narrow"] .gh-era-rail > button:last-child {
+  grid-column: auto;
+}
+
 .gh-preview-browser__body,
 .gh-preview-workbench {
   display: grid;

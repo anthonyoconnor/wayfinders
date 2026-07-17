@@ -28,10 +28,10 @@ describe("GR-5.2 Great Hall fixed asset set", () => {
     expect(new Set(portraits)).toHaveLength(20);
   });
 
-  it("keeps the authored achievement and lineage sheets available to the preview", async () => {
+  it("keeps the authored achievement sheet and empty Hall plate available to the preview", async () => {
     const assets = await Promise.all([
       readPng("assets/gr5/great-hall/achievement-token-set.png"),
-      readPng("assets/gr5/great-hall/lineage-counting-cord.png"),
+      readPng("assets/gr5/great-hall/hall-interior-backdrop.png"),
     ]);
     for (const asset of assets) expect(asset.byteLength).toBeGreaterThan(1_000_000);
   });

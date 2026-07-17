@@ -445,14 +445,22 @@ views. The workspace is for viewing and product decisions, not editing assets.
 Iterate by replacing source images in place and reloading until the product
 owner records an explicit **Go** decision.
 
+The first reviewable composition deliberately simplifies the selected concept.
+It uses one empty Hall-interior background plate, then overlays the unchanged
+navigator portraits, a left-side selected memorial with four pictorial cloth
+bands, and a right-side `4 x 3` ancestor wall. All twelve portrait positions
+remain visible; positions beyond the selected navigator count use covered
+frames. The counting cord and lineage totals are not displayed in this review
+version. Their reference art and infographic definitions remain available for
+a later product decision.
+
 Acceptance gate:
 
 - exactly twenty distinct, complete navigator portrait files exist and map
   directly to generations one through twenty;
 - rebuild, responsive relayout, repeated selection, and preview-count changes
   never alter a generation's portrait assignment;
-- all ten achievement kinds and all fourteen displayed lineage totals have a
-  unique visual and accessible mapping;
+- all ten achievement kinds have a unique visual and accessible mapping;
 - lead/report and safe/lost states remain distinguishable without color;
 - gold remains reserved for idol-location progress and shell repairs; and
 - reviewed source/contact sheets contain no text artifacts, watermark,

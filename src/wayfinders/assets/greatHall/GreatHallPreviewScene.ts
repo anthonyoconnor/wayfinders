@@ -50,6 +50,13 @@ function portraitMarkup(
     </button>`;
 }
 
+function emptyPortraitMarkup(): string {
+  return `
+    <span class="gh-portrait-placeholder" aria-hidden="true">
+      <span></span>
+    </span>`;
+}
+
 function achievementMarkup(achievement: Readonly<GreatHallPreviewAchievement>): string {
   return `<button
     class="gh-achievement gh-achievement--${achievement.kind}"
@@ -72,7 +79,6 @@ function voyageMarkup(voyageRecord: Readonly<GreatHallPreviewVoyage>): string {
       <span class="gh-voyage__achievements">
         ${voyageRecord.achievements.map(achievementMarkup).join("")}
       </span>
-      <span class="gh-voyage__state">${stateCopy}</span>
     </section>`;
 }
 
@@ -240,6 +246,10 @@ export class GreatHallPreviewScene extends Phaser.Scene {
     const modeCopy = model.mode === "home"
       ? "Ancestor chronicle"
       : model.mode === "handover" ? "The next navigator awaits the chart" : "The idol paths are remembered";
+    const emptyPortraits = Array.from(
+      { length: GREAT_HALL_ERA_SIZE - model.visibleNavigators.length },
+      emptyPortraitMarkup,
+    ).join("");
     this.stage.dataset.viewport = this.viewport;
     this.stage.innerHTML = `
       <div class="gh-preview-viewport">
@@ -261,6 +271,7 @@ export class GreatHallPreviewScene extends Phaser.Scene {
             <section class="gh-era-wall" aria-label="Generations ${model.eraStart} through ${model.eraEnd}">
               <div class="gh-era-wall__portraits">
                 ${model.visibleNavigators.map((navigator) => portraitMarkup(navigator, selected.generation)).join("")}
+                ${emptyPortraits}
               </div>
               <nav class="gh-era-rail" aria-label="Era navigation">
                 <button type="button" data-gh-action="previous-era" aria-label="Previous era" ${model.eraIndex === 0 ? "disabled" : ""}>◀</button>
@@ -276,10 +287,6 @@ export class GreatHallPreviewScene extends Phaser.Scene {
               <div class="gh-memorial__portrait">
                 <img src="${selected.portraitUrl}" alt="Navigator generation ${selected.generation}" decoding="async">
                 <span>${selected.generation}</span>
-              </div>
-              <div class="gh-memorial__copy">
-                <strong>${stateLabel(selected.state)}</strong>
-                ${selected.confirmedByGeneration ? `<small>Fate confirmed by generation ${selected.confirmedByGeneration}</small>` : ""}
               </div>
               <div class="gh-voyage-list">
                 ${selected.voyages.map(voyageMarkup).join("")}
@@ -331,10 +338,6 @@ export class GreatHallPreviewScene extends Phaser.Scene {
         <details class="gh-preview-reference">
           <summary>Achievement art sheet</summary>
           <img src="/assets/gr5/great-hall/achievement-token-set.png" alt="Ten fixed Great Hall achievement token designs" loading="lazy" decoding="async">
-        </details>
-        <details class="gh-preview-reference">
-          <summary>Lineage tally art sheet</summary>
-          <img src="/assets/gr5/great-hall/lineage-counting-cord.png" alt="Fourteen fixed Great Hall lineage tally designs" loading="lazy" decoding="async">
         </details>
         <p class="gh-preview-readonly">View-only approval surface. Edit image files in the project and reload to see revisions.</p>
       </section>`;

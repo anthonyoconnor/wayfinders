@@ -406,7 +406,7 @@ The Great Hall workspace is a view-only product-review surface. A single
 navigator-count control reveals the first one through twenty entries of a fixed
 ordered portrait catalog; twelve-generation era pages bound portrait DOM, and
 the selected memorial always has four voyage bands. Representative active,
-completed, lost/unlocated, lost/confirmed, handover, completion, tally, and ten
+completed, lost/unlocated, lost/confirmed, handover, completion, and ten
 achievement-symbol states come from immutable preview fixtures. Portrait and
 symbol files are read directly from `public/assets/gr5/great-hall`, so replacing
 a file and reloading shows the revision without runtime generation, asset
@@ -417,6 +417,13 @@ most twelve portrait controls and four selected voyage bands, and has a `5 ms`
 p95 model-build regression budget at twenty generations. Browser image decode,
 layout, and interaction measurements remain part of the pending product-review
 pass rather than gameplay performance authority.
+
+The first approval composition uses one fixed empty Hall-interior image beneath
+all interactive content. The selected navigator and four pictorial voyage bands
+occupy the left mounting area; the right wall always presents twelve compact
+portrait positions, using covered placeholders for generations not yet present
+in that era. Lineage totals and their counting cord are intentionally omitted
+from this review version. The twenty existing portrait files remain unchanged.
 
 An imported island can enter a disposable sea trial regardless of availability.
 The trial contains only open water, the authored player boat, and the candidate's
