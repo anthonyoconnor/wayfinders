@@ -462,8 +462,9 @@ the resulting current state.
 Bounded diagnostics expose selected state, state/output gains, duck reason and
 timer, active/peak voices, starts, stops, crossfades, and per-reason triggers.
 Scene shutdown unsubscribes lifecycle events and stops both stable music voices
-before the general audio controller. All stored files remain auditionable
-through the play-only Audio workspace. The stored artifact and replacement
+before the general audio controller. The final eleven-file music, ambience,
+sound-effect, and UI set remains auditionable through the play-only Audio
+workspace. The stored artifact, deterministic regeneration, and replacement
 contract is owned by `Wayfinders_Asset_Pipeline.md`.
 
 Chunk-local terrain, authored home-island objects, imported authored-island

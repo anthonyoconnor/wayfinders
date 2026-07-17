@@ -5,6 +5,35 @@ in the focused Islands workspace. Ships and Fishing shoals still use their
 general production tools. This is intentionally a prototype workflow, not a
 general art or atlas tool.
 
+## Regenerate the shipped audio set
+
+The final audio renderer is deterministic and uses the repository's Node.js
+runtime; it needs no DAW, plug-in, Python package, or downloaded input. From the
+repository root, run:
+
+```powershell
+npm.cmd run audio:generate
+npm.cmd run audio:check
+```
+
+`audio:generate` rewrites all eleven WAVs under `public/assets/audio/v1` at the
+paths already named by `public/assets/audio/audio-catalog.json`. It aborts before
+rendering if that exact catalog path set has changed. It does not edit the
+catalog or runtime loader. Run `git diff --stat` after generation, then use the
+play-only Audio workspace at `?mode=assets&workspace=audio` to audition every
+file. Finish with the full read-only gate:
+
+```powershell
+npm.cmd run assets:check
+```
+
+Future agents can change the fixed compositions, seeds, synthesis voices, or
+normalization targets in `scripts/generate-audio-assets.mjs`, regenerate, and
+audition the complete results. Preserve each stable ID's semantic purpose and
+loop flag. A new ID, category, path, or loop behavior is a catalog/runtime
+contract change, not a routine regeneration. The browser workspace remains
+play-only; there is no interactive audio editor or mixer.
+
 ## Normal workflow
 
 1. Start the prototype and open the library:

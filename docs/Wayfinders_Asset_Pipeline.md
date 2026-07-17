@@ -19,7 +19,9 @@ in `Wayfinders_Technical_Design.md`; future workflow scope is in
   silently replacing accepted collision or gameplay metadata.
 
 Audio is a separate stored-runtime artifact family. It does not use PNG source
-recipes, preparation, candidate review, promotion, or repository-write APIs.
+recipes, preparation, candidate review, promotion, or browser repository-write
+APIs. Its checked-in deterministic renderer is the only supported bulk
+regeneration path.
 
 ## Stored audio library
 
@@ -41,13 +43,23 @@ must be made explicitly. Catalog metadata intentionally excludes content
 hashes, duration, sample rate, measured level, source-project data, and approval
 state so replacing file bytes does not require unrelated metadata maintenance.
 
-The repository supplies read-only catalog and WAV validation only. Validation
+The repository supplies catalog/WAV validation and one deterministic production
+renderer. Validation
 requires the catalog and disk WAV sets to match exactly, safe in-root paths,
 integer PCM RIFF/WAVE structure, no one-shot longer than four seconds, and no
 more than twelve MiB across stored WAVs. It contains no audio recording,
-synthesis, generation, trimming, normalization, encoding, mixing, upload, or
-export workflow. Completed runtime WAVs are produced outside this repository
-and placed directly at the stable paths.
+interactive editing, interactive mixing, upload, or browser-write workflow.
+
+`scripts/generate-audio-assets.mjs` is the retained source for the shipped
+restrained palette: wooden percussion, soft bells, low pads, and abstract surf.
+It uses only Node.js standard-library APIs, deterministic seeds, and fixed
+arrangements to render all eleven complete `24 kHz`, `16-bit` integer-PCM WAVs.
+It normalizes the four loop families to their declared production peaks,
+applies click-free loop boundaries or one-shot edge fades, and overwrites only
+the existing V1 paths. Before writing, it verifies that its exact output set
+still matches the catalog; a catalog addition, removal, or path change therefore
+requires a deliberate renderer update. The renderer never changes the catalog,
+runtime code, or mixer metadata.
 
 The `?mode=assets&workspace=audio` workspace groups the shared catalog and
 loads one selected stored file for browser playback. It supports play from

@@ -1,8 +1,8 @@
 # Wayfinders audio-system proposal
 
-Implementation is present through `AUD-4`; live browser acceptance remains to
-be recorded. Planning and authorization status for `AUD-5`
-is owned only by `Wayfinders_Roadmap.md`.
+Implementation is present through `AUD-5`; live browser and product-owner
+audition acceptance remains to be recorded. Planning and authorization status
+for any follow-up is owned only by `Wayfinders_Roadmap.md`.
 
 This document owns the remaining audio design and acceptance criteria. Current
 runtime behavior is owned by `Wayfinders_Technical_Design.md`; current code
@@ -90,8 +90,9 @@ milestones may extend the existing seams only in these directions:
 
 | Seam | Remaining extension | Constraint |
 | --- | --- | --- |
-| Audio workspace | continue auditioning the shared stored files without new production controls | no upload, creation, editing, mixing, metadata writes, or gameplay state |
-| `public/assets/audio` | receive final `AUD-5` bytes at existing paths | no source-production tooling or gameplay data |
+| Audio workspace | continue auditioning the shared stored files without production controls | no upload, creation, editing, mixing, metadata writes, or gameplay state |
+| `public/assets/audio` | store final `AUD-5` bytes at existing paths | no gameplay data or browser-write API |
+| `scripts/generate-audio-assets.mjs` | deterministically regenerate the complete shipped WAV set | no runtime dependency, interactive editor, upload, or catalog mutation |
 
 ```mermaid
 flowchart LR
@@ -282,6 +283,12 @@ Deliver:
 - current-state updates to the architecture map and technical design plus
   durable acceptance evidence in the roadmap archive.
 
+Implemented on 2026-07-17, with live browser and product-owner audition
+acceptance pending. The final eleven-file PCM set occupies the established
+catalog paths. The retained deterministic renderer and its operator workflow
+are owned by `Wayfinders_Asset_Pipeline.md` and
+`ASSET_PRODUCTION_QUICKSTART.md`.
+
 Acceptance gate:
 
 - Every catalog entry resolves to its final stored WAV at the already-integrated
@@ -295,8 +302,9 @@ Acceptance gate:
   ambience, and music overlap.
 - Music and ambience loop seamlessly for ten consecutive repetitions; every
   one-shot starts responsively and ends without an audible cut.
-- No audio synthesis, editing, mixing, encoding, upload, or repository-write
-  tool is added as part of production delivery.
+- The deterministic complete-set renderer remains reproducible from the
+  repository, while the Audio workspace remains play-only and no interactive
+  editor, mixer, upload surface, or browser repository-write API is added.
 - Keyboard and screen-reader acceptance confirms controls and all reinforced
   information remain usable with sound disabled.
 - `npm.cmd run check`, browser acceptance, and a final repository diff/status
@@ -320,9 +328,10 @@ Acceptance gate:
 - weather simulation, dynamic wind, and per-island surf emitters;
 - HRTF or general positional-audio infrastructure;
 - audio-driven gameplay timing or rhythm mechanics;
-- repository tooling for recording, synthesis, waveform editing, trimming,
-  normalization, encoding, mixing, or DAW integration;
-- generative music, middleware, or a universal asset-pipeline rewrite;
+- interactive repository tooling for recording, waveform editing, trimming,
+  mixing, encoding, or DAW integration beyond the retained deterministic
+  complete-set renderer;
+- runtime-generative music, middleware, or a universal asset-pipeline rewrite;
 - preference persistence or any gameplay save/load behavior; and
 - asset-library upload, metadata editing, review, promotion, or repository
   replacement operations for audio.

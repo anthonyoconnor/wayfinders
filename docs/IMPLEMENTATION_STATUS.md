@@ -12,16 +12,21 @@ post-survey risk. Browser acceptance at normal gameplay zoom verified the
 unlabelled rack, fractional return allocation, two-bundle survey glow, hidden
 exact status, and no warning or error output.
 
-The audio layer is implemented through `AUD-4`. Game and asset-library modes
+The audio layer is implemented through `AUD-5`. Game and asset-library modes
 share one validated stored-audio catalog; game mode has explicit enable, mute,
 master/category controls, bounded voice ownership, diagnostics, and silent
 fallback. The asset library has a play-only Audio workspace over the same
-stored files. Game mode reconciles a persistent ocean bed and a smoothed,
+eleven final WAVs. A deterministic Node.js renderer can regenerate that complete
+set at the stable paths without changing catalog or runtime code. Automated
+AUD-5 inspection reports `6.029 MiB` stored audio, exact zero-value loop
+boundaries, a `0.4698` maximum-control aligned stress peak, and a `0.2449`
+default-control aligned stress peak. The asset gate passes.
+Game mode reconciles a persistent ocean bed and a smoothed,
 speed-controlled wake from current presentation state without world queries.
 It also batches typed discovery, survey, idol, exact-return, wreck, and accepted
 UI sources into at most one priority- and cooldown-bounded cue per synchronous
-transaction. High-rate and developer-only state remains silent. Catalog/WAV,
-Game mode also selects home-harbor or open-water music from current visible
+transaction. High-rate and developer-only state remains silent. Game mode also
+selects home-harbor or open-water music from current visible
 presentation state, crossfades two stable loops, and ducks them behind return,
 wreck, succession, and completion. Mixer, controller, ambience, cue and music
 policies/controllers, controls, preview, workspace, and composition checks

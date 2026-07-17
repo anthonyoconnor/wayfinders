@@ -34,7 +34,7 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 | `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering | feature-specific presentation rules |
 | `audio` | validated stored-audio catalog contracts, renderer-neutral gain and sailing-ambience state, and bounded voice-accounting policy | Phaser objects, gameplay authority, decoded media, hidden-world queries, or repository writes |
 | `rendering` | Phaser lifecycle, resource activation, and read-model adaptation | authoritative gameplay decisions |
-| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, isolated trials, and play-only stored-audio preview | navigation authority outside declared collision metadata, gameplay-session state, or audio creation/editing/mixing/writes |
+| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, isolated trials, and play-only stored-audio preview | navigation authority outside declared collision metadata, gameplay-session state, or browser audio creation/editing/mixing/writes |
 
 ## Dependency direction
 
@@ -110,6 +110,10 @@ adapter may own Phaser sound instances.
   bus.
   Neither audio seam imports or mutates `GameSimulation`, scans the world, or
   reads hidden terrain.
+- `scripts/generate-audio-assets.mjs` is an offline, deterministic production
+  renderer for the complete stored WAV set. It has no runtime imports or
+  browser surface and verifies its output paths against the canonical catalog
+  before overwriting audio files.
 - Asset tools share runtime package validation, presentation factories, and the
   accepted hybrid collision contract. Narrow same-origin development-server
   operations serialize source intake, candidate save or deletion, review, and exact-
