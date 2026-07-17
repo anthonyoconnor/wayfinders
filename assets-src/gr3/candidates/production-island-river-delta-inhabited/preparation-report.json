@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.river-delta-inhabited",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "44bc9bedc8b61bbd088b6bbaafa782e17cda9209a01568a87b3e696bac7839b3",
+  "jobKey": "37498b327982635a85a54b818e35ea17faa44ddfa5fe9e2851fce415b263bf01",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-river-delta-inhabited-source.png",
+      "sha256": "6fd27de2e8de8b0a3f30cfdfa794cccf2c769bb239ebc965c06ea9f046112e90"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-river-delta-inhabited-mask.png",
+      "sha256": "7cf83952dfcc255bf87b736247e44e6a2a0823634af9a90c64c636a06a7e48b8"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-river-delta-inhabited/base.png",
+        "width": 480,
+        "height": 480,
+        "sha256": "13b9e46f059070457262903e6b020b9722f7eba74d629738481619501ee7b2a8",
+        "sourceBounds": {
+          "x": 44,
+          "y": 133,
+          "width": 1177,
+          "height": 974
+        },
+        "placement": {
+          "x": 0,
+          "y": 41,
+          "width": 480,
+          "height": 397
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-river-delta-inhabited/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "cebdf887dbb970ef3c0a280a98b9d34c46ca48d7c6369ee20c5788898ede6856"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-river-delta-inhabited/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "9f2a0514341c50db444b2ce0e623a33d79311378e3a7e8c878d10c22e519737c"
+    }
+  }
+}

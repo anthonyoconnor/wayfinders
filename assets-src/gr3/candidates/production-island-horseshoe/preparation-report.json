@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.horseshoe",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "58d81a2244754060eec2a97e0e2e9afd62d13a11e9da92cc92463d83058ad453",
+  "jobKey": "75b8e6ee1f9a558ef3f68a4ff2d05ccfc67dba2c3bce010853d619fa3b081377",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-horseshoe-source.png",
+      "sha256": "c812a9da7bd91c619972fb6a80fe285b5bb53426dbae4ba04a289657c3bb66be"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-horseshoe-mask.png",
+      "sha256": "f9431ee23de7bb4b13b90c46df8ae47ec27a4b7f93588ded9741d54ac534719c"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-horseshoe/base.png",
+        "width": 480,
+        "height": 480,
+        "sha256": "1766ef43f3bb8a652fed9b8b2969d889958ec3e2af84a303f9046624667e1bac",
+        "sourceBounds": {
+          "x": 62,
+          "y": 137,
+          "width": 1121,
+          "height": 976
+        },
+        "placement": {
+          "x": 0,
+          "y": 31,
+          "width": 480,
+          "height": 418
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-horseshoe/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "9487b76cefcfe1fe4f3c167af3866527e07871730d9713f76d67492b5deee9f9"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-horseshoe/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "08caed8fdbc8a09d7e261c07c3edbb6b3dad57bbd4bf0c2e55023f8f8ae3179f"
+    }
+  }
+}

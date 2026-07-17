@@ -8,7 +8,11 @@
       "lifecycle": "runtime",
       "collection": "Runtime assets",
       "sortOrder": 0,
-      "tags": ["island", "home", "runtime"],
+      "tags": [
+        "island",
+        "home",
+        "runtime"
+      ],
       "provenance": {
         "kind": "runtime-package",
         "sourceFile": "public/assets/gr1/images/home-island.png"
@@ -31,7 +35,9 @@
         }
       ],
       "animations": [],
-      "collision": {"mode": "preserve"},
+      "collision": {
+        "mode": "preserve"
+      },
       "availableInGame": true,
       "runtimeBinding": {
         "assetId": "home.island.primary",
@@ -45,7 +51,12 @@
       "lifecycle": "runtime",
       "collection": "Runtime assets",
       "sortOrder": 0,
-      "tags": ["vessel", "player", "runtime", "animated"],
+      "tags": [
+        "vessel",
+        "player",
+        "runtime",
+        "animated"
+      ],
       "provenance": {
         "kind": "runtime-package",
         "sourceFile": "public/assets/gr1/images/player-boat.png"
@@ -106,7 +117,9 @@
           "directionCount": 1
         }
       ],
-      "collision": {"mode": "preserve"},
+      "collision": {
+        "mode": "preserve"
+      },
       "runtimeBinding": {
         "assetId": "player.boat.primary",
         "collisionIntent": "preserve"
@@ -119,7 +132,12 @@
       "lifecycle": "runtime",
       "collection": "Runtime assets",
       "sortOrder": 0,
-      "tags": ["shoal", "fishing", "runtime", "passable"],
+      "tags": [
+        "shoal",
+        "fishing",
+        "runtime",
+        "passable"
+      ],
       "provenance": {
         "kind": "runtime-package",
         "sourceFile": "public/assets/gr1/images/fishing-shoal.png"
@@ -142,11 +160,119 @@
         }
       ],
       "animations": [],
-      "collision": {"mode": "preserve"},
+      "collision": {
+        "mode": "preserve"
+      },
       "runtimeBinding": {
         "assetId": "shoal.fishing.primary",
         "collisionIntent": "preserve"
       }
+    },
+    {
+      "id": "production.island.river-delta-inhabited",
+      "name": "river-delta-inhabited",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "island production sources",
+      "sortOrder": 10,
+      "tags": [
+        "island",
+        "river",
+        "delta",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-river-delta-inhabited-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Base visual",
+          "role": "base",
+          "sourceFile": "assets-src/gr3/intake/production-island-river-delta-inhabited-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 480,
+            "targetHeight": 480,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              227,
+              9,
+              232
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 80,
+            "trimAlphaThreshold": 8,
+            "padding": 8
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-river-delta-inhabited-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.horseshoe",
+      "name": "horseshoe",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "island production sources",
+      "sortOrder": 20,
+      "tags": [
+        "island",
+        "horseshoe",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-horseshoe-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Base visual",
+          "role": "base",
+          "sourceFile": "assets-src/gr3/intake/production-island-horseshoe-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 480,
+            "targetHeight": 480,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              231,
+              9,
+              233
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 80,
+            "trimAlphaThreshold": 8,
+            "padding": 8
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-horseshoe-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
     }
   ]
 }
