@@ -27,7 +27,9 @@ describe("audio application composition", () => {
     expect(scene).toContain("if (this.audioCatalogResult?.ok)");
     expect(scene).toContain("preloadGameAudioCatalog(this, this.audioCatalogResult.catalog)");
     expect(scene).toContain("new GameAudioController({");
-    expect(scene).toContain("mountGameAudioControls(root, this.audioController)");
+    expect(scene).toContain("new GameAudioCueController(");
+    expect(scene).toContain("this.simulation.events");
+    expect(scene).toContain("(action) => this.audioCueController?.enqueueUiAction(action)");
     expect(scene).toContain("new SailingAmbienceController(this.audioController)");
     expect(scene).toContain("this.updateSailingAmbience(delta / 1000)");
     expect(scene).toContain("this.sailingAmbienceInput.speed = this.currentShipPose.speed");
@@ -35,8 +37,11 @@ describe("audio application composition", () => {
     expect(scene).toContain("this.simulation.generationHandoverActive");
     expect(scene).toContain("mountUnavailableGameAudioControls(root, message)");
     expect(scene).toContain("this.audioControls?.destroy()");
+    expect(scene).toContain("this.audioCueController?.destroy()");
     expect(scene).toContain("this.sailingAmbienceController?.destroy()");
     expect(scene).toContain("this.audioController?.destroy()");
+    expect(scene.indexOf("this.audioCueController?.destroy()"))
+      .toBeLessThan(scene.indexOf("this.audioController?.destroy()"));
     expect(scene.indexOf("this.sailingAmbienceController?.destroy()"))
       .toBeLessThan(scene.indexOf("this.audioController?.destroy()"));
   });

@@ -348,7 +348,7 @@ region and updates one `ActiveChunkSet`. The active set prioritizes visible
 chunks, adds a prefetch ring when capacity allows, and enforces a hard five-by-
 five (`25`) chunk resource budget. Deactivation runs before activation.
 
-### Audio foundation and sailing ambience
+### Audio foundation, sailing ambience, and discrete cues
 
 Game and asset-library startup fetch and strictly validate
 `/assets/audio/audio-catalog.json` once before scene composition. Isolated asset
@@ -405,10 +405,45 @@ them. Bounded diagnostics expose target/current gains, active ambience voices,
 peak count, starts, and wake stops. Scene shutdown destroys the ambience
 controller before the general audio controller.
 
-Automatic gameplay/UI cues and music-state selection are not yet bound. Those
-presentation policies remain the scope of `AUD-3` and `AUD-4`; all stored files
-remain auditionable through the play-only Audio workspace. The stored artifact
-and replacement contract is owned by `Wayfinders_Asset_Pipeline.md`.
+`AudioCuePolicy` is a renderer-neutral, stateful cooldown policy over typed cue
+sources. `GameAudioCueController` subscribes directly to the simulation's
+existing `GameEvents`, collects all synchronous sources until the next
+microtask, and plays at most the highest-priority eligible intention. Direct
+accepted UI actions enter that same batch. It never subscribes high-rate tile,
+provision, knowledge, or return-state events; missed one-shots while audio is
+disabled, unavailable, or suspended are discarded rather than replayed.
+
+The implemented cue families and fixed bounds are:
+
+| Family | Sources | Asset | Priority | Cooldown | Voice rule |
+| --- | --- | --- | ---: | ---: | --- |
+| UI confirm | accepted confirm actions | `ui.confirm` | `300` | `120 ms` | one; replace oldest |
+| UI cancel | accepted cancel actions | `ui.cancel` | `310` | `120 ms` | one; replace oldest |
+| UI toggle | accepted toggle actions | `ui.toggle` | `200` | `120 ms` | one; replace oldest |
+| Discovery | island, survey-site, shoal sightings | `sfx.discovery` | `400` | `650 ms` | one; replace oldest |
+| Wreck discovery | first wreck sighting | `sfx.discovery` | `410` | `650 ms` | one discovery voice; replace oldest |
+| Survey | island, survey-site, shoal surveys | `sfx.survey-complete` | `600` | `250 ms` | two; reject excess |
+| Wreck survey | completed wreck survey | `sfx.survey-complete` | `610` | `250 ms` | two survey voices; reject excess |
+| Idol discovery | idol location discovered | `sfx.discovery` | `900` | `500 ms` | one; replaces ordinary survey or discovery |
+| Dock return | expedition returned | `sfx.dock-return` | `800` | `500 ms` | one; replace oldest |
+| Dock replenishment | dock replenishment without return | `sfx.dock-return` | `790` | `500 ms` | one dock-return voice; replace oldest |
+| Wreck | ship wrecked | `sfx.wreck` | `1000` | `1000 ms` | one; replace oldest |
+
+Stable source order breaks equal-priority ties. Oldest replacement is ordered
+by start time and then voice ID. An idol-discovery batch suppresses its ordinary
+survey/discovery and UI confirmations; an expedition return suppresses the
+same-transaction dock replenishment; `expeditionFailed` and returned-record
+events have no second cue. A teleport is a batch barrier against incidental
+discovery sounds, while world regeneration is not subscribed. Recent cue
+decisions, active/peak cue count, processed/played/suppressed/rejected counts,
+and dropped bounded-source count are exposed with the other browser audio
+diagnostics. Scene teardown unsubscribes the cue adapter and stops its owned
+voices before destroying the general audio controller.
+
+Music-state selection is not yet bound and remains the scope of `AUD-4`. All
+stored files remain auditionable through the play-only Audio workspace. The
+stored artifact and replacement contract is owned by
+`Wayfinders_Asset_Pipeline.md`.
 
 Chunk-local terrain, authored home-island objects, imported authored-island
 layers, knowledge/risk textures, cloud/shadow pairs, and marker pools all consume

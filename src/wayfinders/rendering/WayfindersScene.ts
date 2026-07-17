@@ -89,12 +89,14 @@ import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
 import {
   createPhaserAudioPlaybackPort,
+  GameAudioCueController,
   GameAudioController,
   mountGameAudioControls,
   mountUnavailableGameAudioControls,
   preloadGameAudioCatalog,
   SailingAmbienceController,
   type GameAudioControls,
+  type GameAudioCueDiagnostics,
   type GameAudioSnapshot,
   type SailingAmbienceDiagnostics,
 } from "./audio";
@@ -176,6 +178,7 @@ type BrowserAudioDebugSnapshot =
     status: "available";
     audio: Readonly<GameAudioSnapshot>;
     ambience: Readonly<SailingAmbienceDiagnostics>;
+    cues: Readonly<GameAudioCueDiagnostics>;
   }>
   | Readonly<{ status: "unavailable"; error: string }>;
 
@@ -294,6 +297,7 @@ export class WayfindersScene extends Phaser.Scene {
   private pilotAssets!: PilotAssetRuntime;
   private authoredIslandPresentations!: Readonly<AuthoredIslandPresentationRuntime>;
   private audioController?: GameAudioController;
+  private audioCueController?: GameAudioCueController;
   private sailingAmbienceController?: SailingAmbienceController;
   private audioControls?: GameAudioControls;
   private readonly sailingAmbienceInput: SailingAmbienceInput = {
@@ -1337,10 +1341,15 @@ export class WayfindersScene extends Phaser.Scene {
     | SurveySiteInteractionResult
     | undefined {
     if (this.simulation.generationHandoverActive) return undefined;
-    if (this.simulation.wreckSurveyInteraction) return this.performWreckSurvey();
-    if (this.simulation.surveySiteInteraction) return this.performSurveySiteSurvey();
-    if (this.simulation.fishingShoalInteraction) return this.performFishingShoalSurvey();
-    return this.performIslandDossierSurvey();
+    const result = this.simulation.wreckSurveyInteraction
+      ? this.performWreckSurvey()
+      : this.simulation.surveySiteInteraction
+        ? this.performSurveySiteSurvey()
+        : this.simulation.fishingShoalInteraction
+          ? this.performFishingShoalSurvey()
+          : this.performIslandDossierSurvey();
+    if (result?.status === "surveyed") this.audioCueController?.enqueueUiAction("confirm");
+    return result;
   }
 
   private surveyBudgetText(budget: Readonly<SurveyBudgetReadModel>): string {
@@ -1491,6 +1500,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.syncSurveyRibbon();
     this.syncRiskLegend();
     this.log("Went ashore to visit the Great Hall lineage chronicle.");
+    this.audioCueController?.enqueueUiAction("confirm");
     return true;
   }
 
@@ -1503,12 +1513,16 @@ export class WayfindersScene extends Phaser.Scene {
     this.syncSurveyRibbon();
     this.syncRiskLegend();
     if (restoreFocus) (this.homeActionButton ?? this.gameHost)?.focus({ preventScroll: true });
+    if (restoreFocus) this.audioCueController?.enqueueUiAction("cancel");
     return true;
   }
 
   private selectGreatHallGeneration(generation: number): boolean {
     const selected = this.greatHallView?.selectGeneration(Math.trunc(generation)) ?? false;
-    if (selected) this.lastDiagnosticsRevision = -1;
+    if (selected) {
+      this.lastDiagnosticsRevision = -1;
+      this.audioCueController?.enqueueUiAction("toggle");
+    }
     return selected;
   }
 
@@ -1553,6 +1567,7 @@ export class WayfindersScene extends Phaser.Scene {
       ? document.querySelector<HTMLElement>("#developer-tools-close")
       : this.gameHost;
     focusTarget?.focus({ preventScroll: true });
+    this.audioCueController?.enqueueUiAction("confirm");
     return true;
   }
 
@@ -1560,6 +1575,7 @@ export class WayfindersScene extends Phaser.Scene {
     const view = this.greatHallView;
     if (!view || view.mode !== "completion") return false;
     if (!this.simulation.continueCompletedWorld()) return false;
+    this.audioCueController?.enqueueUiAction("confirm");
     view.hide();
     this.lastDiagnosticsRevision = -1;
     if (this.showPendingGenerationHandover()) return true;
@@ -1579,6 +1595,7 @@ export class WayfindersScene extends Phaser.Scene {
     if (developerLog) clearDeveloperLog(developerLog);
     this.afterWorldChanged();
     this.log(`Started a new game in world ${nextSeed}; completed world ${previousSeed} was left behind.`);
+    this.audioCueController?.enqueueUiAction("confirm");
     return nextSeed;
   }
 
@@ -2146,8 +2163,16 @@ export class WayfindersScene extends Phaser.Scene {
       mixer: new AudioMixer(catalog),
       playback: createPhaserAudioPlaybackPort(this),
     });
+    this.audioCueController = new GameAudioCueController(
+      this.audioController,
+      this.simulation.events,
+    );
     this.sailingAmbienceController = new SailingAmbienceController(this.audioController);
-    this.audioControls = mountGameAudioControls(root, this.audioController);
+    this.audioControls = mountGameAudioControls(
+      root,
+      this.audioController,
+      (action) => this.audioCueController?.enqueueUiAction(action),
+    );
   }
 
   private updateSailingAmbience(deltaSeconds: number): void {
@@ -2161,11 +2186,12 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private audioDebugSnapshot(): BrowserAudioDebugSnapshot {
-    if (this.audioController && this.sailingAmbienceController) {
+    if (this.audioController && this.sailingAmbienceController && this.audioCueController) {
       return Object.freeze({
         status: "available",
         audio: this.audioController.getSnapshot(),
         ambience: this.sailingAmbienceController.getSnapshot(),
+        cues: this.audioCueController.getSnapshot(),
       });
     }
     return Object.freeze({
@@ -2556,6 +2582,8 @@ export class WayfindersScene extends Phaser.Scene {
   private destroyBindings(): void {
     this.audioControls?.destroy();
     this.audioControls = undefined;
+    this.audioCueController?.destroy();
+    this.audioCueController = undefined;
     this.sailingAmbienceController?.destroy();
     this.sailingAmbienceController = undefined;
     this.audioController?.destroy();

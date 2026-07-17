@@ -1,7 +1,7 @@
 # Wayfinders audio-system proposal
 
-Implementation is present through `AUD-2`; live browser acceptance remains to
-be recorded. Planning and authorization status for `AUD-3` through `AUD-5`
+Implementation is present through `AUD-3`; live browser acceptance remains to
+be recorded. Planning and authorization status for `AUD-4` through `AUD-5`
 is owned only by `Wayfinders_Roadmap.md`.
 
 This document owns the remaining audio design and acceptance criteria. Current
@@ -24,7 +24,7 @@ The audio track has five milestones:
    asset workspace, mixer, unlock flow, controls, diagnostics, and lifecycle
    boundary.
 2. `AUD-2` added ocean and vessel ambience driven by current presentation state.
-3. `AUD-3` adds bounded gameplay and interface cues from existing typed events.
+3. `AUD-3` added bounded gameplay and interface cues from existing typed events.
 4. `AUD-4` adds two-state music and lifecycle transitions.
 5. `AUD-5` produces the final sounds and music, overwrites the reference files
    at their stable runtime paths, completes browser acceptance, and closes
@@ -90,9 +90,9 @@ milestones may extend the existing seams only in these directions:
 
 | Seam | Remaining extension | Constraint |
 | --- | --- | --- |
-| `src/wayfinders/audio` | add typed cue priority/cooldown and renderer-neutral ambience/music state selection | no Phaser objects, gameplay authority, or filesystem writes |
-| `src/wayfinders/rendering/audio` | add long-lived ambience/music instances, crossfades, and bounded cue adaptation | no gameplay rules, hidden-world queries, or simulation mutation |
-| `WayfindersScene` | pass current presentation-safe read models and bind existing typed events | no individual cue policy or sound-instance bookkeeping |
+| `src/wayfinders/audio` | add renderer-neutral music state selection | no Phaser objects, gameplay authority, or filesystem writes |
+| `src/wayfinders/rendering/audio` | add long-lived music instances and crossfades | no gameplay rules, hidden-world queries, or simulation mutation |
+| `WayfindersScene` | pass current presentation-safe music read models | no individual cue/music policy or sound-instance bookkeeping |
 | Audio workspace | continue auditioning the shared stored files without new production controls | no upload, creation, editing, mixing, metadata writes, or gameplay state |
 | `public/assets/audio` | receive final `AUD-5` bytes at existing paths | no source-production tooling or gameplay data |
 
@@ -113,8 +113,8 @@ decision.
 
 ## Runtime contract
 
-This section specifies current continuous-audio behavior and planned behavior
-for `AUD-3` through `AUD-4` on top of the implemented foundation.
+This section summarizes implemented cue and continuous-audio behavior plus the
+planned `AUD-4` behavior on top of the implemented foundation.
 `Wayfinders_Technical_Design.md` remains the
 canonical owner of current mixer, unlock, control, and lifecycle behavior.
 
@@ -255,27 +255,12 @@ follow-up.
 
 ### AUD-3 — Gameplay and interface cues
 
-Deliver:
-
-- pure event-batch-to-cue policy with priority, cooldown, and replacement;
-- discovery, survey, exact-return, wreck, confirm, cancel, and toggle families;
-- high-priority idol discovery using the catalog's discovery sound, derived
-  from the same transaction batch;
-- scene subscriptions through the existing `GameEvents` instance; and
-- diagnostics containing only recent bounded cue decisions, never decoded
-  audio buffers or authoritative mutation.
-
-Acceptance gate:
-
-- Contract tests cover every source row in the discrete cue table.
-- Integration tests prove an idol survey produces one high-priority cue, an
-  ordinary survey produces one survey cue, a completed-tenure return does not
-  pile up record-return cues, and wreck produces one failure cue.
-- High-rate tile, provision, knowledge, and return-state events never create
-  one-shots.
-- Cooldown and voice-cap sweeps remain deterministic under the fake clock.
-- All sound-reinforced actions retain equivalent visible and semantic feedback
-  with master mute enabled.
+Implemented, with live muted/unmuted browser acceptance pending. Current cue
+behavior and ownership are documented by the technical design and architecture
+map. Contract coverage includes every source row, deterministic fake-clock
+cooldowns and caps, idol-survey coalescing, ordinary survey, return, wreck,
+high-rate silence, blocked-audio discard, bounded diagnostics, and teardown.
+The current roadmap owns the remaining acceptance follow-up.
 
 ### AUD-4 — Adaptive music and lifecycle transitions
 

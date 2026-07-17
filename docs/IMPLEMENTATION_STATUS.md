@@ -12,16 +12,19 @@ post-survey risk. Browser acceptance at normal gameplay zoom verified the
 unlabelled rack, fractional return allocation, two-bundle survey glow, hidden
 exact status, and no warning or error output.
 
-The audio layer is implemented through `AUD-2`. Game and asset-library modes
+The audio layer is implemented through `AUD-3`. Game and asset-library modes
 share one validated stored-audio catalog; game mode has explicit enable, mute,
 master/category controls, bounded voice ownership, diagnostics, and silent
 fallback. The asset library has a play-only Audio workspace over the same
 stored files. Game mode reconciles a persistent ocean bed and a smoothed,
 speed-controlled wake from current presentation state without world queries.
-Catalog/WAV, mixer, controller, ambience state/controller, controls, preview,
-workspace, and composition checks pass. Live keyboard/media and audible-loop
-browser acceptance is still pending because the in-app browser connection did
-not initialize during this handoff.
+It also batches typed discovery, survey, idol, exact-return, wreck, and accepted
+UI sources into at most one priority- and cooldown-bounded cue per synchronous
+transaction. High-rate and developer-only state remains silent. Catalog/WAV,
+mixer, controller, ambience and cue policy/controllers, controls, preview,
+workspace, and composition checks pass. Live keyboard/media, audible-loop, and
+cue browser acceptance is still pending because the in-app browser connection
+did not initialize during this handoff.
 
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
@@ -39,12 +42,11 @@ The twenty-generation presentation-fixture baseline measured `0.193 ms` p95 over
 owned by the technical design. Architecture validation, source and test
 typechecks, the quick and integration lanes, focused GP-5.2 and audio contracts,
 audio repository-I/O checks, GP-5.2 browser acceptance, and the production
-bundle passed. Audio browser acceptance remains pending. The aggregate
-`npm.cmd run check` reaches and passes `audio:check` but remains blocked at
-asset validation because `promotion-summary.json` is stale. The combined
-correctness run retains asset-only fixture drift that expects the former
-three-package empty-source baseline while the current workspace contains
-additional island sources, candidates, and recipes. A cross-process collision
+bundle passed. The complete read-only asset gate also passes. Audio browser
+acceptance remains pending. The aggregate `npm.cmd run check` remains blocked
+in the contract lane by asset-only fixture drift that expects the former three-
+package empty-source baseline while the current workspace contains additional
+island sources, candidates, and recipes. A cross-process collision
 test that timed out under parallel lane contention passes in isolation. Those
 authored-asset artifacts and expectations are outside GP-5.2 and the audio
 layer, and remain untouched.
@@ -67,8 +69,8 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
   operation.
 - Game mode exposes a **Sound** panel with explicit enable, mute, master, music,
   ambience, sound-effect, and interface levels. Ocean and speed-controlled wake
-  ambience start after enable. Automatic gameplay cues and music-state
-  selection are not yet bound.
+  ambience start after enable. Automatic gameplay/UI cues are bound; music-state
+  selection is not yet bound.
 - An imported island can launch a disposable open-water sea trial from its
   library record and return directly to that same record.
 - Gameplay-session saving is absent; refresh starts a new session.
@@ -95,7 +97,8 @@ membership; `tests/README.md` explains lane selection.
 
 - Complete live audio browser acceptance for keyboard focus, stored-file media
   decode/audition, mute and level controls, silence at rest, smoothed wake,
-  direction reversal, loop seams, console-clean teardown, and restart.
+  direction reversal, loop seams, cue coalescing and supplementary muted
+  feedback, console-clean teardown, and restart.
 - The layered water system is proposed but is not registered or loaded by the
   game.
 - End-to-end browser departure responsiveness has not been remeasured after the

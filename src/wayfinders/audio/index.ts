@@ -46,3 +46,18 @@ export type {
   SailingAmbienceInput,
   SailingAmbienceStateSnapshot,
 } from "./SailingAmbience";
+
+export {
+  AUDIO_CUE_SOURCES,
+  AudioCuePolicy,
+} from "./AudioCuePolicy";
+export type {
+  ActiveAudioCueVoice,
+  AudioCueDecision,
+  AudioCueFamily,
+  AudioCueIntention,
+  AudioCueReplacement,
+  AudioCueSource,
+  AudioCueSuppressionReason,
+  AudioUiCueAction,
+} from "./AudioCuePolicy";

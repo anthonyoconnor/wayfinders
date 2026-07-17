@@ -74,7 +74,12 @@ describe("AUD-1 game audio controls binding", () => {
       playback: port,
     });
     const view = new FakeControlsView();
-    const binding = new GameAudioControlsBinding(controller, view);
+    const uiActions: string[] = [];
+    const binding = new GameAudioControlsBinding(
+      controller,
+      view,
+      (action) => uiActions.push(action),
+    );
 
     expect(view.models.at(-1)).toMatchObject({
       unlockState: "locked",
@@ -96,10 +101,13 @@ describe("AUD-1 game audio controls binding", () => {
     view.actions!.setMasterVolume(0.35);
     view.actions!.setCategoryVolume("sfx", 0.25);
     view.actions!.setMuted(true);
+    view.actions!.emitUiAction("cancel");
     expect(view.models.at(-1)).toMatchObject({ masterVolume: 0.35, muted: true });
     expect(view.models.at(-1)!.categories.find(({ id }) => id === "sfx")!.volume).toBe(0.25);
+    expect(uiActions).toEqual(["toggle", "cancel"]);
 
     view.actions!.enableSound();
+    expect(uiActions).toEqual(["toggle", "cancel", "toggle"]);
     expect(view.models.at(-1)!.unlockState).toBe("unlocking");
     port.completeUnlock();
     expect(view.models.at(-1)).toMatchObject({

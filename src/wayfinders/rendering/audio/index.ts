@@ -54,3 +54,12 @@ export type {
   SailingAmbienceAudioTarget,
   SailingAmbienceDiagnostics,
 } from "./SailingAmbienceController";
+
+export { GameAudioCueController } from "./GameAudioCueController";
+export type {
+  GameAudioCueAudioSnapshot,
+  GameAudioCueAudioTarget,
+  GameAudioCueControllerOptions,
+  GameAudioCueDecisionRecord,
+  GameAudioCueDiagnostics,
+} from "./GameAudioCueController";

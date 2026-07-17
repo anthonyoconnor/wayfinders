@@ -1,4 +1,8 @@
-import { AUDIO_CATEGORIES, type AudioCategory } from "../../audio";
+import {
+  AUDIO_CATEGORIES,
+  type AudioCategory,
+  type AudioUiCueAction,
+} from "../../audio";
 import type { GameAudioSnapshot, GameAudioUnlockState } from "./GameAudioController";
 
 export interface GameAudioControlsTarget {
@@ -15,6 +19,7 @@ export interface GameAudioControlActions {
   readonly setMuted: (muted: boolean) => void;
   readonly setMasterVolume: (volume: number) => void;
   readonly setCategoryVolume: (category: AudioCategory, volume: number) => void;
+  readonly emitUiAction: (action: AudioUiCueAction) => void;
 }
 
 export interface GameAudioControlsModel {
@@ -48,12 +53,20 @@ export class GameAudioControlsBinding implements GameAudioControls {
   constructor(
     target: GameAudioControlsTarget,
     private readonly view: GameAudioControlsView,
+    onUiAction: (action: AudioUiCueAction) => void = () => undefined,
   ) {
     view.bind({
-      enableSound: () => target.enableSound(),
-      setMuted: (muted) => target.setMuted(muted),
+      enableSound: () => {
+        target.enableSound();
+        onUiAction("toggle");
+      },
+      setMuted: (muted) => {
+        target.setMuted(muted);
+        onUiAction("toggle");
+      },
       setMasterVolume: (volume) => target.setMasterVolume(volume),
       setCategoryVolume: (category, volume) => target.setCategoryVolume(category, volume),
+      emitUiAction: onUiAction,
     });
     view.render(gameAudioControlsModel(target.getSnapshot()));
     this.unsubscribe = target.subscribe((snapshot) => {
@@ -89,8 +102,9 @@ export function gameAudioControlsModel(
 export function mountGameAudioControls(
   root: HTMLElement,
   target: GameAudioControlsTarget,
+  onUiAction?: (action: AudioUiCueAction) => void,
 ): GameAudioControls {
-  return new GameAudioControlsBinding(target, new DomGameAudioControlsView(root));
+  return new GameAudioControlsBinding(target, new DomGameAudioControlsView(root), onUiAction);
 }
 
 /**
@@ -224,19 +238,25 @@ class DomGameAudioControlsView implements GameAudioControlsView {
     if (this.actions) throw new Error("Game audio controls are already bound");
     this.actions = actions;
     const signal = this.abort.signal;
-    this.toggle.addEventListener("click", () => this.setOpen(this.panel.hidden), { signal });
+    this.toggle.addEventListener("click", () => {
+      this.setOpen(this.panel.hidden);
+      actions.emitUiAction("toggle");
+    }, { signal });
     this.container.addEventListener("keydown", (event) => {
       if (event.key !== "Escape" || this.panel.hidden) return;
       event.preventDefault();
       this.setOpen(false);
       this.toggle.focus();
+      actions.emitUiAction("cancel");
     }, { signal });
     this.enable.addEventListener("click", actions.enableSound, { signal });
     this.mute.addEventListener("click", () => actions.setMuted(!this.muted), { signal });
     this.master.addEventListener("input", () => actions.setMasterVolume(this.master.valueAsNumber), { signal });
+    this.master.addEventListener("change", () => actions.emitUiAction("toggle"), { signal });
     for (const category of AUDIO_CATEGORIES) {
       const input = this.categoryInputs.get(category)!;
       input.addEventListener("input", () => actions.setCategoryVolume(category, input.valueAsNumber), { signal });
+      input.addEventListener("change", () => actions.emitUiAction("toggle"), { signal });
     }
   }
 
