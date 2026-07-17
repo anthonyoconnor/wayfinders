@@ -45,13 +45,14 @@ the rebuilt ambience also awaits product-owner audition.
 WTR-1.0 is implemented on `codex/water-look-prototype` and awaits product
 feedback. The asset shell now exposes a Water tab whose static branch-only
 preview compares all prepared tile profiles and variants, a selected 3x3 repeat,
-four representative deep-to-coastal layouts, and an open-water player-boat
-fixture. It does not register a water package, integrate water into the game,
-animate water, or blend water with islands. Source typecheck and the production
-bundle pass. Browser verification covered direct Water routing, profile and
-variant selection, depth-layout changes, the boat fixture, workspace teardown
-and return, and reported no warning or error output. Broad automated coverage
-was intentionally outside this feedback prototype's scope.
+a 96x96 whole-world composition, multi-cell handoffs between every water
+treatment, and a player-boat scale reference. It does not register a water
+package, integrate water into the game, animate water, or blend water with
+islands. Source typecheck and the production bundle pass. Browser verification
+covered direct Water routing, profile and variant selection, world inspection
+scales, the optional visual overlays, workspace teardown and return, and
+reported no warning or error output. Broad automated coverage was intentionally
+outside this feedback prototype's scope.
 
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and

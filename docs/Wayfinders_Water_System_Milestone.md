@@ -457,28 +457,25 @@ existing asset-workspace shell. Do not build generalized workspace, package,
 or rendering infrastructure for this prototype. Its implementation may be
 replaced or discarded after the visual direction is understood.
 
-The prototype presents three compact views:
+The prototype presents two compact views:
 
 1. **Tile gallery.** Display the different static candidate water profiles and
    variants with simple labels. A small repeat view should make obvious seams
    and repeated focal marks visible.
-2. **Depth-blending playground.** Display deep and shallow bases with the
-   selected transition between them. Start with a few representative straight,
-   corner, diagonal, and channel layouts. Add an editable paint grid or
-   exhaustive 47-mask browser only if it makes visual iteration materially
-   faster.
-3. **In-game look mockup.** Compose the player boat over a representative
-   open-water field at normal gameplay scale so feedback is about how the water
-   reads in Wayfinders rather than how individual atlas frames look in
-   isolation. This is a fixed fixture, not `GameSimulation` or a generated
+2. **Whole-world blending playground.** Display a fixed 96x96 water-only world
+   that places abyss, deep ocean, coastal shelves, lagoons, reefs, current,
+   rough water, a future brackish study, and the player boat in one coherent
+   game-scale composition. Blend broad regions across multiple cells so
+   feedback concerns world layout and treatment handoffs instead of one enlarged
+   tile edge. This is a fixed fixture, not `GameSimulation` or a generated
    world.
 
 Use static frames only. WTR-1.0 does not create an animation clock, clip sampler,
 reduced-motion implementation, chunk lifecycle, production package contract,
 promotion flow, performance telemetry, or runtime renderer. A manual refresh
 after rebuilding or replacing candidate art is sufficient. Controls should be
-limited to whatever directly speeds comparison, such as water profile, blend
-layout, overlay on/off, and zoom.
+limited to whatever directly speeds comparison, such as water profile, variant,
+visual-overlay on/off, and world inspection scale.
 
 WTR-1.0 does not prototype shoreline foam, the authored home-island overlay,
 water beneath transparent island art, or generated-island handoffs. Island
@@ -547,10 +544,8 @@ Tasks:
   runtime package or production promotion path;
 - display the different static base profiles and variants in a labelled gallery
   with one small repeated-tile view;
-- show a handful of representative deep-to-shallow blends, including straight,
-  corner, diagonal, and channel shapes;
-- show one fixed in-game look mockup using the player boat and representative
-  open water at normal gameplay scale;
+- show one fixed 96x96 world-scale composition containing every water treatment,
+  broad multi-cell handoffs, and the player boat;
 - add only the comparison controls that shorten the feedback loop;
 - rebuild or replace candidate art manually as feedback arrives; and
 - add a focused test or diagnostic only when it is faster than repeated manual
@@ -560,8 +555,8 @@ Exit gate:
 
 - the branch prototype opens from a Water tab and makes the available tile
   directions easy to compare;
-- representative depth blends and one game-scale open-water composition are
-  visible well enough to gather concrete product feedback;
+- the whole-world composition makes every water treatment and its broad
+  handoffs visible well enough to gather concrete product feedback;
 - the feedback and preferred direction are recorded, including what should be
   changed in the next iteration; and
 - no production readiness, exhaustive topology, animation, game integration,
@@ -693,9 +688,9 @@ Exit gate:
 These criteria apply only to the branch prototype and are intentionally not a
 production acceptance gate:
 
-- [ ] The Water tab shows the different static candidate tiles, representative
-      depth blends, and one game-scale open-water composition with the player
-      boat.
+- [ ] The Water tab shows the different static candidate tiles and one 96x96
+      game-scale water world containing every treatment, broad multi-cell
+      handoffs, and the player boat.
 - [ ] No authored or generated island blending is included; WTR-1.3 retains that
       scope.
 - [ ] The product owner can compare the useful directions and provide concrete

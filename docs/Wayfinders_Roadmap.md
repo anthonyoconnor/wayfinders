@@ -183,8 +183,9 @@ criteria are defined in `Wayfinders_Water_System_Milestone.md`.
 
 `WTR-1.0` is implemented on `codex/water-look-prototype` as a deliberately rough
 prototype. Its **Water** asset-workspace tab shows the different static
-candidate tiles, repeat comparisons, representative depth blends, and one
-game-scale open-water composition with the player boat. The prototype is ready
+candidate tiles, repeat comparisons, and one 96x96 whole-world composition that
+places every water treatment, multi-cell handoff, and the player boat in a
+single game-scale context. The prototype is ready
 for product feedback; its exit gate remains open until that feedback and the
 preferred direction are recorded. It is not a production-ready asset workspace
 or integration into the game. WTR-1.0 does not address authored or generated

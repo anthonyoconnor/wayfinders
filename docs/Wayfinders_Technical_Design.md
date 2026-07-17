@@ -569,7 +569,9 @@ shoals**, **Water**, **Great Hall**, and **Audio** tabs above permanent
 left-library, centre-preview, and right-workbench regions. Water is a branch-only
 WTR-1.0 feedback prototype: its isolated scene reads prepared static tile,
 transition, and overlay sheets directly, shows labelled variants, repeat checks,
-representative depth layouts, and an open-water boat fixture, and owns no
+and a
+96x96 whole-world study with multi-cell treatment handoffs and a player-boat
+scale reference, and owns no
 gameplay catalog, package, promotion, animation, island-blending, or runtime
 renderer authority. The active workspace is URL-addressable and follows browser
 history; accessible arrow-key navigation uses roving focus. A typed registry

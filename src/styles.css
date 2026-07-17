@@ -3164,6 +3164,59 @@ html[data-application-mode="assets"] .asset-library-browser {
   font-size: 0.68rem;
 }
 
+.water-preview-world-note {
+  max-width: 62rem;
+  margin: -0.25rem 0 0.85rem !important;
+  color: #8fb8b5;
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.water-preview-world-study .water-preview-world-wrap {
+  max-height: min(72vh, 54rem);
+  padding: 0;
+  scrollbar-color: #477f82 #09252d;
+}
+
+.water-preview-world-map {
+  display: block;
+  max-width: none;
+  background: #082f40;
+  image-rendering: pixelated;
+}
+
+.water-preview-world-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.35rem 0.7rem;
+  padding-top: 0.75rem;
+}
+
+.water-preview-world-legend span {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #b8d3cd;
+  font-size: 0.65rem;
+}
+
+.water-preview-world-legend i {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 auto;
+  border: 1px solid rgba(215, 240, 230, 0.28);
+  border-radius: 0.2rem;
+}
+
+.water-preview-world-legend i[data-water="abyss"] { background: #082f40; }
+.water-preview-world-legend i[data-water="deep"] { background: #12536a; }
+.water-preview-world-legend i[data-water="coastal"] { background: #4aa1a0; }
+.water-preview-world-legend i[data-water="lagoon"] { background: #2d858b; }
+.water-preview-world-legend i[data-water="reef"] { background: #36756b; }
+.water-preview-world-legend i[data-water="current"] { background: linear-gradient(135deg, #12536a 30%, #8bd0cf); }
+.water-preview-world-legend i[data-water="rough"] { background: linear-gradient(135deg, #12536a 30%, #dce8d2); }
+.water-preview-world-legend i[data-water="brackish"] { background: #507f55; }
+
 .water-preview-selected {
   display: grid;
   grid-template-columns: auto minmax(8rem, 1fr);
@@ -3176,9 +3229,7 @@ html[data-application-mode="assets"] .asset-library-browser {
 
 .water-preview-repeat,
 .water-preview-variant-strip,
-.water-preview-gallery article > div,
-.water-preview-blend,
-.water-preview-world {
+.water-preview-gallery article > div {
   display: grid;
   line-height: 0;
 }
@@ -3258,86 +3309,19 @@ html[data-application-mode="assets"] .asset-library-browser {
   overflow-x: auto;
 }
 
-.water-preview-tile,
-.water-preview-blend-cell,
-.water-preview-world-cell,
-.water-preview-world-cell i {
+.water-preview-tile {
   display: block;
   flex: 0 0 auto;
   background-repeat: no-repeat;
   image-rendering: pixelated;
 }
 
-.water-preview-blend-wrap,
 .water-preview-world-wrap {
   overflow: auto;
   padding: 0.25rem;
   border: 1px solid rgba(95, 155, 158, 0.22);
   border-radius: 0.5rem;
   background: #082f40;
-}
-
-.water-preview-blend,
-.water-preview-world {
-  width: max-content;
-  margin: 0 auto;
-}
-
-.water-preview-legend {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 0.55rem 0.25rem 0.2rem;
-}
-
-.water-preview-legend span {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: #b4d0ca;
-  font-size: 0.65rem;
-}
-
-.water-preview-legend i {
-  width: 0.9rem;
-  height: 0.9rem;
-  border-radius: 0.2rem;
-}
-
-.water-preview-legend i[data-water="deep"] { background: #12536a; }
-.water-preview-legend i[data-water="coastal"] { background: #4aa1a0; }
-.water-preview-legend i[data-water="transition"] { background: linear-gradient(135deg, #12536a, #4aa1a0); }
-
-.water-preview-world {
-  position: relative;
-  overflow: hidden;
-  border-radius: 0.35rem;
-}
-
-.water-preview-world-cell { position: relative; }
-.water-preview-world-cell i { position: absolute; inset: 0; }
-
-.water-preview-boat,
-.water-preview-wake {
-  position: absolute;
-  z-index: 3;
-  top: 50%;
-  left: 50%;
-  image-rendering: pixelated;
-  pointer-events: none;
-}
-
-.water-preview-boat {
-  width: 96px;
-  transform: translate(-50%, -50%) rotate(-8deg);
-}
-
-.water-preview-wake {
-  z-index: 2;
-  width: 144px;
-  opacity: 0.82;
-  transform: translate(-72%, -50%) rotate(-8deg);
 }
 
 .water-preview-browser__body,
