@@ -621,12 +621,8 @@ ordering.
 
 ## Out of scope
 
-- navigator names, biographies, traits, family trees, inheritance, politics,
-  age simulation, or new succession rules;
-- gameplay saving, cloud history, or lineage persistence across refresh;
-- new achievements, discovery rewards, idol rules, or wreck mechanics;
+- gameplay saving or lineage persistence across refresh;
 - an explorable 3D Hall, first-person walking, or a second Phaser scene;
-- a permanent sailing score panel;
 - photorealistic portraits or direct representation of a named real-world
   culture;
 - a general avatar creator, UI editor, icon framework, atlas system, event bus,

@@ -506,10 +506,7 @@ repository transactions. Exact counts are intentionally not part of this
 contract.
 
 Desktop keyboard and pointer play is the validated platform target. Responsive
-resize exists. Touch-first sailing and representative mobile rendering/loading
-performance require separate design and acceptance. Browser acceptance remains
-necessary for WebGL startup, input focus, visual alignment, lifecycle modes,
-asset-tool usability, and real rendered-frame behavior.
+resize exists.
 
 ## 14. Extension constraints
 

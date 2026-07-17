@@ -114,30 +114,9 @@ Before authorization, confirm the proposed art direction. Implementation must
 consume the existing shared active-chunk boundary and must not introduce a
 second presentation-lifetime policy or simulation clock.
 
-## Explicitly deferred
-
-- Broad runtime-asset expansion beyond the proposed authored-island track until
-  a separate content batch defines and authorizes its packages, placement, and
-  gameplay-facing semantics.
-- Authoritative tribe economy/output, selectable voyage loadouts, generic wreck
-  salvage/recovery, and automatic trade gameplay. Product rationale and open
-  questions belong in `Wayfinders_Economy_Design.md`.
-- Chained discovery quests, nested site targets, large resource catalogs,
-  dynamic pricing, markets, fleet management, and labour allocation.
-- Real-time economic refill timers or idle progression.
-- NPC collision, combat, escorts, or direct fleet commands.
-- Family trees, inheritable traits, politics, illness, age simulation, and
-  non-wreck mid-voyage death.
-- Physical idol recovery/cargo, idols as money or compulsory upgrades, and a
-  forced ending without the current continue/new-game choice.
-- A permanent economy panel or arcade score HUD.
-- A general-purpose raster, pixel-art, atlas, or animation editor.
-- Touch-first sailing until separately designed and approved.
-- Gameplay saving, cloud sync, server-backed voyage saves, and multiplayer.
-
 ## Authorization boundary
 
-No further milestone is authorized for implementation. The water proposal,
-gameplay persistence, a new gameplay or production-asset
-milestone, broad runtime content rollout, or any other deferred scope requires
-explicit user authorization.
+No further milestone is authorized for implementation. The water proposal and
+any new gameplay or production-asset milestone require explicit user
+authorization. Do not implement gameplay saving; it may return only through an
+explicitly authorized milestone designed for the game that exists at that time.

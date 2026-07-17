@@ -63,10 +63,6 @@ membership; `tests/README.md` explains lane selection.
 
 - The layered water system is proposed but is not registered or loaded by the
   game.
-- Desktop keyboard and pointer input are the validated target. Touch-first
-  sailing and representative mobile performance remain unimplemented.
-- Interactive WebGL acceptance remains appropriate for presentation, asset-tool
-  usability, and browser frame-time changes even when automated gates pass.
 - End-to-end browser departure responsiveness has not been remeasured after the
   current guidance and active-chunk architecture settled. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.

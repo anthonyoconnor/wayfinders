@@ -102,8 +102,6 @@ checking and the automated test suite, and creates the production build.
   review, promotion, and repository-transaction contracts.
 - [Asset production quickstart](docs/ASSET_PRODUCTION_QUICKSTART.md) is the
   current operator workflow.
-- [Future world activity](docs/Wayfinders_Economy_Design.md) records
-  unimplemented product direction and open economy questions.
 - [Water-system proposal](docs/Wayfinders_Water_System_Milestone.md) owns the
   detailed design and acceptance criteria for that proposed presentation track.
 - [Agent guide](AGENTS.md) owns development process and documentation rules.
