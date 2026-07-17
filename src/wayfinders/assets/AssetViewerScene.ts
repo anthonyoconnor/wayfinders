@@ -2049,13 +2049,15 @@ export class AssetViewerScene extends Phaser.Scene {
         <header><h3>${escapeHtml(group.name)}</h3><span>${group.entries.length}</span></header>
         <div class="asset-library-list">
           ${group.entries.map((entry) => {
+            const availableInGame = entry.entryType === "authored-package"
+              || (entry.entryType === "production-candidate" && entry.availableInGame);
             const settlement = entry.entryType === "reference-image"
               ? entry.reference.settlement ?? entry.reference.kind
               : entry.entryType === "production-candidate"
                 ? entry.reviewState
                 : "runtime";
             const status = focusedIslands
-              ? entry.entryType === "authored-package" ? "Available" : entry.entryType === "production-candidate" ? "Unavailable" : "Reference"
+              ? entry.entryType === "reference-image" ? "Reference" : availableInGame ? "Available" : "Unavailable"
               : entry.entryType === "authored-package"
                 ? "Runtime"
               : entry.entryType === "production-candidate"
@@ -2070,7 +2072,7 @@ export class AssetViewerScene extends Phaser.Scene {
                 data-library-id="${escapeHtml(entry.id)}"
                 data-library-type="${escapeHtml(entry.entryType)}"
                 data-library-settlement="${escapeHtml(settlement)}"
-                data-library-availability="${entry.entryType === "authored-package" ? "available" : "unavailable"}"
+                data-library-availability="${availableInGame ? "available" : "unavailable"}"
                 data-library-search="${escapeHtml(`${entry.name} ${entry.subtitle} ${entry.id} ${entry.tags.join(" ")}`.toLowerCase())}"
               >
                 <span class="asset-library-thumb"><img loading="lazy" decoding="async" alt="" data-library-thumb-src="${escapeHtml(entry.thumbnailUrl)}"></span>

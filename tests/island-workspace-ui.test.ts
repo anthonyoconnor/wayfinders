@@ -51,6 +51,12 @@ describe("GR-4.1 focused island workshop", () => {
     expect(scene).toContain('this.reportIslandStatus("Saving changes…")');
   });
 
+  it("derives the island card badge and filters from saved availability", () => {
+    expect(scene).toContain('entry.entryType === "production-candidate" && entry.availableInGame');
+    expect(scene).toContain('availableInGame ? "Available" : "Unavailable"');
+    expect(scene).toContain('data-library-availability="${availableInGame ? "available" : "unavailable"}"');
+  });
+
   it("focuses island intake without exposing unrelated family controls", () => {
     expect(scene).toContain('focusedFamily: "island"');
     expect(intake).toContain("focusedFamily?: ProductionAssetFamily");
