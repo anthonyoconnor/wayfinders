@@ -1,7 +1,8 @@
 # Wayfinders current roadmap
 
 Status: forward plan. Gameplay is complete through `GP-5.1`; the Great Hall
-track is complete through `GR-5.3`.
+track is complete through `GR-5.3`; cloud atmosphere is complete through
+`CLD-1`.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -22,6 +23,7 @@ authorized.
 - `GR-x.y` identifies graphics, asset-pipeline, and production-presentation
   milestones and acceptance gates.
 - `WTR-x.y` identifies the proposed water-presentation track.
+- `CLD-x.y` identifies cloud-atmosphere milestones and acceptance gates.
 - A milestone is complete only when its behavior, tests, maintainability,
   performance criteria, and acceptance evidence pass.
 - This roadmap proposes sequencing but authorizes no work by itself.
@@ -48,8 +50,9 @@ architecture map; its delivery history is archived.
 
 The asset-workspace shell, focused island workshop, single island-availability
 lifecycle, deterministic authored-island world planning, and chunk-bounded
-authored runtime presentation are implemented. No further production-asset
-milestone is currently proposed.
+authored runtime presentation and independent revealed-map cloud atmosphere are
+implemented. No further production-presentation milestone is currently
+proposed.
 
 The Voyage Sense thread and its supply commitments are implemented through
 `GP-5.2`. The water-system proposal remains a separate candidate track. Great

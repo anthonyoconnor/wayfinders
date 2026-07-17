@@ -1256,6 +1256,40 @@ fixture hosts. Fatal voyages remain free of provisional credit, undiscovered
 idol hosts remain structurally absent, and home, handover, completion, focus,
 movement, and lifecycle actions remain owned by the existing game host.
 
+## Cloud atmosphere
+
+### CLD-1 — Revealed-map cloud atmosphere
+
+Status: implemented and accepted on 2026-07-16.
+
+The game now renders sparse world-space clouds through an independent
+`CloudLayerRenderer`. Four deterministic quadrant candidates per active chunk
+cycle through all four approved top-down pixel-art silhouettes, with seeded
+scale, reflection, opacity, position, drift amplitude, period, and phase providing
+additional variety. The cloud layer shares only the scene's active-chunk delta
+and the knowledge overlay's pure fully-clear predicate. A padded footprint that
+touches Unknown or Personal fog, a filtered fog boundary, or the world edge is
+suppressed in full, while a fixed clear radius protects the player boat.
+
+The scene-owned **Cloud atmosphere** developer checkbox defaults on, immediately
+releases cloud sprites when disabled, and deterministically rebuilds only cloud
+resources when re-enabled. The equivalent `window.__WAYFINDERS__` command and
+bounded telemetry never enter `GameSimulation.debug` or change gameplay,
+knowledge, visibility, terrain, collision, navigation, or other presentation
+resources. Reduced-motion preference freezes seeded cloud phases.
+
+The retained source, provenance, four-frame RGBA runtime sheet, package
+metadata, authored opaque-frame bounds, and read-only validation command live
+under the CLD-1 asset paths.
+Contract coverage verifies package shape, all four variants across deterministic
+samples, transform and motion variety, conservative fog exclusion, independent
+toggle lifecycle, deterministic reconstruction, corner-crossing revealed-area
+placement, resource caps, and zero stable-sync allocations. Live browser
+acceptance confirmed that the scene-owned checkbox releases all cloud sprites
+and deterministically rebuilds them without affecting the other overlays. The
+approved current-game mockup remains reference-only at
+`concept_art/clouds/cloud-atmosphere-current-game-mockup.png`.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development
@@ -1300,6 +1334,7 @@ determine whether the user-visible departure symptom remains.
 
 ## Archive boundary
 
-This archive includes completed gameplay through `GP-4.1`, graphics and asset
-work through `GR-5.3`, and architecture work through `AM-6`. Upcoming, proposed,
-and deferred work is maintained only in `Wayfinders_Roadmap.md`.
+This archive includes completed gameplay through `GP-5.1`, graphics and asset
+work through `GR-5.3`, cloud atmosphere through `CLD-1`, and architecture work
+through `AM-6`. Upcoming, proposed, and deferred work is maintained only in
+`Wayfinders_Roadmap.md`.

@@ -38,6 +38,19 @@ Omitting fine collision metadata is a supported V1 contract: the package uses
 its declared coarse terrain behavior. This is a current external data contract,
 not a migration adapter.
 
+The CLD-1 atmosphere sheet is a presentation-only runtime package outside the
+collision-authoring catalog. `src/wayfinders/assets/packages/cloud-atmosphere.json`
+owns its stable identity, four `627 x 627` frame layout, variant names, opaque
+pixel bounds, and bounded presentation defaults. Its retained source and
+provenance live under
+`assets-src/cld1/clouds`; the prepared RGBA sheet lives under
+`public/assets/cld1/clouds`. `scripts/cloud-asset-check.mjs`, included in
+`assets:check`, validates source/runtime dimensions, frame count, unique variant
+coverage, RGBA format, per-frame opaque bounds, and the presence of both
+transparent and visible pixels.
+The asset has no collision, gameplay binding, asset-library workspace, intake,
+or repository-authoring path.
+
 ## Asset library and candidate types
 
 The `?mode=assets` library uses the same catalog, texture loader, Phaser

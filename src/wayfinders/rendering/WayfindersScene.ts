@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { appendDeveloperLog, clearDeveloperLog } from "../../developerLog";
 import { preloadPilotAssetPackages } from "../assets/PilotAssetCatalog";
+import { preloadCloudAsset } from "../assets/CloudAssetCatalog";
 import { createPilotAssetRuntime, type PilotAssetRuntime } from "../assets/PilotAssetRuntime";
 import {
   createAuthoredIslandPresentationRuntime,
@@ -59,6 +60,7 @@ import {
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
 import { buildCargoPresentation, type CargoPresentationModel } from "./CargoPresentation";
+import { CloudLayerRenderer } from "./CloudLayerRenderer";
 import { collectDebugEntityBounds, type DebugEntityBoundsRole } from "./DebugEntityBounds";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { IslandDossierRenderer } from "./IslandDossierRenderer";
@@ -103,6 +105,7 @@ interface PresentationResourceSnapshot {
   readonly activeChunks: ReturnType<ActiveChunkSet["getTelemetry"]>;
   readonly world: ReturnType<WorldRenderer["getTelemetry"]>;
   readonly knowledge: ReturnType<KnowledgeOverlayRenderer["getResourceTelemetry"]>;
+  readonly clouds: ReturnType<CloudLayerRenderer["getResourceTelemetry"]>;
   readonly risk: ReturnType<RiskOverlayRenderer["getResourceTelemetry"]>;
   readonly markers: Readonly<{
     wrecks: ReturnType<WreckRenderer["getLifetimeTelemetry"]>;
@@ -119,6 +122,11 @@ interface BrowserDebugApi {
   forceWreck: () => boolean;
   regenerate: (seed?: number) => ReturnType<GameSimulation["snapshot"]>;
   setOverlay: (name: keyof GameSimulation["debug"], visible: boolean) => void;
+  setCloudAtmosphere: (visible: boolean) => boolean;
+  cloudAtmosphere: () => Readonly<{
+    enabled: boolean;
+    resources: ReturnType<CloudLayerRenderer["getResourceTelemetry"]>;
+  }>;
   returnToDock: () => boolean;
   navigatorWreckTargets: () => ReadonlyArray<{ id: number; generation: number; x: number; y: number }>;
   performance: () => ReturnType<FrameTimingMonitor["snapshot"]>;
@@ -165,6 +173,7 @@ export class WayfindersScene extends Phaser.Scene {
   private keys!: MovementKeys;
   private worldRenderer!: WorldRenderer;
   private knowledgeOverlay!: KnowledgeOverlayRenderer;
+  private cloudLayer!: CloudLayerRenderer;
   private riskOverlay!: RiskOverlayRenderer;
   private cargoRenderer!: CargoRenderer;
   private cargoPresentation?: CargoPresentationModel;
@@ -264,6 +273,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   preload(): void {
     preloadPilotAssetPackages(this);
+    preloadCloudAsset(this);
     preloadAuthoredIslandPresentations(this, this.authoredIslandPresentationCatalog);
   }
 
@@ -280,6 +290,10 @@ export class WayfindersScene extends Phaser.Scene {
     );
     this.wreckRenderer = new WreckRenderer(this);
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
+    this.cloudLayer = new CloudLayerRenderer(
+      this,
+      typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    );
     this.riskOverlay = new RiskOverlayRenderer(this);
     this.cargoRenderer = new CargoRenderer(this);
     this.islandDossierRenderer = new IslandDossierRenderer(this);
@@ -494,6 +508,11 @@ export class WayfindersScene extends Phaser.Scene {
   private applyActiveChunkDelta(delta: Readonly<ActiveChunkDelta>, worldAlreadyBound = false): void {
     if (!worldAlreadyBound) this.worldRenderer.applyActiveChunks(delta);
     this.knowledgeOverlay.applyActiveChunkDelta(this.simulation.world, delta);
+    this.cloudLayer.applyActiveChunkDelta(
+      delta,
+      this.simulation.generated.seed,
+      this.simulation.world.chunkSize * this.simulation.config.navigation.tileSize,
+    );
     this.riskOverlay.applyActiveChunkDelta(this.simulation.world, delta);
     this.wreckRenderer.applyActiveChunks(delta.active);
     this.islandDossierRenderer.applyActiveChunks(delta.active);
@@ -668,12 +687,20 @@ export class WayfindersScene extends Phaser.Scene {
       this.lastViewportZoom = camera.zoom;
     }
     this.renderEntityDebug();
+    const revealedIslandIds = new Set(this.simulation.revealedIslandIds);
     this.knowledgeOverlay.sync(
       this.simulation.world,
       this.simulation.generated.seed,
       force,
-      new Set(this.simulation.revealedIslandIds),
+      revealedIslandIds,
       this.simulation.islandFogRevealRevision,
+    );
+    this.cloudLayer.sync(
+      this.simulation.world,
+      revealedIslandIds,
+      this.simulation.islandFogRevealRevision,
+      this.time.now,
+      { x: this.simulation.ship.worldX, y: this.simulation.ship.worldY },
     );
     this.riskOverlay.sync(
       this.simulation.world,
@@ -781,6 +808,11 @@ export class WayfindersScene extends Phaser.Scene {
       host.dataset.knowledgeVersion = String(this.simulation.world.knowledgeVersion);
       host.dataset.supportedTopologyVersion = String(this.simulation.world.supportedTopologyVersion);
       host.dataset.visibilityVersion = String(this.simulation.world.visibilityVersion);
+      const cloudResources = this.cloudLayer.getResourceTelemetry();
+      host.dataset.cloudsEnabled = String(cloudResources.enabled);
+      host.dataset.activeClouds = String(cloudResources.activeClouds);
+      host.dataset.clearCloudFootprints = String(cloudResources.clearCloudFootprints);
+      host.dataset.visibleClouds = String(cloudResources.visibleClouds);
       const timing = this.frameTiming.snapshot();
       host.dataset.frameP50Ms = timing.p50Ms.toFixed(2);
       host.dataset.frameP95Ms = timing.p95Ms.toFixed(2);
@@ -955,6 +987,7 @@ export class WayfindersScene extends Phaser.Scene {
             ${this.toggleMarkup("currentSight", "Current line of sight")}
             ${this.toggleMarkup("forwardRange", "Forward reach limit")}
             ${this.toggleMarkup("returnViability", "Return route viability")}
+            ${this.cloudToggleMarkup()}
           </div>
         </details>
 
@@ -1011,6 +1044,9 @@ export class WayfindersScene extends Phaser.Scene {
         this.syncRiskLegend();
       }, { signal });
     });
+    slot.querySelector<HTMLInputElement>("input[data-cloud-atmosphere]")?.addEventListener("change", (event) => {
+      this.setCloudAtmosphereEnabled((event.currentTarget as HTMLInputElement).checked);
+    }, { signal });
     slot.querySelectorAll<HTMLInputElement>("input[data-config]").forEach((input) => {
       input.addEventListener("change", () => {
         const id = input.dataset.config ?? "";
@@ -1074,6 +1110,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.updateDeveloperStateOutputs();
     this.syncDeveloperToolAvailability();
     this.syncRiskLegend();
+    this.syncCloudAtmosphereControl();
   }
 
   private mountSurveyRibbon(): void {
@@ -1501,6 +1538,10 @@ export class WayfindersScene extends Phaser.Scene {
     return `<label class="tool-check"><input data-overlay="${name}" type="checkbox" ${this.simulation.debug[name] ? "checked" : ""}> ${label}</label>`;
   }
 
+  private cloudToggleMarkup(): string {
+    return `<label class="tool-check"><input data-cloud-atmosphere type="checkbox" ${this.cloudLayer.isEnabled ? "checked" : ""}> Cloud atmosphere</label>`;
+  }
+
   private numberMarkup(id: string, label: string, value: number, min: number, max: number, step: number): string {
     return `<label class="tool-number"><span>${label}</span><input data-config="${id}" type="number" value="${value}" min="${min}" max="${max}" step="${step}"></label>`;
   }
@@ -1677,6 +1718,18 @@ export class WayfindersScene extends Phaser.Scene {
     legend.hidden = this.simulation.generationHandoverActive
       || (this.greatHallView?.isOpen ?? false)
       || (!visibility.forwardRange && !visibility.returnViability);
+  }
+
+  private setCloudAtmosphereEnabled(enabled: boolean): boolean {
+    const changed = this.cloudLayer.setEnabled(enabled);
+    this.syncCloudAtmosphereControl();
+    if (changed) this.syncPresentation(true);
+    return changed;
+  }
+
+  private syncCloudAtmosphereControl(): void {
+    const input = document.querySelector<HTMLInputElement>("#scene-tools-slot input[data-cloud-atmosphere]");
+    if (input) input.checked = this.cloudLayer.isEnabled;
   }
 
   private liveConfigValue(id: string): number {
@@ -1942,6 +1995,11 @@ export class WayfindersScene extends Phaser.Scene {
         return this.simulation.snapshot();
       },
       setOverlay: (name, visible) => this.simulation.setDebugVisibility(name, visible),
+      setCloudAtmosphere: (visible) => this.setCloudAtmosphereEnabled(visible),
+      cloudAtmosphere: () => Object.freeze({
+        enabled: this.cloudLayer.isEnabled,
+        resources: this.cloudLayer.getResourceTelemetry(),
+      }),
       returnToDock: () => this.returnToDockForTesting(),
       navigatorWreckTargets: () => this.navigatorWreckTargets(),
       performance: () => this.frameTiming.snapshot(),
@@ -1984,6 +2042,7 @@ export class WayfindersScene extends Phaser.Scene {
       activeChunks: this.activeChunkSet.getTelemetry(),
       world: this.worldRenderer.getTelemetry(),
       knowledge: this.knowledgeOverlay.getResourceTelemetry(),
+      clouds: this.cloudLayer.getResourceTelemetry(),
       risk: this.riskOverlay.getResourceTelemetry(),
       markers: Object.freeze({
         wrecks: this.wreckRenderer.getLifetimeTelemetry(),
@@ -2392,6 +2451,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.greatHallView = undefined;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.knowledgeOverlay.destroy();
+    this.cloudLayer.destroy();
     this.riskOverlay.destroy();
     this.cargoRenderer.destroy();
     this.islandDossierRenderer.destroy();

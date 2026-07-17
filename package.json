@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "build:bundle": "vite build",
     "assets:build": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs build",
-    "assets:check": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs check && node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-pipeline.mjs check && node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-promotion.mjs check",
+    "assets:check": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs check && node scripts/cloud-asset-check.mjs && node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-pipeline.mjs check && node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-promotion.mjs check",
     "assets:intake": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/asset-pipeline.mjs intake",
     "assets:prepare": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-pipeline.mjs prepare",
     "assets:prepare:check": "node --experimental-transform-types --disable-warning=ExperimentalWarning scripts/production-asset-pipeline.mjs check",

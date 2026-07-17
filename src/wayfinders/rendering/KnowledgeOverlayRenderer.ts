@@ -6,7 +6,13 @@ import type { WorldGrid } from "../world/WorldGrid";
 import { KnowledgeState } from "../world/TileData";
 import { addPaddedChunkNeighbours } from "./OverlayChunkInvalidation";
 import { createCameraCulledImage } from "./CameraCulledImage";
+import {
+  isExactIslandTileRevealed,
+  isKnowledgeOverlayFullyClearAtTile,
+} from "./KnowledgeClearCoverage";
 import type { ActiveChunkDelta, ActiveChunkEntry } from "./activation";
+
+export { isExactIslandTileRevealed } from "./KnowledgeClearCoverage";
 
 interface MaskChunkView {
   image: Phaser.GameObjects.Image;
@@ -30,14 +36,6 @@ export interface KnowledgeOverlayResourceTelemetry {
 const MASK_SCALE = 4;
 const MASK_PADDING_TILES = 1;
 const NO_REVEALED_ISLANDS: ReadonlySet<number> = new Set<number>();
-
-/** Island dossiers reveal only the exact generated non-home island footprint. */
-export function isExactIslandTileRevealed(
-  islandId: number,
-  revealedIslandIds: ReadonlySet<number>,
-): boolean {
-  return islandId > 0 && revealedIslandIds.has(islandId);
-}
 
 /**
  * Reusable, bilinear knowledge mask. Each chunk owns a small padded texture;
@@ -316,8 +314,7 @@ export class KnowledgeOverlayRenderer {
           scratchContext.fillRect(pixelX, pixelY, MASK_SCALE, MASK_SCALE);
           continue;
         }
-        if (world.isVisibleNow(worldX, worldY) || world.getKnowledge(worldX, worldY) === KnowledgeState.Supported) continue;
-        if (isExactIslandTileRevealed(world.getIslandId(worldX, worldY), revealedIslandIds)) continue;
+        if (isKnowledgeOverlayFullyClearAtTile(world, worldX, worldY, revealedIslandIds)) continue;
 
         const noise = (seededValue(seed + 809, worldX, worldY) - 0.5) * prototypeConfig.overlays.fogNoise;
         if (world.getKnowledge(worldX, worldY) === KnowledgeState.Unknown) {

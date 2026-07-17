@@ -1,0 +1,38 @@
+{
+  "contractVersion": 1,
+  "assetId": "presentation.clouds.primary",
+  "kind": "cloud-atmosphere",
+  "sourceAssetId": "generated.cloud-atmosphere.source.v1",
+  "runtimeRevision": 1,
+  "image": {
+    "imageId": "presentation.clouds.primary.frames",
+    "textureKey": "wayfinders:image:cloud-atmosphere",
+    "url": "./assets/cld1/clouds/cloud-sheet.png",
+    "pixelSize": { "width": 1254, "height": 1254 },
+    "frameSize": { "width": 627, "height": 627 },
+    "frameCount": 4,
+    "opaqueBounds": [
+      { "x": 77, "y": 264, "width": 498, "height": 89 },
+      { "x": 110, "y": 190, "width": 378, "height": 217 },
+      { "x": 70, "y": 265, "width": 497, "height": 120 },
+      { "x": 73, "y": 217, "width": 484, "height": 217 }
+    ]
+  },
+  "presentation": {
+    "depth": 30,
+    "candidatesPerChunk": 4,
+    "chunkDensity": 1,
+    "opacity": { "minimum": 0.18, "maximum": 0.32 },
+    "scale": { "minimum": 0.28, "maximum": 0.42 },
+    "driftAmplitudePixels": { "minimum": 28, "maximum": 68 },
+    "driftPeriodSeconds": { "minimum": 42, "maximum": 72 },
+    "clearPaddingTiles": 1,
+    "playerClearRadiusPixels": 224
+  },
+  "variants": [
+    "long-broken-wisp",
+    "compact-uneven-cluster",
+    "split-trailing-wisps",
+    "shallow-crescent-bank"
+  ]
+}

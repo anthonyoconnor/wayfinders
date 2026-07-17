@@ -349,12 +349,13 @@ chunks, adds a prefetch ring when capacity allows, and enforces a hard five-by-
 five (`25`) chunk resource budget. Deactivation runs before activation.
 
 Chunk-local terrain, authored home-island objects, imported authored-island
-layers, knowledge/risk textures, and marker pools all consume the same active-
-chunk delta. Inactive presentation resources are destroyed or returned to
-bounded pools; non-creating world reads prevent the renderer from expanding
-authoritative storage. Shared package and available-island textures plus the
-player-boat visual remain scene-owned. The ocean backdrop is the deterministic
-placeholder if visible demand exceeds the active budget.
+layers, knowledge/risk textures, cloud sprites, and marker pools all consume
+the same active-chunk delta. Inactive presentation resources are destroyed or
+returned to bounded pools; non-creating world reads prevent the renderer from
+expanding authoritative storage. Shared package and available-island textures,
+the player-boat visual, and one four-frame cloud sheet remain scene-owned. The
+ocean backdrop is the deterministic placeholder if visible demand exceeds the
+active budget.
 
 Knowledge and Voyage Sense overlays update only dirty chunks and required neighbours.
 Static terrain, feature markers, and authored island objects are constructed
@@ -368,9 +369,29 @@ disagreement uses the complete procedural developer presentation instead of a
 partial imported visual. Camera zoom changes no placement calculation. The ship
 interpolates between fixed simulation steps. No texture is allocated per frame.
 
+Cloud atmosphere is an independent presentation layer above map art and below
+fog, the ship, feature markers, Voyage Sense guidance, prompts, and UI. Each
+active chunk has four deterministic quadrant candidates that cycle through all
+four authored silhouettes. The world seed, chunk, and candidate slot also choose
+scale, horizontal reflection, opacity, drift amplitude, drift period, position,
+and phase. A
+candidate is drawn only when its complete padded tile footprint is fully clear
+under the knowledge overlay's canonical predicate; Unknown or Personal fog,
+filtered fog edges, and world bounds suppress the whole cloud. A `224 px`
+player-clear radius preserves immediate navigation readability.
+
+Cloud drift uses rendering time and never simulation time. Reduced-motion
+preference freezes every candidate at its seeded phase. The layer owns its
+sprites, deterministic descriptors, enabled state, and resource counters, but
+shares the scene's active-chunk lifetime. Disabling clouds destroys only cloud
+sprites and turns stable sync into a bounded no-op; re-enabling reconstructs
+the current active candidates without invalidating terrain, water, fog, risk,
+markers, UI, or authoritative revisions.
+
 The runtime authored packages provide the home island, animated player boat,
-and fishing-shoal cue. Available imported islands use their prepared PNG layers;
-procedural fallback and other content use intentional developer presentation.
+fishing-shoal cue, and presentation-only four-frame cloud sheet. Available
+imported islands use their prepared PNG layers; procedural fallback and other
+content use intentional developer presentation.
 The game and `?mode=assets` library share package validation, texture loading,
 presentation factories, and collision descriptors. The asset route supplies
 preview coordinates only; it does not create another gameplay simulation.
@@ -478,11 +499,15 @@ needed by adapters; listeners cannot mutate simulation state through the bus.
 
 The developer UI can regenerate by seed, inspect island approaches, move to
 survey anchors, teleport to water, adjust provisions, force a wreck, toggle
-navigation/visibility/guidance diagnostics, and tune supported configuration.
-Opening the drawer does not pause sailing. Lifecycle gates still suppress input.
+navigation/visibility/guidance diagnostics, independently enable or disable
+cloud atmosphere, and tune supported configuration. The checked-by-default
+cloud switch is session-only and scene-owned; it is not a simulation debug or
+configuration value. Opening the drawer does not pause sailing. Lifecycle gates
+still suppress input.
 
 `window.__WAYFINDERS__` exposes bounded snapshot, command, overlay, resource,
-and performance diagnostics for browser automation. These interfaces report
+and performance diagnostics for browser automation. Its cloud command and
+telemetry report and mutate presentation state only. These interfaces report
 authoritative or sampled state; they do not become gameplay ownership seams.
 
 ## 12. Performance contracts
@@ -495,6 +520,8 @@ Normal sailing avoids work proportional to total world or island count:
 - interaction and marker queries start from spatially local candidates;
 - forward guidance is cooperative, cancellable, and atomically published;
 - return rendering follows one sparse, chunk-indexed Voyage Sense thread;
+- clouds retain at most four candidates per active chunk and recheck fog coverage
+  only on knowledge/visibility/reveal revision or tile-boundary drift;
 - overlays update dirty active chunks only; and
 - diagnostics are sampled and capped.
 
