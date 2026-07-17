@@ -24,6 +24,9 @@ survey, discovery, dock-return, wreck, and UI cues were made substantially more
 prominent. Current inspection reports `6.487 MiB` stored audio, exact zero-value
 loop boundaries, a `0.8414` maximum-control aligned stress peak, and a `0.4776`
 default-control aligned stress peak. The asset gate passes.
+The explicit Enable sound activation now resumes Web Audio directly and
+completes unlock without requiring the player to leave and refocus the game;
+focused regression coverage starts a discovery cue immediately afterward.
 Game mode reconciles a persistent ocean bed and a smoothed,
 speed-controlled wake from current presentation state without world queries.
 It also batches typed discovery, survey, idol, exact-return, wreck, and accepted

@@ -359,8 +359,11 @@ and the affected sound surface reports the failure in place.
 With a valid catalog, game mode queues every catalog WAV during
 `WayfindersScene.preload()`. `GameAudioController` then owns a Phaser playback
 port, all sound instances it creates, and a renderer-neutral `AudioMixer`.
-Playback begins disabled behind an explicit **Enable sound** action and respects
-the browser Sound Manager lock. A cue attempted while disabled, locked,
+Playback begins disabled behind an explicit **Enable sound** action. That exact
+activation resumes a suspended Web Audio context, reconciles a stale initial
+Phaser focus flag, and completes enablement without requiring a blur/focus
+cycle; the HTML5 fallback retains its pre-armed touch unlock. A cue attempted
+while disabled, locked,
 suspended, unavailable, or destroyed is rejected immediately and is never
 queued for replay. On blur/suspension, owned one-shots are discarded while
 Phaser pauses retained loops; focus only reconciles those current loops.

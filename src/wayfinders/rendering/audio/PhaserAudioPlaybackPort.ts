@@ -11,6 +11,10 @@ import { phaserAudioCacheKey } from "./GameAudioPreload";
 // though every runtime manager owns the method. Keep that mismatch here.
 interface PhaserSoundManagerPort {
   readonly locked: boolean;
+  readonly context?: Readonly<{
+    readonly state: string;
+    resume(): Promise<void>;
+  }>;
   /** Phaser HTML5 manager's blur-resume ledger; absent for Web Audio/no-audio. */
   readonly onBlurPausedSounds?: Phaser.Sound.BaseSound[];
   add(key: string): Phaser.Sound.BaseSound;
@@ -111,6 +115,7 @@ export class PhaserAudioPlaybackPort implements AudioPlaybackPort {
   private readonly listeners = new Set<(event: AudioPlaybackLifecycleEvent) => void>();
   private readonly voices = new Set<PhaserAudioPlaybackVoice>();
   private readonly html5UnlockArmed: boolean;
+  private gestureUnlocked: boolean;
   private destroyed = false;
   private gameSuspended: boolean;
 
@@ -120,6 +125,7 @@ export class PhaserAudioPlaybackPort implements AudioPlaybackPort {
     this.manager = scene.sound as PhaserSoundManagerPort;
     this.available = soundIsAvailable(scene);
     this.gameSuspended = !scene.game.hasFocus;
+    this.gestureUnlocked = !this.manager.locked;
     this.html5UnlockArmed = this.available
       && this.manager.locked
       && Array.isArray(this.manager.onBlurPausedSounds);
@@ -132,7 +138,7 @@ export class PhaserAudioPlaybackPort implements AudioPlaybackPort {
   }
 
   get locked(): boolean {
-    return this.available && this.manager.locked;
+    return this.available && !this.gestureUnlocked && this.manager.locked;
   }
 
   get suspended(): boolean {
@@ -159,8 +165,22 @@ export class PhaserAudioPlaybackPort implements AudioPlaybackPort {
     }
   }
 
-  requestUnlock(): void {
+  requestUnlock(): void | Promise<void> {
     if (!this.available || this.destroyed || !this.locked) return;
+    const context = this.manager.context;
+    if (context) {
+      // Phaser installs gesture listeners during boot, but its public locked
+      // flag is not cleared until a later Sound Manager update. Resume the
+      // context inside the explicit Enable click and expose that result
+      // immediately so loops and subsequent cues do not depend on blur/focus.
+      return context.resume().then(() => {
+        if (this.destroyed) return;
+        if (context.state !== "running") throw new Error("Audio context remained suspended after the enable gesture.");
+        this.gestureUnlocked = true;
+        this.resumeFromExplicitGesture();
+        this.emit("unlocked");
+      });
+    }
     // Phaser's HTML5 fallback must install its touchend listener before the
     // first activation. It was armed in the constructor; installing it again
     // from the later synthetic click would miss that gesture and duplicate
@@ -193,7 +213,17 @@ export class PhaserAudioPlaybackPort implements AudioPlaybackPort {
     for (const listener of [...this.listeners]) listener(event);
   }
 
-  private readonly handleUnlocked = (): void => this.emit("unlocked");
+  private readonly handleUnlocked = (): void => {
+    this.gestureUnlocked = true;
+    this.resumeFromExplicitGesture();
+    this.emit("unlocked");
+  };
+
+  private resumeFromExplicitGesture(): void {
+    if (!this.gameSuspended) return;
+    this.gameSuspended = false;
+    this.emit("resumed");
+  }
 
   private readonly handleManagerPaused = (): void => {
     if (this.gameSuspended) return;

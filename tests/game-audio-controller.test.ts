@@ -118,7 +118,32 @@ class FakePlaybackPort implements AudioPlaybackPort {
   }
 }
 
+class GestureUnlockPlaybackPort extends FakePlaybackPort {
+  override async requestUnlock(): Promise<void> {
+    this.unlockRequests++;
+    this.locked = false;
+    if (this.suspended) this.emit("resumed");
+  }
+}
+
 describe("AUD-1 game audio controller", () => {
+  it("starts playback immediately after the explicit enable promise resolves", async () => {
+    const port = new GestureUnlockPlaybackPort(true, true);
+    port.suspended = true;
+    const { controller } = fixture(port);
+
+    controller.enableSound();
+    expect(controller.getSnapshot().unlockState).toBe("unlocking");
+    await Promise.resolve();
+
+    expect(controller.getSnapshot().unlockState).toBe("unlocked");
+    expect(controller.getSnapshot().suspended).toBe(false);
+    expect(controller.play({ assetId: "sfx.discovery", voiceId: "first-cue" })).toEqual({
+      kind: "started",
+      voiceId: "first-cue",
+    });
+  });
+
   it("queues every catalog file beneath stable Phaser cache keys", () => {
     const calls: Array<{ key: string; urls: string | string[] }> = [];
     const loader: GameAudioLoader = {

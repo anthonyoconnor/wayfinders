@@ -408,7 +408,7 @@ export class GameAudioController {
   };
 
   private completeUnlock(): void {
-    if (this.destroyed || !this.playback.available) return;
+    if (this.destroyed || !this.playback.available || this.enabled) return;
     this.enabled = true;
     this.unlockPending = false;
     this.notify();

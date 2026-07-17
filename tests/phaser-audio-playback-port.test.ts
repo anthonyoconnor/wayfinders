@@ -66,7 +66,45 @@ class FakeSoundManager extends FakeEmitter {
   }
 }
 
+class FakeAudioContext {
+  state = "suspended";
+  resumeCalls = 0;
+
+  async resume(): Promise<void> {
+    this.resumeCalls++;
+    this.state = "running";
+  }
+}
+
 describe("AUD-1 Phaser audio playback port", () => {
+  it("resumes Web Audio in the explicit enable gesture without a focus cycle", async () => {
+    const manager = new FakeSoundManager() as FakeSoundManager & { context: FakeAudioContext };
+    manager.locked = true;
+    manager.context = new FakeAudioContext();
+    const gameEvents = new FakeEmitter();
+    const scene = {
+      sound: manager,
+      cache: { audio: { exists: () => true } },
+      game: {
+        hasFocus: false,
+        config: { audio: { noAudio: false } },
+        device: { audio: { webAudio: true, audioData: true } },
+        events: gameEvents,
+      },
+    } as unknown as Phaser.Scene;
+
+    const port = new PhaserAudioPlaybackPort(scene);
+    const lifecycle: string[] = [];
+    port.subscribe((event) => lifecycle.push(event));
+    await port.requestUnlock();
+
+    expect(manager.context.resumeCalls).toBe(1);
+    expect(port.locked).toBe(false);
+    expect(port.suspended).toBe(false);
+    expect(lifecycle).toEqual(["resumed", "unlocked"]);
+    port.destroy();
+  });
+
   it("arms Phaser's HTML5 touch unlock before the first explicit Enable gesture", () => {
     const manager = new FakeSoundManager();
     manager.locked = true;
