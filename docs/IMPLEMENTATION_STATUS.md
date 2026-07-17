@@ -18,8 +18,11 @@ master/category controls, bounded voice ownership, diagnostics, and silent
 fallback. The asset library has a play-only Audio workspace over the same
 eleven final WAVs. A deterministic Node.js renderer can regenerate that complete
 set at the stable paths without changing catalog or runtime code. Automated
-AUD-5 inspection reports `6.029 MiB` stored audio, exact zero-value loop
-boundaries, a `0.4698` maximum-control aligned stress peak, and a `0.2449`
+After the first product-owner audition, the ambience was revised from a
+broadband texture into discrete rolling breakers and a pulsed vessel wake; all
+survey, discovery, dock-return, wreck, and UI cues were made substantially more
+prominent. Current inspection reports `6.487 MiB` stored audio, exact zero-value
+loop boundaries, a `0.8414` maximum-control aligned stress peak, and a `0.4776`
 default-control aligned stress peak. The asset gate passes.
 Game mode reconciles a persistent ocean bed and a smoothed,
 speed-controlled wake from current presentation state without world queries.

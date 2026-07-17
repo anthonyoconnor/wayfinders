@@ -51,7 +51,9 @@ more than twelve MiB across stored WAVs. It contains no audio recording,
 interactive editing, interactive mixing, upload, or browser-write workflow.
 
 `scripts/generate-audio-assets.mjs` is the retained source for the shipped
-restrained palette: wooden percussion, soft bells, low pads, and abstract surf.
+restrained palette: wooden percussion, prominent confirmation bells, low pads,
+four distinct rolling breakers in the ocean bed, and a pulsed water-and-bubble
+vessel wake.
 It uses only Node.js standard-library APIs, deterministic seeds, and fixed
 arrangements to render all eleven complete `24 kHz`, `16-bit` integer-PCM WAVs.
 It normalizes the four loop families to their declared production peaks,

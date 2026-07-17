@@ -87,6 +87,34 @@ function fixture() {
 }
 
 describe("AUD-3 game audio cue controller", () => {
+  it.each([
+    "islandSighted",
+    "surveySiteSighted",
+    "fishingShoalSighted",
+    "wreckDiscovered",
+  ] as const)("plays the discovery cue for live %s events", (eventName) => {
+    const { audio, events, flush } = fixture();
+    events.emit(eventName, eventPayload<typeof eventName>());
+    flush();
+
+    expect(audio.playRequests).toHaveLength(1);
+    expect(audio.playRequests[0]).toMatchObject({ assetId: "sfx.discovery" });
+  });
+
+  it.each([
+    "islandDossierSurveyed",
+    "surveySiteSurveyed",
+    "fishingShoalSurveyed",
+    "wreckSurveyed",
+  ] as const)("plays the survey cue for live %s events", (eventName) => {
+    const { audio, events, flush } = fixture();
+    events.emit(eventName, eventPayload<typeof eventName>());
+    flush();
+
+    expect(audio.playRequests).toHaveLength(1);
+    expect(audio.playRequests[0]).toMatchObject({ assetId: "sfx.survey-complete" });
+  });
+
   it("batches an idol survey into one high-priority discovery cue", () => {
     const { audio, controller, events, tasks, flush } = fixture();
     events.emit("surveySiteSurveyed", eventPayload<"surveySiteSurveyed">());

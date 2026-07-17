@@ -134,6 +134,15 @@ function addNoiseBurst(sound, start, duration, amplitude, seed, lowHz, highHz, p
   }
 }
 
+function circularWaveEnvelope(time, seconds, start, attack, release) {
+  const elapsed = ((time - start) % seconds + seconds) % seconds;
+  if (elapsed < attack) return Math.sin((elapsed / attack) * Math.PI * 0.5) ** 2;
+  if (elapsed < attack + release) {
+    return Math.cos(((elapsed - attack) / release) * Math.PI * 0.5) ** 2;
+  }
+  return 0;
+}
+
 function normalize(sound, targetPeak, loop) {
   for (const channel of sound) {
     let mean = 0;
@@ -224,40 +233,82 @@ function renderMusic(kind) {
 }
 
 function renderAmbience(kind) {
-  const seconds = kind === "ocean" ? 8 : 4;
+  const seconds = kind === "ocean" ? 12 : 6;
   const channels = kind === "ocean" ? 2 : 1;
   const sound = createSound(seconds, channels);
   for (let channel = 0; channel < channels; channel += 1) {
-    const noise = periodicNoise(sound[channel].length, seconds, 300 + channel + (kind === "wake" ? 20 : 0), kind === "ocean" ? 18 : 120, kind === "ocean" ? 1500 : 3900, kind === "ocean" ? 0.42 : 0.12);
-    for (let frame = 0; frame < noise.length; frame += 1) {
-      const position = frame / noise.length;
-      const swell = 0.54 + 0.20 * Math.sin(2 * Math.PI * (kind === "ocean" ? 2 : 3) * position + channel * 1.1);
-      sound[channel][frame] += noise[frame] * swell * 0.24;
+    const body = periodicNoise(
+      sound[channel].length,
+      seconds,
+      300 + channel + (kind === "wake" ? 20 : 0),
+      kind === "ocean" ? 24 : 90,
+      kind === "ocean" ? 620 : 1200,
+      kind === "ocean" ? 0.62 : 0.38,
+    );
+    const wash = periodicNoise(
+      sound[channel].length,
+      seconds,
+      350 + channel + (kind === "wake" ? 20 : 0),
+      kind === "ocean" ? 380 : 700,
+      kind === "ocean" ? 3400 : 4600,
+      0.08,
+    );
+    for (let frame = 0; frame < body.length; frame += 1) {
+      const time = frame / SAMPLE_RATE;
+      let surge = 0;
+      if (kind === "ocean") {
+        for (const start of [0.15, 3.15, 6.15, 9.15]) {
+          surge += circularWaveEnvelope(time, seconds, start + channel * 0.12, 0.52, 1.55);
+        }
+        const undertow = 0.035 * Math.sin(2 * Math.PI * (4 / seconds) * time + channel * 0.35);
+        sound[channel][frame] += body[frame] * (0.028 + 0.115 * surge)
+          + wash[frame] * (0.008 + 0.052 * surge ** 1.6)
+          + undertow * (0.35 + 0.65 * surge);
+      } else {
+        for (const start of [0.10, 0.85, 1.60, 2.35, 3.10, 3.85, 4.60, 5.35]) {
+          surge += circularWaveEnvelope(time, seconds, start, 0.07, 0.34);
+        }
+        sound[channel][frame] += body[frame] * (0.055 + 0.105 * surge)
+          + wash[frame] * (0.012 + 0.050 * surge);
+      }
     }
+  }
+  if (kind === "wake") {
+    [0.32, 1.08, 1.84, 2.60, 3.36, 4.12, 4.88].forEach((start, index) => {
+      addTone(sound, 520 + (index % 3) * 115, 0.022, {
+        start,
+        duration: 0.18,
+        attack: 0.006,
+        release: 0.14,
+        decay: 8,
+      });
+    });
   }
   return sound;
 }
 
 function renderDiscovery() {
   const sound = createSound(1.65, 2);
-  [[0.02, 293.66, -0.45], [0.18, 440, 0.2], [0.34, 587.33, 0.55]].forEach(([start, note, pan]) => addBell(sound, start, note, 0.15, pan));
-  addNoiseBurst(sound, 0.12, 1.1, 0.018, 501, 900, 5200);
+  addWoodTap(sound, 0.006, 0.22, -0.15, 500);
+  [[0.015, 392, -0.45], [0.15, 587.33, 0.15], [0.30, 783.99, 0.55]].forEach(([start, note, pan]) => addBell(sound, start, note, 0.22, pan));
+  addNoiseBurst(sound, 0.04, 0.85, 0.026, 501, 1100, 5600);
   return sound;
 }
 
 function renderSurvey() {
   const sound = createSound(1.35, 2);
-  addWoodTap(sound, 0.015, 0.18, -0.25, 601);
-  addBell(sound, 0.10, 392, 0.15, 0.25);
-  addBell(sound, 0.25, 587.33, 0.10, 0.55);
+  addWoodTap(sound, 0.006, 0.25, -0.35, 601);
+  addWoodTap(sound, 0.11, 0.19, 0.30, 602);
+  addBell(sound, 0.055, 440, 0.21, -0.10);
+  addBell(sound, 0.22, 659.26, 0.17, 0.45);
   return sound;
 }
 
 function renderDock() {
   const sound = createSound(1.9, 2);
-  addWoodTap(sound, 0.02, 0.20, -0.5, 701);
-  addWoodTap(sound, 0.17, 0.15, 0.35, 702);
-  [[0.20, 440, 0.45], [0.42, 329.63, 0.05], [0.66, 220, -0.35]].forEach(([start, note, pan]) => addBell(sound, start, note, 0.13, pan));
+  addWoodTap(sound, 0.01, 0.25, -0.5, 701);
+  addWoodTap(sound, 0.16, 0.20, 0.35, 702);
+  [[0.16, 440, 0.45], [0.38, 329.63, 0.05], [0.62, 220, -0.35]].forEach(([start, note, pan]) => addBell(sound, start, note, 0.18, pan));
   return sound;
 }
 
@@ -298,13 +349,13 @@ function assertCatalogContract() {
 assertCatalogContract();
 writeWav("music/home-harbor.wav", renderMusic("home"), 0.52, true);
 writeWav("music/open-water.wav", renderMusic("open"), 0.52, true);
-writeWav("ambience/ocean.wav", renderAmbience("ocean"), 0.45, true);
-writeWav("ambience/wake.wav", renderAmbience("wake"), 0.45, true);
-writeWav("sfx/discovery.wav", renderDiscovery(), 0.38, false);
-writeWav("sfx/survey-complete.wav", renderSurvey(), 0.38, false);
-writeWav("sfx/dock-return.wav", renderDock(), 0.38, false);
-writeWav("sfx/wreck.wav", renderWreck(), 0.38, false);
-writeWav("ui/confirm.wav", renderUi("confirm"), 0.34, false);
-writeWav("ui/cancel.wav", renderUi("cancel"), 0.34, false);
-writeWav("ui/toggle.wav", renderUi("toggle"), 0.34, false);
+writeWav("ambience/ocean.wav", renderAmbience("ocean"), 0.42, true);
+writeWav("ambience/wake.wav", renderAmbience("wake"), 0.42, true);
+writeWav("sfx/discovery.wav", renderDiscovery(), 0.70, false);
+writeWav("sfx/survey-complete.wav", renderSurvey(), 0.72, false);
+writeWav("sfx/dock-return.wav", renderDock(), 0.70, false);
+writeWav("sfx/wreck.wav", renderWreck(), 0.74, false);
+writeWav("ui/confirm.wav", renderUi("confirm"), 0.48, false);
+writeWav("ui/cancel.wav", renderUi("cancel"), 0.48, false);
+writeWav("ui/toggle.wav", renderUi("toggle"), 0.48, false);
 console.log(`Generated ${EXPECTED_PATHS.length} audio assets in ${path.relative(REPOSITORY_ROOT, V1_ROOT)}.`);
