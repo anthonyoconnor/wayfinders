@@ -188,8 +188,9 @@ deliberately direct visual prototype. Its **Water** asset-workspace tab retains
 the static candidate and repeat comparisons, then uses one zoomable 96x96 world
 to show smoothly masked water-profile handoffs, wind and wave motion, three
 representative islands with irregular shoreline-following depth bands, broken
-exposure-sensitive shore waves, and eight water-specific animated fishing
-shoals. A compact gallery keeps every shoal direction comparable outside the
+exposure-sensitive shore waves, and lean, steady, and rich animated fishing-
+ground cues derived from the existing game shoal style. A compact gallery keeps
+the three strengths comparable outside the
 world. The prototype is ready for product feedback and remains entirely outside
 the production asset catalog and game runtime.
 
@@ -203,8 +204,9 @@ feedback is recorded.
 `WTR-1.1` supplies judged-default wave and wind motion. `WTR-1.2` supplies the
 representative islands and irregular shore-following depth transitions.
 `WTR-1.3` supplies broken, non-uniform animated shore waves. `WTR-1.4` supplies
-eight new fishing-shoal looks suited to the different water profiles, and
-`WTR-1.5` animates them in the same preview. These remain visual-feedback
+three surface-disturbance strengths matching the game's lean, steady, and rich
+quality vocabulary, and `WTR-1.5` animates them in the same preview. Water type
+changes their context rather than implying a visible species. These remain visual-feedback
 milestones only; they do not authorize production asset promotion or
 game-runtime integration.
 

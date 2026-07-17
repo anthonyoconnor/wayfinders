@@ -23,16 +23,17 @@ Evolve the branch Water workspace into a focused visual playground that:
 - places representative authored and generated islands in irregular
   shore-following shallow-to-deep water;
 - adds broken, non-uniform animated waves around island edges;
-- introduces up to ten fishing-shoal looks matched to different water profiles
-  and animates them in context;
+- introduces lean, steady, and rich fishing-ground strengths that match the
+  existing shoal's player-scale surface-disturbance style and animates them in
+  context;
 - preserves terrain, collision, navigation, knowledge, provisions, and world
   generation as the only gameplay authorities; and
 - keeps every preview decision visual-only and isolated from gameplay authority.
 
 The proposed sequence is complete when the Water tab can demonstrate convincing
 open-water motion, irregular island depth handoffs, varied animated shoreline
-waves, and water-specific animated fishing shoals well enough to gather product
-feedback. It does not imply a promoted package, default runtime renderer,
+waves, and player-scale animated fishing-ground strengths well enough to gather
+product feedback. It does not imply a promoted package, default runtime renderer,
 generalized animation system, or game integration.
 
 ## Evidence and current constraints
@@ -475,12 +476,14 @@ The prototype presents three compact views:
    and repeated focal marks visible.
 2. **Whole-world blending playground.** Display a fixed 96x96 world that places
    every water treatment, the player boat, three representative islands, and
-   eight shoals in one coherent game-scale composition. Island transparency
+   representative lean, steady, and rich fishing grounds in one coherent game-
+   scale composition. Island transparency
    drives irregular depth masks; local wind, wave, shoreline, and shoal motion
    use judged defaults. This is a fixed fixture, not `GameSimulation` or a
    generated world.
-3. **Shoal gallery.** Display the eight water-specific shoal directions with
-   their intended water profiles while the same sprites move in the world.
+3. **Shoal gallery.** Display the three gameplay-strength cues at their native
+   96 x 64 scale while representative instances animate in different water
+   profiles in the world.
 
 The animation clock and canvas-mask work remain local to the Water workspace.
 The prototype does not create a general clip sampler, reduced-motion system,
@@ -658,10 +661,15 @@ Exit gate:
 
 Tasks:
 
-- create a branch-local catalog of no more than ten fishing-shoal types, with
-  distinct silhouettes, school density, fish scale, and palette choices;
-- provide shoals suited to the water profiles where they appear, including
-  deep, coastal, lagoon, reef, current, rough, and brackish studies where useful;
+- create exactly three branch-local fishing-ground cues matching the existing
+  gameplay qualities: lean, steady, and rich;
+- use the existing 96 x 64 in-game fishing-shoal asset as the style and scale
+  authority: broken glints, ripples, and water-colour disturbance with no
+  individually visible fish at player scale;
+- vary surface-activity density and brightness so strength is readable without
+  introducing different visible species;
+- place the strength cues across deep, coastal, lagoon, reef, current, rough,
+  brackish, and abyss studies where useful;
 - keep every new shoal visual-only and separate from fishing resources,
   collision, spawning, or gameplay identity;
 - place representative shoals in appropriate regions of the Water-tab world;
@@ -671,18 +679,19 @@ Tasks:
 
 Exit gate:
 
-- the Water tab displays a coherent catalog of distinct water-specific shoals;
-- every placed shoal is visually compatible with its surrounding water profile;
-- silhouettes remain readable at overview and 1:1 game scale; and
+- the Water tab displays lean, steady, and rich fishing-ground strengths;
+- every placed cue is visually compatible with its surrounding water profile;
+- strength remains readable at overview and 1:1 game scale while individual
+  fish remain invisible; and
 - no game catalog, resource rule, or runtime renderer changes.
 
 ### WTR-1.5 — Animated fishing shoals
 
 Tasks:
 
-- animate the WTR-1.4 shoals inside the Water tab using restrained swimming,
-  schooling, turning, and surface-disturbance motion;
-- vary direction, speed, phase, and movement envelope by shoal type and water
+- animate the WTR-1.4 cues using restrained shimmer, tiny water-relative drift,
+  and incomplete expanding ripple fragments rather than swimming fish;
+- vary pulse speed, phase, ripple count, and intensity by strength and water
   context without adding a tuning-heavy UI;
 - keep shoal motion legible beside wind, wave, current, and island-edge motion;
 - ensure animation remains bounded to the preview lifecycle and stops when the
@@ -691,7 +700,8 @@ Tasks:
 
 Exit gate:
 
-- each shoal type has a recognizably different but coherent movement character;
+- each strength has a recognizably different but coherent surface-activity
+  character;
 - shoals stay visually associated with their intended water regions and do not
   overpower islands or water texture;
 - pausing motion produces a useful static comparison; and
@@ -752,16 +762,18 @@ production acceptance gate:
 
 ### WTR-1.4 fishing-shoal catalog feedback gate
 
-- [x] The Water tab contains no more than ten distinct new fishing-shoal looks.
-- [x] Shoals are placed only in visually suitable water profiles.
+- [x] The Water tab contains lean, steady, and rich 96 x 64 fishing-ground cues.
+- [x] No individual fish is visible at overview or native player scale.
+- [x] Strength is expressed through surface-activity density and brightness, and
+      cues are placed only in visually suitable water profiles.
 - [x] The Water tab includes a compact labelled comparison gallery.
 - [x] New shoal assets remain branch-local preview assets and do not replace or
       register the current game package.
 
 ### WTR-1.5 fishing-shoal animation feedback gate
 
-- [x] Every displayed shoal has restrained swimming or schooling motion.
-- [x] Movement character varies across the catalog without requiring exposed
+- [x] Every displayed cue has restrained surface shimmer and ripple motion.
+- [x] Surface-activity character varies by strength without requiring exposed
       tuning controls.
 - [x] Water, shoreline, and shoal motion can be paused together.
 - [x] Leaving the Water workspace stops its animation lifecycle.

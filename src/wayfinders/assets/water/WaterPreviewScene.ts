@@ -44,6 +44,7 @@ const PROFILES = Object.freeze([
 ] as const);
 
 type WaterProfileId = (typeof PROFILES)[number]["id"];
+type ShoalStrength = "lean" | "steady" | "rich";
 
 interface IslandPlacement {
   readonly id: string;
@@ -57,15 +58,19 @@ interface IslandPlacement {
 
 interface ShoalPlacement {
   readonly id: string;
-  readonly label: string;
   readonly profile: WaterProfileId;
-  readonly url: string;
+  readonly strength: ShoalStrength;
   readonly x: number;
   readonly y: number;
-  readonly size: number;
-  readonly speed: number;
-  readonly amplitude: number;
-  readonly heading: number;
+}
+
+interface ShoalStrengthVisual {
+  readonly strength: ShoalStrength;
+  readonly label: string;
+  readonly note: string;
+  readonly url: string;
+  readonly intensity: number;
+  readonly pulseSpeed: number;
 }
 
 interface ShorePoint {
@@ -89,15 +94,42 @@ const ISLANDS: readonly IslandPlacement[] = Object.freeze([
   { id: "river-delta", label: "River Delta", url: RIVER_DELTA_ISLAND_URL, x: 62, y: 27, width: 22, height: 22 },
 ]);
 
+const SHOAL_STRENGTHS: readonly ShoalStrengthVisual[] = Object.freeze([
+  {
+    strength: "lean",
+    label: "Lean fishing ground",
+    note: "Sparse glints · faint surface breaks",
+    url: new URL("../../../../assets-src/gr1/water/prototype/shoals/shoal-lean.png", import.meta.url).href,
+    intensity: 0.48,
+    pulseSpeed: 0.55,
+  },
+  {
+    strength: "steady",
+    label: "Steady fishing ground",
+    note: "Regular ripples · moderate activity",
+    url: new URL("../../../../assets-src/gr1/water/prototype/shoals/shoal-steady.png", import.meta.url).href,
+    intensity: 0.72,
+    pulseSpeed: 0.78,
+  },
+  {
+    strength: "rich",
+    label: "Rich fishing ground",
+    note: "Bright churn · strong surface breaks",
+    url: new URL("../../../../assets-src/gr1/water/prototype/shoals/shoal-rich.png", import.meta.url).href,
+    intensity: 0.92,
+    pulseSpeed: 1.05,
+  },
+]);
+
 const SHOALS: readonly ShoalPlacement[] = Object.freeze([
-  { id: "abyss-lantern", label: "Lantern crescent", profile: "abyss", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/abyss-lantern.png", import.meta.url).href, x: 11, y: 13, size: 7, speed: 0.55, amplitude: 0.65, heading: -0.18 },
-  { id: "deep-mackerel", label: "Blue mackerel", profile: "deep", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/deep-mackerel.png", import.meta.url).href, x: 39, y: 16, size: 8, speed: 0.72, amplitude: 0.8, heading: 0.05 },
-  { id: "coastal-sardine", label: "Coastal bait ball", profile: "coastal", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/coastal-sardine.png", import.meta.url).href, x: 83, y: 66, size: 7, speed: 0.95, amplitude: 0.55, heading: 0.1 },
-  { id: "lagoon-fry", label: "Lagoon fry", profile: "lagoon", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/lagoon-fry.png", import.meta.url).href, x: 45, y: 84, size: 6, speed: 0.42, amplitude: 0.42, heading: -0.08 },
-  { id: "reef-butterfly", label: "Reef butterflies", profile: "reef", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/reef-butterfly.png", import.meta.url).href, x: 48, y: 69, size: 6, speed: 0.62, amplitude: 0.36, heading: 0.14 },
-  { id: "current-needle", label: "Current riders", profile: "current", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/current-needle.png", import.meta.url).href, x: 34, y: 39, size: 9, speed: 1.35, amplitude: 1.15, heading: -0.58 },
-  { id: "rough-bonito", label: "Rough-water bonito", profile: "rough", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/rough-bonito.png", import.meta.url).href, x: 78, y: 15, size: 8, speed: 1.1, amplitude: 0.75, heading: -0.35 },
-  { id: "brackish-mullet", label: "Brackish mullet", profile: "brackish", url: new URL("../../../../assets-src/gr1/water/prototype/shoals/brackish-mullet.png", import.meta.url).href, x: 12, y: 86, size: 7, speed: 0.48, amplitude: 0.5, heading: 0.02 },
+  { id: "abyss-lean", profile: "abyss", strength: "lean", x: 11, y: 13 },
+  { id: "deep-steady", profile: "deep", strength: "steady", x: 39, y: 16 },
+  { id: "coastal-rich", profile: "coastal", strength: "rich", x: 83, y: 66 },
+  { id: "lagoon-lean", profile: "lagoon", strength: "lean", x: 45, y: 84 },
+  { id: "reef-steady", profile: "reef", strength: "steady", x: 48, y: 69 },
+  { id: "current-rich", profile: "current", strength: "rich", x: 34, y: 39 },
+  { id: "rough-steady", profile: "rough", strength: "steady", x: 78, y: 15 },
+  { id: "brackish-lean", profile: "brackish", strength: "lean", x: 12, y: 86 },
 ]);
 
 export class WaterPreviewScene extends Phaser.Scene {
@@ -269,12 +301,12 @@ export class WaterPreviewScene extends Phaser.Scene {
       <div class="water-preview-stage__inner">
         <header class="water-preview-hero">
           <div><p class="eyebrow">Early visual feedback</p><h2>How should Wayfinders water feel?</h2></div>
-          <div class="water-preview-pills"><span>Animated</span><span>3 islands</span><span>8 shoals</span><span>No game integration</span></div>
+          <div class="water-preview-pills"><span>Animated</span><span>3 islands</span><span>3 shoal strengths</span><span>No game integration</span></div>
         </header>
 
         <section class="water-preview-panel water-preview-world-study">
           <div class="water-preview-panel__heading"><div><p class="eyebrow">96 × 96 world study</p><h3>Water, islands, and shoals in context</h3></div><span>WTR-1.0–1.5 prototype</span></div>
-          <p class="water-preview-world-note">A game-sized visual study with irregular island-driven shallows, exposed and sheltered shoreline waves, wind, currents, rough water, and eight water-specific shoals. Zoom to 1:1 Game to inspect the native 32-pixel tile scale.</p>
+          <p class="water-preview-world-note">A game-sized visual study with irregular island-driven shallows, exposed and sheltered shoreline waves, wind, currents, rough water, and lean, steady, and rich fishing grounds. Shoals use abstract surface disturbance at the same 96×64 scale as the existing game cue—never visible fish.</p>
           <div class="water-preview-zoom" role="group" aria-label="Water world zoom controls">
             <button type="button" data-water-zoom="out" aria-label="Zoom out" ${zoomIndex === 0 ? "disabled" : ""}>−</button>
             <output aria-live="polite">${zoomPercent}%${this.worldCellSize === TILE_SIZE ? " · game scale" : ""}</output>
@@ -295,12 +327,12 @@ export class WaterPreviewScene extends Phaser.Scene {
         </section>
 
         <section class="water-preview-panel">
-          <div class="water-preview-panel__heading"><div><p class="eyebrow">Fishing shoals</p><h3>Eight water-specific directions</h3></div><span>Animated in the world above</span></div>
+          <div class="water-preview-panel__heading"><div><p class="eyebrow">Fishing shoals</p><h3>Three gameplay strengths</h3></div><span>96×64 surface cues · no visible fish</span></div>
           <div class="water-preview-shoal-gallery">
-            ${SHOALS.map((shoal) => `
+            ${SHOAL_STRENGTHS.map((shoal) => `
               <article class="water-preview-shoal-card">
-                <div data-water="${shoal.profile}"><img src="${shoal.url}" alt="${shoal.label} fishing shoal"></div>
-                <strong>${shoal.label}</strong><small>${PROFILES[profileIndex(shoal.profile)]!.label} water</small>
+                <div data-shoal-strength="${shoal.strength}"><img src="${shoal.url}" alt="${shoal.label} surface disturbance"></div>
+                <strong>${shoal.label}</strong><small>${shoal.note}</small>
               </article>`).join("")}
           </div>
         </section>
@@ -362,7 +394,7 @@ export class WaterPreviewScene extends Phaser.Scene {
       loadPreviewImage(PLAYER_BOAT_URL),
       loadPreviewImage(PLAYER_WAKE_URL),
       ...ISLANDS.map(({ url }) => loadPreviewImage(url)),
-      ...SHOALS.map(({ url }) => loadPreviewImage(url)),
+      ...SHOAL_STRENGTHS.map(({ url }) => loadPreviewImage(url)),
     ]);
     if (revision !== this.renderRevision || !canvas.isConnected || !motionCanvas.isConnected) return;
     const context = canvas.getContext("2d");
@@ -627,9 +659,11 @@ function drawWorldMotion(
   }
 
   SHOALS.forEach((shoal, index) => {
-    const image = shoalImages[index];
-    if (!image) return;
-    drawShoal(context, image, shoal, cell, seconds, index);
+    const strengthIndex = shoalStrengthIndex(shoal.strength);
+    const image = shoalImages[strengthIndex];
+    const visual = SHOAL_STRENGTHS[strengthIndex];
+    if (!image || !visual) return;
+    drawShoal(context, image, shoal, visual, cell, seconds, index);
   });
 }
 
@@ -684,31 +718,49 @@ function drawShoal(
   context: CanvasRenderingContext2D,
   image: HTMLImageElement,
   shoal: ShoalPlacement,
+  visual: ShoalStrengthVisual,
   cell: number,
   seconds: number,
   index: number,
 ): void {
-  const phase = seconds * shoal.speed + index * 0.73;
-  const driftX = Math.cos(shoal.heading) * Math.sin(phase) * shoal.amplitude;
-  const driftY = Math.sin(shoal.heading) * Math.sin(phase) * shoal.amplitude + Math.cos(phase * 0.8) * 0.16;
-  const size = shoal.size * cell;
-  const x = (shoal.x + driftX) * cell;
-  const y = (shoal.y + driftY) * cell;
+  const phase = seconds * visual.pulseSpeed + index * 0.73;
+  const width = cell * 3;
+  const height = cell * 2;
+  const x = (shoal.x + Math.sin(phase) * 0.045) * cell;
+  const y = (shoal.y + Math.cos(phase * 0.74) * 0.035) * cell;
+  const shimmer = 1 + Math.sin(phase * 1.35) * 0.015;
+  const strengthRank = shoal.strength === "lean" ? 1 : shoal.strength === "steady" ? 2 : 3;
   context.save();
   context.translate(x, y);
-  context.rotate(shoal.heading + Math.sin(phase * 0.7) * 0.045);
-  context.strokeStyle = "rgba(183, 234, 224, 0.28)";
-  context.lineWidth = Math.max(1, cell * 0.06);
-  context.beginPath();
-  context.ellipse(-size * 0.06, size * 0.05, size * 0.42, size * 0.2, 0, 0.15, Math.PI * 1.45);
-  context.stroke();
-  context.globalAlpha = 0.9 + Math.sin(phase * 1.4) * 0.08;
-  context.drawImage(image, -size / 2, -size / 2, size, size);
+  context.globalAlpha = 0.58 + visual.intensity * 0.34 + Math.sin(phase * 1.4) * 0.035;
+  context.drawImage(image, -width * shimmer / 2, -height * shimmer / 2, width * shimmer, height * shimmer);
+  context.lineCap = "round";
+  context.lineWidth = Math.max(1, cell * 0.045);
+  for (let ripple = 0; ripple < strengthRank; ripple++) {
+    const progress = (seconds * visual.pulseSpeed * 0.42 + index * 0.19 + ripple / strengthRank) % 1;
+    const alpha = (1 - progress) * visual.intensity * 0.22;
+    context.strokeStyle = `rgba(197, 245, 242, ${alpha})`;
+    context.beginPath();
+    context.ellipse(
+      (ripple - (strengthRank - 1) / 2) * width * 0.16,
+      Math.sin(index + ripple) * height * 0.08,
+      width * (0.07 + progress * 0.14),
+      height * (0.06 + progress * 0.12),
+      0,
+      0.18,
+      Math.PI * 1.5,
+    );
+    context.stroke();
+  }
   context.restore();
 }
 
 function profileIndex(id: WaterProfileId): number {
   return PROFILES.findIndex((profile) => profile.id === id);
+}
+
+function shoalStrengthIndex(strength: ShoalStrength): number {
+  return SHOAL_STRENGTHS.findIndex((visual) => visual.strength === strength);
 }
 
 function staticTileStyle(profile: number, variant: number, scale: number): string {

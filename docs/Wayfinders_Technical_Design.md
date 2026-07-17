@@ -571,8 +571,10 @@ WTR-1.0 through WTR-1.5 feedback prototype: its isolated scene reads prepared
 static and overlay sheets plus preview-only island and shoal images directly.
 It shows labelled tile variants and repeat checks, then composes a 96x96 world
 with smoothly masked treatment handoffs, island-alpha-derived shoreline depth,
-wind and wave accents, locally varied shoreline waves, and eight animated
-water-specific fishing shoals. The study redraws from a fitted overview through
+wind and wave accents, locally varied shoreline waves, and lean, steady, and
+rich animated fishing-ground cues. Those cues reuse the existing runtime
+shoal's 96 x 64 abstraction: broken glints, water-colour noise, and ripples with
+no individually readable fish. The study redraws from a fitted overview through
 native 32-pixel game-tile scale while retaining the inspected map centre. One
 pause control stops the scene-local water, shoreline, and shoal animation, and
 workspace shutdown cancels that frame lifecycle. It omits the production-tooling

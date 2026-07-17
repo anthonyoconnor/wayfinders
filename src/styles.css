@@ -3338,7 +3338,7 @@ html.water-preview-active[data-application-mode="assets"] .developer-tools {
 
 .water-preview-shoal-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
   gap: 0.65rem;
 }
 
@@ -3367,13 +3367,9 @@ html.water-preview-active[data-application-mode="assets"] .developer-tools {
   background-size: 12px 12px;
 }
 
-.water-preview-shoal-card > div[data-water="abyss"] { background-color: #082f40; }
-.water-preview-shoal-card > div[data-water="coastal"] { background-color: #4aa1a0; }
-.water-preview-shoal-card > div[data-water="lagoon"] { background-color: #2d858b; }
-.water-preview-shoal-card > div[data-water="reef"] { background-color: #36756b; }
-.water-preview-shoal-card > div[data-water="current"] { background-color: #1c6374; }
-.water-preview-shoal-card > div[data-water="rough"] { background-color: #245d6b; }
-.water-preview-shoal-card > div[data-water="brackish"] { background-color: #507f55; }
+.water-preview-shoal-card > div[data-shoal-strength="lean"] { background-color: #0a3c4e; }
+.water-preview-shoal-card > div[data-shoal-strength="steady"] { background-color: #12536a; }
+.water-preview-shoal-card > div[data-shoal-strength="rich"] { background-color: #17637a; }
 
 .water-preview-shoal-card img {
   width: 100%;

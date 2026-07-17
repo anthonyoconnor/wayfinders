@@ -47,8 +47,10 @@ product feedback. The branch-only Water workspace compares all prepared tile
 profiles and variants, then presents a zoomable 96x96 world with smoothly masked
 profile handoffs, wind and wave motion, three representative islands, irregular
 shore-following shallow and coastal bands, broken exposure-sensitive shore
-waves, and eight water-specific animated fishing shoals. A compact labelled
-gallery exposes the shoal catalog directly. One pause control stops water,
+waves, and three animated fishing-ground strengths matching the existing game's
+lean, steady, and rich vocabulary. Their 96 x 64 cues use only broken glints,
+ripples, and surface colour; no individual fish are visible at native player
+scale. A compact labelled gallery exposes the strength comparison directly. One pause control stops water,
 shoreline, and shoal motion together; workspace shutdown cancels the local
 animation lifecycle. The prototype does not register a water or shoal package,
 change the game runtime, or provide production authoring and promotion tools.
