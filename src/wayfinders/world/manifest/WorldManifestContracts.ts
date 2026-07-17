@@ -30,6 +30,7 @@ export type WorldManifestIslandSize = typeof WORLD_MANIFEST_ISLAND_SIZES[number]
 
 export type StableIslandId = `island:${string}`;
 export type StableLandmarkId = `landmark:${WorldManifestLandmarkKind}`;
+export type StableWaterRegionId = `water:${string}`;
 
 export interface WorldManifestDimensionsV1 {
   readonly width: number;
@@ -48,6 +49,38 @@ export interface WorldManifestLandmarkV1 {
   readonly id: StableLandmarkId;
   readonly kind: WorldManifestLandmarkKind;
   readonly position: Readonly<GridPoint>;
+}
+
+interface WorldManifestWaterRegionBaseV1 {
+  readonly id: StableWaterRegionId;
+  readonly typeId: string;
+  readonly seed: number;
+}
+
+export interface WorldManifestWaterEllipseRegionV1 extends WorldManifestWaterRegionBaseV1 {
+  readonly strategy: "ellipse";
+  readonly typeId: string;
+  readonly center: Readonly<{ x: number; y: number }>;
+  readonly radiusX: number;
+  readonly radiusY: number;
+}
+
+export interface WorldManifestWaterRibbonRegionV1 extends WorldManifestWaterRegionBaseV1 {
+  readonly strategy: "ribbon";
+  readonly typeId: string;
+  readonly start: Readonly<{ x: number; y: number }>;
+  readonly end: Readonly<{ x: number; y: number }>;
+  readonly width: number;
+}
+
+export type WorldManifestWaterRegionV1 =
+  | WorldManifestWaterEllipseRegionV1
+  | WorldManifestWaterRibbonRegionV1;
+
+export interface WorldManifestWaterLayoutV1 {
+  readonly version: string;
+  readonly catalogFingerprint: string;
+  readonly regions: readonly Readonly<WorldManifestWaterRegionV1>[];
 }
 
 /** Durable island facts. Runtime state and generated tile data do not belong here. */
@@ -82,6 +115,7 @@ export interface WorldManifestV1 {
   readonly dimensions: Readonly<WorldManifestDimensionsV1>;
   readonly landmarks: readonly Readonly<WorldManifestLandmarkV1>[];
   readonly islands: readonly Readonly<WorldManifestIslandV1>[];
+  readonly waterLayout: Readonly<WorldManifestWaterLayoutV1>;
 }
 
 export type WorldManifestInputV1 = Omit<WorldManifestV1, "schemaVersion">;

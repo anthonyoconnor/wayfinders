@@ -209,6 +209,7 @@ describe("WorldRenderer active chunk resources", () => {
     expect(first.telemetry.activeChunkKeys).toEqual(["0,0", "1,0"]);
     expect(first.telemetry.tilesVisitedLastUpdate).toBe(2 * 8 * 8);
     const plateau = first.telemetry.activeResourceObjects;
+    expect(plateau).toBe(0);
 
     const stationary = renderer.syncActiveChunks([entry(0, 0, 0), entry(1, 0, 1)]);
     expect(stationary).toMatchObject({ activated: 0, deactivated: 0, retained: 2 });
@@ -219,7 +220,7 @@ describe("WorldRenderer active chunk resources", () => {
     expect(moved.telemetry.activeChunks).toBe(2);
     expect(moved.telemetry.activeResourceObjects).toBe(plateau);
     expect(moved.telemetry.tilesVisitedLastUpdate).toBe(8 * 8);
-    expect(moved.telemetry.totalResourceObjectsDestroyed).toBeGreaterThan(0);
+    expect(moved.telemetry.totalResourceObjectsDestroyed).toBe(0);
   });
 
   it("checks knowledge revisions only for active chunk views", () => {
@@ -307,7 +308,6 @@ describe("WorldRenderer active chunk resources", () => {
     expect(images).toHaveLength(0);
 
     const activated = renderer.syncActiveChunks([entry(1, 0, 0)]);
-    expect(graphicsFills).toContainEqual({ color: 0x4aa1a0, x: 64, y: 96, width: 33, height: 33 });
     expect(activated.telemetry.activeAuthoredImageObjects).toBe(2);
     expect(images).toMatchObject([
       { x: 320, y: 96, textureKey: "base", displayWidth: 128, displayHeight: 64, alpha: 1, blendMode: 0 },

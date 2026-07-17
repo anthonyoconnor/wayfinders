@@ -33,11 +33,11 @@ describe("GR-3.2 production preparation pipeline", () => {
       .toBe(canonicalJson({ a: { x: 3, y: 2 }, z: 1 }));
   });
 
-  it("accepts an empty preparable set and can select a runtime recipe explicitly", () => {
-    expect(selectProductionRecipes(manifest, [])).toEqual([]);
+  it("selects the current preparable sources and can select a runtime recipe explicitly", () => {
+    expect(selectProductionRecipes(manifest, [])).toHaveLength(6);
     expect(selectProductionRecipes(manifest, ["--id", "home.island.primary"]))
       .toHaveLength(1);
-    expect(selectProductionRecipes(manifest, ["--family=island"])).toHaveLength(1);
+    expect(selectProductionRecipes(manifest, ["--family=island"])).toHaveLength(7);
     expect(() => selectProductionRecipes(manifest, ["--id", "missing.asset"]))
       .toThrow(/No production recipes matched/);
   });
@@ -75,12 +75,15 @@ describe("GR-3.2 production preparation pipeline", () => {
     expect(empty).toMatchObject({ kind: "empty", passable: true });
   });
 
-  it("records the clean baseline with no generated candidates", () => {
+  it("records the current generated candidate inventory", () => {
     expect(productionIndex).toMatchObject({
       formatVersion: 1,
       pipelineVersion: 2,
-      entries: [],
+      entries: expect.arrayContaining([
+        expect.objectContaining({ id: "production.island.horseshoe", lifecycle: "candidate" }),
+      ]),
     });
+    expect(productionIndex.entries).toHaveLength(6);
   });
 
   it("continues a batch after one isolated recipe failure", async () => {

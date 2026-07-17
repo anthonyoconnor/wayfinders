@@ -3,26 +3,17 @@ import {
   assetWorkspaceSceneKey,
   type WaterAssetWorkspaceModule,
 } from "../workspaces/AssetWorkspace";
+import { resolveAuthoredHomeIslandPlacement } from "../AuthoredHomeIsland";
+import { TerrainType } from "../../world/TileData";
+import { WorldGenerator, type GeneratedWorld } from "../../world/WorldGenerator";
+import { WATER_TYPE_IDS } from "../../world/water";
+import { WATER_ASSET_URLS } from "./WaterAssetContract";
 
-const WATER_STATIC_URL = new URL(
-  "../../../../assets-src/gr1/water/runtime/water-static.png",
-  import.meta.url,
-).href;
-const WATER_OVERLAYS_URL = new URL(
-  "../../../../assets-src/gr1/water/runtime/water-overlays.png",
-  import.meta.url,
-).href;
+const WATER_STATIC_URL = WATER_ASSET_URLS.static;
+const WATER_OVERLAYS_URL = WATER_ASSET_URLS.overlays;
 const PLAYER_BOAT_URL = "/assets/gr1/images/player-boat.png";
 const PLAYER_WAKE_URL = "/assets/gr1/images/player-wake.png";
 const HOME_ISLAND_URL = "/assets/gr1/images/home-island.png";
-const HORSESHOE_ISLAND_URL = new URL(
-  "../../../../assets-src/gr3/candidates/production-island-horseshoe/base.png",
-  import.meta.url,
-).href;
-const RIVER_DELTA_ISLAND_URL = new URL(
-  "../../../../assets-src/gr3/candidates/production-island-river-delta-inhabited/base.png",
-  import.meta.url,
-).href;
 
 const TILE_SIZE = 32;
 const SHEET_MARGIN = 2;
@@ -83,6 +74,7 @@ interface ShorePoint {
 }
 
 interface WaterWorldModel {
+  readonly generated: GeneratedWorld;
   readonly land: Uint8Array;
   readonly distanceFromLand: Float32Array;
   readonly shore: readonly ShorePoint[];
@@ -90,8 +82,6 @@ interface WaterWorldModel {
 
 const ISLANDS: readonly IslandPlacement[] = Object.freeze([
   { id: "home", label: "Home Island", url: HOME_ISLAND_URL, x: 56, y: 58, width: 23, height: 23 },
-  { id: "horseshoe", label: "Horseshoe", url: HORSESHOE_ISLAND_URL, x: 17, y: 59, width: 22, height: 22 },
-  { id: "river-delta", label: "River Delta", url: RIVER_DELTA_ISLAND_URL, x: 62, y: 27, width: 22, height: 22 },
 ]);
 
 const SHOAL_STRENGTHS: readonly ShoalStrengthVisual[] = Object.freeze([
@@ -99,7 +89,7 @@ const SHOAL_STRENGTHS: readonly ShoalStrengthVisual[] = Object.freeze([
     strength: "lean",
     label: "Lean fishing ground",
     note: "Sparse glints · faint surface breaks",
-    url: new URL("../../../../assets-src/gr1/water/prototype/shoals/shoal-lean.png", import.meta.url).href,
+    url: WATER_ASSET_URLS.shoalLean,
     intensity: 0.48,
     pulseSpeed: 0.55,
   },
@@ -107,7 +97,7 @@ const SHOAL_STRENGTHS: readonly ShoalStrengthVisual[] = Object.freeze([
     strength: "steady",
     label: "Steady fishing ground",
     note: "Regular ripples · moderate activity",
-    url: new URL("../../../../assets-src/gr1/water/prototype/shoals/shoal-steady.png", import.meta.url).href,
+    url: WATER_ASSET_URLS.shoalSteady,
     intensity: 0.72,
     pulseSpeed: 0.78,
   },
@@ -115,7 +105,7 @@ const SHOAL_STRENGTHS: readonly ShoalStrengthVisual[] = Object.freeze([
     strength: "rich",
     label: "Rich fishing ground",
     note: "Bright churn · strong surface breaks",
-    url: new URL("../../../../assets-src/gr1/water/prototype/shoals/shoal-rich.png", import.meta.url).href,
+    url: WATER_ASSET_URLS.shoalRich,
     intensity: 0.92,
     pulseSpeed: 1.05,
   },
@@ -143,6 +133,7 @@ export class WaterPreviewScene extends Phaser.Scene {
   private showOverlays = true;
   private motionPaused = false;
   private renderRevision = 0;
+  private worldSeed = 84_221;
   private animationFrame?: number;
 
   constructor(workspace: Readonly<WaterAssetWorkspaceModule>) {
@@ -243,6 +234,9 @@ export class WaterPreviewScene extends Phaser.Scene {
         if (!(target instanceof HTMLInputElement)) return;
         this.showOverlays = target.checked;
         break;
+      case "seed":
+        this.worldSeed = Number.isFinite(Number(target.value)) ? Math.trunc(Number(target.value)) : 84_221;
+        break;
       default:
         return;
     }
@@ -258,11 +252,11 @@ export class WaterPreviewScene extends Phaser.Scene {
     if (!this.browser) return;
     this.browser.innerHTML = `
       <header class="asset-library-header">
-        <div><p class="eyebrow">WTR-1.0–1.5 branch</p><h2>Water</h2></div>
-        <span class="water-preview-badge">Prototype</span>
+        <div><p class="eyebrow">WTR-2 runtime</p><h2>Water</h2></div>
+        <span class="water-preview-badge">Production</span>
       </header>
       <div class="water-preview-browser__body">
-        <p class="water-preview-intro">A branch-only playground for animated water, island transitions, shoreline waves, and fishing shoals. Nothing here is registered in the game.</p>
+        <p class="water-preview-intro">Inspect the production water catalog, generated layout, animation, island handoffs, and fishing-shoal presentation.</p>
         <section class="water-preview-control-group">
           <h3>Selected water</h3>
           <div class="water-preview-profile-list">
@@ -276,6 +270,7 @@ export class WaterPreviewScene extends Phaser.Scene {
         <section class="water-preview-control-group">
           <h3>Compare</h3>
           <label>Variant <select data-water-control="variant">${[0, 1, 2, 3].map((value) => `<option value="${value}" ${value === this.variant ? "selected" : ""}>${value + 1}</option>`).join("")}</select></label>
+          <label>World seed <input data-water-control="seed" type="number" value="${this.worldSeed}"></label>
           <label>World scale <select data-water-control="world-scale">
             <option value="4" ${this.worldCellSize === 4 ? "selected" : ""}>Fit overview · 13%</option>
             <option value="8" ${this.worldCellSize === 8 ? "selected" : ""}>Quarter scale · 25%</option>
@@ -300,13 +295,13 @@ export class WaterPreviewScene extends Phaser.Scene {
     this.stage.innerHTML = `
       <div class="water-preview-stage__inner">
         <header class="water-preview-hero">
-          <div><p class="eyebrow">Early visual feedback</p><h2>How should Wayfinders water feel?</h2></div>
-          <div class="water-preview-pills"><span>Animated</span><span>3 islands</span><span>3 shoal strengths</span><span>No game integration</span></div>
+          <div><p class="eyebrow">Production inspection</p><h2>Generated Wayfinders water</h2></div>
+          <div class="water-preview-pills"><span>Seed ${this.worldSeed}</span><span>Runtime layout</span><span>3 shoal strengths</span><span>Game assets</span></div>
         </header>
 
         <section class="water-preview-panel water-preview-world-study">
-          <div class="water-preview-panel__heading"><div><p class="eyebrow">96 × 96 world study</p><h3>Water, islands, and shoals in context</h3></div><span>WTR-1.0–1.5 prototype</span></div>
-          <p class="water-preview-world-note">A game-sized visual study with irregular island-driven shallows, exposed and sheltered shoreline waves, wind, currents, rough water, and lean, steady, and rich fishing grounds. Shoals use abstract surface disturbance at the same 96×64 scale as the existing game cue—never visible fish.</p>
+          <div class="water-preview-panel__heading"><div><p class="eyebrow">96 × 96 generated world</p><h3>Water, islands, and shoals in context</h3></div><span>WTR-2 runtime parity</span></div>
+          <p class="water-preview-world-note">The real world generator resolves water types for this seed. Reef remains authoritative terrain, current and rough water are visual overlays, and island shelves produce irregular coastal and lagoon handoffs.</p>
           <div class="water-preview-zoom" role="group" aria-label="Water world zoom controls">
             <button type="button" data-water-zoom="out" aria-label="Zoom out" ${zoomIndex === 0 ? "disabled" : ""}>−</button>
             <output aria-live="polite">${zoomPercent}%${this.worldCellSize === TILE_SIZE ? " · game scale" : ""}</output>
@@ -402,7 +397,7 @@ export class WaterPreviewScene extends Phaser.Scene {
     if (!context || !motionContext) return;
     const islandImages = prototypeImages.slice(0, ISLANDS.length);
     const shoalImages = prototypeImages.slice(ISLANDS.length);
-    const model = buildWorldModel(islandImages);
+    const model = buildWorldModel(this.worldSeed);
     context.imageSmoothingEnabled = false;
     motionContext.imageSmoothingEnabled = false;
     const cell = this.worldCellSize;
@@ -450,24 +445,15 @@ export class WaterPreviewScene extends Phaser.Scene {
   }
 }
 
-function buildWorldModel(islandImages: readonly HTMLImageElement[]): WaterWorldModel {
-  const maskCanvas = document.createElement("canvas");
-  maskCanvas.width = WORLD_GRID_SIZE;
-  maskCanvas.height = WORLD_GRID_SIZE;
-  const context = maskCanvas.getContext("2d", { willReadFrequently: true });
-  if (!context) throw new Error("Water prototype could not create its island mask");
-  context.imageSmoothingEnabled = true;
-  ISLANDS.forEach((island, index) => {
-    const image = islandImages[index];
-    if (image) context.drawImage(image, island.x, island.y, island.width, island.height);
-  });
-  const pixels = context.getImageData(0, 0, WORLD_GRID_SIZE, WORLD_GRID_SIZE).data;
+function buildWorldModel(seed: number): WaterWorldModel {
+  const generated = new WorldGenerator().generate(seed);
   const land = new Uint8Array(WORLD_GRID_SIZE * WORLD_GRID_SIZE);
   const landCells: Array<readonly [number, number]> = [];
   for (let y = 0; y < WORLD_GRID_SIZE; y++) {
     for (let x = 0; x < WORLD_GRID_SIZE; x++) {
       const index = y * WORLD_GRID_SIZE + x;
-      if (pixels[index * 4 + 3]! < 42) continue;
+      const terrain = generated.grid.getTerrain(x, y);
+      if (terrain !== TerrainType.Land && terrain !== TerrainType.Rock) continue;
       land[index] = 1;
       landCells.push([x, y]);
     }
@@ -513,7 +499,7 @@ function buildWorldModel(islandImages: readonly HTMLImageElement[]): WaterWorldM
       shore.push({ x, y, nx, ny, exposure, phase: (hash % 628) / 100 });
     }
   }
-  return { land, distanceFromLand, shore };
+  return { generated, land, distanceFromLand, shore };
 }
 
 function drawStaticWorld(
@@ -531,43 +517,50 @@ function drawStaticWorld(
   context.fillRect(0, 0, context.canvas.width, context.canvas.height);
   for (let y = 0; y < WORLD_GRID_SIZE; y++) {
     for (let x = 0; x < WORLD_GRID_SIZE; x++) {
-      const variant = coordinateVariant(x, y);
-      drawProfileTile(context, staticSheet, "deep", variant, x * cell, y * cell, cell, 1);
+      const profile = model.generated.water.baseTypeAt(x, y);
+      drawProfileTile(
+        context,
+        staticSheet,
+        profile as WaterProfileId,
+        model.generated.water.variantAt(x, y),
+        x * cell,
+        y * cell,
+        cell,
+        1,
+      );
     }
   }
 
-  const irregularityAt = (x: number, y: number): number => Math.sin(x * 0.33 + y * 0.19) * 1.15
-    + Math.sin(x * 0.11 - y * 0.41) * 0.8
-    + ((coordinateHash(x, y) % 100) / 100 - 0.5) * 0.7;
-  drawProfileField(context, staticSheet, "abyss", cell, (x, y) => clamp01((49 - x - y + Math.sin(y * 0.2) * 5) / 21));
-  drawProfileField(context, staticSheet, "coastal", cell, (x, y) => {
-    const distance = model.distanceFromLand[y * WORLD_GRID_SIZE + x]!;
-    const irregularity = irregularityAt(x, y);
-    return 1 - smoothstep(4.2 + irregularity, 10.2 + irregularity, distance);
-  });
-  drawProfileField(context, staticSheet, "lagoon", cell, (x, y) => {
-    const distance = model.distanceFromLand[y * WORLD_GRID_SIZE + x]!;
-    return 1 - smoothstep(0.7, 3.6 + irregularityAt(x, y) * 0.35, distance);
-  });
-  drawProfileField(context, staticSheet, "brackish", cell, (x, y) => (
-    1 - smoothstep(-0.3, 0.28, ellipseDistance(x, y, 14, 87, 16, 9))
-  ));
-  drawProfileField(context, staticSheet, "reef", cell, reefIntensity);
   if (showOverlays) {
-    drawProfileField(context, staticSheet, "current", cell, (x, y) => {
-      const currentY = 39 + Math.sin(x * 0.12) * 5;
-      return (1 - smoothstep(0.5, 3.5, Math.abs(y - currentY))) * 0.3;
-    });
-    drawProfileField(context, staticSheet, "rough", cell, (x, y) => (
-      (1 - smoothstep(-0.28, 0.22, ellipseDistance(x, y, 77, 18, 18, 10))) * 0.48
-    ));
+    for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+      for (let x = 0; x < WORLD_GRID_SIZE; x++) {
+        if (model.generated.water.hasOverlay(x, y, WATER_TYPE_IDS.current)) {
+          drawProfileTile(context, staticSheet, "current", model.generated.water.variantAt(x, y), x * cell, y * cell, cell, 0.28);
+        }
+        if (model.generated.water.hasOverlay(x, y, WATER_TYPE_IDS.rough)) {
+          drawProfileTile(context, staticSheet, "rough", model.generated.water.variantAt(x, y), x * cell, y * cell, cell, 0.42);
+        }
+      }
+    }
   }
 
-  ISLANDS.forEach((island, index) => {
-    const image = islandImages[index];
-    if (!image) return;
-    context.drawImage(image, island.x * cell, island.y * cell, island.width * cell, island.height * cell);
-  });
+  context.fillStyle = "#779459";
+  for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+    for (let x = 0; x < WORLD_GRID_SIZE; x++) {
+      const terrain = model.generated.grid.getTerrain(x, y);
+      if (terrain === TerrainType.Land) context.fillRect(x * cell, y * cell, cell, cell);
+      else if (terrain === TerrainType.Rock) {
+        context.fillStyle = "#626e6e";
+        context.fillRect(x * cell, y * cell, cell, cell);
+        context.fillStyle = "#779459";
+      }
+    }
+  }
+  const home = islandImages[0];
+  if (home) {
+    const placement = resolveAuthoredHomeIslandPlacement({ x: WORLD_GRID_SIZE / 2, y: WORLD_GRID_SIZE / 2 });
+    context.drawImage(home, placement.topLeft.x * cell, placement.topLeft.y * cell, 15 * cell, 15 * cell);
+  }
 
   const boatSize = cell * 4;
   const boatX = cell * 44;
@@ -576,51 +569,6 @@ function drawStaticWorld(
   context.drawImage(wake, boatX - cell * 3.3, boatY - cell * 2, cell * 6, boatSize);
   context.globalAlpha = 1;
   context.drawImage(boat, boatX - cell * 2, boatY - cell * 2, boatSize, boatSize);
-}
-
-function drawProfileField(
-  context: CanvasRenderingContext2D,
-  sheet: HTMLImageElement,
-  profile: WaterProfileId,
-  cell: number,
-  alphaAt: (x: number, y: number) => number,
-): void {
-  const layer = document.createElement("canvas");
-  layer.width = context.canvas.width;
-  layer.height = context.canvas.height;
-  const layerContext = layer.getContext("2d");
-  if (!layerContext) return;
-  layerContext.imageSmoothingEnabled = false;
-
-  const mask = document.createElement("canvas");
-  mask.width = WORLD_GRID_SIZE;
-  mask.height = WORLD_GRID_SIZE;
-  const maskContext = mask.getContext("2d");
-  if (!maskContext) return;
-  const maskImage = maskContext.createImageData(WORLD_GRID_SIZE, WORLD_GRID_SIZE);
-  for (let y = 0; y < WORLD_GRID_SIZE; y++) {
-    for (let x = 0; x < WORLD_GRID_SIZE; x++) {
-      const alpha = clamp01(alphaAt(x, y));
-      if (alpha > 0.01) {
-        drawProfileTile(layerContext, sheet, profile, coordinateVariant(x, y), x * cell, y * cell, cell, 1);
-      }
-      const pixel = (y * WORLD_GRID_SIZE + x) * 4;
-      maskImage.data[pixel] = 255;
-      maskImage.data[pixel + 1] = 255;
-      maskImage.data[pixel + 2] = 255;
-      maskImage.data[pixel + 3] = Math.round(alpha * 255);
-    }
-  }
-  maskContext.putImageData(maskImage, 0, 0);
-  layerContext.globalCompositeOperation = "destination-in";
-  layerContext.imageSmoothingEnabled = true;
-  layerContext.drawImage(mask, 0, 0, layer.width, layer.height);
-  layerContext.globalCompositeOperation = "source-over";
-  context.drawImage(layer, 0, 0);
-  layer.width = 0;
-  layer.height = 0;
-  mask.width = 0;
-  mask.height = 0;
 }
 
 function drawWorldMotion(
@@ -636,16 +584,20 @@ function drawWorldMotion(
   const frame = Math.floor(seconds * 7) % 8;
   if (showOverlays) {
     drawWind(context, model, cell, seconds);
-    for (let x = 1; x < WORLD_GRID_SIZE; x += 2) {
-      const y = Math.round(39 + Math.sin(x * 0.12) * 5 + Math.sin(seconds * 1.2 + x * 0.18));
-      if (model.land[y * WORLD_GRID_SIZE + x]) continue;
-      drawOverlayFrame(context, overlaySheet, 2, (frame + x) % 8, x * cell, y * cell, cell, 0.72);
-    }
-    for (let y = 8; y < 29; y += 2) {
-      for (let x = 60; x < 95; x += 3) {
-        const intensity = 1 - smoothstep(-0.18, 0.18, ellipseDistance(x, y, 77, 18, 18, 10));
-        if (intensity <= 0 || coordinateHash(x, y) % 3 === 0) continue;
-        drawOverlayFrame(context, overlaySheet, 3, (frame + coordinateVariant(x, y)) % 8, x * cell, y * cell, cell, intensity * 0.76);
+    for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+      for (let x = 0; x < WORLD_GRID_SIZE; x++) {
+        const phase = (frame + model.generated.water.phaseAt(x, y)) % 8;
+        if (model.generated.water.hasOverlay(x, y, WATER_TYPE_IDS.current)) {
+          drawOverlayFrame(context, overlaySheet, 2, phase, x * cell, y * cell, cell, 0.72);
+        }
+        if (model.generated.water.hasOverlay(x, y, WATER_TYPE_IDS.rough)) {
+          drawOverlayFrame(context, overlaySheet, 3, phase, x * cell, y * cell, cell, 0.76);
+        }
+        const base = model.generated.water.baseTypeAt(x, y);
+        if ((base === WATER_TYPE_IDS.coastal || base === WATER_TYPE_IDS.lagoon || base === WATER_TYPE_IDS.reef)
+          && coordinateHash(x, y) % 3 === 0) {
+          drawOverlayFrame(context, overlaySheet, 1, phase, x * cell, y * cell, cell, 0.58);
+        }
       }
     }
     for (const point of model.shore) drawShoreWave(context, point, cell, seconds);
@@ -838,34 +790,10 @@ function drawOverlayFrame(
   context.globalAlpha = 1;
 }
 
-function coordinateVariant(x: number, y: number): number {
-  return coordinateHash(x, y) % 4;
-}
-
 function coordinateHash(x: number, y: number): number {
   let value = Math.imul(x + 17, 0x45d9f3b) ^ Math.imul(y + 31, 0x119de1f3);
   value = Math.imul(value ^ (value >>> 16), 0x45d9f3b);
   return (value ^ (value >>> 16)) >>> 0;
-}
-
-function ellipseDistance(x: number, y: number, centerX: number, centerY: number, radiusX: number, radiusY: number): number {
-  return Math.hypot((x - centerX) / radiusX, (y - centerY) / radiusY) - 1;
-}
-
-function reefIntensity(x: number, y: number): number {
-  const clusters = [
-    [59, 52, 5],
-    [79, 55, 4],
-    [60, 75, 5],
-    [34, 68, 4],
-  ] as const;
-  const distance = Math.min(...clusters.map(([cx, cy, radius]) => Math.hypot(x - cx, y - cy) / radius));
-  return (1 - smoothstep(0.48, 1.08, distance)) * 0.92;
-}
-
-function smoothstep(edge0: number, edge1: number, value: number): number {
-  const t = clamp01((value - edge0) / (edge1 - edge0));
-  return t * t * (3 - 2 * t);
 }
 
 function clamp01(value: number): number {

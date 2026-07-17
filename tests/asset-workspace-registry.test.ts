@@ -19,6 +19,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
       { id: "islands", label: "Islands" },
       { id: "ships", label: "Ships" },
       { id: "fishing-shoals", label: "Fishing shoals" },
+      { id: "water", label: "Water" },
       { id: "great-hall", label: "Great Hall" },
       { id: "audio", label: "Audio" },
     ]);
@@ -42,10 +43,12 @@ describe("GR-4.0 isolated asset workspaces", () => {
   it("resolves direct links, defaults invalid values, and builds stable history URLs", () => {
     expect(resolveAssetWorkspace("?mode=assets&workspace=ships").id).toBe("ships");
     expect(resolveAssetWorkspace("?mode=assets&workspace=fishing-shoals").id).toBe("fishing-shoals");
+    expect(resolveAssetWorkspace("?mode=assets&workspace=water").id).toBe("water");
     expect(resolveAssetWorkspace("?mode=assets&workspace=great-hall").id).toBe("great-hall");
     expect(resolveAssetWorkspace("?mode=assets&workspace=audio").id).toBe("audio");
     expect(resolveAssetWorkspace("?mode=assets&workspace=unknown").id).toBe("islands");
     expect(assetWorkspaceHref("islands")).toBe("?mode=assets&workspace=islands");
+    expect(assetWorkspaceHref("water")).toBe("?mode=assets&workspace=water");
     expect(assetWorkspaceHref("great-hall")).toBe("?mode=assets&workspace=great-hall");
     expect(assetWorkspaceHref("audio")).toBe("?mode=assets&workspace=audio");
   });
@@ -53,11 +56,13 @@ describe("GR-4.0 isolated asset workspaces", () => {
   it("supports wrapping arrow navigation and namespaces scene and selection state", () => {
     expect(adjacentAssetWorkspaceId("islands", -1)).toBe("audio");
     expect(adjacentAssetWorkspaceId("islands", 1)).toBe("ships");
-    expect(adjacentAssetWorkspaceId("fishing-shoals", 1)).toBe("great-hall");
+    expect(adjacentAssetWorkspaceId("fishing-shoals", 1)).toBe("water");
+    expect(adjacentAssetWorkspaceId("water", 1)).toBe("great-hall");
     expect(adjacentAssetWorkspaceId("great-hall", 1)).toBe("audio");
     expect(adjacentAssetWorkspaceId("audio", 1)).toBe("islands");
     expect(assetWorkspaceSceneKey("ships")).toBe("AssetViewerScene:ships");
     expect(assetWorkspaceSceneKey("great-hall")).toBe("AssetViewerScene:great-hall");
+    expect(assetWorkspaceSceneKey("water")).toBe("AssetViewerScene:water");
     expect(assetWorkspaceSelectionKey("ships")).toBe("wayfinders:asset-workspace:ships:selection");
   });
 

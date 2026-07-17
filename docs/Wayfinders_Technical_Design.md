@@ -545,12 +545,39 @@ deterministically rebuilds cloud-owned pairs. Browser diagnostics expose the
 same value and command.
 
 The runtime authored packages provide the home island, animated player boat,
-fishing-shoal cue, and presentation-only four-frame cloud sheet. Available
+fishing-shoal cues, water sheets, and presentation-only four-frame cloud sheet. Available
 imported islands use their prepared PNG layers; procedural fallback and other
 content use intentional developer presentation.
 The game and `?mode=assets` library share package validation, texture loading,
 presentation factories, and collision descriptors. The asset route supplies
 preview coordinates only; it does not create another gameplay simulation.
+
+World generation runs `WaterLayoutPlanner` after authoritative terrain
+rasterization and `WorldAnalysisIndex` construction. The manifest records the
+water-layout version, catalog fingerprint, and stable coherent ellipse/ribbon
+regions; `GeneratedWaterLayout` exposes chunk-addressable base IDs, overlay
+masks, canonical transition masks, variants, and phases. Reef is selected only
+from `TerrainType.Reef`; coastal and protected lagoon water are derived from
+shallow terrain and island context; deep is the ocean fallback. Abyss, current,
+and rough regions are deterministic presentation facts. Brackish remains
+catalogued but is not placed without a future authoritative context. None of
+these presentation facts mutate terrain, collision, navigation, resources,
+knowledge, provisions, islands, or feature outcomes.
+
+`WaterRenderer` consumes the scene-owned `ActiveChunkDelta`. Each active chunk
+owns one cached base canvas texture and one surface canvas texture; prefetched
+chunks remain static and only visible surface textures advance on discrete
+presentation frames. The surface plane composes canonical depth transitions,
+glints, currents, and rough-water/whitecap accents. A constant ocean rectangle
+covers deferred gaps, and the exact home transform owns one aligned shoreline
+overlay while its chunk is active. Reduced motion leaves the cached static
+frame in place. Knowledge, fog, risk, and route renderers remain later layers
+and do not feed water classification.
+
+Fishing-ground presentation uses the fog-filtered read model. Hidden-quality
+states always use the neutral steady surface cue; surveyed states may select
+lean, steady, or rich. Animation is restrained alpha/scale shimmer on active
+views only, with a frozen reduced-motion pose.
 
 Validated package collision metadata feeds the runtime collision descriptors;
 rendered pixels do not. Package schema, editable profile categories, source
@@ -566,30 +593,21 @@ the dimensions or stretch the source.
 
 The asset-library route provides persistent **Islands**, **Ships**, **Fishing
 shoals**, **Water**, **Great Hall**, and **Audio** tabs. Production workspaces use permanent
-left-library, centre-preview, and right-workbench regions. Water is a branch-only
-WTR-1.0 through WTR-1.5 feedback prototype: its isolated scene reads prepared
-static and overlay sheets plus preview-only island and shoal images directly.
-It shows labelled tile variants and repeat checks, then composes a 96x96 world
-with smoothly masked treatment handoffs, island-alpha-derived shoreline depth,
-wind and wave accents, locally varied shoreline waves, and lean, steady, and
-rich animated fishing-ground cues. Those cues reuse the existing runtime
-shoal's 96 x 64 abstraction: broken glints, water-colour noise, and ripples with
-no individually readable fish. The study redraws from a fitted overview through
-native 32-pixel game-tile scale while retaining the inspected map centre. One
-pause control stops the scene-local water, shoreline, and shoal animation, and
-workspace shutdown cancels that frame lifecycle. It omits the production-tooling
-sidebar so the preview uses the available width, and owns no gameplay catalog,
-package, promotion, general animation, island-generation, or runtime-renderer
-authority. The active workspace is URL-addressable and follows
+left-library, centre-preview, and right-workbench regions. Water is the focused
+production inspection surface: it reads the versioned water package and the
+same `WorldGenerator`/`GeneratedWaterLayout` facts as the game, offers seed,
+profile, overlay, pause, fit, and 1:1 controls, and displays the lean, steady,
+and rich 96 x 64 fishing-ground cues without visible fish. It omits the general
+production-tooling sidebar and cannot mutate gameplay or asset authority. The
+active workspace is URL-addressable and follows
 browser history; accessible arrow-key navigation uses roving focus. A typed
 registry partitions library catalog entries and collision profiles, while a
-scene factory mounts a library scene, the animated Water preview, the isolated
+scene factory mounts a library scene, the Water inspection scene, the isolated
 Great Hall approval scene, or the play-only stored-audio scene. Workspace
-shutdown aborts its DOM listeners, cancels its preview-local animation frame,
-and removes its Phaser bindings before the next workspace mounts. Where present,
-the left and right columns scroll independently, and the Phaser preview is sized
-to the centre column so it cannot render behind those controls. Existing recipe
-names and stable IDs are
+shutdown aborts its DOM listeners and Phaser bindings before the next workspace
+mounts. Where present, the left and right columns scroll independently, and the
+Phaser preview is sized to the centre column so it cannot render behind those
+controls. Existing recipe names and stable IDs are
 checked in the form and again under the repository lock; conflicts block
 intake without a separate confirmation step. Validated family defaults and
 identity become one source recipe and one pending candidate through the

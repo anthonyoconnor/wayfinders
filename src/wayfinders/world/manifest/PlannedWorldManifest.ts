@@ -7,6 +7,7 @@ import {
   type WorldManifestIslandSize,
   type WorldManifestIslandV1,
   type WorldManifestLandmarkV1,
+  type WorldManifestWaterLayoutV1,
   type WorldManifestV1,
 } from "./WorldManifestContracts";
 import { createWorldManifestV1 } from "./WorldManifestCodec";
@@ -51,6 +52,7 @@ export interface PlannedWorldManifestMetadataV1 {
   readonly settingsProfileId: string;
   readonly settingsFingerprint?: string;
   readonly authoredIslandCatalogRevision: string;
+  readonly waterLayout: Readonly<WorldManifestWaterLayoutV1>;
 }
 
 /**
@@ -77,6 +79,7 @@ export function createManifestFromPlannedWorldV1(
     },
     landmarks: landmarkDescriptors(world.landmarks),
     islands: world.islands.map(islandDescriptor),
+    waterLayout: metadata.waterLayout,
   });
 }
 

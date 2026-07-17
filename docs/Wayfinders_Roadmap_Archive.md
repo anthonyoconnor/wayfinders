@@ -1369,6 +1369,37 @@ These measurements are historical diagnosis, not current acceptance evidence.
 The settled build still requires a controlled browser zoom matrix and trace to
 determine whether the user-visible departure symptom remains.
 
+## Water production integration
+
+WTR-2.0 through WTR-2.6 were implemented on 2026-07-17 after explicit user
+authorization. The sequence delivered:
+
+- a renderer-neutral, validated `WaterTypeCatalogV1` with catalog-selected
+  placement strategies and an extension fixture proving that a new visual type
+  can reuse a strategy without a planner or renderer identity branch;
+- manifest-recorded stable water regions and a deterministic,
+  chunk-addressable `GeneratedWaterLayout` created only after terrain and world
+  analysis, with reef authority preserved and brackish left unplaced;
+- a validated `world.water.primary` runtime package, five water sheets, three
+  strength-based fishing-ground assets, public runtime handoff, and a read-only
+  repository validator included in `assets:check`;
+- a dedicated active-chunk `WaterRenderer` with cached base/surface canvas
+  textures, static prefetch resources, visible-only discrete surface updates,
+  reduced motion, canonical transitions, currents, rough water, and the aligned
+  home-shore overlay; the former `WorldRenderer` water/wave path was removed;
+- knowledge-safe fishing-ground rendering in which hidden-quality states use the
+  neutral cue and surveyed states may use lean, steady, or rich, with restrained
+  active-view animation; and
+- a Water workspace driven by the real world generator and generated water
+  layout with seed, zoom, overlay, pause, type comparison, and shoal comparison
+  controls while the general Production tooling sidebar remains absent.
+
+Verification included the water asset gate, source and test typechecks, the
+quick lane, focused deterministic/catalog-extension and renderer ownership
+contracts, a production bundle, and live game/Water-workspace browser checks.
+The I/O lane's older clean-repository fixtures were updated to match the current
+six imported-island source/candidate records.
+
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-5.1`, graphics and asset

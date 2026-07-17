@@ -1,0 +1,36 @@
+{
+  "contractVersion": 1,
+  "assetId": "world.water.primary",
+  "kind": "water-tile-package",
+  "sourceAssetId": "generated.water-style-masters.v1",
+  "runtimeRevision": 1,
+  "tileSize": 32,
+  "variantCount": 4,
+  "defaultPlayback": {
+    "timeSource": "presentation-clock",
+    "visibleChunksOnly": true,
+    "reducedMotionTexture": "world.water.tiles.static"
+  },
+  "profiles": [
+    { "id": "abyss", "rowStart": 0, "frameCount": 8, "framesPerSecond": 3, "role": "rare far and deep water" },
+    { "id": "deep", "rowStart": 4, "frameCount": 8, "framesPerSecond": 4, "role": "default open ocean" },
+    { "id": "coastal", "rowStart": 8, "frameCount": 8, "framesPerSecond": 5, "role": "island shelf and shore handoff" },
+    { "id": "lagoon", "rowStart": 12, "frameCount": 8, "framesPerSecond": 4, "role": "protected harbor and atoll interior" },
+    { "id": "reef", "rowStart": 16, "frameCount": 8, "framesPerSecond": 3, "role": "blocking reef readability" },
+    { "id": "current", "rowStart": 20, "frameCount": 8, "framesPerSecond": 7, "role": "directional passable-water overlay" },
+    { "id": "rough", "rowStart": 24, "frameCount": 8, "framesPerSecond": 7, "role": "weather and exposed-water overlay" },
+    { "id": "brackish", "rowStart": 28, "frameCount": 8, "framesPerSecond": 3, "role": "future context-required base" }
+  ],
+  "images": [
+    { "imageId": "world.water.tiles.animated", "file": "water-tiles.png", "pixelSize": { "width": 288, "height": 1152 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4 },
+    { "imageId": "world.water.tiles.static", "file": "water-static.png", "pixelSize": { "width": 144, "height": 288 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4 },
+    { "imageId": "world.water.depth-transitions", "file": "water-depth-transitions.png", "pixelSize": { "width": 1692, "height": 144 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4, "frameCount": 188 },
+    { "imageId": "world.water.surface-overlays", "file": "water-overlays.png", "pixelSize": { "width": 288, "height": 144 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4, "frameCount": 32 },
+    { "imageId": "world.water.home-shore-overlay", "file": "water-home-shore-overlay.png", "pixelSize": { "width": 3872, "height": 484 }, "frameSize": { "width": 480, "height": 480 }, "margin": 2, "spacing": 4, "frameCount": 8 }
+  ],
+  "shoals": [
+    { "quality": "lean", "file": "shoals/shoal-lean.png", "pixelSize": { "width": 96, "height": 64 } },
+    { "quality": "steady", "file": "shoals/shoal-steady.png", "pixelSize": { "width": 96, "height": 64 }, "hiddenQualityNeutral": true },
+    { "quality": "rich", "file": "shoals/shoal-rich.png", "pixelSize": { "width": 96, "height": 64 } }
+  ]
+}

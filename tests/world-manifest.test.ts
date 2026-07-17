@@ -12,6 +12,7 @@ import {
   type PlannedWorldFactsV1,
   type WorldManifestV1,
 } from "../src/wayfinders/world/manifest";
+import { createManifestWaterLayout } from "../src/wayfinders/world/water";
 
 const ISLAND_ONE: PlannedIslandFactsV1 = {
   id: 1,
@@ -67,6 +68,7 @@ function manifest(
     settingsProfileId: "P2-normal",
     settingsFingerprint: "sha256-a1b2c3",
     authoredIslandCatalogRevision: "none",
+    waterLayout: createManifestWaterLayout(84_221, 64, 48),
   });
 }
 

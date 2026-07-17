@@ -150,6 +150,14 @@ export class ChunkActivatedViewPool<
     });
   }
 
+  /** Visits only currently materialized views; never scans inactive world records. */
+  forEachActive(visitor: (view: TView, record: Readonly<TRecord>) => void): void {
+    for (const [id, view] of this.viewsById) {
+      const record = this.recordsById.get(id);
+      if (record) visitor(view, record);
+    }
+  }
+
   destroy(): void {
     for (const view of this.viewsById.values()) {
       this.options.destroy(view);

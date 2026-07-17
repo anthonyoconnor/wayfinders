@@ -789,7 +789,8 @@ export class GameSimulation {
           "world-analysis",
           () => this.generator.analyze(rasterized),
         );
-        return { ...rasterized, analysis };
+        const water = this.generator.planWater(rasterized, analysis);
+        return { ...rasterized, analysis, water };
       },
     );
     this.expeditionId = 1;

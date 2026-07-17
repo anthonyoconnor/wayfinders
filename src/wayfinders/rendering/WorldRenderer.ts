@@ -13,7 +13,7 @@ import { prototypeConfig } from "../config/prototypeConfig";
 import { gridToWorld } from "../world/CoordinateSystem";
 import { IslandKind, type GeneratedIsland } from "../world/IslandGenerator";
 import { seededValue } from "../world/SeededRandom";
-import { KnowledgeState, TerrainType } from "../world/TileData";
+import { TerrainType } from "../world/TileData";
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import type { WorldChunk } from "../world/WorldChunk";
 import { activeChunkKey } from "./activation/ActiveChunkSet";
@@ -88,11 +88,9 @@ const ISLAND_PALETTES: Record<IslandKind, IslandPalette> = {
   },
 };
 
-type ChunkLayerName = "water" | "waves" | "terrain" | "coast" | "structures";
+type ChunkLayerName = "terrain" | "coast" | "structures";
 
 const CHUNK_LAYER_DEPTHS: Record<ChunkLayerName, number> = {
-  water: 0,
-  waves: 1,
   terrain: 2,
   coast: 3,
   structures: 5,
@@ -422,30 +420,12 @@ export class WorldRenderer {
         const tile = grid.getTile(x, y);
         const px = (x - startX) * size;
         const py = (y - startY) * size;
-        const supported = tile.knowledge === KnowledgeState.Supported;
-        if (this.isAuthoredHomeFootprint(generated, x, y)) {
-          if (supported) {
-            const water = this.getLayer(chunk, "water");
-            water.fillStyle(COLORS.supported, 1);
-            water.fillRect(px, py, size + 1, size + 1);
-          }
-          continue;
-        }
+        if (this.isAuthoredHomeFootprint(generated, x, y)) continue;
 
         const island = this.islandsById.get(tile.islandId);
         const hasAuthoredPresentation = island !== undefined
           && this.authoredIslandPresentationsByIslandId.has(island.id);
         const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
-        let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
-        if (hasAuthoredPresentation || tile.terrain === TerrainType.ShallowOcean) {
-          waterColor = supported ? palette.shallowSupported : palette.shallow;
-        }
-        if (waterColor !== COLORS.ocean) {
-          const water = this.getLayer(chunk, "water");
-          water.fillStyle(waterColor, 1);
-          water.fillRect(px, py, size + 1, size + 1);
-        }
-
         if (!hasAuthoredPresentation && tile.terrain === TerrainType.Land) {
           const terrain = this.getLayer(chunk, "terrain");
           const variation = seededValue(seed + 401, x, y) > 0.5 ? palette.land : palette.landDark;
@@ -476,74 +456,16 @@ export class WorldRenderer {
           this.drawIslandDecoration(chunk, island, tile.terrain, x, y, px, py, size, seed);
         }
 
-        if ((x + y) % 2 === 0 && tile.terrain !== TerrainType.Land) {
-          const waves = this.getLayer(chunk, "waves");
-          const waveOffset = seededValue(seed + 503, x, y) * size * 0.24;
-          waves.lineStyle(1, COLORS.wave, supported ? 0.2 : 0.12);
-          waves.beginPath();
-          waves.moveTo(px + size * 0.2 + waveOffset, py + size * 0.52);
-          waves.lineTo(px + size * 0.45 + waveOffset, py + size * 0.46);
-          waves.lineTo(px + size * 0.7 + waveOffset, py + size * 0.52);
-          waves.strokePath();
-        }
       }
     }
   }
 
   private redrawWaterLayer(
     generated: GeneratedWorld,
-    chunk: ChunkView,
-    islandsById: ReadonlyMap<number, GeneratedIsland>,
+    _chunk: ChunkView,
+    _islandsById: ReadonlyMap<number, GeneratedIsland>,
   ): void {
-    chunk.layers.water?.clear();
-    chunk.layers.waves?.clear();
-    const { grid } = generated;
-    const size = prototypeConfig.navigation.tileSize;
-    const startX = chunk.chunkX * grid.chunkSize;
-    const startY = chunk.chunkY * grid.chunkSize;
-    const endX = Math.min(grid.width, startX + grid.chunkSize);
-    const endY = Math.min(grid.height, startY + grid.chunkSize);
-
-    for (let y = startY; y < endY; y++) {
-      for (let x = startX; x < endX; x++) {
-        this.totalTilesVisited++;
-        const tile = grid.getTile(x, y);
-        const supported = tile.knowledge === KnowledgeState.Supported;
-        if (this.isAuthoredHomeFootprint(generated, x, y)) {
-          if (supported) {
-            const water = this.getLayer(chunk, "water");
-            water.fillStyle(COLORS.supported, 1);
-            water.fillRect((x - startX) * size, (y - startY) * size, size + 1, size + 1);
-          }
-          continue;
-        }
-        const island = islandsById.get(tile.islandId);
-        const hasAuthoredPresentation = island !== undefined
-          && this.authoredIslandPresentationsByIslandId.has(island.id);
-        const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
-        let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
-        if (hasAuthoredPresentation || tile.terrain === TerrainType.ShallowOcean) {
-          waterColor = supported ? palette.shallowSupported : palette.shallow;
-        }
-        const px = (x - startX) * size;
-        const py = (y - startY) * size;
-        if (waterColor !== COLORS.ocean) {
-          const water = this.getLayer(chunk, "water");
-          water.fillStyle(waterColor, 1);
-          water.fillRect(px, py, size + 1, size + 1);
-        }
-        if ((x + y) % 2 === 0 && tile.terrain !== TerrainType.Land) {
-          const waves = this.getLayer(chunk, "waves");
-          const waveOffset = seededValue(generated.seed + 503, x, y) * size * 0.24;
-          waves.lineStyle(1, COLORS.wave, supported ? 0.2 : 0.12);
-          waves.beginPath();
-          waves.moveTo(px + size * 0.2 + waveOffset, py + size * 0.52);
-          waves.lineTo(px + size * 0.45 + waveOffset, py + size * 0.46);
-          waves.lineTo(px + size * 0.7 + waveOffset, py + size * 0.52);
-          waves.strokePath();
-        }
-      }
-    }
+    this.generated = generated;
   }
 
   private drawCoastTile(

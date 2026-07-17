@@ -14,6 +14,8 @@ import {
   type WorldManifestLandmarkKind,
   type WorldManifestLandmarkV1,
   type WorldManifestV1,
+  type WorldManifestWaterLayoutV1,
+  type WorldManifestWaterRegionV1,
 } from "./WorldManifestContracts";
 
 const TOP_LEVEL_REQUIRED = [
@@ -25,9 +27,10 @@ const TOP_LEVEL_REQUIRED = [
   "dimensions",
   "landmarks",
   "islands",
+  "waterLayout",
 ] as const;
 
-const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/u;
+const IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/:-]*$/u;
 
 const islandKinds = new Set<string>(WORLD_MANIFEST_ISLAND_KINDS);
 const islandSizes = new Set<string>(WORLD_MANIFEST_ISLAND_SIZES);
@@ -80,6 +83,7 @@ export function validateWorldManifestV1(value: unknown): WorldManifestV1 {
   const dimensions = validateDimensions(source.dimensions);
   const islands = validateIslands(source.islands, dimensions);
   const landmarks = validateLandmarks(source.landmarks, dimensions);
+  const waterLayout = validateWaterLayout(source.waterLayout, dimensions);
 
   return deepFreeze({
     schemaVersion: WORLD_MANIFEST_SCHEMA_VERSION,
@@ -91,7 +95,70 @@ export function validateWorldManifestV1(value: unknown): WorldManifestV1 {
     dimensions,
     landmarks,
     islands,
+    waterLayout,
   });
+}
+
+function validateWaterLayout(
+  value: unknown,
+  dimensions: Readonly<WorldManifestDimensionsV1>,
+): WorldManifestWaterLayoutV1 {
+  const source = exactRecord(value, "$.waterLayout", ["version", "catalogFingerprint", "regions"]);
+  const version = identifier(source.version, "$.waterLayout.version");
+  const catalogFingerprint = identifier(source.catalogFingerprint, "$.waterLayout.catalogFingerprint");
+  if (!Array.isArray(source.regions)) fail("$.waterLayout.regions", "must be an array");
+  const ids = new Set<string>();
+  const regions = source.regions.map((entry, index): WorldManifestWaterRegionV1 => {
+    const path = `$.waterLayout.regions[${index}]`;
+    const raw = plainRecord(entry, path);
+    const strategy = stringValue(raw.strategy, `${path}.strategy`);
+    const required = strategy === "ellipse"
+      ? ["id", "typeId", "strategy", "seed", "center", "radiusX", "radiusY"]
+      : strategy === "ribbon"
+        ? ["id", "typeId", "strategy", "seed", "start", "end", "width"]
+        : fail(`${path}.strategy`, "must be ellipse or ribbon");
+    const region = exactRecord(entry, path, required);
+    const id = identifier(region.id, `${path}.id`);
+    if (!id.startsWith("water:")) fail(`${path}.id`, "must start with water:");
+    if (ids.has(id)) fail(`${path}.id`, `duplicates stable ID ${id}`);
+    ids.add(id);
+    const seed = safeInteger(region.seed, `${path}.seed`);
+    if (strategy === "ellipse") {
+      const typeId = identifier(region.typeId, `${path}.typeId`);
+      return {
+        id: id as `water:${string}`,
+        typeId,
+        strategy,
+        seed,
+        center: finitePoint(region.center, `${path}.center`, dimensions),
+        radiusX: finiteNumber(region.radiusX, `${path}.radiusX`, 0, false),
+        radiusY: finiteNumber(region.radiusY, `${path}.radiusY`, 0, false),
+      };
+    }
+    const typeId = identifier(region.typeId, `${path}.typeId`);
+    return {
+      id: id as `water:${string}`,
+      typeId,
+      strategy: "ribbon",
+      seed,
+      start: finitePoint(region.start, `${path}.start`, dimensions),
+      end: finitePoint(region.end, `${path}.end`, dimensions),
+      width: finiteNumber(region.width, `${path}.width`, 0, false),
+    };
+  }).sort(compareIds);
+  return { version, catalogFingerprint, regions };
+}
+
+function finitePoint(
+  value: unknown,
+  path: string,
+  _dimensions: Readonly<WorldManifestDimensionsV1>,
+): { x: number; y: number } {
+  const source = exactRecord(value, path, ["x", "y"]);
+  return {
+    x: finiteNumber(source.x, `${path}.x`, 0),
+    y: finiteNumber(source.y, `${path}.y`, 0),
+  };
 }
 
 /** Compact canonical JSON: UTF-16 code-unit key order, stable descriptor order, no trailing newline. */
@@ -327,7 +394,7 @@ function stringValue(value: unknown, path: string): string {
 function identifier(value: unknown, path: string): string {
   const result = stringValue(value, path);
   if (result.length > 128 || !IDENTIFIER_PATTERN.test(result)) {
-    fail(path, "must be a portable identifier (letters, numbers, dot, underscore, slash, or hyphen)");
+    fail(path, "must be a portable identifier (letters, numbers, dot, underscore, slash, colon, or hyphen)");
   }
   return result;
 }

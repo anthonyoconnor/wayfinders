@@ -172,50 +172,22 @@ runtime scope.
 
 ### WTR-1 — Layered water system
 
-Status: WTR-1.0 through WTR-1.5 are implemented on the branch asset-viewer
-prototype and await product feedback. None of this sequence is authorized for
-game-runtime integration.
+Status: completed as the visual prototype that established the direction now
+implemented by WTR-2. Historical scope and acceptance evidence are archived in
+`Wayfinders_Roadmap_Archive.md`.
 
-The proposal evolves the branch Water workspace through animation, island depth
-handoffs, and shoreline-wave studies while preserving terrain, collision,
-navigation, knowledge, and world generation as the only gameplay authorities.
-Its source pack, visual design, implementation sequence, and acceptance criteria
-are defined in `Wayfinders_Water_System_Milestone.md`. Production packaging and
-runtime replacement require a later, separately authorized proposal.
+### WTR-2 — Production water integration
 
-`WTR-1.0` through `WTR-1.5` are implemented on `codex/water-look-prototype` as a
-deliberately direct visual prototype. Its **Water** asset-workspace tab retains
-the static candidate and repeat comparisons, then uses one zoomable 96x96 world
-to show smoothly masked water-profile handoffs, wind and wave motion, three
-representative islands with irregular shoreline-following depth bands, broken
-exposure-sensitive shore waves, and lean, steady, and rich animated fishing-
-ground cues derived from the existing game shoal style. A compact gallery keeps
-the three strengths comparable outside the
-world. The prototype is ready for product feedback and remains entirely outside
-the production asset catalog and game runtime.
-
-The sequence uses static sprite sheets, a Water-workspace-local animation loop,
-canvas masks derived from island transparency, and judged visual defaults. It
-does not build a general animation system, production package contract,
-promotion workflow, chunk renderer, performance instrumentation, or broad
-automated test suite. The prototype may be revised or discarded after its
-feedback is recorded.
-
-`WTR-1.1` supplies judged-default wave and wind motion. `WTR-1.2` supplies the
-representative islands and irregular shore-following depth transitions.
-`WTR-1.3` supplies broken, non-uniform animated shore waves. `WTR-1.4` supplies
-three surface-disturbance strengths matching the game's lean, steady, and rich
-quality vocabulary, and `WTR-1.5` animates them in the same preview. Water type
-changes their context rather than implying a visible species. These remain visual-feedback
-milestones only; they do not authorize production asset promotion or
-game-runtime integration.
+Status: implemented on 2026-07-17. The durable runtime contracts and behavior
+are owned by the technical design and architecture map; completion evidence is
+archived in `Wayfinders_Roadmap_Archive.md`.
 
 ## Authorization boundary
 
 WTR-1.0 through WTR-1.5 are authorized only as the branch asset-viewer prototype
 described above. They may create branch-local preview assets and presentation
 code, but they must not register production packages or change the game runtime.
-Any gameplay or production-asset milestone still requires explicit user
-authorization.
+WTR-2.0 through WTR-2.6 were explicitly authorized and are complete. Any later
+gameplay or production-asset milestone still requires explicit user authorization.
 Do not implement gameplay saving; it may return only through an explicitly
 authorized milestone designed for the game that exists at that time.

@@ -42,28 +42,17 @@ crossfades, and ducking acceptance remain pending
 because the in-app browser connection did not initialize during this handoff;
 the rebuilt ambience also awaits product-owner audition.
 
-WTR-1.0 through WTR-1.5 are implemented on `codex/water-look-prototype` and await
-product feedback. The branch-only Water workspace compares all prepared tile
-profiles and variants, then presents a zoomable 96x96 world with smoothly masked
-profile handoffs, wind and wave motion, three representative islands, irregular
-shore-following shallow and coastal bands, broken exposure-sensitive shore
-waves, and three animated fishing-ground strengths matching the existing game's
-lean, steady, and rich vocabulary. Their 96 x 64 cues use only broken glints,
-ripples, and surface colour; no individual fish are visible at native player
-scale. A compact labelled gallery exposes the strength comparison directly. One pause control stops water,
-shoreline, and shoal motion together; workspace shutdown cancels the local
-animation lifecycle. The prototype does not register a water or shoal package,
-change the game runtime, or provide production authoring and promotion tools.
-Broad automated coverage remains intentionally outside this feedback
-prototype's scope. Source typecheck, architecture-boundary validation, and the
-production bundle pass. Browser review covered the overview and native game
-scale, the shared pause control, workspace teardown and remount, and clean
-warning/error output.
-
-The whole-world study supports stepped zoom through native 32-pixel game-tile
-scale while preserving the inspected map area, plus direct Fit and 1:1 Game
-controls. The Water workspace omits the production-tooling sidebar and gives
-that width to the world preview.
+WTR-2.0 through WTR-2.6 are implemented. The world manifest carries stable water
+regions and generation resolves a deterministic chunk-addressable water layout
+without changing gameplay terrain. The active-chunk `WaterRenderer` owns cached
+base and surface textures, visible-only discrete animation, canonical depth
+transitions, current/rough accents, reduced motion, and the aligned home-shore
+overlay. Fishing grounds use neutral hidden-quality presentation and lean,
+steady, or rich surveyed cues with no visible fish. The Water workspace uses the
+real generator and runtime assets with seed, zoom, overlay, pause, and comparison
+controls, and still omits the production-tooling sidebar. Asset validation,
+both typechecks, quick, contract, and I/O lanes, the production bundle, and live
+game and workspace browser checks pass.
 
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and

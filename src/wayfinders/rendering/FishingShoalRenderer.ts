@@ -5,8 +5,9 @@ import {
 } from "../assets/AuthoredAssetContracts";
 import { createAuthoredFishingShoalVisual } from "../assets/AuthoredAssetPresentation";
 import type { AuthoredAssetRuntime } from "../assets/PilotAssetRuntime";
+import { WATER_TEXTURE_KEYS } from "../assets/water";
 import { prototypeConfig } from "../config/prototypeConfig";
-import { createFishingShoalId, type FishingShoalReadModel } from "../exploration/FishingShoalContracts";
+import type { FishingShoalReadModel } from "../exploration/FishingShoalContracts";
 import { gridToChunk, gridToWorld } from "../world/CoordinateSystem";
 import {
   ChunkActivatedViewPool,
@@ -25,6 +26,7 @@ interface FishingShoalView {
   label: Phaser.GameObjects.Text;
   renderedState?: FishingShoalState;
   renderedHomeConnected?: boolean;
+  phase: number;
 }
 
 interface MarkerStyle {
@@ -66,8 +68,6 @@ const MARKER_STYLES: Readonly<Record<FishingShoalState, Readonly<MarkerStyle>>> 
     alpha: 0.95,
   },
 };
-
-const PILOT_SHOAL_ID = createFishingShoalId(0);
 
 /**
  * Developer-art presentation for the fog-filtered fishing-shoal read model.
@@ -128,6 +128,20 @@ export class FishingShoalRenderer {
     return this.views.getTelemetry();
   }
 
+  updatePresentation(timeMilliseconds: number, reducedMotion = false): void {
+    this.views.forEachActive((view) => {
+      if (!view.authoredVisual) return;
+      if (reducedMotion) {
+        view.authoredVisual.setAlpha(0.9).setScale(1);
+        return;
+      }
+      const phase = timeMilliseconds * 0.0014 + view.phase;
+      view.authoredVisual
+        .setAlpha(0.84 + Math.sin(phase * 1.7) * 0.08)
+        .setScale(1 + Math.sin(phase) * 0.018);
+    });
+  }
+
   destroy(): void {
     this.views.destroy();
   }
@@ -138,14 +152,17 @@ export class FishingShoalRenderer {
   ): void {
     const position = gridToWorld(record.tile, prototypeConfig.navigation.tileSize);
     view.container.setPosition(position.x, position.y);
-    if (record.id === PILOT_SHOAL_ID && !view.authoredVisual && this.authoredAssets) {
-      const authored = createAuthoredFishingShoalVisual(this.scene, this.authoredAssets);
-      if (authored) {
-        view.authoredVisual = authored.image;
-        view.container.addAt(authored.image, 0);
-      }
+    view.phase = [...record.id].reduce((sum, character) => sum + character.charCodeAt(0), 0) * 0.19;
+    if (!view.authoredVisual) {
+      const authored = this.authoredAssets
+        ? createAuthoredFishingShoalVisual(this.scene, this.authoredAssets)
+        : undefined;
+      view.authoredVisual = authored?.image
+        ?? this.scene.add.image(0, 0, WATER_TEXTURE_KEYS.shoalSteady).setOrigin(0.5);
+      view.container.addAt(view.authoredVisual, 0);
     }
-    const usesAuthoredVisual = record.id === PILOT_SHOAL_ID && view.authoredVisual !== undefined;
+    view.authoredVisual.setTexture(this.textureFor(record));
+    const usesAuthoredVisual = view.authoredVisual !== undefined;
     view.authoredVisual?.setVisible(usesAuthoredVisual);
     view.marker.setVisible(!usesAuthoredVisual);
     view.badge.setVisible(!usesAuthoredVisual);
@@ -183,7 +200,7 @@ export class FishingShoalRenderer {
     children.push(connectivityCue, marker, badge, label);
     const container = this.scene.add.container(0, 0, children)
       .setDepth(this.authoredMetadata?.visual.depth ?? 43);
-    return { container, connectivityCue, marker, badge, label };
+    return { container, connectivityCue, marker, badge, label, phase: 0 };
   }
 
   private redraw(view: FishingShoalView, state: FishingShoalState, homeConnected: boolean): void {
@@ -289,5 +306,13 @@ export class FishingShoalRenderer {
           ? `HOME-LINKED FISHING GROUND\n${record.quality.toUpperCase()} - ${record.clue.label}`
           : `RETURNED SURVEY - ${record.quality.toUpperCase()}\n${record.clue.label}`;
     }
+  }
+
+  private textureFor(record: Readonly<FishingShoalReadModel>): string {
+    if (record.state === "surveyed" || record.state === "returned-survey") {
+      if (record.quality === "lean") return WATER_TEXTURE_KEYS.shoalLean;
+      if (record.quality === "rich") return WATER_TEXTURE_KEYS.shoalRich;
+    }
+    return WATER_TEXTURE_KEYS.shoalSteady;
   }
 }

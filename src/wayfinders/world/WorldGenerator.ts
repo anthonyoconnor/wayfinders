@@ -20,6 +20,11 @@ import {
 } from "./manifest";
 import { WorldGrid } from "./WorldGrid";
 import {
+  GeneratedWaterLayout,
+  WaterLayoutPlanner,
+  createManifestWaterLayout,
+} from "./water";
+import {
   EMPTY_AUTHORED_ISLAND_CATALOG,
   validateAuthoredIslandCatalog,
   type AuthoredIslandCatalog,
@@ -36,7 +41,7 @@ export interface WorldLandmarks {
   hiddenResource: GridPoint;
 }
 
-export const WORLD_GENERATOR_VERSION = "wayfinders-world-v2";
+export const WORLD_GENERATOR_VERSION = "wayfinders-world-v3";
 
 export interface PlannedWorld {
   seed: number;
@@ -51,6 +56,7 @@ export interface RasterizedWorld extends PlannedWorld {
 
 export interface GeneratedWorld extends RasterizedWorld {
   analysis: WorldAnalysisIndex;
+  water: GeneratedWaterLayout;
 }
 
 function smoothStep(value: number): number {
@@ -86,7 +92,9 @@ export class WorldGenerator {
   generate(seed = this.config.world.seed): GeneratedWorld {
     const planned = this.plan(seed);
     const rasterized = this.rasterize(planned);
-    return { ...rasterized, analysis: this.analyze(rasterized) };
+    const analysis = this.analyze(rasterized);
+    const water = this.planWater(rasterized, analysis);
+    return { ...rasterized, analysis, water };
   }
 
   /** Produces stable world facts without allocating or painting logical chunks. */
@@ -134,6 +142,7 @@ export class WorldGenerator {
       settingsProfileId: worldGenerationProfileIdForConfig(this.config),
       settingsFingerprint: worldGenerationSettingsFingerprint(this.config),
       authoredIslandCatalogRevision: this.authoredIslandCatalog.revision,
+      waterLayout: createManifestWaterLayout(normalizedSeed, planningGrid.width, planningGrid.height),
     });
     return Object.freeze({
       seed: normalizedSeed,
@@ -185,6 +194,20 @@ export class WorldGenerator {
       sourceRevision: world.manifest.generatorVersion,
       isPassable: (index) => graph.isNavigationNodePassable(index),
     });
+  }
+
+  /** Resolves presentation water types without changing authoritative terrain. */
+  planWater(
+    world: Readonly<RasterizedWorld>,
+    analysis: Readonly<WorldAnalysisIndex>,
+  ): GeneratedWaterLayout {
+    return new WaterLayoutPlanner().plan(
+      world.grid,
+      analysis,
+      world.islands,
+      world.manifest,
+      world.seed,
+    );
   }
 
   private paintSupportedWater(grid: WorldGrid, seed: number, center: GridPoint): void {

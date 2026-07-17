@@ -19,10 +19,11 @@ const ESTABLISHED_IDS = [
 ] as const;
 
 describe("asset library catalog", () => {
-  it("starts with only the three runtime packages", () => {
-    expect(ASSET_LIBRARY_CATALOG).toHaveLength(3);
-    expect(ASSET_LIBRARY_CATALOG.every((entry) => entry.entryType === "authored-package")).toBe(true);
-    expect(ASSET_LIBRARY_CATALOG.map((entry) => entry.id)).toEqual(ESTABLISHED_IDS);
+  it("includes the three runtime packages and current imported-island sources", () => {
+    expect(ASSET_LIBRARY_CATALOG).toHaveLength(9);
+    const runtime = ASSET_LIBRARY_CATALOG.filter((entry) => entry.entryType === "authored-package");
+    expect(runtime.map((entry) => entry.id)).toEqual(ESTABLISHED_IDS);
+    expect(ASSET_LIBRARY_CATALOG.filter((entry) => entry.entryType === "production-candidate")).toHaveLength(6);
   });
 
   it("previews a passable multi-layer shoal candidate from a non-island source path", () => {
@@ -235,7 +236,7 @@ describe("asset library catalog", () => {
       "reference.island.20.rock-shard",
     ]);
     expect(ASSET_LIBRARY_GROUPS.map((group) => [group.id, group.entries.length])).toEqual([
-      ["islands", 1],
+      ["islands", 7],
       ["vessels", 1],
       ["world-features", 1],
     ]);

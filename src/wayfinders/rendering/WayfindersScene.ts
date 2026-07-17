@@ -3,6 +3,7 @@ import { appendDeveloperLog, clearDeveloperLog } from "../../developerLog";
 import { preloadPilotAssetPackages } from "../assets/PilotAssetCatalog";
 import { preloadCloudAsset } from "../assets/CloudAssetCatalog";
 import { createPilotAssetRuntime, type PilotAssetRuntime } from "../assets/PilotAssetRuntime";
+import { createWaterAssetRuntime, preloadWaterAssetPackage } from "../assets/water";
 import {
   createAuthoredIslandPresentationRuntime,
   EMPTY_AUTHORED_ISLAND_PRESENTATION_CATALOG,
@@ -87,6 +88,7 @@ import type { ShipRenderPose } from "./ShipPose";
 import { SurveySiteRenderer } from "./SurveySiteRenderer";
 import { WreckRenderer } from "./WreckRenderer";
 import { WorldRenderer } from "./WorldRenderer";
+import { WaterRenderer } from "./WaterRenderer";
 import {
   createPhaserAudioPlaybackPort,
   GameAudioCueController,
@@ -129,6 +131,7 @@ interface MovementKeys {
 interface PresentationResourceSnapshot {
   readonly activeChunks: ReturnType<ActiveChunkSet["getTelemetry"]>;
   readonly world: ReturnType<WorldRenderer["getTelemetry"]>;
+  readonly water: ReturnType<WaterRenderer["getTelemetry"]>;
   readonly knowledge: ReturnType<KnowledgeOverlayRenderer["getResourceTelemetry"]>;
   readonly clouds: ReturnType<CloudLayerRenderer["getResourceTelemetry"]>;
   readonly risk: ReturnType<RiskOverlayRenderer["getResourceTelemetry"]>;
@@ -208,8 +211,10 @@ export class WayfindersScene extends Phaser.Scene {
   private readonly frameTiming = new FrameTimingMonitor();
   private readonly presentationWork = new PresentationWorkMonitor();
   private readonly simulationDiagnostics = new SimulationDiagnosticsAdapter();
+  private prefersReducedMotion = false;
   private keys!: MovementKeys;
   private worldRenderer!: WorldRenderer;
+  private waterRenderer!: WaterRenderer;
   private knowledgeOverlay!: KnowledgeOverlayRenderer;
   private cloudLayer!: CloudLayerRenderer;
   private riskOverlay!: RiskOverlayRenderer;
@@ -330,6 +335,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   preload(): void {
     preloadPilotAssetPackages(this);
+    preloadWaterAssetPackage(this);
     preloadCloudAsset(this);
     preloadAuthoredIslandPresentations(this, this.authoredIslandPresentationCatalog);
     if (this.audioCatalogResult?.ok) {
@@ -338,6 +344,8 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   create(): void {
+    this.prefersReducedMotion = typeof window.matchMedia === "function"
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     this.pilotAssets = createPilotAssetRuntime(this);
     this.authoredIslandPresentations = createAuthoredIslandPresentationRuntime(
       this,
@@ -348,11 +356,16 @@ export class WayfindersScene extends Phaser.Scene {
       this.pilotAssets,
       this.authoredIslandPresentations,
     );
+    this.waterRenderer = new WaterRenderer(
+      this,
+      createWaterAssetRuntime(this),
+      this.prefersReducedMotion,
+    );
     this.wreckRenderer = new WreckRenderer(this);
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);
     this.cloudLayer = new CloudLayerRenderer(
       this,
-      typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+      this.prefersReducedMotion,
     );
     this.riskOverlay = new RiskOverlayRenderer(this);
     this.cargoRenderer = new CargoRenderer(this);
@@ -424,6 +437,8 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   override update(_time: number, delta: number): void {
+    this.waterRenderer.update(_time);
+    this.fishingShoalRenderer.updatePresentation(_time, this.prefersReducedMotion);
     // Derived guidance requested by the prior authoritative tick is applied
     // before this frame's movement. Requests are coalesced by revision.
     this.simulation.advanceForwardGuidance();
@@ -523,6 +538,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.resetActiveChunkSet();
     const delta = this.activeChunkSet.update(this.currentViewportChunkRegion());
     this.worldRenderer.render(this.simulation.generated, delta.active);
+    this.waterRenderer.render(this.simulation.generated, delta.active);
     this.applyActiveChunkDelta(delta, true);
   }
 
@@ -570,6 +586,7 @@ export class WayfindersScene extends Phaser.Scene {
 
   private applyActiveChunkDelta(delta: Readonly<ActiveChunkDelta>, worldAlreadyBound = false): void {
     if (!worldAlreadyBound) this.worldRenderer.applyActiveChunks(delta);
+    if (!worldAlreadyBound) this.waterRenderer.applyActiveChunks(delta);
     this.knowledgeOverlay.applyActiveChunkDelta(this.simulation.world, delta);
     this.cloudLayer.applyActiveChunkDelta(
       delta,
@@ -2149,6 +2166,7 @@ export class WayfindersScene extends Phaser.Scene {
     return Object.freeze({
       activeChunks: this.activeChunkSet.getTelemetry(),
       world: this.worldRenderer.getTelemetry(),
+      water: this.waterRenderer.getTelemetry(),
       knowledge: this.knowledgeOverlay.getResourceTelemetry(),
       clouds: this.cloudLayer.getResourceTelemetry(),
       risk: this.riskOverlay.getResourceTelemetry(),

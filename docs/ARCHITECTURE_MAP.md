@@ -11,17 +11,17 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
    modes also load the shared audio catalog once; a catalog failure is retained
    as an explicit silent/unavailable result rather than blocking startup.
 2. In game mode, `GameSimulation` plans a `WorldManifest`, rasterizes
-   `WorldGrid`, builds one `WorldAnalysisIndex`, and composes gameplay features.
+   `WorldGrid`, builds one `WorldAnalysisIndex`, resolves the presentation-only
+   `GeneratedWaterLayout`, and composes gameplay features.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
 4. The asset-library mode resolves a typed asset-workspace registry and starts
    one workspace-scoped library, Great Hall, Audio, or Water preview scene
-   without gameplay simulation. The branch-only Water workspace starts an
-   animated `WaterPreviewScene`
-   over prepared candidate sheets and preview-only islands and shoals, without a
-   gameplay catalog or simulation. The trial mode starts `AssetTrialScene` with
-   one isolated open-water `WorldGrid`, movement authority, and selected
-   candidate.
+   without gameplay simulation. The Water workspace starts `WaterPreviewScene`
+   over the validated water package
+   and real seeded generated-water facts, without creating gameplay simulation.
+   The trial mode starts `AssetTrialScene` with one isolated open-water
+   `WorldGrid`, movement authority, and selected candidate.
 5. Presentation controllers and renderers consume read models, revisions, and
    the shared active-chunk delta where applicable.
 6. Diagnostics and development tools consume bounded read models and counters;
@@ -74,7 +74,9 @@ adapter may own Phaser sound instances.
 - `WorldGenerator` owns plan, rasterize, and analyze stages. `WorldManifest` is
   durable generated identity; `WorldGrid` is runtime tile authority;
   `WorldAnalysisIndex` is the shared source for connectivity and coastline
-  analysis.
+  analysis; `WaterTypeCatalogV1`, `WaterLayoutPlanner`, and
+  `GeneratedWaterLayout` own renderer-neutral water presentation facts after
+  analysis without changing terrain authority.
 - `WorldSpatialIndex` owns deterministic chunk buckets.
   `WorldDescriptorRegistry` adapts heterogeneous descriptors at composition;
   feature systems remain responsible for exact range, state, and approach
@@ -97,6 +99,9 @@ adapter may own Phaser sound instances.
   rules never depend on clouds. Shared package textures, the
   player-boat visual, and the four-frame cloud sheet remain a small scene-owned
   set. Feature-specific presentation belongs in controllers and renderers.
+  `WaterRenderer` consumes that same delta and owns two cached canvas-texture
+  planes per active chunk plus the active home-shore overlay. Only visible
+  surface planes advance; `WorldRenderer` no longer draws water or waves.
 - `src/wayfinders/audio/index.ts` is the public stored-audio and mixer seam. It
   validates the canonical catalog, resolves catalog-relative runtime URLs, and
   owns in-memory master/category gain, bounded deterministic voice decisions,
@@ -128,11 +133,10 @@ adapter may own Phaser sound instances.
 - `AssetWorkspaceRegistry` is the asset-library composition seam. The shell owns
   accessible tab navigation, URL history, and the three permanent mount regions.
   Library workspaces own their catalog partition, collision profiles,
-  namespaced selection, and scene lifetime. The branch-only Water workspace is
-  an animated feedback surface that reads prepared candidate sheets and
-  preview-only island and shoal images directly. It owns its DOM canvas masks
-  and request-animation-frame lifecycle, but no package, promotion, runtime,
-  terrain, or gameplay authority. The
+  namespaced selection, and scene lifetime. The Water workspace is a focused
+  production inspection surface that reads the validated runtime water package
+  and the same seeded `GeneratedWaterLayout` facts as the game. Its zoom, seed,
+  overlay, and pause controls own no package, terrain, or gameplay authority. The
   view-only Great Hall workspace
   validates and varies a checked-in twenty-generation V1 fixture, then passes it
   to the same bounded semantic renderer used by the game. A pure adapter maps
