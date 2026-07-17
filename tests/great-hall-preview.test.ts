@@ -70,4 +70,26 @@ describe("GR-5.1 Great Hall approval fixtures", () => {
       "idol-location",
     ]));
   });
+
+  it("shows every achievement asset across dense returned voyages in the default memorial", () => {
+    const current = buildGreatHallPreviewModel({ navigatorCount: 20 }).selectedNavigator;
+    const returnedVoyages = current.voyages.filter(({ state }) => state === "returned");
+
+    expect(returnedVoyages).toHaveLength(3);
+    expect(returnedVoyages.every(({ achievements }) => achievements.length > 1)).toBe(true);
+    expect(new Set(returnedVoyages.flatMap(({ achievements }) =>
+      achievements.map(({ kind }) => kind)))).toEqual(new Set([
+      "supported-route",
+      "mapped-water",
+      "island-lead",
+      "island-dossier",
+      "survey-lead",
+      "survey-report",
+      "fishing-lead",
+      "fishing-survey",
+      "wreck-report",
+      "idol-location",
+    ]));
+    expect(current.voyages[3]?.state).toBe("awaiting");
+  });
 });

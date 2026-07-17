@@ -162,10 +162,10 @@ export const GREAT_HALL_PREVIEW_ROSTER = Object.freeze([
   navigator(18, "completed", completedVoyages([V.wreck], [V.siteReport], [V.fishingSurvey], [V.route])),
   navigator(19, "lost-unlocated", lostVoyages([[V.water], [V.islandLead]])),
   navigator(20, "active", Object.freeze([
-    returned(1, V.route, V.fishingLead),
-    returned(2, V.fishingSurvey, V.idol),
-    voyage(3, "awaiting"),
-    voyage(4, "unsailed"),
+    returned(1, V.route, V.water, V.islandLead, V.islandDossier),
+    returned(2, V.siteLead, V.siteReport, V.fishingLead),
+    returned(3, V.fishingSurvey, V.wreck, V.idol),
+    voyage(4, "awaiting"),
   ])),
 ] satisfies readonly Readonly<GreatHallPreviewNavigator>[]);
 

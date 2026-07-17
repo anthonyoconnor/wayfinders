@@ -454,6 +454,10 @@ frames. The counting cord and lineage totals are not displayed in this review
 version. Their reference art and infographic definitions remain available for
 a later product decision.
 
+For visual review, the default current-navigator fixture displays all ten
+achievement symbols across three returned voyages, with multiple achievements
+per band, while retaining one awaiting voyage state.
+
 Acceptance gate:
 
 - exactly twenty distinct, complete navigator portrait files exist and map

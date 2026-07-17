@@ -424,6 +424,9 @@ occupy the left mounting area; the right wall always presents twelve compact
 portrait positions, using covered placeholders for generations not yet present
 in that era. Lineage totals and their counting cord are intentionally omitted
 from this review version. The twenty existing portrait files remain unchanged.
+The default twentieth-generation memorial distributes all ten achievement
+symbols across three dense returned voyages so the main Hall view exercises
+multi-achievement bands; its fourth voyage remains awaiting.
 
 An imported island can enter a disposable sea trial regardless of availability.
 The trial contains only open water, the authored player boat, and the candidate's
