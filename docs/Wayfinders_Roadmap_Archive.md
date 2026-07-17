@@ -1165,6 +1165,10 @@ synthetic contract fixtures rather than a retained placeholder asset.
 
 Status: implemented and accepted on 2026-07-16.
 
+Product decision (2026-07-16): the previously proposed `GR-5.4` follow-on is
+not required. The Great Hall track closes at `GR-5.3`; no ceremony-polish or
+additional acceptance milestone remains in the current roadmap.
+
 The product owner accepted the fixed-art Ancestor Wall preview and recorded the
 required **Go** for game integration. Twenty stable generation portraits and the
 closed ten-symbol achievement vocabulary now feed one validated, JSON-compatible

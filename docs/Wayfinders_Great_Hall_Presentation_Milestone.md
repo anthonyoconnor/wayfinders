@@ -1,8 +1,8 @@
-# Wayfinders graphical Great Hall milestone proposal
+# Wayfinders graphical Great Hall milestone
 
-This document owns the detailed design and acceptance criteria for the
-graphical Great Hall proposal. `Wayfinders_Roadmap.md` owns its planning,
-sequencing, and authorization state. The retained concepts under
+This document owns the implemented detailed design and acceptance criteria for
+the graphical Great Hall. `Wayfinders_Roadmap.md` owns planning, sequencing,
+and authorization state. The retained concepts under
 `concept_art/great-hall` are reference art only and are not runtime assets.
 `Wayfinders_Great_Hall_Infographic_Lexicon.md` owns the exact counting-cord,
 navigator, voyage, achievement, wreck-fate, idol, and detail-symbol vocabulary.
@@ -26,20 +26,20 @@ chronicle that:
 - keeps portraits, symbols, era grouping, and all rendered pixels strictly in
   presentation authority.
 
-The proposal is complete when the selected visual system, twenty predefined
-portraits, fixed symbol and Hall assets, an explicitly approved preview-tool
-example, graphical Hall implementation, ceremony modes, accessibility
-behavior, responsive layouts, and measured twenty-generation budgets all pass
-their acceptance gates.
+The track is complete with the selected visual system, twenty predefined
+portraits, fixed symbol and Hall assets, the approved preview-tool example, one
+shared graphical Hall implementation, bounded era paging, exact accessible
+achievement detail, and the measured twenty-generation model budget.
 
 ## Evidence and current constraints
 
-### Current presentation
+### Implemented presentation
 
-`GreatHallView` is a screen-space HTML dialog. It currently uses headings,
-prose, numeric cards, a newest-first generation button list, and textual
-achievement lists. It contains no navigator portrait, general achievement icon,
-SVG, canvas illustration, or Hall-specific runtime art.
+`GreatHallView` is a screen-space HTML dialog hosting the shared graphical Hall
+renderer. It uses the fixed Hall backdrop, predefined navigator portraits,
+achievement symbols, twelve-generation era pages, one selected memorial, four
+voyage bands, and an exact-label detail plaque. The asset workspace passes its
+validated fixture to that same renderer.
 
 The current dialog has three required modes:
 
@@ -555,48 +555,6 @@ Acceptance gate:
 - the old text renderer, preview-only presentation model, and duplicate Hall
   rendering markup are removed.
 
-### GR-5.4 — Ceremony, responsive polish, and acceptance
-
-Status: proposed, not started, and not authorized. Depends on `GR-5.3`.
-
-Finish the shared Hall renderer as a historical place rather than a reskinned
-data panel. Handover adds the outgoing portrait to the wall and reveals the next
-fresh frame without delaying authoritative succession. Loss uses a short
-restrained material transition; a later returned wreck report changes only the
-frame treatment and never draws across the portrait. Completion emphasizes the
-final voyage and approved achievement symbols before showing the existing
-choices; it does not reintroduce the deferred counting cord or lineage totals.
-All animation is optional presentation and has an immediate reduced-motion
-path.
-
-Tune desktop, medium, and narrow layouts; focus visibility; tooltip/plaque
-placement; text scaling; contrast; grayscale symbol recognition; touch-sized
-targets inside the Hall; and resize behavior. Run repeated open/page/close
-measurements through twenty generations against the budgets
-recorded in `GR-5.1`, including decoded texture and live DOM/resource counts.
-
-Acceptance gate:
-
-- browser screenshots pass for 1, 12, 13, and 20 generations across
-  home, handover, loss, confirmed fate, and completion states at the approved
-  desktop, medium, and narrow viewports;
-- for an identical presentation object, the asset-workspace and game hosts have
-  equivalent Hall content, ordering, state treatments, and accessible names;
-- no layout uses horizontal overflow or a nested generation scroller;
-- every interaction works without hover and with keyboard-only navigation;
-- screen-reader traversal exposes era position, selected navigator, state,
-  voyage outcomes, exact achievement labels, fate, and actions in a coherent
-  order;
-- reduced motion presents every state change immediately and loses no
-  information;
-- repeated era traversal and Hall reopening plateau at approved DOM, image,
-  listener, decoded-byte, adapter, and rendering timing budgets with no stale
-  selection or leak;
-- current home-dock, lineage, discovery, completion, and movement outcomes
-  remain unchanged; and
-- all relevant visual, quick, contract, integration, repository/I/O,
-  performance, typecheck, architecture, asset, and bundle gates pass.
-
 ## Dependency summary
 
 ```mermaid
@@ -606,7 +564,6 @@ flowchart LR
     GH52 --> GO{"Product owner Go?"}
     GO -->|Revise| GH52
     GO -->|Go| GH53["GR-5.3 shared model and renderer"]
-    GH53 --> GH54["GR-5.4 ceremony and acceptance"]
 ```
 
 The graph shows technical dependencies, not authorization or product priority.
@@ -624,16 +581,6 @@ The implemented baseline records:
   and
 - repository-I/O validation for twenty distinct fixed portrait files, the Hall
   backdrop, and the authored achievement-symbol sheet.
-
-Interactive browser measurements remain to be recorded during product review
-for each named lineage fixture and viewport:
-
-- chronicle-to-presentation build and Hall open p50/p95/p99;
-- era page switch and selected navigator switch p50/p95/p99;
-- visible and total Hall DOM nodes, listeners, and image elements;
-- loaded predefined portrait count and decoded bytes;
-- layout-shift and resize behavior; and
-- repeated open/page/close plateau behavior.
 
 The fixed structural budget is twelve portrait controls, four selected voyage
 bands, one selected detail surface, and controls whose count depends on visible
@@ -690,7 +637,7 @@ ordering.
 
 ## Definition of done
 
-The graphical Great Hall track is done when generations one through twenty map
+The graphical Great Hall track is complete: generations one through twenty map
 to twenty stable predefined portraits; the product owner approved the cohesive
 preview-tool example before game integration; one versioned JSON-compatible
 presentation contract and one graphical renderer serve both the asset workspace
@@ -699,6 +646,5 @@ symbol language and exact-text detail; fixed twelve-generation era pages make
 the twenty-generation scope practical without lineage-sized DOM; home,
 handover, loss, confirmed fate, and completion modes preserve their current
 rules; the old text and preview-only rendering paths are removed; the Hall looks
-like the authored home island's accumulated ancestral interior; all responsive,
-accessibility, visual, resource, performance, repository, and game-behavior
-gates pass; and no presentation pixel or fixture has become gameplay authority.
+like the authored home island's accumulated ancestral interior; and no
+presentation pixel or fixture has become gameplay authority.

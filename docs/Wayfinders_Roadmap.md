@@ -1,7 +1,7 @@
 # Wayfinders current roadmap
 
-Status: forward plan. Great Hall integration through `GR-5.3` is implemented;
-ceremony and acceptance polish in `GR-5.4` remains unauthorized.
+Status: forward plan. The Great Hall track is complete through `GR-5.3`; no
+further Great Hall milestone is planned.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -61,8 +61,7 @@ integration in `GR-5.3` are implemented.
 
 ### GR-5 — Graphical Great Hall chronicle
 
-Status: implemented through `GR-5.3`. `GR-5.4` remains proposed and requires
-separate authorization.
+Status: complete through `GR-5.3`. No further milestone is planned.
 
 Replace the text-led Great Hall with the selected **Ancestor Wall** direction:
 reviewed navigator portraits, a stable achievement-symbol language, fixed
@@ -80,9 +79,7 @@ The implementation sequence is:
    accepted by the product owner;
 3. `GR-5.3` — one versioned JSON-compatible presentation contract, a shared
    graphical renderer for the asset viewer and game, the chronicle adapter, and
-   bounded era paging, all now implemented; and
-4. `GR-5.4` — ceremony modes, responsive/accessibility polish, visual review,
-   shared-host equivalence, and twenty-generation performance acceptance.
+   bounded era paging, all now implemented.
 
 ```mermaid
 flowchart LR
@@ -91,7 +88,6 @@ flowchart LR
     GH52 --> GO{"Product owner Go?"}
     GO -->|Revise| GH52
     GO -->|Go| GH53["GR-5.3 shared model and renderer"]
-    GH53 --> GH54["GR-5.4 ceremony and acceptance"]
 ```
 
 The detailed current-information inventory, retained concepts, selected visual
@@ -141,7 +137,7 @@ second presentation-lifetime policy or simulation clock.
 
 ## Authorization boundary
 
-No further milestone is authorized for implementation. `GR-5.4` requires
-explicit authorization. The water proposal, gameplay persistence, a new gameplay or production-asset
+No further milestone is authorized for implementation. The water proposal,
+gameplay persistence, a new gameplay or production-asset
 milestone, broad runtime content rollout, or any other deferred scope requires
 explicit user authorization.

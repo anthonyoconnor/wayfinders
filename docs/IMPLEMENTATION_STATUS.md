@@ -67,9 +67,6 @@ membership; `tests/README.md` explains lane selection.
   sailing and representative mobile performance remain unimplemented.
 - Interactive WebGL acceptance remains appropriate for presentation, asset-tool
   usability, and browser frame-time changes even when automated gates pass.
-- GR-5.4 ceremony animation, full responsive/accessibility polish, shared-host
-  screenshot equivalence, and repeated-open resource acceptance remain proposed
-  and unauthorized.
 - End-to-end browser departure responsiveness has not been remeasured after the
   current guidance and active-chunk architecture settled. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.
