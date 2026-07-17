@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.island-bone-rock-uninhabited",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "20eb65c16c63021bb1630121ebfe7e17ae845f27e667b18e8d2269eec2526e76",
+  "jobKey": "a92c2212abfb0631561f56f7c3dc900675779aef41eb8a57f6fa91cf10e78b54",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-island-bone-rock-uninhabited-source.png",
+      "sha256": "2da6b6685664312de8db1dc1f067581a4320afcca0e92971a506235b9ec920ee"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-island-bone-rock-uninhabited-mask.png",
+      "sha256": "8cfd3aaf8c73a3a6fac3214a79256c65e6cfaec944a134872fad0fae4eac64af"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-island-bone-rock-uninhabited/base.png",
+        "width": 640,
+        "height": 640,
+        "sha256": "21e0df2a8dac244b79083baa46f8ef65d30637e44ae0ffe6c5b61eec09342651",
+        "sourceBounds": {
+          "x": 92,
+          "y": 128,
+          "width": 1073,
+          "height": 966
+        },
+        "placement": {
+          "x": 0,
+          "y": 32,
+          "width": 640,
+          "height": 576
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-island-bone-rock-uninhabited/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "6f04d43b395e62e77917eb35700dae88b08e8a91e11e685832533bb09caa8506"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-island-bone-rock-uninhabited/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "086872837489039e2ce3e34bbb3718894174f4953eedeed3426110f899ba6456"
+    }
+  }
+}

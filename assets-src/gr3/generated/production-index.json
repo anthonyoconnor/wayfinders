@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "pipelineVersion": 2,
-  "manifestSha256": "9e43cf57fe25108eea73a7bc451e4f401785e2b27184983ff812d996e285bd6e",
+  "manifestSha256": "7d8d8a124f99e464b6a2afbe2555031c682cb363994dfb73950641000c10f7da",
   "entries": [
     {
       "id": "production.island.horseshoe",
@@ -23,6 +23,90 @@
       ],
       "thumbnailFile": "assets-src/gr3/candidates/production-island-horseshoe/thumbnail.png",
       "collisionDraftFile": "assets-src/gr3/candidates/production-island-horseshoe/collision-draft.json"
+    },
+    {
+      "id": "production.island.island-01-crescent-cay-uninhabited",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "469d9516feb2a3c39d5af179b7182a04c35599180a1f20724297f7eb4f395f90",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-island-01-crescent-cay-uninhabited-source.png",
+        "assets-src/gr3/candidate-masks/production-island-island-01-crescent-cay-uninhabited-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-island-01-crescent-cay-uninhabited/base.png",
+          "width": 320,
+          "height": 320,
+          "sha256": "44f95c0d38d6206f1295f21e48bef2759c94cd3547b29bb4e87fec4e6075b348"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-island-01-crescent-cay-uninhabited/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-island-01-crescent-cay-uninhabited/collision-draft.json"
+    },
+    {
+      "id": "production.island.island-bone-rock-uninhabited",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "a92c2212abfb0631561f56f7c3dc900675779aef41eb8a57f6fa91cf10e78b54",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-island-bone-rock-uninhabited-source.png",
+        "assets-src/gr3/candidate-masks/production-island-island-bone-rock-uninhabited-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-island-bone-rock-uninhabited/base.png",
+          "width": 640,
+          "height": 640,
+          "sha256": "21e0df2a8dac244b79083baa46f8ef65d30637e44ae0ffe6c5b61eec09342651"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-island-bone-rock-uninhabited/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-island-bone-rock-uninhabited/collision-draft.json"
+    },
+    {
+      "id": "production.island.island-lightning-ridge-uninhabited",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "41e9865e017104ac017e8144ccdfe8619c94a97fd59420e8814857659a6add3e",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-island-lightning-ridge-uninhabited-source.png",
+        "assets-src/gr3/candidate-masks/production-island-island-lightning-ridge-uninhabited-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-island-lightning-ridge-uninhabited/base.png",
+          "width": 480,
+          "height": 480,
+          "sha256": "5915af73e7f29f3e8e2d44279dd9a595b942b0386c0601e811c74d953a5d3c00"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-island-lightning-ridge-uninhabited/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-island-lightning-ridge-uninhabited/collision-draft.json"
+    },
+    {
+      "id": "production.island.island-star-atoll-uninhabited",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "7d9f57e9d3112d4e115c4fa533ff477d4c5ba067835069c800d725ea0935be76",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-island-star-atoll-uninhabited-source.png",
+        "assets-src/gr3/candidate-masks/production-island-island-star-atoll-uninhabited-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-island-star-atoll-uninhabited/base.png",
+          "width": 480,
+          "height": 480,
+          "sha256": "16866e7f57d35374fc4027e0b2e2aa95deb0a6aa565eb93c58986d0b7e6bcdb8"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-island-star-atoll-uninhabited/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-island-star-atoll-uninhabited/collision-draft.json"
     },
     {
       "id": "production.island.river-delta-inhabited",

@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "pipelineVersion": 1,
-  "manifestSha256": "63bd4b1886372a882a0ed53b306cd5601e6c5a84574d74f4a2d157fd1bcc666e",
+  "manifestSha256": "7d8d8a124f99e464b6a2afbe2555031c682cb363994dfb73950641000c10f7da",
   "counts": {
     "candidates": 0,
     "approved": 0,
@@ -11,7 +11,7 @@
   },
   "queue": [],
   "evidence": {
-    "preparedCandidateCount": 0,
+    "preparedCandidateCount": 6,
     "candidateThumbnailBytes": 0,
     "maxSelectedCandidateDecodedBytes": 0,
     "promotedPayloadBytes": 0

@@ -273,6 +273,223 @@
         "subcellSize": 8
       },
       "availableInGame": true
+    },
+    {
+      "id": "production.island.island-01-crescent-cay-uninhabited",
+      "name": "island-01-crescent-cay-uninhabited",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "island production sources",
+      "sortOrder": 30,
+      "tags": [
+        "island",
+        "01",
+        "crescent",
+        "cay",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-island-01-crescent-cay-uninhabited-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Base visual",
+          "role": "base",
+          "sourceFile": "assets-src/gr3/intake/production-island-island-01-crescent-cay-uninhabited-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 320,
+            "targetHeight": 320,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              232,
+              12,
+              233
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 80,
+            "trimAlphaThreshold": 8,
+            "padding": 8
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-island-01-crescent-cay-uninhabited-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.island-star-atoll-uninhabited",
+      "name": "island-star-atoll-uninhabited",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "island production sources",
+      "sortOrder": 40,
+      "tags": [
+        "island",
+        "star",
+        "atoll",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-island-star-atoll-uninhabited-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Base visual",
+          "role": "base",
+          "sourceFile": "assets-src/gr3/intake/production-island-island-star-atoll-uninhabited-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 480,
+            "targetHeight": 480,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              229,
+              10,
+              233
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 80,
+            "trimAlphaThreshold": 8,
+            "padding": 8
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-island-star-atoll-uninhabited-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.island-bone-rock-uninhabited",
+      "name": "island-bone-rock-uninhabited",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "island production sources",
+      "sortOrder": 50,
+      "tags": [
+        "island",
+        "bone",
+        "rock",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-island-bone-rock-uninhabited-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Base visual",
+          "role": "base",
+          "sourceFile": "assets-src/gr3/intake/production-island-island-bone-rock-uninhabited-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 640,
+            "targetHeight": 640,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              235,
+              11,
+              236
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 80,
+            "trimAlphaThreshold": 8,
+            "padding": 8
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-island-bone-rock-uninhabited-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.island-lightning-ridge-uninhabited",
+      "name": "island-lightning-ridge-uninhabited",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "island production sources",
+      "sortOrder": 60,
+      "tags": [
+        "island",
+        "lightning",
+        "ridge",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-island-lightning-ridge-uninhabited-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Base visual",
+          "role": "base",
+          "sourceFile": "assets-src/gr3/intake/production-island-island-lightning-ridge-uninhabited-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 480,
+            "targetHeight": 480,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              226,
+              10,
+              232
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 80,
+            "trimAlphaThreshold": 8,
+            "padding": 8
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-island-lightning-ridge-uninhabited-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
     }
   ]
 }

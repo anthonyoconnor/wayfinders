@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.island-lightning-ridge-uninhabited",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "748ef31aea4f9e0f2493ea6293583ff3dfde60e7c1d310b71aca7dc66f0f62c3",
+  "jobKey": "41e9865e017104ac017e8144ccdfe8619c94a97fd59420e8814857659a6add3e",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-island-lightning-ridge-uninhabited-source.png",
+      "sha256": "eca537764352c2a22e7ab0c026051839bed87dac25160fd107737625e074fb2b"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-island-lightning-ridge-uninhabited-mask.png",
+      "sha256": "ea7960457cf1763e3ad0bf25beda40a8c226bec042b996a2e4ea60d209f30d7f"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-island-lightning-ridge-uninhabited/base.png",
+        "width": 480,
+        "height": 480,
+        "sha256": "5915af73e7f29f3e8e2d44279dd9a595b942b0386c0601e811c74d953a5d3c00",
+        "sourceBounds": {
+          "x": 291,
+          "y": 40,
+          "width": 678,
+          "height": 1176
+        },
+        "placement": {
+          "x": 101,
+          "y": 0,
+          "width": 277,
+          "height": 480
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-island-lightning-ridge-uninhabited/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "942e15dd45e2b7107f75f360dce91ca9e859a8a39a86430c025d87466078954c"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-island-lightning-ridge-uninhabited/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "acdb32121f893a8abfe7c4818246a124e45dba770c586c94f30d6bbe96ed5f7e"
+    }
+  }
+}
