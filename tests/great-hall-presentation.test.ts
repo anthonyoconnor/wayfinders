@@ -58,4 +58,13 @@ describe("GR-5.3 Great Hall presentation contract", () => {
       }
     }
   });
+
+  it.each([1, 2, 20])("models a handover from a terminal navigator to its immediate successor at count %i", (navigatorCount) => {
+    const model = buildGreatHallFixture({ navigatorCount, mode: "handover" });
+    const selected = model.navigators[model.selectedGeneration - 1]!;
+
+    expect(selected.state).not.toBe("active");
+    expect(model.nextGeneration).toBe(model.selectedGeneration + 1);
+    expect([model.currentGeneration, model.currentGeneration + 1]).toContain(model.nextGeneration);
+  });
 });

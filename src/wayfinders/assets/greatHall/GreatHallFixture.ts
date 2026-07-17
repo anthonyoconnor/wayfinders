@@ -16,19 +16,23 @@ export function buildGreatHallFixture(options: Readonly<{
   mode?: GreatHallPresentationMode;
 }>): Readonly<GreatHallPresentationModel> {
   const count = clamp(options.navigatorCount, 1, GREAT_HALL_MAX_GENERATIONS);
-  const selectedGeneration = clamp(options.selectedGeneration ?? count, 1, count);
+  const mode = options.mode ?? "home";
+  const requestedSelection = clamp(options.selectedGeneration ?? count, 1, count);
+  const selectedGeneration = mode === "handover" && count > 1
+    ? Math.min(requestedSelection, count - 1)
+    : requestedSelection;
   const navigators = GREAT_HALL_FIXTURE.navigators.slice(0, count).map((navigator) =>
-    projectNavigator(navigator, count));
+    projectNavigator(navigator, count, mode));
   const found = navigators.reduce((total, navigator) => total + navigator.voyages.reduce(
     (voyageTotal, voyage) => voyageTotal + voyage.achievements.filter(({ kind }) => kind === "idol-location").length,
     0,
   ), 0);
   return validateGreatHallPresentationModel({
     version: GREAT_HALL_FIXTURE.version,
-    mode: options.mode ?? "home",
+    mode,
     currentGeneration: count,
     selectedGeneration,
-    ...((options.mode ?? "home") === "handover" ? { nextGeneration: count + 1 } : {}),
+    ...(mode === "handover" ? { nextGeneration: count === 1 ? 2 : count } : {}),
     idolProgress: { found, total: 3, complete: found === 3 },
     navigators,
   });
@@ -37,8 +41,9 @@ export function buildGreatHallFixture(options: Readonly<{
 function projectNavigator(
   navigator: Readonly<GreatHallPresentationNavigator>,
   count: number,
+  mode: GreatHallPresentationMode,
 ): GreatHallPresentationNavigator {
-  if (navigator.generation === count && navigator.state !== "active") {
+  if (navigator.generation === count && navigator.state !== "active" && !(mode === "handover" && count === 1)) {
     const returned = navigator.voyages.filter(({ state }) => state === "returned").slice(0, 3);
     const voyages: GreatHallPresentationVoyage[] = [...returned];
     const awaiting = voyages.length + 1;

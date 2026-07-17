@@ -167,6 +167,23 @@ describe("Great Hall chronicle read model", () => {
     ]);
   });
 
+  it("accepts a death handover after the successor is already the current navigator", () => {
+    const { lineage, sources } = threeGenerationHistory();
+    const chronicle = buildGreatHallChronicle(lineage.navigators, sources);
+    const lost = chronicle.navigators[1];
+
+    const model = adaptGreatHallChronicle(chronicle, {
+      mode: "handover",
+      selectedNavigatorId: lost.navigatorId,
+      nextGeneration: 3,
+    });
+
+    expect(model.selectedGeneration).toBe(2);
+    expect(model.currentGeneration).toBe(3);
+    expect(model.nextGeneration).toBe(3);
+    expect(model.navigators[1].state).toBe("lost-confirmed");
+  });
+
   it("derives completed, lost, and active entries with structured committed achievements", () => {
     const { lineage, sources } = threeGenerationHistory();
 

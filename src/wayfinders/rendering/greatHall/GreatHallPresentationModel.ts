@@ -129,8 +129,14 @@ export function validateGreatHallPresentationModel(value: unknown): Readonly<Gre
 
   if (currentGeneration !== navigators.length) fail("currentGeneration must identify the newest navigator");
   if (selectedGeneration < 1 || selectedGeneration > navigators.length) fail("selectedGeneration is out of range");
-  if (model.mode === "handover" && model.nextGeneration !== currentGeneration + 1) {
-    fail("handover nextGeneration must follow the current generation");
+  const selectedNavigator = record(navigators[selectedGeneration - 1], "selected navigator");
+  if (model.mode === "handover") {
+    const nextGeneration = integer(model.nextGeneration, "handover nextGeneration");
+    if (selectedNavigator.state === "active") fail("handover must select a terminal navigator");
+    if (nextGeneration !== selectedGeneration + 1) fail("handover nextGeneration must follow the selected navigator");
+    if (nextGeneration !== currentGeneration && nextGeneration !== currentGeneration + 1) {
+      fail("handover successor must be current or immediately pending");
+    }
   }
   if (model.mode !== "handover" && model.nextGeneration !== undefined) {
     fail("nextGeneration is valid only in handover mode");
