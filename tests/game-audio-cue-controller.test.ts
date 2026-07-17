@@ -219,6 +219,29 @@ describe("AUD-3 game audio cue controller", () => {
     });
   });
 
+  it("invokes the microtask scheduler without a controller receiver", () => {
+    const audio = new FakeCueAudioTarget();
+    const events = new GameEvents();
+    const tasks: Array<() => void> = [];
+    let schedulerReceiver: unknown = "not-called";
+    const controller = new GameAudioCueController(audio, events, {
+      scheduleMicrotask: function (this: unknown, task) {
+        schedulerReceiver = this;
+        tasks.push(task);
+      },
+    });
+
+    events.emit("fishingShoalSighted", eventPayload<"fishingShoalSighted">());
+
+    expect(schedulerReceiver).toBeUndefined();
+    expect(tasks).toHaveLength(1);
+    tasks.shift()!();
+    expect(audio.playRequests).toEqual([expect.objectContaining({
+      assetId: "sfx.discovery",
+    })]);
+    controller.destroy();
+  });
+
   it("prunes completed voices, bounds diagnostics, and unsubscribes on destroy", () => {
     const { audio, controller, events, advance, flush, tasks } = fixture();
     for (let index = 0; index < 20; index++) {

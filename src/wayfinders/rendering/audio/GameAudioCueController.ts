@@ -93,7 +93,12 @@ export class GameAudioCueController {
   ) {
     this.policy = options.policy ?? new AudioCuePolicy();
     this.now = options.now ?? defaultNow;
-    this.scheduleMicrotask = options.scheduleMicrotask ?? queueMicrotask;
+    const scheduleMicrotask = options.scheduleMicrotask ?? queueMicrotask;
+    // Invoke browser host callbacks as plain functions. Retaining one directly
+    // on the controller and calling it through the property can supply the
+    // controller as `this`, which receiver-sensitive hosts reject and leaves
+    // the cue batch permanently marked as scheduled.
+    this.scheduleMicrotask = (task) => scheduleMicrotask(task);
     this.captureAudioSnapshot(audio.getSnapshot());
     this.removeAudioListener = audio.subscribe(this.captureAudioSnapshot);
     this.eventUnsubscribers = this.bindGameEvents(events);
