@@ -5,7 +5,7 @@ import type {
   CargoBundleSlice,
   CargoPresentationModel,
 } from "./CargoPresentation";
-import { cargoReturnColor } from "./CargoPresentation";
+import { CARGO_SURVEY_COLOR, cargoReturnColor } from "./CargoPresentation";
 
 interface BundleView {
   readonly container: Phaser.GameObjects.Container;
@@ -126,9 +126,9 @@ export class CargoRenderer {
     if (survey) {
       const x = BUNDLE_LEFT + survey.start * BUNDLE_WIDTH;
       const width = Math.max(1, (survey.end - survey.start) * BUNDLE_WIDTH);
-      view.glow.fillStyle(0xf6d68f, 0.18);
+      view.glow.fillStyle(0x7ce8f0, 0.18);
       view.glow.fillRoundedRect(x - 2, -10, width + 4, 20, 4);
-      view.glow.lineStyle(1.5, 0xffe1a3, 0.78);
+      view.glow.lineStyle(1.5, 0xb9f5ff, 0.78);
       view.glow.strokeRoundedRect(x - 1, -9, width + 2, 18, 3);
       view.glow.setAlpha(0.68);
     }
@@ -144,7 +144,7 @@ export class CargoRenderer {
     const color = slice.kind === "return"
       ? cargoReturnColor(riskLevel)
       : slice.kind === "survey"
-        ? 0xf1d08a
+        ? CARGO_SURVEY_COLOR
         : slice.kind === "depleted"
           ? 0x071013
           : null;
@@ -184,7 +184,7 @@ export class CargoRenderer {
     this.rack.lineStyle(1, 0xc3a66d, 0.28);
     this.rack.lineBetween(-width / 2 + 8, -6, width / 2 - 8, -6);
     if (model.surveyShortfall > 0) {
-      this.rack.lineStyle(2, 0xf1d08a, 0.9);
+      this.rack.lineStyle(2, CARGO_SURVEY_COLOR, 0.9);
       this.rack.lineBetween(width / 2 - 9, -height - 3, width / 2 + 3, -height + 9);
       this.rack.lineBetween(width / 2 - 3, -height - 3, width / 2 + 3, -height + 3);
     }

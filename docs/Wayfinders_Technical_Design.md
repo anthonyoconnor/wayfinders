@@ -243,7 +243,7 @@ uncommitted supply; a contiguous spend-end overlay uses the thread's current
 green, yellow, orange, or red state for the exact shortest-known-return cost;
 and the already-spent travel fraction remains visible as depleted material.
 Fractional costs occupy fractional bundle widths. While an authoritative survey
-prompt is present, its quoted cost occupies the spend end in warm ivory with a
+prompt is present, its quoted cost occupies the spend end in sea-glass cyan with a
 restrained breathing outline, the return allocation moves before it, and the
 return colour is classified from the projected post-survey margin. Reduced
 motion keeps the same survey outline static. The rack has no visible labels or

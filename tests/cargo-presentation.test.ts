@@ -2,17 +2,20 @@ import { describe, expect, it } from "vitest";
 import { ReturnRiskLevel } from "../src/wayfinders/exploration/ReturnPathSystem.ts";
 import {
   buildCargoPresentation,
+  CARGO_SURVEY_COLOR,
   cargoReturnColor,
 } from "../src/wayfinders/rendering/CargoPresentation.ts";
 
 describe("cargo commitment presentation", () => {
   it("uses the complete Voyage Sense thread palette", () => {
-    expect([
+    const returnPalette = [
       cargoReturnColor(ReturnRiskLevel.Comfortable),
       cargoReturnColor(ReturnRiskLevel.Warning),
       cargoReturnColor(ReturnRiskLevel.Critical),
       cargoReturnColor(ReturnRiskLevel.Impossible),
-    ]).toEqual([0x5bb874, 0xe2c44a, 0xee7d24, 0xc42624]);
+    ];
+    expect(returnPalette).toEqual([0x5bb874, 0xe2c44a, 0xee7d24, 0xc42624]);
+    expect(returnPalette).not.toContain(CARGO_SURVEY_COLOR);
   });
 
   it("maps fractional return cost and spent progress onto physical bundles", () => {

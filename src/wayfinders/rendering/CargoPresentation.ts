@@ -50,6 +50,9 @@ interface CommitmentInterval {
 
 const EPSILON = 1e-9;
 
+/** Cool sea-glass cyan, intentionally outside the Voyage Sense risk palette. */
+export const CARGO_SURVEY_COLOR = 0x65cfe0;
+
 export function cargoReturnColor(level: ReturnRiskLevel): number {
   switch (level) {
     case ReturnRiskLevel.Comfortable: return 0x5bb874;

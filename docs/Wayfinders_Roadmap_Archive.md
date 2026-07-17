@@ -758,7 +758,7 @@ The compact cargo rack now presents the exact authoritative supply partition
 without visible words or numbers. A renderer-neutral model divides physical
 bundles into natural uncommitted material, depleted fractional travel spend,
 the shortest-known-return commitment in the Voyage Sense risk colour, and a
-warm ivory survey commitment only while an authoritative prompt is present.
+sea-glass cyan survey commitment only while an authoritative prompt is present.
 Partial costs occupy partial bundle widths and insufficient commitments never
 create fictitious icons. Survey presentation reserves its quoted cost first and
 colours the remaining return allocation from the projected post-survey margin.
