@@ -968,9 +968,11 @@ export class WayfindersScene extends Phaser.Scene {
           <div class="tool-disclosure__body">
             ${this.numberMarkup("forward-cone-half-angle", "Forward cone half-angle", prototypeConfig.overlays.forwardConeHalfAngleDegrees, 1, 180, 5)}
             ${this.numberMarkup("unknown-cleanup-limit", "Returned Unknown cleanup limit", prototypeConfig.world.maxEnclosedUnknownTiles, 0, 8, 1)}
-            ${this.numberMarkup("return-path-padding", "Return route padding", prototypeConfig.overlays.returnPathPadding, 0, 4, 1)}
+            ${this.numberMarkup("return-path-padding", "Return diagnostic padding", prototypeConfig.overlays.returnPathPadding, 0, 4, 1)}
             ${this.numberMarkup("forward-opacity", "Forward opacity", prototypeConfig.overlays.forwardOverlayOpacity, 0, 1, 0.05)}
-            ${this.numberMarkup("return-opacity", "Return opacity", prototypeConfig.overlays.returnOverlayOpacity, 0, 1, 0.05)}
+            ${this.numberMarkup("return-opacity", "Voyage Sense opacity", prototypeConfig.overlays.returnOverlayOpacity, 0, 1, 0.05)}
+            ${this.numberMarkup("return-thread-width", "Voyage Sense width", prototypeConfig.overlays.returnThreadWidth, 1, 16, 1)}
+            ${this.numberMarkup("return-thread-curve-radius", "Voyage Sense curve radius", prototypeConfig.overlays.returnThreadCurveRadius, 0, 16, 1)}
             ${this.numberMarkup("fog-blend", "Fog transition width", prototypeConfig.overlays.fogBlend, 0, 1, 0.02)}
             ${this.numberMarkup("fog-noise", "Fog noise strength", prototypeConfig.overlays.fogNoise, 0, 1, 0.02)}
           </div>
@@ -1633,6 +1635,8 @@ export class WayfindersScene extends Phaser.Scene {
       case "return-path-padding": return prototypeConfig.overlays.returnPathPadding;
       case "forward-opacity": return prototypeConfig.overlays.forwardOverlayOpacity;
       case "return-opacity": return prototypeConfig.overlays.returnOverlayOpacity;
+      case "return-thread-width": return prototypeConfig.overlays.returnThreadWidth;
+      case "return-thread-curve-radius": return prototypeConfig.overlays.returnThreadCurveRadius;
       case "fog-blend": return prototypeConfig.overlays.fogBlend;
       case "fog-noise": return prototypeConfig.overlays.fogNoise;
       default: throw new RangeError(`Unknown live configuration field: ${id}`);
@@ -1667,6 +1671,8 @@ export class WayfindersScene extends Phaser.Scene {
       case "return-path-padding": patch = { overlays: { returnPathPadding: value } }; break;
       case "forward-opacity": patch = { overlays: { forwardOverlayOpacity: value } }; break;
       case "return-opacity": patch = { overlays: { returnOverlayOpacity: value } }; break;
+      case "return-thread-width": patch = { overlays: { returnThreadWidth: value } }; break;
+      case "return-thread-curve-radius": patch = { overlays: { returnThreadCurveRadius: value } }; break;
       case "fog-blend": patch = { overlays: { fogBlend: value } }; break;
       case "fog-noise": patch = { overlays: { fogNoise: value } }; break;
     }
@@ -1683,7 +1689,16 @@ export class WayfindersScene extends Phaser.Scene {
         "risk-warning",
         "risk-critical",
       ].includes(id)) this.simulation.refreshRiskOverlays();
-      else if (!["forward-cone-half-angle", "return-path-padding", "forward-opacity", "return-opacity", "fog-blend", "fog-noise"].includes(id)) {
+      else if (![
+        "forward-cone-half-angle",
+        "return-path-padding",
+        "forward-opacity",
+        "return-opacity",
+        "return-thread-width",
+        "return-thread-curve-radius",
+        "fog-blend",
+        "fog-noise",
+      ].includes(id)) {
         this.simulation.revision++;
       }
       return true;

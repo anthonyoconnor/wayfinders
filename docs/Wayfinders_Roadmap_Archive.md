@@ -1,7 +1,7 @@
 # Wayfinders completed roadmap archive
 
 Status: historical. This document preserves the scope, gates and acceptance
-evidence for completed `GP-0.1` through `GP-4.1`, `GR-1.1` through `GR-3.8`,
+evidence for completed `GP-0.1` through `GP-5.1`, `GR-1.1` through `GR-3.8`,
 and `AM-0` through `AM-6` work. It does not define or authorize future work. See
 `Wayfinders_Roadmap.md` for the small, current forward plan.
 
@@ -32,6 +32,8 @@ At the close of the gameplay track, the build provided:
 - continuous sailing, fog, current sight and Unknown, Personal and Supported
   water knowledge;
 - provisions, forward/return guidance and exact-dock expedition commitment;
+- a faint curved Voyage Sense thread for the ordered return route and its
+  provision-margin risk state;
 - Supported-route inheritance, deterministic island dossiers and their
   provisional sighting/survey to returned lead/dossier records;
 - one directly sightable seed-derived historic wreck, coastal ruin and tidal
@@ -705,6 +707,48 @@ non-retriggering `continued` states; scene presentation gives the final Hall
 priority over ordinary return and succession cues. Catalog, integration, Hall,
 completion-choice, seed-reset and final-voyage-order tests are part of the clean
 typecheck/test/build gate recorded in `IMPLEMENTATION_STATUS.md`.
+
+### GP-5 — Voyage Sense presentation
+
+#### GP-5.1 — Voyage Sense thread
+
+Status: implemented and accepted on 2026-07-16.
+
+Replace the filled and patterned grid presentation of return viability with one
+faint, soft-edged thread following the ordered minimum-provision route from the
+ship to the first reachable Supported water. Preserve return pathfinding,
+eligibility, provision costs, and risk thresholds as simulation authority.
+
+- The presentation adapter consumes `ReturnPathResult.pathIndices`; the padded
+  corridor remains diagnostic data and is never used as thread geometry.
+- Cardinal route turns become restrained quadratic curves whose entry and exit
+  consume no more than half an adjacent route edge. The curve therefore remains
+  inside the traversable route-tile envelope rather than appearing to cut
+  through blocked terrain.
+- Sparse line and curve segments are indexed by chunk once per changed route.
+  Active chunk textures draw only their indexed segments with a narrow core and
+  wider low-opacity edge; stable frames do not reconstruct the path or allocate
+  textures.
+- One state colours the complete thread green for comfortable supply, yellow
+  for a narrowing margin, orange for critical supply, and red when the known
+  route costs more than the available supply. Already-safe and unreachable
+  states draw no thread.
+- Thread width, curve radius, and opacity are validated live presentation
+  tuning values. The Voyage Sense legend uses the same four-line colour
+  language rather than filled grid swatches.
+
+Acceptance evidence: focused geometry and rendering contracts cover curved
+turns, chunk seams, empty routes, ordered-path rather than corridor consumption,
+all four risk colours, resource telemetry, route replacement, and stale
+clearing. Existing return-route tests continue to cover deterministic shortest
+paths, threshold reclassification, already-safe and disconnected worlds, and
+regeneration. Architecture validation, source and test typechecks, the quick
+lane, focused contracts, integration tests, and the production bundle pass.
+Browser review at normal gameplay zoom confirmed the faint green turning route,
+the same route recoloured red at zero supply, the four-state legend, and no
+browser warnings or errors. The repository-wide aggregate remains independently
+blocked by stale production-asset catalog expectations recorded in
+`IMPLEMENTATION_STATUS.md`; GP-5.1 does not change asset inputs or artifacts.
 
 ## Graphics track
 

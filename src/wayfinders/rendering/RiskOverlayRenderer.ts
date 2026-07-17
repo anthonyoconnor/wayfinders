@@ -7,6 +7,11 @@ import type { WorldChunk } from "../world/WorldChunk";
 import type { WorldGrid } from "../world/WorldGrid";
 import { addCardinalChunkDependents } from "./OverlayChunkInvalidation";
 import { createCameraCulledImage } from "./CameraCulledImage";
+import {
+  buildVoyageSenseThread,
+  type VoyageSenseThreadGeometry,
+  type VoyageSenseThreadSegment,
+} from "./VoyageSenseThread";
 import type { ActiveChunkDelta, ActiveChunkEntry } from "./activation";
 
 interface OverlayChunkView {
@@ -29,6 +34,8 @@ export interface RiskOverlayResourceTelemetry {
   readonly peakActiveTextures: number;
   readonly totalTextureAllocations: number;
   readonly totalTextureReleases: number;
+  readonly returnThreadSegments: number;
+  readonly returnThreadChunkBuckets: number;
 }
 
 const OVERLAY_SCALE = 6;
@@ -52,13 +59,17 @@ export class RiskOverlayRenderer {
   private lastSignature = "";
   private forwardPresented = new Uint8Array(0);
   private forwardReachable = new Uint8Array(0);
-  private returnPresented = new Uint8Array(0);
   private lastForward?: ForwardRangeResult;
   private lastReturning?: ReturnPathResult;
   private lastForwardPresentationCandidates: readonly number[] = [];
   private lastForwardCandidates: readonly number[] = [];
   private lastForwardLogicalRevision = -1;
-  private lastReturnCorridor: readonly number[] = [];
+  private lastReturnPath?: readonly number[];
+  private lastReturnRiskLevel = ReturnRiskLevel.Hidden;
+  private returnThread: VoyageSenseThreadGeometry = {
+    segments: [],
+    segmentsByChunk: new Map(),
+  };
   private lastVisibleIndices: readonly number[] = [];
   private lastForwardVisible?: boolean;
   private lastReturnVisible?: boolean;
@@ -122,6 +133,8 @@ export class RiskOverlayRenderer {
       peakActiveTextures: this.peakActiveTextures,
       totalTextureAllocations: this.totalTextureAllocations,
       totalTextureReleases: this.totalTextureReleases,
+      returnThreadSegments: this.returnThread.segments.length,
+      returnThreadChunkBuckets: this.returnThread.segmentsByChunk.size,
     });
   }
 
@@ -140,7 +153,9 @@ export class RiskOverlayRenderer {
 
     const chunks = this.presentationChunks(world);
     const signature = `${prototypeConfig.overlays.forwardOverlayOpacity}:`
-      + `${prototypeConfig.overlays.returnOverlayOpacity}`;
+      + `${prototypeConfig.overlays.returnOverlayOpacity}:`
+      + `${prototypeConfig.overlays.returnThreadWidth}:`
+      + `${prototypeConfig.overlays.returnThreadCurveRadius}`;
     const styleChanged = signature !== this.lastSignature;
     const visibilityChanged = world.visibilityVersion !== this.lastVisibilityVersion;
     const dataChanged = revision !== this.lastRevision
@@ -148,6 +163,12 @@ export class RiskOverlayRenderer {
       || returning !== this.lastReturning;
     const logicalForwardChanged = forward !== this.lastForward
       || forward.logicalRevision !== this.lastForwardLogicalRevision;
+    const returnGeometryChanged = worldChanged
+      || styleChanged
+      || returning !== this.lastReturning
+      || returning.pathIndices !== this.lastReturnPath;
+    const returnChanged = returnGeometryChanged
+      || returning.riskLevel !== this.lastReturnRiskLevel;
     const chunksChanged = chunks.length !== this.views.size || this.pendingActivationKeys.size > 0;
     const debugChanged = debug.forwardRange !== this.lastForwardVisible
       || debug.returnViability !== this.lastReturnVisible;
@@ -173,6 +194,16 @@ export class RiskOverlayRenderer {
     const dirtyForward = new Set<WorldChunk>();
     const dirtyReturn = new Set<WorldChunk>();
 
+    if (returnGeometryChanged) {
+      this.returnThread = buildVoyageSenseThread(
+        world,
+        returning.pathIndices,
+        prototypeConfig.navigation.tileSize,
+        prototypeConfig.overlays.returnThreadCurveRadius,
+        prototypeConfig.overlays.returnThreadWidth,
+      );
+    }
+
     if (force || worldChanged || dataChanged || chunksChanged) {
       if (force || worldChanged || logicalForwardChanged) {
         this.updateForwardReachableIndices(world, forward, this.lastForwardCandidates, dirtyForward);
@@ -180,13 +211,13 @@ export class RiskOverlayRenderer {
       }
       this.updateForwardIndices(world, forward, this.lastForwardPresentationCandidates, dirtyForward);
       this.updateForwardIndices(world, forward, forward.presentationCandidateIndices, dirtyForward);
-      this.updateReturnIndices(world, returning, this.lastReturnCorridor, dirtyReturn);
-      this.updateReturnIndices(world, returning, returning.corridorIndices, dirtyReturn);
     } else if (visibilityChanged) {
       this.updateForwardIndices(world, forward, this.lastVisibleIndices, dirtyForward);
       this.updateForwardIndices(world, forward, world.getVisibleIndices(), dirtyForward);
-      this.updateReturnIndices(world, returning, this.lastVisibleIndices, dirtyReturn);
-      this.updateReturnIndices(world, returning, world.getVisibleIndices(), dirtyReturn);
+    }
+
+    if (returnChanged) {
+      for (const chunk of chunks) dirtyReturn.add(chunk);
     }
 
     if (redrawAll) {
@@ -218,7 +249,7 @@ export class RiskOverlayRenderer {
     for (const chunk of dirtyReturn) {
       const view = this.views.get(this.chunkKey(chunk));
       if (!view) continue;
-      this.renderReturnChunk(world, chunk, view.returnTexture);
+      this.renderReturnChunk(returning.riskLevel, chunk, view.returnTexture);
       view.returnTexture.refresh();
     }
 
@@ -233,7 +264,8 @@ export class RiskOverlayRenderer {
     this.lastForwardCandidates = [...forward.candidateIndices];
     this.lastForwardLogicalRevision = forward.logicalRevision;
     this.lastForwardPresentationCandidates = [...forward.presentationCandidateIndices];
-    this.lastReturnCorridor = [...returning.corridorIndices];
+    this.lastReturnPath = returning.pathIndices;
+    this.lastReturnRiskLevel = returning.riskLevel;
     this.lastVisibleIndices = [...world.getVisibleIndices()];
     this.lastForwardVisible = debug.forwardRange;
     this.lastReturnVisible = debug.returnViability;
@@ -245,13 +277,14 @@ export class RiskOverlayRenderer {
     this.lastWorld = undefined;
     this.forwardPresented = new Uint8Array(0);
     this.forwardReachable = new Uint8Array(0);
-    this.returnPresented = new Uint8Array(0);
     this.lastForward = undefined;
     this.lastReturning = undefined;
     this.lastForwardPresentationCandidates = [];
     this.lastForwardCandidates = [];
     this.lastForwardLogicalRevision = -1;
-    this.lastReturnCorridor = [];
+    this.lastReturnPath = undefined;
+    this.lastReturnRiskLevel = ReturnRiskLevel.Hidden;
+    this.returnThread = { segments: [], segmentsByChunk: new Map() };
     this.lastVisibleIndices = [];
     this.lastForwardVisible = undefined;
     this.lastReturnVisible = undefined;
@@ -283,15 +316,6 @@ export class RiskOverlayRenderer {
     }
   }
 
-  private updateReturnIndices(
-    world: WorldGrid,
-    returning: ReturnPathResult,
-    indices: Iterable<number>,
-    dirtyChunks: Set<WorldChunk>,
-  ): void {
-    for (const index of indices) this.updateReturnIndex(world, returning, index, dirtyChunks);
-  }
-
   private updateForwardIndex(
     world: WorldGrid,
     forward: ForwardRangeResult,
@@ -302,21 +326,6 @@ export class RiskOverlayRenderer {
     if (this.forwardPresented[index] === next) return;
     this.forwardPresented[index] = next;
     addCardinalChunkDependents(world, index, dirtyChunks);
-  }
-
-  private updateReturnIndex(
-    world: WorldGrid,
-    returning: ReturnPathResult,
-    index: number,
-    dirtyChunks: Set<WorldChunk>,
-  ): void {
-    const next = world.isVisibleNowAtIndex(index) ? ReturnRiskLevel.Hidden : returning.risk[index];
-    if (this.returnPresented[index] === next) return;
-    this.returnPresented[index] = next;
-    const x = index % world.width;
-    const y = Math.floor(index / world.width);
-    const chunk = world.getChunkAt(x, y, false);
-    if (chunk) dirtyChunks.add(chunk);
   }
 
   private getOrCreateChunkView(chunk: WorldChunk): OverlayChunkView {
@@ -386,7 +395,6 @@ export class RiskOverlayRenderer {
     this.destroyViews();
     this.forwardPresented = new Uint8Array(world.tileCount);
     this.forwardReachable = new Uint8Array(world.tileCount);
-    this.returnPresented = new Uint8Array(world.tileCount);
     this.lastWorld = world;
     this.lastRevision = -1;
     this.lastVisibilityVersion = -1;
@@ -396,7 +404,9 @@ export class RiskOverlayRenderer {
     this.lastForwardPresentationCandidates = [];
     this.lastForwardCandidates = [];
     this.lastForwardLogicalRevision = -1;
-    this.lastReturnCorridor = [];
+    this.lastReturnPath = undefined;
+    this.lastReturnRiskLevel = ReturnRiskLevel.Hidden;
+    this.returnThread = { segments: [], segmentsByChunk: new Map() };
     this.lastVisibleIndices = [];
     this.lastForwardVisible = undefined;
     this.lastReturnVisible = undefined;
@@ -497,66 +507,68 @@ export class RiskOverlayRenderer {
   }
 
   private renderReturnChunk(
-    world: WorldGrid,
+    level: ReturnRiskLevel,
     chunk: WorldChunk,
     texture: Phaser.Textures.CanvasTexture,
   ): void {
     const context = texture.getContext();
     context.clearRect(0, 0, texture.width, texture.height);
-    const opacity = prototypeConfig.overlays.returnOverlayOpacity;
+    if (level === ReturnRiskLevel.Hidden) return;
 
-    for (let localY = 0; localY < chunk.size; localY++) {
-      const y = chunk.chunkY * chunk.size + localY;
-      if (y >= world.height) break;
-      for (let localX = 0; localX < chunk.size; localX++) {
-        const x = chunk.chunkX * chunk.size + localX;
-        if (x >= world.width) break;
-        const index = y * world.width + x;
-        const level = this.returnPresented[index] as ReturnRiskLevel;
-        if (level === ReturnRiskLevel.Hidden) continue;
-        const px = localX * OVERLAY_SCALE;
-        const py = localY * OVERLAY_SCALE;
-        context.fillStyle = this.riskColor(level, opacity);
-        context.fillRect(px, py, OVERLAY_SCALE, OVERLAY_SCALE);
-        this.drawRiskPattern(context, level, px, py, opacity);
-      }
-    }
+    const segments = this.returnThread.segmentsByChunk.get(this.chunkKey(chunk));
+    if (!segments || segments.length === 0) return;
+
+    const opacity = prototypeConfig.overlays.returnOverlayOpacity;
+    const canvasScale = OVERLAY_SCALE / prototypeConfig.navigation.tileSize;
+    const coreWidth = prototypeConfig.overlays.returnThreadWidth * canvasScale;
+    context.save();
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    this.strokeThread(context, segments, chunk, coreWidth * 2.2, this.riskColor(level, opacity * 0.18));
+    this.strokeThread(context, segments, chunk, coreWidth, this.riskColor(level, opacity * 0.78));
+    context.restore();
   }
 
   private riskColor(level: ReturnRiskLevel, opacity: number): string {
     switch (level) {
-      case ReturnRiskLevel.Comfortable: return `rgba(222, 195, 82, ${opacity * 0.7})`;
-      case ReturnRiskLevel.Warning: return `rgba(238, 188, 62, ${opacity})`;
-      case ReturnRiskLevel.Critical: return `rgba(238, 105, 29, ${Math.min(0.9, opacity * 1.25)})`;
-      case ReturnRiskLevel.Impossible: return `rgba(196, 38, 36, ${Math.min(0.95, opacity * 1.6)})`;
+      case ReturnRiskLevel.Comfortable: return `rgba(91, 184, 116, ${opacity})`;
+      case ReturnRiskLevel.Warning: return `rgba(226, 196, 74, ${opacity})`;
+      case ReturnRiskLevel.Critical: return `rgba(238, 125, 36, ${opacity})`;
+      case ReturnRiskLevel.Impossible: return `rgba(196, 38, 36, ${opacity})`;
       default: return "rgba(0, 0, 0, 0)";
     }
   }
 
-  private drawRiskPattern(
+  private strokeThread(
     context: CanvasRenderingContext2D,
-    level: ReturnRiskLevel,
-    px: number,
-    py: number,
-    opacity: number,
+    segments: readonly VoyageSenseThreadSegment[],
+    chunk: WorldChunk,
+    lineWidth: number,
+    strokeStyle: string,
   ): void {
-    if (level === ReturnRiskLevel.Comfortable) return;
-    context.save();
-    context.strokeStyle = `rgba(28, 24, 18, ${Math.min(0.82, opacity * 2.2)})`;
-    context.lineWidth = 0.75;
+    const tileSize = prototypeConfig.navigation.tileSize;
+    const canvasScale = OVERLAY_SCALE / tileSize;
+    const chunkWorldX = chunk.chunkX * chunk.size * tileSize;
+    const chunkWorldY = chunk.chunkY * chunk.size * tileSize;
+    const local = ({ x, y }: Readonly<{ x: number; y: number }>) => ({
+      x: (x - chunkWorldX) * canvasScale,
+      y: (y - chunkWorldY) * canvasScale,
+    });
+    context.strokeStyle = strokeStyle;
+    context.lineWidth = lineWidth;
     context.beginPath();
-    context.moveTo(px + 0.75, py + OVERLAY_SCALE - 0.75);
-    context.lineTo(px + OVERLAY_SCALE - 0.75, py + 0.75);
-    if (level >= ReturnRiskLevel.Critical) {
-      context.moveTo(px - 1, py + OVERLAY_SCALE - 0.75);
-      context.lineTo(px + OVERLAY_SCALE * 0.5, py + 0.75);
-    }
-    if (level === ReturnRiskLevel.Impossible) {
-      context.moveTo(px + 0.75, py + 0.75);
-      context.lineTo(px + OVERLAY_SCALE - 0.75, py + OVERLAY_SCALE - 0.75);
+    for (const segment of segments) {
+      const from = local(segment.from);
+      const to = local(segment.to);
+      context.moveTo(from.x, from.y);
+      if (segment.kind === "curve") {
+        const control = local(segment.control);
+        context.quadraticCurveTo(control.x, control.y, to.x, to.y);
+      } else {
+        context.lineTo(to.x, to.y);
+      }
     }
     context.stroke();
-    context.restore();
   }
 
   private chunkKey(chunk: WorldChunk): string {

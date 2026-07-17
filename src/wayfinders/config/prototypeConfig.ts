@@ -60,6 +60,10 @@ export interface PrototypeConfig {
     fogBlend: number;
     forwardOverlayOpacity: number;
     returnOverlayOpacity: number;
+    /** Voyage Sense thread width in world pixels. */
+    returnThreadWidth: number;
+    /** Maximum world-pixel radius used to round each return-path turn. */
+    returnThreadCurveRadius: number;
     /** Half-angle of the heading-centred forward presentation cone. */
     forwardConeHalfAngleDegrees: number;
     /** Cardinal passable-water padding around the minimum-cost return path. */
@@ -157,6 +161,8 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
     fogBlend: 0.12,
     forwardOverlayOpacity: 0.55,
     returnOverlayOpacity: 0.35,
+    returnThreadWidth: 5,
+    returnThreadCurveRadius: 10,
     forwardConeHalfAngleDegrees: 60,
     returnPathPadding: 1,
   },
@@ -372,6 +378,8 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   unitInterval(config.overlays.fogBlend, "overlays.fogBlend");
   unitInterval(config.overlays.forwardOverlayOpacity, "overlays.forwardOverlayOpacity");
   unitInterval(config.overlays.returnOverlayOpacity, "overlays.returnOverlayOpacity");
+  positive(config.overlays.returnThreadWidth, "overlays.returnThreadWidth");
+  nonNegative(config.overlays.returnThreadCurveRadius, "overlays.returnThreadCurveRadius");
   positive(config.overlays.forwardConeHalfAngleDegrees, "overlays.forwardConeHalfAngleDegrees");
   if (config.overlays.forwardConeHalfAngleDegrees > 180) {
     throw new RangeError("overlays.forwardConeHalfAngleDegrees must be at most 180");

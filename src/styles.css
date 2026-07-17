@@ -621,8 +621,7 @@ a:focus-visible {
   flex: 0 0 auto;
   width: 0.85rem;
   height: 0.85rem;
-  border: 1px solid rgba(225, 235, 224, 0.55);
-  background: rgba(222, 195, 82, 0.68);
+  color: rgb(91, 184, 116);
 }
 
 .legend-swatch--forward {
@@ -639,27 +638,27 @@ a:focus-visible {
   content: "";
 }
 
-.legend-swatch--warning {
-  background: #ee691d;
+.legend-swatch:not(.legend-swatch--forward)::after {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  border-top: 2px solid currentColor;
+  box-shadow: 0 0 3px currentColor;
+  content: "";
+  opacity: 0.72;
 }
 
-.legend-swatch--warning::after,
-.legend-swatch--danger::before,
-.legend-swatch--danger::after {
-  position: absolute;
-  inset: 45% -10% auto;
-  height: 1px;
-  background: rgba(30, 20, 16, 0.75);
-  content: "";
-  transform: rotate(-45deg);
+.legend-swatch--caution {
+  color: rgb(226, 196, 74);
+}
+
+.legend-swatch--warning {
+  color: rgb(238, 125, 36);
 }
 
 .legend-swatch--danger {
-  background: #b5292d;
-}
-
-.legend-swatch--danger::after {
-  transform: rotate(45deg);
+  color: rgb(196, 38, 36);
 }
 
 .game-status,

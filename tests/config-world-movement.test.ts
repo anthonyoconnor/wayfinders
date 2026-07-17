@@ -187,6 +187,19 @@ describe("prototype configuration", () => {
       "overlays.returnPathPadding must be a non-negative integer",
     );
   });
+
+  it("validates Voyage Sense thread width and curve radius", () => {
+    patchPrototypeConfig({ overlays: { returnThreadWidth: 7, returnThreadCurveRadius: 12 } });
+    expect(prototypeConfig.overlays.returnThreadWidth).toBe(7);
+    expect(prototypeConfig.overlays.returnThreadCurveRadius).toBe(12);
+
+    expect(() => patchPrototypeConfig({ overlays: { returnThreadWidth: 0 } })).toThrow(
+      "overlays.returnThreadWidth must be positive",
+    );
+    expect(() => patchPrototypeConfig({ overlays: { returnThreadCurveRadius: -1 } })).toThrow(
+      "overlays.returnThreadCurveRadius must be non-negative",
+    );
+  });
 });
 
 describe("world foundations", () => {

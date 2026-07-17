@@ -25,10 +25,20 @@ interface FillCall {
   style: string;
 }
 
+interface StrokeCall {
+  style: string;
+  width: number;
+  commands: Array<
+    | { kind: "move" | "line"; x: number; y: number }
+    | { kind: "curve"; controlX: number; controlY: number; x: number; y: number }
+  >;
+}
+
 interface FakeTexture {
   width: number;
   height: number;
   calls: FillCall[];
+  strokes: StrokeCall[];
   refreshCount: number;
   getContext(): CanvasRenderingContext2D;
   setFilter(): void;
@@ -42,9 +52,18 @@ function makeRendererHarness(key = "overlay-test") {
     textures: {
       createCanvas(textureKey: string, width: number, height: number) {
         const calls: FillCall[] = [];
-        const drawingContext: Pick<CanvasRenderingContext2D, "fillStyle" | "clearRect" | "fillRect"> = {
+        const strokes: StrokeCall[] = [];
+        let commands: StrokeCall["commands"] = [];
+        const drawingContext = {
           fillStyle: "",
-          clearRect: () => { calls.length = 0; },
+          strokeStyle: "",
+          lineWidth: 1,
+          lineCap: "butt",
+          lineJoin: "miter",
+          clearRect: () => {
+            calls.length = 0;
+            strokes.length = 0;
+          },
           fillRect(x: number, y: number, fillWidth: number, fillHeight: number) {
             calls.push({
               x,
@@ -54,12 +73,28 @@ function makeRendererHarness(key = "overlay-test") {
               style: String(this.fillStyle),
             });
           },
+          save: () => undefined,
+          restore: () => undefined,
+          beginPath: () => { commands = []; },
+          moveTo: (x: number, y: number) => { commands.push({ kind: "move", x, y }); },
+          lineTo: (x: number, y: number) => { commands.push({ kind: "line", x, y }); },
+          quadraticCurveTo: (controlX: number, controlY: number, x: number, y: number) => {
+            commands.push({ kind: "curve", controlX, controlY, x, y });
+          },
+          stroke() {
+            strokes.push({
+              style: String(this.strokeStyle),
+              width: this.lineWidth,
+              commands: [...commands],
+            });
+          },
         };
-        const context = drawingContext as CanvasRenderingContext2D;
+        const context = drawingContext as unknown as CanvasRenderingContext2D;
         const texture: FakeTexture = {
           width,
           height,
           calls,
+          strokes,
           refreshCount: 0,
           getContext: () => context,
           setFilter: () => undefined,
@@ -90,6 +125,11 @@ function makeRendererHarness(key = "overlay-test") {
     texture: (chunkX: number, chunkY: number) => {
       const texture = textures.get(`${key}-risk-forward-${chunkX}-${chunkY}`);
       if (!texture) throw new Error(`Missing forward texture ${chunkX},${chunkY}`);
+      return texture;
+    },
+    returnTexture: (chunkX: number, chunkY: number) => {
+      const texture = textures.get(`${key}-risk-return-${chunkX}-${chunkY}`);
+      if (!texture) throw new Error(`Missing return texture ${chunkX},${chunkY}`);
       return texture;
     },
   };
@@ -136,14 +176,21 @@ function activateAllChunks(renderer: RiskOverlayRenderer, world: WorldGrid): voi
 function emptyReturn(world: WorldGrid): ReturnPathResult {
   return {
     risk: new Uint8Array(world.tileCount),
+    pathIndices: [],
     corridorIndices: [],
+    riskLevel: ReturnRiskLevel.Hidden,
   } as unknown as ReturnPathResult;
 }
 
-function comfortableReturn(world: WorldGrid, index: number): ReturnPathResult {
+function makeReturn(
+  world: WorldGrid,
+  pathIndices: readonly number[],
+  riskLevel: ReturnRiskLevel,
+  corridorIndices: readonly number[] = [],
+): ReturnPathResult {
   const risk = new Uint8Array(world.tileCount);
-  risk[index] = ReturnRiskLevel.Comfortable;
-  return { risk, corridorIndices: [index] } as unknown as ReturnPathResult;
+  for (const index of corridorIndices) risk[index] = riskLevel;
+  return { risk, pathIndices, corridorIndices, riskLevel } as unknown as ReturnPathResult;
 }
 
 const debugVisibility = {
@@ -393,23 +440,78 @@ describe("forward frontier rendering", () => {
     expect(texture(0, 0).calls).toEqual([]);
   });
 
-  it("suppresses return risk in current sight and restores it after sight moves away", () => {
-    const world = new WorldGrid(3, 3, 3);
+  it("renders the Voyage Sense thread from the ordered path instead of corridor tiles", () => {
+    const world = new WorldGrid(4, 2, 2);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Personal);
-    const center = world.index(1, 1);
-    const returning = comfortableReturn(world, center);
+    const path = [world.index(0, 0), world.index(1, 0), world.index(2, 0), world.index(2, 1)];
+    const corridorOnly = world.index(3, 1);
+    const returning = makeReturn(world, path, ReturnRiskLevel.Comfortable, [corridorOnly]);
     const forward = makeForward(world, [], []);
-    world.setVisibleNowAtIndex(center, true);
-    const { renderer } = makeRendererHarness("return-sight-test");
+    const { renderer, returnTexture } = makeRendererHarness("return-thread-test");
     activateAllChunks(renderer, world);
 
     renderer.sync(world, forward, returning, debugVisibility, 1, true);
-    const presented = (renderer as unknown as { returnPresented: Uint8Array }).returnPresented;
-    expect(presented[center]).toBe(ReturnRiskLevel.Hidden);
 
-    world.clearVisibility();
-    renderer.sync(world, forward, returning, debugVisibility, 1);
-    expect(presented[center]).toBe(ReturnRiskLevel.Comfortable);
+    const strokes = [returnTexture(0, 0), returnTexture(1, 0)].flatMap(({ strokes: calls }) => calls);
+    expect(strokes.length).toBeGreaterThan(0);
+    expect(strokes.some(({ commands }) => commands.some(({ kind }) => kind === "curve"))).toBe(true);
+    expect(strokes.every(({ style }) => style.startsWith("rgba(91, 184, 116,"))).toBe(true);
+    expect(returnTexture(1, 0).calls).toEqual([]);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      returnThreadSegments: 3,
+      returnThreadChunkBuckets: 2,
+    });
+  });
+
+  it("recolors the whole thread through green, yellow, orange, and red risk states", () => {
+    const world = new WorldGrid(3, 1, 3);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Personal);
+    const path = [0, 1, 2].map((x) => world.index(x, 0));
+    const forward = makeForward(world, [], []);
+    const { renderer, returnTexture } = makeRendererHarness("return-color-test");
+    activateAllChunks(renderer, world);
+    const colors = new Map([
+      [ReturnRiskLevel.Comfortable, "rgba(91, 184, 116,"],
+      [ReturnRiskLevel.Warning, "rgba(226, 196, 74,"],
+      [ReturnRiskLevel.Critical, "rgba(238, 125, 36,"],
+      [ReturnRiskLevel.Impossible, "rgba(196, 38, 36,"],
+    ]);
+
+    let revision = 1;
+    for (const [level, color] of colors) {
+      renderer.sync(world, forward, makeReturn(world, path, level), debugVisibility, revision++);
+      expect(returnTexture(0, 0).strokes).toHaveLength(2);
+      expect(returnTexture(0, 0).strokes.every(({ style }) => style.startsWith(color))).toBe(true);
+    }
+  });
+
+  it("clears stale thread geometry when the route moves to another chunk or becomes hidden", () => {
+    const world = new WorldGrid(4, 2, 2);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Personal);
+    const forward = makeForward(world, [], []);
+    const { renderer, returnTexture } = makeRendererHarness("return-replace-test");
+    activateAllChunks(renderer, world);
+    renderer.sync(
+      world,
+      forward,
+      makeReturn(world, [world.index(0, 0), world.index(1, 0)], ReturnRiskLevel.Warning),
+      debugVisibility,
+      1,
+    );
+    expect(returnTexture(0, 0).strokes.length).toBeGreaterThan(0);
+
+    renderer.sync(
+      world,
+      forward,
+      makeReturn(world, [world.index(2, 1), world.index(3, 1)], ReturnRiskLevel.Critical),
+      debugVisibility,
+      2,
+    );
+    expect(returnTexture(0, 0).strokes).toEqual([]);
+    expect(returnTexture(1, 0).strokes.length).toBeGreaterThan(0);
+
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 3);
+    expect(returnTexture(1, 0).strokes).toEqual([]);
   });
 
   it("skips full logical-candidate diffing for a presentation-only heading change", () => {

@@ -226,9 +226,14 @@ tasks.
 Return guidance remains synchronous authority. `ReturnPathSystem` finds one
 minimum-provision route from the ship to reachable Supported water. It may cross
 Unknown water only inside current sight and otherwise follows Personal water.
-A configurable passable padding creates the rendered corridor without crossing
-unseen Unknown, blocked, or Supported cells. Risk colour applies to the whole
-corridor from the remaining provision margin; no route means no corridor.
+The ordered route is presentation input for the **Voyage Sense thread**. A
+bounded padded corridor remains available to diagnostics but is not rendered.
+Presentation rounds cardinal turns within the traversable route-tile envelope
+and indexes the resulting sparse segments by chunk; it never recalculates the
+route or becomes navigation authority. One faint soft-edged thread applies a
+single risk colour to the whole route from the remaining provision margin:
+green, yellow, orange, then red as supply falls. The thread is absent when the
+ship is already in Supported water or no eligible known route exists.
 
 ## 8. Expedition, wreck, and lineage lifecycle
 
@@ -334,7 +339,7 @@ authoritative storage. Shared package and available-island textures plus the
 player-boat visual remain scene-owned. The ocean backdrop is the deterministic
 placeholder if visible demand exceeds the active budget.
 
-Knowledge and risk overlays update only dirty chunks and required neighbours.
+Knowledge and Voyage Sense overlays update only dirty chunks and required neighbours.
 Static terrain, feature markers, and authored island objects are constructed
 only for active chunks. Each imported island resolves the stable asset ID
 recorded in its manifest descriptor, positions visible prepared layers at the
@@ -472,7 +477,7 @@ Normal sailing avoids work proportional to total world or island count:
 - collision visits the swept coarse AABB and cached cardinal topology;
 - interaction and marker queries start from spatially local candidates;
 - forward guidance is cooperative, cancellable, and atomically published;
-- return rendering follows one sparse route/corridor;
+- return rendering follows one sparse, chunk-indexed Voyage Sense thread;
 - overlays update dirty active chunks only; and
 - diagnostics are sampled and capped.
 

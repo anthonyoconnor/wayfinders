@@ -2,9 +2,16 @@
 
 Status: current development handoff, verified 2026-07-16.
 
-The asset workflow through GR-4.4 and the graphical Great Hall through GR-5.3
-are implemented. The product owner accepted the GR-5.2 approval preview and
-authorized its shared-renderer game integration. Focused contract and
+The asset workflow through GR-4.4, the graphical Great Hall through GR-5.3,
+and gameplay through GP-5.1 are implemented. GP-5.1 replaces the filled return
+corridor with the chunk-indexed Voyage Sense thread. Focused geometry and
+renderer coverage protects curved turns, chunk seams, path-versus-corridor
+consumption, all four provision-margin colours, and stale clearing. Browser
+acceptance at normal gameplay zoom verified green and red turning routes, the
+four-state legend, and no warning or error output.
+
+The product owner accepted the GR-5.2 approval preview and authorized its
+shared-renderer game integration. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,
 deterministic shoreline seeding, atomic island availability, exact-mask round
 trips, duplicate identity rejection, rollback, and isolated-trial authority.
@@ -16,11 +23,15 @@ creation and destruction. Browser smoke acceptance covers the game, zoom input,
 and the simplified Islands workspace without warning or error output.
 The twenty-generation presentation-fixture baseline measured `0.193 ms` p95 over
 2,000 serial samples on 2026-07-16. The implemented regression contract is
-owned by the technical design. The aggregate source gates and serial
-performance lane below pass against this current handoff tree, including
-world-density, island-placement, and Great Hall fixture coverage. The aggregate
-`npm.cmd run check` command remains blocked before those lanes because the GR-2
-generated asset catalog inherited from current `main` is stale.
+owned by the technical design. GP-5.1 architecture validation, source and test
+typechecks, quick and focused contract lanes, integration coverage, browser
+acceptance, and the production bundle pass. The aggregate `npm.cmd run check`
+command remains blocked at asset validation because `promotion-summary.json`
+is stale. The combined correctness run proceeds past that check but retains
+asset-only failures whose fixtures expect the former three-package empty-source
+baseline while the current workspace contains two additional island sources
+and candidates. Those asset artifacts and expectations are outside GP-5.1 and
+remain untouched.
 
 This file records only volatile operational facts. Implemented behavior belongs
 in `Wayfinders_Technical_Design.md`, ownership in `ARCHITECTURE_MAP.md`, future

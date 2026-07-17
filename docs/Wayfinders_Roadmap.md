@@ -1,7 +1,7 @@
 # Wayfinders current roadmap
 
-Status: forward plan. The Great Hall track is complete through `GR-5.3`; no
-further Great Hall milestone is planned.
+Status: forward plan. Gameplay is complete through `GP-5.1`; the Great Hall
+track is complete through `GR-5.3`.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -51,10 +51,11 @@ lifecycle, deterministic authored-island world planning, and chunk-bounded
 authored runtime presentation are implemented. No further production-asset
 milestone is currently proposed.
 
-The water-system proposal remains a separate candidate track. Great Hall
-concept and planning work is complete. The product owner accepted the `GR-5.2`
-view-only approval workspace and recorded **Go** on 2026-07-16. The shared
-presentation contract, renderer, fixture, game adapter, and bounded era
+The Voyage Sense thread in `GP-5.1` is implemented. No further `GP-5` milestone
+is planned. The water-system proposal remains a separate candidate track. Great
+Hall concept and planning work is complete. The product owner accepted the
+`GR-5.2` view-only approval workspace and recorded **Go** on 2026-07-16. The
+shared presentation contract, renderer, fixture, game adapter, and bounded era
 integration in `GR-5.3` are implemented.
 
 ## Great Hall presentation
@@ -97,6 +98,15 @@ symbol set is defined in `Wayfinders_Great_Hall_Infographic_Lexicon.md`.
 Concept PNGs remain reference-only under `concept_art/great-hall` and never
 load at runtime. The reviewed copies consumed by the approval workspace live at
 stable paths under `public/assets/gr5/great-hall`.
+
+## Voyage Sense
+
+### GP-5 — Voyage Sense presentation
+
+Status: complete through `GP-5.1`. No further milestone is planned.
+
+The implemented Voyage Sense thread contract is owned by the technical design;
+scope and acceptance evidence are archived.
 
 ## Water presentation
 
