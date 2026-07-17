@@ -437,7 +437,7 @@ export class WorldRenderer {
           && this.authoredIslandPresentationsByIslandId.has(island.id);
         const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
         let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
-        if (tile.terrain === TerrainType.ShallowOcean) {
+        if (hasAuthoredPresentation || tile.terrain === TerrainType.ShallowOcean) {
           waterColor = supported ? palette.shallowSupported : palette.shallow;
         }
         if (waterColor !== COLORS.ocean) {
@@ -518,9 +518,11 @@ export class WorldRenderer {
           continue;
         }
         const island = islandsById.get(tile.islandId);
+        const hasAuthoredPresentation = island !== undefined
+          && this.authoredIslandPresentationsByIslandId.has(island.id);
         const palette = island ? ISLAND_PALETTES[island.kind] : ISLAND_PALETTES[IslandKind.HighIsland];
         let waterColor: number = supported ? COLORS.supported : COLORS.ocean;
-        if (tile.terrain === TerrainType.ShallowOcean) {
+        if (hasAuthoredPresentation || tile.terrain === TerrainType.ShallowOcean) {
           waterColor = supported ? palette.shallowSupported : palette.shallow;
         }
         const px = (x - startX) * size;

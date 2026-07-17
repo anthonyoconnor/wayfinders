@@ -6,9 +6,14 @@ import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import type { GeneratedWorld } from "../src/wayfinders/world/WorldGenerator";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 
+const { graphicsFills } = vi.hoisted(() => ({
+  graphicsFills: [] as Array<{ color: number; x: number; y: number; width: number; height: number }>,
+}));
+
 vi.mock("phaser", () => {
   class Graphics {
     destroyed = false;
+    private fillColor = 0;
 
     constructor(_scene?: unknown) {}
 
@@ -16,8 +21,11 @@ vi.mock("phaser", () => {
     setPosition(): this { return this; }
     setDepth(): this { return this; }
     clear(): this { return this; }
-    fillStyle(): this { return this; }
-    fillRect(): this { return this; }
+    fillStyle(color: number): this { this.fillColor = color; return this; }
+    fillRect(x: number, y: number, width: number, height: number): this {
+      graphicsFills.push({ color: this.fillColor, x, y, width, height });
+      return this;
+    }
     fillRoundedRect(): this { return this; }
     fillTriangle(): this { return this; }
     fillCircle(): this { return this; }
@@ -272,6 +280,8 @@ describe("WorldRenderer active chunk resources", () => {
       authoredCollision: { gridWidth: 4, gridHeight: 2, solidSubcells: [{ x: 1, y: 1 }] },
     } as const;
     (generated as { islands: readonly unknown[] }).islands = [island];
+    generated.grid.setTerrain(island.bounds.minX, island.bounds.minY, TerrainType.Land);
+    generated.grid.setIslandId(island.bounds.minX, island.bounds.minY, island.id);
     const presentations = {
       revision: "catalog-test",
       diagnostics: [],
@@ -291,11 +301,13 @@ describe("WorldRenderer active chunk resources", () => {
       authoredIslandCatalogRevision: "catalog-test",
     };
     const renderer = new WorldRenderer(scene as never, undefined, presentations);
+    graphicsFills.length = 0;
 
     renderer.render(generated, [entry(0, 0, 0)]);
     expect(images).toHaveLength(0);
 
     const activated = renderer.syncActiveChunks([entry(1, 0, 0)]);
+    expect(graphicsFills).toContainEqual({ color: 0x4aa1a0, x: 64, y: 96, width: 33, height: 33 });
     expect(activated.telemetry.activeAuthoredImageObjects).toBe(2);
     expect(images).toMatchObject([
       { x: 320, y: 96, textureKey: "base", displayWidth: 128, displayHeight: 64, alpha: 1, blendMode: 0 },
