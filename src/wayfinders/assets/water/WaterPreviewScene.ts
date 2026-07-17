@@ -21,6 +21,7 @@ const SHEET_PITCH = 36;
 const STATIC_SHEET_WIDTH = 144;
 const STATIC_SHEET_HEIGHT = 288;
 const WORLD_GRID_SIZE = 96;
+const WORLD_CELL_SIZES = Object.freeze([4, 8, 12, 16, 24, 32]);
 
 const PROFILES = Object.freeze([
   { id: "abyss", label: "Abyss", note: "Quiet far water" },
@@ -82,6 +83,27 @@ export class WaterPreviewScene extends Phaser.Scene {
   }
 
   private readonly onClick = (event: Event): void => {
+    const zoomTarget = event.target instanceof Element
+      ? event.target.closest<HTMLElement>("[data-water-zoom]")
+      : null;
+    const zoomAction = zoomTarget?.dataset.waterZoom;
+    if (zoomAction) {
+      const currentIndex = WORLD_CELL_SIZES.indexOf(this.worldCellSize);
+      if (zoomAction === "in") {
+        this.worldCellSize = WORLD_CELL_SIZES[Math.min(WORLD_CELL_SIZES.length - 1, currentIndex + 1)]!;
+      } else if (zoomAction === "out") {
+        this.worldCellSize = WORLD_CELL_SIZES[Math.max(0, currentIndex - 1)]!;
+      } else if (zoomAction === "fit") {
+        this.worldCellSize = WORLD_CELL_SIZES[0]!;
+      } else if (zoomAction === "game") {
+        this.worldCellSize = TILE_SIZE;
+      } else {
+        return;
+      }
+      this.render();
+      return;
+    }
+
     const target = event.target instanceof Element
       ? event.target.closest<HTMLElement>("[data-water-profile]")
       : null;
@@ -103,7 +125,7 @@ export class WaterPreviewScene extends Phaser.Scene {
         this.variant = Math.min(3, Math.max(0, Math.trunc(Number(target.value) || 0)));
         break;
       case "world-scale":
-        this.worldCellSize = [4, 8, 12].includes(Number(target.value)) ? Number(target.value) : 4;
+        this.worldCellSize = WORLD_CELL_SIZES.includes(Number(target.value)) ? Number(target.value) : 4;
         break;
       case "overlays":
         if (!(target instanceof HTMLInputElement)) return;
@@ -144,9 +166,12 @@ export class WaterPreviewScene extends Phaser.Scene {
           <h3>Compare</h3>
           <label>Variant <select data-water-control="variant">${[0, 1, 2, 3].map((value) => `<option value="${value}" ${value === this.variant ? "selected" : ""}>${value + 1}</option>`).join("")}</select></label>
           <label>World scale <select data-water-control="world-scale">
-            <option value="4" ${this.worldCellSize === 4 ? "selected" : ""}>Overview</option>
-            <option value="8" ${this.worldCellSize === 8 ? "selected" : ""}>Medium</option>
-            <option value="12" ${this.worldCellSize === 12 ? "selected" : ""}>Detail</option>
+            <option value="4" ${this.worldCellSize === 4 ? "selected" : ""}>Fit overview · 13%</option>
+            <option value="8" ${this.worldCellSize === 8 ? "selected" : ""}>Quarter scale · 25%</option>
+            <option value="12" ${this.worldCellSize === 12 ? "selected" : ""}>Inspect · 38%</option>
+            <option value="16" ${this.worldCellSize === 16 ? "selected" : ""}>Half scale · 50%</option>
+            <option value="24" ${this.worldCellSize === 24 ? "selected" : ""}>Close detail · 75%</option>
+            <option value="32" ${this.worldCellSize === 32 ? "selected" : ""}>Game scale · 100%</option>
           </select></label>
           <label class="water-preview-check"><input data-water-control="overlays" type="checkbox" ${this.showOverlays ? "checked" : ""}> Currents, rough water, and glints</label>
         </section>
@@ -155,9 +180,12 @@ export class WaterPreviewScene extends Phaser.Scene {
 
   private renderStage(): void {
     if (!this.stage) return;
+    const previousViewport = this.captureWorldViewport();
     const selectedIndex = profileIndex(this.selectedProfile);
     const revision = ++this.renderRevision;
     const worldPixels = WORLD_GRID_SIZE * this.worldCellSize;
+    const zoomPercent = Math.round((this.worldCellSize / TILE_SIZE) * 100);
+    const zoomIndex = WORLD_CELL_SIZES.indexOf(this.worldCellSize);
     this.stage.innerHTML = `
       <div class="water-preview-stage__inner">
         <header class="water-preview-hero">
@@ -167,7 +195,14 @@ export class WaterPreviewScene extends Phaser.Scene {
 
         <section class="water-preview-panel water-preview-world-study">
           <div class="water-preview-panel__heading"><div><p class="eyebrow">96 × 96 world study</p><h3>All water treatments in context</h3></div><span>Multi-cell static blends</span></div>
-          <p class="water-preview-world-note">A full prototype-scale water world: abyss and deep ocean, coastal shelves, calm lagoons, reef fields, a current ribbon, rough water, and a future brackish study. Regions are intentionally broad so the transitions can be judged as a world composition rather than one enlarged tile edge.</p>
+          <p class="water-preview-world-note">A full prototype-scale water world: abyss and deep ocean, coastal shelves, calm lagoons, reef fields, a current ribbon, rough water, and a future brackish study. Zoom to 1:1 Game to inspect the native 32-pixel tile scale used in play.</p>
+          <div class="water-preview-zoom" role="group" aria-label="Water world zoom controls">
+            <button type="button" data-water-zoom="out" aria-label="Zoom out" ${zoomIndex === 0 ? "disabled" : ""}>−</button>
+            <output aria-live="polite">${zoomPercent}%${this.worldCellSize === TILE_SIZE ? " · game scale" : ""}</output>
+            <button type="button" data-water-zoom="in" aria-label="Zoom in" ${zoomIndex === WORLD_CELL_SIZES.length - 1 ? "disabled" : ""}>+</button>
+            <button type="button" data-water-zoom="fit">Fit</button>
+            <button type="button" data-water-zoom="game">1:1 Game</button>
+          </div>
           <div class="water-preview-world-wrap">
             <canvas class="water-preview-world-map" data-water-world width="${worldPixels}" height="${worldPixels}" aria-label="World-scale map showing every water treatment"></canvas>
           </div>
@@ -196,6 +231,7 @@ export class WaterPreviewScene extends Phaser.Scene {
         </section>
 
       </div>`;
+    this.restoreWorldViewport(previousViewport);
     void this.renderWorldCanvas(revision);
   }
 
@@ -210,6 +246,7 @@ export class WaterPreviewScene extends Phaser.Scene {
           <div><dt>Profile</dt><dd>${PROFILES[profileIndex(this.selectedProfile)]!.label}</dd></div>
           <div><dt>Variant</dt><dd>${this.variant + 1}</dd></div>
           <div><dt>World</dt><dd>96 × 96</dd></div>
+          <div><dt>Scale</dt><dd>${Math.round((this.worldCellSize / TILE_SIZE) * 100)}%${this.worldCellSize === TILE_SIZE ? " · game" : ""}</dd></div>
           <div><dt>Blend</dt><dd>Multi-cell crossfade</dd></div>
           <div><dt>Motion</dt><dd>Static</dd></div>
         </dl>
@@ -220,6 +257,23 @@ export class WaterPreviewScene extends Phaser.Scene {
 
   private tileSprite(profile: number, variant: number, scale: number): string {
     return `<span class="water-preview-tile" aria-hidden="true" style="${staticTileStyle(profile, variant, scale)}"></span>`;
+  }
+
+  private captureWorldViewport(): { readonly x: number; readonly y: number } | undefined {
+    const wrap = this.stage?.querySelector<HTMLElement>(".water-preview-world-wrap");
+    if (!wrap || wrap.scrollWidth <= 0 || wrap.scrollHeight <= 0) return undefined;
+    return {
+      x: (wrap.scrollLeft + wrap.clientWidth / 2) / wrap.scrollWidth,
+      y: (wrap.scrollTop + wrap.clientHeight / 2) / wrap.scrollHeight,
+    };
+  }
+
+  private restoreWorldViewport(viewport: { readonly x: number; readonly y: number } | undefined): void {
+    if (!viewport) return;
+    const wrap = this.stage?.querySelector<HTMLElement>(".water-preview-world-wrap");
+    if (!wrap) return;
+    wrap.scrollLeft = viewport.x * wrap.scrollWidth - wrap.clientWidth / 2;
+    wrap.scrollTop = viewport.y * wrap.scrollHeight - wrap.clientHeight / 2;
   }
 
   private async renderWorldCanvas(revision: number): Promise<void> {

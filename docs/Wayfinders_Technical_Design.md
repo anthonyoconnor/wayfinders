@@ -571,7 +571,8 @@ WTR-1.0 feedback prototype: its isolated scene reads prepared static tile,
 transition, and overlay sheets directly, shows labelled variants, repeat checks,
 and a
 96x96 whole-world study with multi-cell treatment handoffs and a player-boat
-scale reference, and owns no
+scale reference. The study can redraw from a fitted overview through native
+32-pixel game-tile scale while retaining the inspected map centre, and owns no
 gameplay catalog, package, promotion, animation, island-blending, or runtime
 renderer authority. The active workspace is URL-addressable and follows browser
 history; accessible arrow-key navigation uses roving focus. A typed registry

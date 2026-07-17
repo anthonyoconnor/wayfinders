@@ -54,6 +54,10 @@ scales, the optional visual overlays, workspace teardown and return, and
 reported no warning or error output. Broad automated coverage was intentionally
 outside this feedback prototype's scope.
 
+The whole-world study supports stepped zoom through native 32-pixel game-tile
+scale while preserving the inspected map area, plus direct Fit and 1:1 Game
+controls.
+
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,

@@ -3172,6 +3172,42 @@ html[data-application-mode="assets"] .asset-library-browser {
   line-height: 1.55;
 }
 
+.water-preview-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.65rem;
+}
+
+.water-preview-zoom button {
+  min-width: 2.15rem;
+  min-height: 2.15rem;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid rgba(111, 188, 186, 0.42);
+  border-radius: 0.4rem;
+  color: #d8ede2;
+  background: rgba(11, 58, 68, 0.82);
+  cursor: pointer;
+}
+
+.water-preview-zoom button:hover:not(:disabled),
+.water-preview-zoom button:focus-visible {
+  border-color: #87cfca;
+  background: rgba(20, 85, 94, 0.96);
+}
+
+.water-preview-zoom button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.water-preview-zoom output {
+  min-width: 6.8rem;
+  color: #b8d3cd;
+  font: 700 0.68rem ui-monospace, SFMono-Regular, Consolas, monospace;
+  text-align: center;
+}
+
 .water-preview-world-study .water-preview-world-wrap {
   max-height: min(72vh, 54rem);
   padding: 0;
