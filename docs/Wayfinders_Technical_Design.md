@@ -565,24 +565,24 @@ padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
 The asset-library route provides persistent **Islands**, **Ships**, **Fishing
-shoals**, **Water**, **Great Hall**, and **Audio** tabs above permanent
-left-library, centre-preview, and right-workbench regions. Water is a branch-only
-WTR-1.0 feedback prototype: its isolated scene reads prepared static tile,
-transition, and overlay sheets directly, shows labelled variants, repeat checks,
-and a
+shoals**, **Water**, **Great Hall**, and **Audio** tabs. Production workspaces use
+permanent left-library, centre-preview, and right-workbench regions. Water is a
+branch-only WTR-1.0 feedback prototype: its isolated scene reads prepared static tile, transition,
+and overlay sheets directly, shows labelled variants, repeat checks, and a
 96x96 whole-world study with multi-cell treatment handoffs and a player-boat
 scale reference. The study can redraw from a fitted overview through native
-32-pixel game-tile scale while retaining the inspected map centre, and owns no
+32-pixel game-tile scale while retaining the inspected map centre. It omits the
+production-tooling sidebar so the preview uses the available width, and owns no
 gameplay catalog, package, promotion, animation, island-blending, or runtime
 renderer authority. The active workspace is URL-addressable and follows browser
 history; accessible arrow-key navigation uses roving focus. A typed registry
 partitions library catalog entries and collision profiles, while a scene factory
 mounts a library scene, the static Water preview, the isolated Great Hall
 approval scene, or the play-only stored-audio scene. Workspace shutdown aborts
-its DOM listeners and Phaser bindings before the next workspace mounts. The left
-and right columns scroll independently, and the Phaser preview is sized to the
-centre column so it cannot render behind those controls. Existing recipe names
-and stable IDs are
+its DOM listeners and Phaser bindings before the next workspace mounts. Where
+present, the left and right columns scroll independently, and the Phaser preview
+is sized to the centre column so it cannot render behind those controls. Existing
+recipe names and stable IDs are
 checked in the form and again under the repository lock; conflicts block
 intake without a separate confirmation step. Validated family defaults and
 identity become one source recipe and one pending candidate through the

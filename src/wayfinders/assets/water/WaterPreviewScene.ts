@@ -40,6 +40,7 @@ export class WaterPreviewScene extends Phaser.Scene {
   private controlsAbort?: AbortController;
   private browser?: HTMLElement;
   private stage?: HTMLElement;
+  private toolsPanel?: HTMLElement;
   private selectedProfile: WaterProfileId = "deep";
   private variant = 0;
   private worldCellSize = 4;
@@ -63,7 +64,8 @@ export class WaterPreviewScene extends Phaser.Scene {
     this.controlsAbort = new AbortController();
     const region = document.querySelector<HTMLElement>(".game-region");
     const slot = document.querySelector<HTMLElement>("#scene-tools-slot");
-    if (!region || !slot) throw new Error("Water preview requires the asset workspace shell");
+    const toolsPanel = document.querySelector<HTMLElement>("#developer-tools-panel");
+    if (!region || !slot || !toolsPanel) throw new Error("Water preview requires the asset workspace shell");
 
     this.browser = document.createElement("aside");
     this.browser.className = "asset-library-browser water-preview-browser";
@@ -79,7 +81,10 @@ export class WaterPreviewScene extends Phaser.Scene {
     this.browser.addEventListener("click", this.onClick, { signal });
     this.browser.addEventListener("input", this.onInput, { signal });
     this.stage.addEventListener("click", this.onClick, { signal });
-    slot.classList.add("tool-slot--connected", "water-preview-tools");
+    slot.replaceChildren();
+    toolsPanel.hidden = true;
+    this.toolsPanel = toolsPanel;
+    document.documentElement.classList.add("water-preview-active");
   }
 
   private readonly onClick = (event: Event): void => {
@@ -140,7 +145,6 @@ export class WaterPreviewScene extends Phaser.Scene {
   private render(): void {
     this.renderBrowser();
     this.renderStage();
-    this.renderWorkbench();
   }
 
   private renderBrowser(): void {
@@ -233,26 +237,6 @@ export class WaterPreviewScene extends Phaser.Scene {
       </div>`;
     this.restoreWorldViewport(previousViewport);
     void this.renderWorldCanvas(revision);
-  }
-
-  private renderWorkbench(): void {
-    const slot = document.querySelector<HTMLElement>("#scene-tools-slot");
-    if (!slot) return;
-    slot.innerHTML = `
-      <section class="water-preview-workbench">
-        <header><div><p class="eyebrow">Feedback target</p><h3>Base water direction</h3></div><span>WTR-1.0</span></header>
-        <p>Compare the full-world distribution, multi-cell profile handoffs, texture density, and whether every treatment has a clear role.</p>
-        <dl>
-          <div><dt>Profile</dt><dd>${PROFILES[profileIndex(this.selectedProfile)]!.label}</dd></div>
-          <div><dt>Variant</dt><dd>${this.variant + 1}</dd></div>
-          <div><dt>World</dt><dd>96 × 96</dd></div>
-          <div><dt>Scale</dt><dd>${Math.round((this.worldCellSize / TILE_SIZE) * 100)}%${this.worldCellSize === TILE_SIZE ? " · game" : ""}</dd></div>
-          <div><dt>Blend</dt><dd>Multi-cell crossfade</dd></div>
-          <div><dt>Motion</dt><dd>Static</dd></div>
-        </dl>
-        <section><h4>Deliberately deferred</h4><ul><li>Island and shoreline blending</li><li>Animation foundation</li><li>Runtime catalog and game renderer</li><li>Production validation and promotion</li></ul></section>
-        <p class="water-preview-readonly">This branch preview can be revised or discarded after the preferred visual direction is recorded.</p>
-      </section>`;
   }
 
   private tileSprite(profile: number, variant: number, scale: number): string {
@@ -361,10 +345,12 @@ export class WaterPreviewScene extends Phaser.Scene {
     this.browser = undefined;
     this.stage?.remove();
     this.stage = undefined;
+    if (this.toolsPanel) this.toolsPanel.hidden = false;
+    this.toolsPanel = undefined;
+    document.documentElement.classList.remove("water-preview-active");
     const slot = document.querySelector<HTMLElement>("#scene-tools-slot");
     if (slot) {
       slot.replaceChildren();
-      slot.classList.remove("tool-slot--connected", "water-preview-tools");
     }
   }
 }

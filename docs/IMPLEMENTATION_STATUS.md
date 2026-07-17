@@ -56,7 +56,8 @@ outside this feedback prototype's scope.
 
 The whole-world study supports stepped zoom through native 32-pixel game-tile
 scale while preserving the inspected map area, plus direct Fit and 1:1 Game
-controls.
+controls. The Water workspace omits the production-tooling sidebar and gives
+that width to the world preview.
 
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
