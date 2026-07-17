@@ -41,6 +41,8 @@ import {
   type WreckSurveyInteractionResultV1,
 } from "../exploration/WreckSurveyContracts";
 import type { SurveyBudgetReadModel } from "../exploration/SurveyContracts";
+import { availableProvisionUnits } from "../exploration/ProvisionSystem";
+import { classifyReturnRiskMargin, ReturnRiskLevel } from "../exploration/ReturnPathSystem";
 import {
   buildGreatHallChronicle,
   type GreatHallChronicle,
@@ -56,6 +58,7 @@ import {
 } from "../world/CollisionMask";
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
+import { buildCargoPresentation, type CargoPresentationModel } from "./CargoPresentation";
 import { collectDebugEntityBounds, type DebugEntityBoundsRole } from "./DebugEntityBounds";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { IslandDossierRenderer } from "./IslandDossierRenderer";
@@ -164,6 +167,16 @@ export class WayfindersScene extends Phaser.Scene {
   private knowledgeOverlay!: KnowledgeOverlayRenderer;
   private riskOverlay!: RiskOverlayRenderer;
   private cargoRenderer!: CargoRenderer;
+  private cargoPresentation?: CargoPresentationModel;
+  private lastCargoPhysicalBundles = -1;
+  private lastCargoAvailableProvisionUnits = Number.NaN;
+  private lastCargoReturnCost: number | null | undefined;
+  private lastCargoReturnRiskLevel = ReturnRiskLevel.Hidden;
+  private lastCargoSurveyCost = -1;
+  private lastCargoProjectedReturnMargin: number | null | undefined;
+  private lastCargoComfortableThreshold = Number.NaN;
+  private lastCargoWarningThreshold = Number.NaN;
+  private lastCargoCriticalThreshold = Number.NaN;
   private islandDossierRenderer!: IslandDossierRenderer;
   private surveySiteRenderer!: SurveySiteRenderer;
   private fishingShoalRenderer!: FishingShoalRenderer;
@@ -670,8 +683,7 @@ export class WayfindersScene extends Phaser.Scene {
       this.simulation.overlaysRevision,
       force,
     );
-    this.cargoRenderer.sync(this.simulation.ship.provisions);
-    this.syncSurveyRibbon();
+    this.syncCargoPresentation(this.syncSurveyRibbon());
     const spatialEntitiesAfter = this.simulation.descriptorSpatialQueryTotals.entitiesExamined;
     this.presentationWork.recordEntityQueries(spatialEntitiesAfter - spatialEntitiesBefore);
     this.syncHomeAction();
@@ -1091,12 +1103,12 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveyButton?.addEventListener("click", () => this.performSurveyAction(), { signal });
   }
 
-  private syncSurveyRibbon(): void {
+  private syncSurveyRibbon(): Readonly<SurveyBudgetReadModel> | undefined {
     const ribbon = this.surveyRibbon;
-    if (!ribbon) return;
+    if (!ribbon) return undefined;
     if (this.simulation.generationHandoverActive || this.greatHallView?.isOpen) {
       ribbon.hidden = true;
-      return;
+      return undefined;
     }
 
     const wreckInteraction = this.simulation.wreckSurveyInteraction;
@@ -1111,7 +1123,7 @@ export class WayfindersScene extends Phaser.Scene {
       ribbon.dataset.surveyTarget = String(wreckInteraction.wreckId);
       delete ribbon.dataset.shoalId;
       ribbon.hidden = false;
-      return;
+      return wreckInteraction;
     }
 
     const surveySiteInteraction = this.simulation.surveySiteInteraction;
@@ -1128,7 +1140,7 @@ export class WayfindersScene extends Phaser.Scene {
       ribbon.dataset.surveyTarget = surveySiteInteraction.id;
       delete ribbon.dataset.shoalId;
       ribbon.hidden = false;
-      return;
+      return surveySiteInteraction;
     }
 
     const fishingInteraction = this.simulation.fishingShoalInteraction;
@@ -1145,7 +1157,7 @@ export class WayfindersScene extends Phaser.Scene {
       ribbon.dataset.surveyTarget = fishingInteraction.id;
       ribbon.dataset.shoalId = fishingInteraction.id;
       ribbon.hidden = false;
-      return;
+      return fishingInteraction;
     }
 
     const islandInteraction = this.simulation.islandDossierInteraction;
@@ -1164,13 +1176,62 @@ export class WayfindersScene extends Phaser.Scene {
       ribbon.dataset.surveyTarget = String(islandInteraction.islandId);
       delete ribbon.dataset.shoalId;
       ribbon.hidden = false;
-      return;
+      return islandInteraction;
     }
 
     ribbon.hidden = true;
     delete ribbon.dataset.surveyKind;
     delete ribbon.dataset.surveyTarget;
     delete ribbon.dataset.shoalId;
+    return undefined;
+  }
+
+  private syncCargoPresentation(activeSurveyBudget: Readonly<SurveyBudgetReadModel> | undefined): void {
+    const physicalBundles = this.simulation.ship.provisions;
+    const availableUnits = availableProvisionUnits(this.simulation.ship);
+    const returnCost = Number.isFinite(this.simulation.returnPaths.returnCost)
+      ? this.simulation.returnPaths.returnCost
+      : null;
+    const returnRiskLevel = this.simulation.returnPaths.riskLevel;
+    const surveyCost = activeSurveyBudget?.surveyCost ?? -1;
+    const projectedReturnMargin = activeSurveyBudget?.projectedReturnMargin;
+    const thresholds = this.simulation.config.returnRisk;
+    const changed = this.cargoPresentation === undefined
+      || physicalBundles !== this.lastCargoPhysicalBundles
+      || availableUnits !== this.lastCargoAvailableProvisionUnits
+      || returnCost !== this.lastCargoReturnCost
+      || returnRiskLevel !== this.lastCargoReturnRiskLevel
+      || surveyCost !== this.lastCargoSurveyCost
+      || projectedReturnMargin !== this.lastCargoProjectedReturnMargin
+      || thresholds.comfortable !== this.lastCargoComfortableThreshold
+      || thresholds.warning !== this.lastCargoWarningThreshold
+      || thresholds.critical !== this.lastCargoCriticalThreshold;
+    if (changed) {
+      const projectedReturnRiskLevel = projectedReturnMargin == null
+        ? ReturnRiskLevel.Hidden
+        : classifyReturnRiskMargin(projectedReturnMargin, this.simulation.config.returnRisk);
+      this.cargoPresentation = buildCargoPresentation({
+        physicalBundles,
+        availableProvisionUnits: availableUnits,
+        returnCost,
+        returnRiskLevel,
+        survey: activeSurveyBudget
+          ? { cost: activeSurveyBudget.surveyCost, projectedReturnRiskLevel }
+          : undefined,
+      });
+      this.lastCargoPhysicalBundles = physicalBundles;
+      this.lastCargoAvailableProvisionUnits = availableUnits;
+      this.lastCargoReturnCost = returnCost;
+      this.lastCargoReturnRiskLevel = returnRiskLevel;
+      this.lastCargoSurveyCost = surveyCost;
+      this.lastCargoProjectedReturnMargin = projectedReturnMargin;
+      this.lastCargoComfortableThreshold = thresholds.comfortable;
+      this.lastCargoWarningThreshold = thresholds.warning;
+      this.lastCargoCriticalThreshold = thresholds.critical;
+    }
+    const presentation = this.cargoPresentation;
+    if (!presentation) throw new Error("Cargo presentation was not initialized");
+    this.cargoRenderer.sync(presentation);
   }
 
   private performSurveyAction():

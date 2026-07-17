@@ -237,6 +237,20 @@ single risk colour to the whole route from the remaining provision margin:
 green, yellow, orange, then red as supply falls. The thread is absent when the
 ship is already in Supported water or no eligible known route exists.
 
+The screen-space cargo rack consumes one renderer-neutral partition of physical
+bundles rather than recalculating gameplay rules. Natural bundle material is
+uncommitted supply; a contiguous spend-end overlay uses the thread's current
+green, yellow, orange, or red state for the exact shortest-known-return cost;
+and the already-spent travel fraction remains visible as depleted material.
+Fractional costs occupy fractional bundle widths. While an authoritative survey
+prompt is present, its quoted cost occupies the spend end in warm ivory with a
+restrained breathing outline, the return allocation moves before it, and the
+return colour is classified from the projected post-survey margin. Reduced
+motion keeps the same survey outline static. The rack has no visible labels or
+numbers. A visually hidden live status owns exact usable, return, survey,
+uncommitted, safe/unknown, and shortfall text without announcing animation
+frames.
+
 ## 8. Expedition, wreck, and lineage lifecycle
 
 An expedition begins when ordinary movement crosses from Supported to

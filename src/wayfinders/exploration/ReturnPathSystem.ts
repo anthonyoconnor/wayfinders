@@ -43,6 +43,19 @@ export interface ReturnRiskCounts {
   impossible: number;
 }
 
+export function classifyReturnRiskMargin(
+  margin: number,
+  thresholds: Readonly<PrototypeConfig["returnRisk"]>,
+): ReturnRiskLevel {
+  if (![thresholds.comfortable, thresholds.warning, thresholds.critical].every(Number.isFinite)) {
+    throw new RangeError("Return-risk thresholds must be finite");
+  }
+  if (margin >= thresholds.comfortable) return ReturnRiskLevel.Comfortable;
+  if (margin >= thresholds.warning) return ReturnRiskLevel.Warning;
+  if (margin >= thresholds.critical) return ReturnRiskLevel.Critical;
+  return ReturnRiskLevel.Impossible;
+}
+
 interface ReturnBudgetCache {
   corridorIndices: readonly number[];
   returnCost: number;
@@ -293,14 +306,7 @@ export class ReturnPathSystem implements ReturnQuery {
   }
 
   private classifyMargin(margin: number): ReturnRiskLevel {
-    const thresholds = this.config.returnRisk;
-    if (![thresholds.comfortable, thresholds.warning, thresholds.critical].every(Number.isFinite)) {
-      throw new RangeError("Return-risk thresholds must be finite");
-    }
-    if (margin >= thresholds.comfortable) return ReturnRiskLevel.Comfortable;
-    if (margin >= thresholds.warning) return ReturnRiskLevel.Warning;
-    if (margin >= thresholds.critical) return ReturnRiskLevel.Critical;
-    return ReturnRiskLevel.Impossible;
+    return classifyReturnRiskMargin(margin, this.config.returnRisk);
   }
 
   private countsFor(level: ReturnRiskLevel, count: number): ReturnRiskCounts {

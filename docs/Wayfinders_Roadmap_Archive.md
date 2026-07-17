@@ -750,6 +750,33 @@ browser warnings or errors. The repository-wide aggregate remains independently
 blocked by stale production-asset catalog expectations recorded in
 `IMPLEMENTATION_STATUS.md`; GP-5.1 does not change asset inputs or artifacts.
 
+#### GP-5.2 — Voyage Sense supply commitments
+
+Status: implemented and accepted on 2026-07-16.
+
+The compact cargo rack now presents the exact authoritative supply partition
+without visible words or numbers. A renderer-neutral model divides physical
+bundles into natural uncommitted material, depleted fractional travel spend,
+the shortest-known-return commitment in the Voyage Sense risk colour, and a
+warm ivory survey commitment only while an authoritative prompt is present.
+Partial costs occupy partial bundle widths and insufficient commitments never
+create fictitious icons. Survey presentation reserves its quoted cost first and
+colours the remaining return allocation from the projected post-survey margin.
+Its breathing outline becomes static under reduced-motion preference. Exact
+quantities, safe/unknown return state, and shortfalls remain in the visually
+hidden live status.
+
+Acceptance evidence: renderer-neutral contracts cover fractional spend and
+return partitions, projected survey partitioning, insufficient return and
+survey supply, safe and unknown routes, and invalid physical inputs. Existing
+survey contracts continue to prove authoritative quoted costs and affordability.
+Architecture validation, source and test typechecks, the quick lane, and the
+focused presentation contract pass. Browser review at normal gameplay zoom
+confirmed the graphics-only twelve-bundle rack, fractional green return tint,
+two-bundle survey glow, immediate hidden-status updates, and no browser warning
+or error output. The unrelated aggregate asset-validation blocker remains
+recorded in `IMPLEMENTATION_STATUS.md`.
+
 ## Graphics track
 
 ### GR-0 — Developer graphics contract
