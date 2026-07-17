@@ -1,4 +1,3 @@
-single line trail for voyage sense
 clouds
 weather
 storms
@@ -6,3 +5,4 @@ ocean animals
 prosperity - increases with more fishing shoals and more island connections
 start with low supply and build up amount of supply received based on prosperity
 supply display - can show colors related to the voyage sense. also highlight how much will be spent on the survey
+continous world - the world is a globe and therefore wraps around. going far left will wrap around to the right. same for going up and down.
