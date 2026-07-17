@@ -2,8 +2,10 @@ import {
   PRODUCTION_ASSET_FAMILY_DEFAULTS,
   PRODUCTION_ASSET_INTAKE_FORMAT_VERSION,
   PRODUCTION_ASSET_INTAKE_ROUTE,
+  aspectLockedProductionAssetDimensions,
   gridPaddedProductionAssetDimensions,
   productionAssetPngDimensions,
+  productionAssetNameFromFileName,
   suggestedProductionAssetId,
   type ProductionAssetCanvasSizing,
   type ProductionAssetDimensions,
@@ -90,6 +92,7 @@ export function mountProductionAssetIntakeUi({
         </select><small data-field-error="family"></small></label>
         <label class="production-intake-wide">Stable ID<input name="id" required maxlength="96" spellcheck="false"><small data-field-error="id"></small></label>
         <label class="production-intake-wide production-intake-dimensions-mode"><input name="keepOriginalDimensions" type="checkbox" checked> Keep original PNG dimensions</label>
+        <label class="production-intake-wide production-intake-dimensions-mode"><input name="lockAspectRatio" type="checkbox" checked> Lock width and height to the PNG aspect ratio</label>
         <label>Canvas width (px)<input name="targetWidth" type="number" min="1" max="4096" required><small data-field-error="targetWidth"></small></label>
         <label>Canvas height (px)<input name="targetHeight" type="number" min="1" max="4096" required><small data-field-error="targetHeight"></small></label>
         <div class="production-intake-wide production-intake-dimensions" data-intake-dimensions>
@@ -138,6 +141,7 @@ export function mountProductionAssetIntakeUi({
   let canvasSizing: ProductionAssetCanvasSizing = "native";
   let dimensionReadRevision = 0;
   let sourceReadPending = false;
+  let nameEdited = false;
   const existingIds = new Set(existingAssets.map(({ id }) => id));
   const existingNames = new Set(existingAssets.map(({ name }) => name.trim().toLowerCase()));
 
@@ -170,10 +174,12 @@ export function mountProductionAssetIntakeUi({
   });
   const updateDimensionControls = (jobActive = false) => {
     const keepOriginal = field<HTMLInputElement>(form, "keepOriginalDimensions");
+    const lockAspectRatio = field<HTMLInputElement>(form, "lockAspectRatio");
     const width = field<HTMLInputElement>(form, "targetWidth");
     const height = field<HTMLInputElement>(form, "targetHeight");
     width.disabled = jobActive || keepOriginal.checked;
     height.disabled = jobActive || keepOriginal.checked;
+    lockAspectRatio.disabled = jobActive || keepOriginal.checked || sourceDimensions === undefined;
     const target = targetDimensions();
     const family = field<HTMLSelectElement>(form, "family").value as ProductionAssetFamily;
     const collision = field<HTMLSelectElement>(form, "collisionSemantics").value;
@@ -208,6 +214,16 @@ export function mountProductionAssetIntakeUi({
         }
       }
     }
+  };
+  const syncAspectRatio = (axis: "width" | "height") => {
+    if (!sourceDimensions || !field<HTMLInputElement>(form, "lockAspectRatio").checked) return;
+    const width = field<HTMLInputElement>(form, "targetWidth");
+    const height = field<HTMLInputElement>(form, "targetHeight");
+    const changed = Number(axis === "width" ? width.value : height.value);
+    if (!Number.isInteger(changed) || changed < 1 || changed > 4_096) return;
+    const projected = aspectLockedProductionAssetDimensions(sourceDimensions, axis, changed);
+    if (axis === "width") height.value = String(projected.height);
+    else width.value = String(projected.width);
   };
   const useSourceDimensions = (dimensions: Readonly<ProductionAssetDimensions>) => {
     sourceDimensions = dimensions;
@@ -298,6 +314,13 @@ export function mountProductionAssetIntakeUi({
       return;
     }
     sourceReadPending = true;
+    const name = field<HTMLInputElement>(form, "name");
+    const fileName = productionAssetNameFromFileName(sourceFile.name);
+    if (fileName && (!nameEdited || name.value.trim() === "")) {
+      name.value = fileName;
+      const family = field<HTMLSelectElement>(form, "family").value as ProductionAssetFamily;
+      field<HTMLInputElement>(form, "id").value = suggestedProductionAssetId(fileName, family);
+    }
     updateIdentityAvailability();
     void sourceFile.arrayBuffer()
       .then((bytes) => readSourceDimensions(bytes, revision))
@@ -322,12 +345,18 @@ export function mountProductionAssetIntakeUi({
     }
     updateDimensionControls();
   });
+  field<HTMLInputElement>(form, "lockAspectRatio").addEventListener("change", (event) => {
+    if ((event.currentTarget as HTMLInputElement).checked) syncAspectRatio("width");
+    updateDimensionControls();
+  });
   field<HTMLInputElement>(form, "targetWidth").addEventListener("input", () => {
     canvasSizing = "resize";
+    syncAspectRatio("width");
     updateDimensionControls();
   });
   field<HTMLInputElement>(form, "targetHeight").addEventListener("input", () => {
     canvasSizing = "resize";
+    syncAspectRatio("height");
     updateDimensionControls();
   });
   field<HTMLSelectElement>(form, "collisionSemantics").addEventListener("change", () => updateDimensionControls());
@@ -337,6 +366,7 @@ export function mountProductionAssetIntakeUi({
       const padded = gridPaddedProductionAssetDimensions(sourceDimensions);
       canvasSizing = "native";
       field<HTMLInputElement>(form, "keepOriginalDimensions").checked = false;
+      field<HTMLInputElement>(form, "lockAspectRatio").checked = false;
       field<HTMLInputElement>(form, "targetWidth").value = String(padded.width);
       field<HTMLInputElement>(form, "targetHeight").value = String(padded.height);
       updateDimensionControls();
@@ -345,6 +375,7 @@ export function mountProductionAssetIntakeUi({
     }
   });
   field<HTMLInputElement>(form, "name").addEventListener("input", () => {
+    nameEdited = true;
     const family = field<HTMLSelectElement>(form, "family").value as ProductionAssetFamily;
     field<HTMLInputElement>(form, "id").value = suggestedProductionAssetId(field<HTMLInputElement>(form, "name").value, family);
     updateIdentityAvailability();
@@ -426,6 +457,7 @@ export function mountProductionAssetIntakeUi({
       sourceDimensions = undefined;
       canvasSizing = "native";
       sourceReadPending = false;
+      nameEdited = Boolean(reference);
       form.reset();
       clearErrors();
       currentJob = undefined;

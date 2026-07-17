@@ -381,7 +381,8 @@ ship**, fit, paint, erase, `8`/`32`-pixel brush size, undo, redo, reset, and one
 built-in home island never does. It does not expose runtime profiles, dimensions,
 layer composition, animation, validation, fingerprints, review, promotion, or
 portable-package controls. Import fixes the family and collision semantics to
-island defaults, reads the PNG canvas, offers grid padding when needed, prepares
+island defaults, derives the initial name from the filename, reads the PNG
+canvas, offers aspect-locked manual sizing and grid padding when needed, prepares
 the image, seeds the shoreline mask, and selects the resulting unavailable
 island. Saving an imported island commits its editable name, complete mask, and
 one durable `availableInGame` boolean through a rollback-safe repository

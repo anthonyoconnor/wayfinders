@@ -62,6 +62,10 @@ describe("GR-4.1 focused island workshop", () => {
     expect(intake).toContain("focusedFamily?: ProductionAssetFamily");
     expect(intake).toContain("Import island PNG");
     expect(intake).toContain("Its canvas size and initial collision mask are read automatically.");
+    expect(intake).toContain('name="lockAspectRatio"');
+    expect(intake).toContain("productionAssetNameFromFileName(sourceFile.name)");
+    expect(intake).toContain('syncAspectRatio("width")');
+    expect(intake).toContain('syncAspectRatio("height")');
     expect(intake).toContain("data-intake-advanced");
     expect(intake).toContain('focusedFamily === "island" && job.recipeId');
   });

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   PRODUCTION_ASSET_FAMILY_DEFAULTS,
   ProductionAssetIntakeValidationError,
+  aspectLockedProductionAssetDimensions,
   gridPaddedProductionAssetDimensions,
   productionAssetPngDimensions,
+  productionAssetNameFromFileName,
   suggestedProductionAssetId,
   validateProductionAssetIntakeRequest,
 } from "../src/wayfinders/assets/ProductionAssetIntake";
@@ -52,6 +54,15 @@ describe("GR-3.5 guided production asset intake", () => {
     });
     expect(suggestedProductionAssetId("  Shell Masons!  ", "island"))
       .toBe("production.island.shell-masons");
+  });
+
+  it("derives upload names and preserves the source aspect ratio from either dimension", () => {
+    expect(productionAssetNameFromFileName("river.delta.inhabited.png")).toBe("river.delta.inhabited");
+    expect(productionAssetNameFromFileName("C:\\art\\Atoll.PNG")).toBe("Atoll");
+    expect(aspectLockedProductionAssetDimensions({ width: 1_280, height: 720 }, "width", 640))
+      .toEqual({ width: 640, height: 360 });
+    expect(aspectLockedProductionAssetDimensions({ width: 1_280, height: 720 }, "height", 180))
+      .toEqual({ width: 320, height: 180 });
   });
 
   it("normalizes a reference recipe request without a manual identity confirmation", () => {

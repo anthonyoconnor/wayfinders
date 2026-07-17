@@ -48,7 +48,10 @@ add prepared production candidates without creating a second simulation.
 **Add PNG** starts guided intake for a new local image. In the Islands
 workspace, family, layer role, solid collision semantics, and runtime category
 are fixed island defaults rather than operator fields. The form reads the PNG's
-native canvas immediately and defaults to keeping it. A solid candidate whose
+native canvas immediately, derives the editable asset name from the filename,
+and defaults to keeping its dimensions. When manual dimensions are enabled, an
+aspect-ratio lock updates width or height from the other value using the source
+PNG ratio. A solid candidate whose
 native canvas is not
 divisible by `32` receives an explicit warning and a one-action transparent-pad
 option to the next aligned canvas. Manual output dimensions remain available

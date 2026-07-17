@@ -47,6 +47,8 @@ export interface ProductionAssetDimensions {
   readonly height: number;
 }
 
+export type ProductionAssetDimensionAxis = "width" | "height";
+
 const PNG_SIGNATURE = Object.freeze([137, 80, 78, 71, 13, 10, 26, 10]);
 
 /** Reads the authoritative canvas size from a PNG IHDR without decoding pixels. */
@@ -81,6 +83,31 @@ export function gridPaddedProductionAssetDimensions(
     throw new RangeError("Grid padding would exceed the 4096 pixel texture limit");
   }
   return Object.freeze({ width: paddedWidth, height: paddedHeight });
+}
+
+/** Uses the local upload filename as the initial editable display name. */
+export function productionAssetNameFromFileName(fileName: string): string {
+  const normalized = fileName.replaceAll("\\", "/");
+  const baseName = normalized.slice(normalized.lastIndexOf("/") + 1);
+  const extension = baseName.lastIndexOf(".");
+  return (extension > 0 ? baseName.slice(0, extension) : baseName).trim();
+}
+
+/** Projects one edited canvas dimension through the source PNG aspect ratio. */
+export function aspectLockedProductionAssetDimensions(
+  source: Readonly<ProductionAssetDimensions>,
+  axis: ProductionAssetDimensionAxis,
+  value: number,
+): Readonly<ProductionAssetDimensions> {
+  const sourceWidth = boundedInteger(source.width);
+  const sourceHeight = boundedInteger(source.height);
+  const changed = boundedInteger(value);
+  if (!sourceWidth || !sourceHeight || !changed) {
+    throw new RangeError("Aspect-locked dimensions must be whole numbers from 1 to 4096");
+  }
+  return Object.freeze(axis === "width"
+    ? { width: changed, height: Math.max(1, Math.round(changed * sourceHeight / sourceWidth)) }
+    : { width: Math.max(1, Math.round(changed * sourceWidth / sourceHeight)), height: changed });
 }
 
 export const PRODUCTION_ASSET_FAMILY_DEFAULTS: Readonly<Record<ProductionAssetFamily, ProductionAssetFamilyDefaults>> =
