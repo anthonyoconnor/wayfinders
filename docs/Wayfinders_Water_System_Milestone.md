@@ -8,30 +8,30 @@ but no water asset is registered or loaded by the game.
 The first milestone is a rapid, branch-only **Water** workspace prototype in the
 asset library. Its purpose is to put plausible water in front of the product
 owner quickly, gather visual feedback, and iterate on tiles and depth blending
-before investing in production contracts, animation, or game integration.
+before iterating on animation and island handoffs. The replacement follow-up
+milestones remain branch playground work; production contracts and game
+integration are not scheduled by this proposal.
 
 ## Outcome
 
-Implement a layered, grid-aligned water presentation system that:
+Evolve the branch Water workspace into a focused visual playground that:
 
 - visually belongs beside the current home island and island reference set;
 - distinguishes deep, shallow, reef, lagoon, current, rough, and biome-specific
   water without inventing accidental gameplay rules;
-- blends continuously under authored and generated islands;
-- provides a small presentation-animation foundation that later systems can
-  reuse;
-- remains deterministic across chunk activation, knowledge redraws, and
-  same-seed regeneration;
+- demonstrates judged-default wind and wave animation without a tuning-heavy UI;
+- places representative authored and generated islands in irregular
+  shore-following shallow-to-deep water;
+- adds broken, non-uniform animated waves around island edges;
 - preserves terrain, collision, navigation, knowledge, provisions, and world
   generation as the only gameplay authorities; and
-- consumes the shared active-chunk boundary and retains dirty-water-chunk
-  updates.
+- keeps every preview decision visual-only and isolated from gameplay authority.
 
-The milestone is complete only when the candidate art has been promoted through
-a validated package, detailed static water has replaced developer per-cell fills
-and wave strokes while retaining the deferred ocean backdrop, sparse animation
-runs through a shared rendering-layer presentation clock, and the visual and
-performance acceptance gates in this document pass.
+The proposed sequence is complete when the Water tab can demonstrate convincing
+open-water motion, irregular island depth handoffs, and varied animated
+shoreline waves well enough to gather product feedback. It does not imply a
+promoted package, default runtime renderer, generalized animation system, or
+game integration.
 
 ## Evidence and current constraints
 
@@ -72,10 +72,10 @@ The proposal is based on the current repository and these art references:
   transparent island pixels so the organic alpha edge never exposes a flat
   rectangle or empty background.
 - The project has metadata-timed ship/wake presentation, but no shared general
-  animation system. Water is the first consumer of the proposed presentation
-  clock and clip sampler; it must not become a second simulation clock. The
-  clock belongs to rendering, is owned by `WayfindersScene`, and may replace
-  direct renderer reads of `scene.time.now` without changing gameplay timing.
+  animation system. WTR-1.1 uses the smallest Water-workspace-local timing path
+  practical and does not create a game-wide clock. Any later runtime proposal
+  must keep presentation time outside simulation and avoid a second simulation
+  clock.
 - `WorldManifest` now owns durable generated identity and `WorldAnalysisIndex`
   owns shared coastline and water-component facts. Water may derive its exact
   eight-neighbor visual mask from a bounded `WorldGrid` apron, but it must reuse
@@ -277,7 +277,10 @@ contexts exist in a world contract. Atoll entrances and minimum channel width
 are regression cases because an attractive transition must never visually or
 logically close a passable channel.
 
-## Proposed render architecture
+## Deferred production render architecture
+
+This architecture is retained as reference for a future runtime proposal. It is
+not part of WTR-1.1 through WTR-1.3.
 
 ```mermaid
 flowchart LR
@@ -313,7 +316,8 @@ interface WaterChunkView {
 }
 ```
 
-The exact Phaser primitive can be selected during WTR-1.2, but it must batch by
+The exact Phaser primitive can be selected during any later authorized runtime
+integration, but it must batch by
 plane and texture and activate through `ActiveChunkSet` deltas. Do not create
 one tween, Phaser animation, or standalone game object per ocean tile.
 `WayfindersScene` remains the only owner of chunk membership: water processes
@@ -343,6 +347,10 @@ animation descriptors.
 
 ## Animation foundation
 
+This section is deferred production design reference. WTR-1.1 should not build
+this shared foundation; its animation exists only in the branch Water workspace
+and may be replaced after visual feedback.
+
 ### Principles
 
 - Animation is unsaved presentation state.
@@ -358,10 +366,10 @@ animation descriptors.
 - Pause, scene sleep, tab backgrounding, and resume cannot create gameplay work
   or an animation catch-up loop.
 - The system must respond to live `prefers-reduced-motion` changes.
-- Migrate ship/wake sampling from direct `scene.time.now` reads to the same
-  presentation-time input during WTR-1.4, preserving its current visual and
-  gameplay behavior. This makes the foundation shared without adding another
-  animation scheduler.
+- Any later shared-animation work may migrate ship/wake sampling from direct
+  `scene.time.now` reads to the same presentation-time input while preserving
+  its current visual and gameplay behavior. This makes the foundation shared
+  without adding another animation scheduler.
 
 Proposed descriptor:
 
@@ -415,7 +423,8 @@ remove shallow/reef readability or alter simulation state.
 ## Prepared candidate package
 
 The candidate lives at `assets-src/gr1/water` and is intentionally outside the
-live gameplay catalog until WTR-1.1 establishes validation and promotion rules.
+live gameplay catalog until a separately authorized production milestone
+establishes validation and promotion rules.
 WTR-1.0 may expose these candidate outputs through the smallest practical
 preview loader or branch-local copy. Preview availability is not review,
 promotion, or runtime registration.
@@ -439,14 +448,15 @@ ship. `build-water-package.mjs` deterministically rebuilds the candidate without
 changing `public`, `dist`, or current source files.
 
 The builder and current `runtime` directory are candidate preparation evidence,
-not an alternate production authority. WTR-1.1 must either integrate the
-deterministic build into the repository's production-recipe preparation path or
-materialize equivalent current outputs through that path before promotion.
+not an alternate production authority. Any later production milestone must
+either integrate the deterministic build into the repository's production-recipe
+preparation path or materialize equivalent current outputs through that path
+before promotion.
 
 The candidate is an art/contract starting point, not automatic approval.
-WTR-1.0 owns the early visible iteration and feedback loop. WTR-1.1 may begin
-production work only after that feedback identifies a direction worth pursuing
-and the product owner separately authorizes the next milestone.
+WTR-1.0 owns the initial visible iteration and feedback loop. WTR-1.1 may begin
+animation experiments only after the product owner separately authorizes it;
+none of WTR-1.1 through WTR-1.3 authorizes production work.
 
 ## Water asset-library playground
 
@@ -478,9 +488,9 @@ limited to whatever directly speeds comparison, such as water profile, variant,
 visual-overlay on/off, and world inspection scale.
 
 WTR-1.0 does not prototype shoreline foam, the authored home-island overlay,
-water beneath transparent island art, or generated-island handoffs. Island
-blending remains wholly owned by WTR-1.3 after the base water direction has
-been selected.
+water beneath transparent island art, or generated-island handoffs. WTR-1.2
+introduces the island depth handoff, and WTR-1.3 adds varied animated shoreline
+waves after that base relationship is understood.
 
 Manual visual review is the primary verification method. Do not build broad
 unit, integration, browser, accessibility, lifecycle, or performance coverage
@@ -489,7 +499,11 @@ the fastest way to try an item repeatedly—for example, checking a mask resolve
 while adjusting depth blends. Rendered preview pixels and fixture cells never
 become collision, navigation, terrain, or package authority.
 
-## Package and pipeline design
+## Deferred production package and pipeline design
+
+This section is not scheduled by WTR-1.1 through WTR-1.3. It remains reference
+for any later proposal that promotes water assets or integrates them into the
+game.
 
 Production semantic ID: `world.water.primary`.
 
@@ -563,123 +577,80 @@ Exit gate:
   performance, accessibility, or automated-test gate is implied. The prototype
   can be revised or discarded.
 
-### WTR-1.1 — Contract and promotion gate
+### WTR-1.1 — Animated water playground
 
 Tasks:
 
-- carry the WTR-1.0 feedback into the accepted taxonomy, palette handoff,
-  47-mask convention, render planes, static-base/sparse-overlay policy, clip
-  rates, and budgets;
-- record named-profile presentation baselines before changing runtime water;
-- add `WaterAssetContractV1`, manifest validation, margin/spacing loader support,
-  an explicit runtime catalog union, production asset representation, and
-  focused contract tests;
-- express the accepted source/build decisions through the production recipe,
-  preparation, exact-fingerprint review, and promotion lifecycle;
-- validate the candidate files and promote only the approved current runtime
-  sheets to `public/assets/...` through the existing transaction boundary; and
-- record art/source provenance without treating reference pixels as authority.
+- add animation to the Water tab's world study without integrating it into the
+  game or building a generalized animation framework;
+- demonstrate at least two clearly readable motion families: repeating water
+  waves and wind-driven surface movement;
+- use judgement to add restrained supporting motion such as drifting glints,
+  moving caustics, current streaks, or occasional whitecaps where it improves
+  the water rather than making the whole surface busy;
+- choose sensible default speed, density, direction, phase variation, and
+  intensity values in code;
+- keep the UI deliberately small: provide only the controls needed to view or
+  pause the result, not a panel of tuning parameters; and
+- use focused diagnostics only when they make visual iteration faster.
 
 Exit gate:
 
-- the candidate selected after playground feedback is the exact candidate
-  reviewed and promoted as `world.water.primary`, and the Water workspace can
-  compare its promoted package with the approved candidate;
-- every sheet/frame/mask validates, `assets:check` accepts its recipe, lineage,
-  review, and promotion records; and
-- no world renderer or gameplay behavior has changed yet.
+- the Water tab visibly demonstrates both wave and wind motion at overview and
+  1:1 game scale;
+- the loops feel coherent, different water profiles retain their character,
+  and the surface does not shimmer uniformly; and
+- the product owner can give animation feedback without waiting for island or
+  game integration.
 
-### WTR-1.2 — Static chunked water renderer
+### WTR-1.2 — Islands and irregular depth transitions
 
 Tasks:
 
-- add a rendering-owned `WaterSurfaceClassifier` that consumes `WorldGrid`,
-  `WorldManifest`, and applicable `WorldAnalysisIndex` facts and caches
-  per-active-chunk profile/mask/variant data;
-- add a batched `WaterRenderer` whose static base, transition, underwater, and
-  surface planes consume the existing `ActiveChunkDelta` lifecycle;
-- use `water-static.png` initially;
-- retain the constant ocean backdrop for deferred chunks and activation gaps;
-- preserve Supported water via tint and preserve existing fog/knowledge layers;
-- keep bounded neighbor apron data available across chunk boundaries without a
-  second global coastline/connectivity scan;
-- publish active resource, texture-byte, activation, deactivation, and update
-  counters beside existing presentation telemetry; and
-- add a developer overlay for profile, mask, variant, and chunk inspection.
+- place representative existing islands in the Water tab so their relationship
+  with the animated water can be reviewed in context;
+- continue water beneath transparent island edges and preserve the island art
+  as the focal layer;
+- derive shallow water from the actual shoreline shape, then transition through
+  intermediate water into deep water as distance from land increases;
+- vary transition width and contour around coves, points, channels, reefs, and
+  exposed sides so the result never reads as a uniform circular band;
+- keep the WTR-1.1 animation defaults active while judging the depth handoff;
+  and
+- add only lightweight island selection or comparison controls that directly
+  shorten the feedback loop.
 
 Exit gate:
 
-- developer per-cell ocean/shallow fills and wave strokes are replaced while
-  the constant ocean object remains the deferred low-detail fallback;
-- a fixed seed produces identical cached classifications on regeneration and
-  traversal;
-- water resources never outlive `delta.active`, visible deferred chunks retain
-  the low-detail backdrop, and activation order cannot change classification;
-- terrain/collision/navigation snapshots remain byte-for-byte unchanged; and
-- static rendering performs no full-world work per frame.
+- the Water tab can display representative islands inside the water world;
+- each island has a readable shallow-to-deep handoff that follows its shoreline
+  and varies organically rather than forming a large circle; and
+- transparent edges, bays, narrow passages, and nearby reef shapes do not expose
+  hard rectangles or abrupt depth steps.
 
-### WTR-1.3 — Island handoff and topology polish
+### WTR-1.3 — Varied animated island-edge waves
 
 Tasks:
 
-- stop omitting water for the full authored-home rectangle;
-- render coastal water under the complete home footprint, then draw the current
-  island composition above it;
-- render generic foam below authored art and the aligned home clip above it;
-- integrate the 47-mask depth transitions for every generated island kind;
-- verify reefs, atoll entrances, docks, and narrow channels; and
-- add screenshot/contact harnesses for 2x2, 3x3, chunk-boundary, and island cases.
+- add animated shorewash and breaking-wave motion around island edges in the
+  Water tab;
+- make wave presence, length, intensity, and timing respond visually to local
+  coastline shape and exposure rather than drawing a continuous uniform halo;
+- keep protected coves and harbor-like recesses calmer while allowing more
+  visible breaks on exposed points and open coasts;
+- use broken segments and region-coherent phases so adjacent edge motion feels
+  connected without moving in perfect lockstep;
+- preserve island silhouettes, docks, reefs, channels, and the underlying
+  shallow-to-deep read; and
+- review the result across the representative islands introduced in WTR-1.2.
 
 Exit gate:
 
-- no rectangle, transparent gap, magenta fringe, generic-foam mismatch, depth
-  step, or chunk seam is visible around the home or generated islands at the
-  required zooms.
-
-### WTR-1.4 — Shared presentation clock and water clips
-
-Tasks:
-
-- implement a pure water clip/frame resolver with fixed-time tests;
-- add one rendering-layer presentation clock/controller owned by the scene and
-  pass one time snapshot to presentation consumers per rendered frame;
-- migrate ship/wake sampling to the same presentation-time input without
-  changing its current output contract;
-- update only `visible` active-chunk overlay batches when a discrete frame
-  advances; prefetched chunks remain static;
-- add deterministic tile/region/global phase policies;
-- integrate glint, caustic, current, whitecap, reef, and home clips at the approved
-  densities;
-- handle pause, sleep, resume, teardown, world regeneration, and resize; and
-- implement live reduced-motion behavior.
-
-Exit gate:
-
-- clips loop without luminance/alpha pops or connected-edge tearing;
-- no per-tile tweens/animations or per-frame texture allocations exist;
-- reduced motion freezes immediately and preserves readability; and
-- animation values cannot reach simulation, collision, navigation, world, or
-  feature APIs.
-
-### WTR-1.5 — Integration, accessibility, and performance acceptance
-
-Tasks:
-
-- test all knowledge, risk, route, fog, and sight combinations;
-- review grayscale/low-saturation terrain readability;
-- run the water contract/mask/clip tests in the narrow deterministic lane,
-  package and repository-artifact coverage in the I/O lane, renderer integration
-  coverage in the appropriate contract/integration lane, and resource/frame
-  budgets in the performance lane;
-- run the normal typechecks, `assets:check`, relevant tests, and bundle build;
-- profile representative sailing, camera movement, chunk boundaries, and tab
-  resume; and
-- tune densities/FPS only within the approved art and performance budgets.
-
-Exit gate:
-
-- every acceptance criterion below passes and the new package is the default
-  runtime water path.
+- animated edge waves give islands a clear sense of contact with moving water;
+- no island is surrounded by a uniform foam ring or synchronized circular wave;
+  and
+- exposed and protected shoreline areas read differently without requiring a
+  tuning-heavy UI.
 
 ## Acceptance criteria
 
@@ -691,7 +662,7 @@ production acceptance gate:
 - [ ] The Water tab shows the different static candidate tiles and one 96x96
       game-scale water world containing every treatment, broad multi-cell
       handoffs, and the player boat.
-- [ ] No authored or generated island blending is included; WTR-1.3 retains that
+- [ ] No authored or generated island blending is included; WTR-1.2 retains that
       scope.
 - [ ] The product owner can compare the useful directions and provide concrete
       feedback without waiting for animation or game integration.
@@ -699,6 +670,44 @@ production acceptance gate:
       visual experiment, not to establish broad regression coverage.
 - [ ] Feedback and the preferred next direction are recorded before WTR-1.1 is
       separately authorized.
+
+### WTR-1.1 animation feedback gate
+
+- [ ] The Water tab shows at least wave and wind-driven motion across the world
+      study and at 1:1 game scale.
+- [ ] Motion uses coherent, restrained defaults and does not make every water
+      cell animate in the same way or at the same phase.
+- [ ] Different water profiles remain readable while animated.
+- [ ] The UI exposes viewing and pause behavior only where useful; speed,
+      density, phase, and intensity do not become a tuning dashboard.
+- [ ] No gameplay runtime, production package, or general animation system is
+      implied by the prototype.
+
+### WTR-1.2 island-depth feedback gate
+
+- [ ] Representative existing islands can be selected and viewed inside the
+      Water tab's animated world.
+- [ ] Shallow water follows real shoreline shape and transitions outward into
+      intermediate and deep water.
+- [ ] Transition width varies around coves, points, channels, reefs, and exposed
+      coasts rather than forming a uniform circular band.
+- [ ] Water continues beneath transparent island edges without exposing a
+      rectangular footprint or abrupt depth step.
+
+### WTR-1.3 island-edge wave feedback gate
+
+- [ ] Animated edge waves use broken, locally varied segments rather than a
+      complete uniform ring.
+- [ ] Protected recesses read calmer than exposed points and open coasts.
+- [ ] Adjacent surf motion is coherent without moving in perfect lockstep.
+- [ ] Waves preserve island silhouettes, docks, reefs, channels, and the
+      shallow-to-deep transition beneath them.
+
+### Deferred production criteria
+
+The remaining criteria and performance guidance are retained as unscheduled
+design reference for a future production/runtime proposal. They are not exit
+gates for WTR-1.1 through WTR-1.3 and do not authorize implementation.
 
 ### Package and grid
 
@@ -769,8 +778,8 @@ production acceptance gate:
       compressed payload unless a later reviewed budget replaces these limits.
 - [ ] Repeated camera traversal plateaus at the approved active-chunk resource,
       texture-byte, and object counts with no activation/deactivation leak.
-- [ ] Named-profile sailing and camera-movement measurements meet the absolute
-      and water-attributable p95/p99 regression budgets recorded in WTR-1.1.
+- [ ] Named-profile sailing and camera-movement measurements meet separately
+      reviewed absolute and water-attributable p95/p99 regression budgets.
 
 ### Repository gate
 
@@ -785,9 +794,9 @@ production acceptance gate:
 - [ ] Runtime assets are promoted through `public`; generated `dist` is not
       hand-authored.
 
-## Performance budgets and fallbacks
+## Deferred production performance budgets and fallbacks
 
-Before WTR-1.2 changes runtime presentation, WTR-1.1 records replayable
+Before any later milestone changes runtime presentation, it records replayable
 baselines for the named world profiles and representative viewport/zoom cases.
 Each record includes seed, profile, viewport, p50/p95/p99 and maximum frame time,
 active/deferred chunk counts, water resource objects, decoded texture bytes,
@@ -833,8 +842,8 @@ deferred-placeholder behavior.
 | Reef becomes hard to read under overlays | Give authoritative reef classification priority and enforce grayscale tests |
 | Authored overlay texture exceeds budget | Own it through the home active chunk, animate only in its visible band, and retain a static representative frame fallback |
 | Water tooling forks production authority | Extend the recipe/review/promotion gate narrowly; do not promote from the standalone candidate builder |
-| Prototype state becomes package or gameplay authority | Keep the branch preview isolated and require WTR-1.1 contract, review, and promotion work before any runtime use |
-| Unmeasured baseline makes a frame target meaningless | Record named-profile absolute and incremental budgets in WTR-1.1 before runtime integration |
+| Prototype state becomes package or gameplay authority | Keep the branch preview isolated and require a separately authorized contract, review, and promotion milestone before any runtime use |
+| Unmeasured baseline makes a frame target meaningless | Record named-profile absolute and incremental budgets before any runtime integration |
 | AI source texture repeats or contains artifacts | Treat masters as source only; use contact/seam review and deterministic preparation before fingerprinted review and promotion |
 
 ## Out of scope
@@ -855,12 +864,9 @@ change requires its own authority, tests, and milestone approval.
 
 ## Definition of done
 
-The water milestone is done when the accepted package is loaded through the
-validated production lifecycle and catalog; the renderer consumes the one
-scene-owned active-chunk delta and uses static grid-aligned base/transition art
-above the deferred ocean backdrop; authored and generated islands have clean
-water handoffs; one rendering-layer presentation clock drives ship/wake and only
-sparse visible water effects; reduced motion and knowledge overlays work; all
-visual, deterministic, gameplay, pipeline, resource-lifetime, memory, and
-measured frame-time gates pass; and no other milestone document had to become a
-second implementation backlog.
+The proposed Water-workspace sequence is done when the product owner can review
+judged-default wave and wind animation, representative islands with irregular
+shore-following shallow-to-deep transitions, and varied animated waves around
+their edges. Feedback and the preferred direction must be recorded after each
+stage. Completion does not mean the assets are promoted, water is integrated
+into the game, or the deferred production design has been authorized.
