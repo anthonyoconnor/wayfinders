@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { GREAT_HALL_PREVIEW_ROSTER } from "../src/wayfinders/assets/greatHall/GreatHallPreviewModel";
+import { GREAT_HALL_FIXTURE } from "../src/wayfinders/assets/greatHall/GreatHallFixture";
 
 const repositoryRoot = process.cwd();
 const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -15,7 +15,7 @@ async function readPng(relativePath: string): Promise<Buffer> {
 
 describe("GR-5.2 Great Hall fixed asset set", () => {
   it("keeps all twenty ordered portrait files present and distinct", async () => {
-    const portraits = await Promise.all(GREAT_HALL_PREVIEW_ROSTER.map(async (navigator) => {
+    const portraits = await Promise.all(GREAT_HALL_FIXTURE.navigators.map(async (navigator) => {
       const relativePath = navigator.portraitUrl.replace(/^\/assets\//, "assets/");
       const [buffer, metadata] = await Promise.all([
         readPng(relativePath),

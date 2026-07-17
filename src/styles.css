@@ -279,8 +279,9 @@ a:focus-visible {
 }
 
 .great-hall__panel {
+  position: relative;
   display: grid;
-  width: min(68rem, calc(100vw - 2rem));
+  width: min(76rem, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
   max-height: calc(100dvh - 2rem);
   gap: 1.1rem;
@@ -297,7 +298,7 @@ a:focus-visible {
 }
 
 .great-hall[data-mode="handover"] .great-hall__panel {
-  width: min(44rem, calc(100vw - 2rem));
+  width: min(76rem, calc(100vw - 2rem));
 }
 
 .great-hall[data-mode="completion"] .great-hall__panel {
@@ -371,6 +372,10 @@ a:focus-visible {
 }
 
 .great-hall__close {
+  position: absolute;
+  z-index: 3;
+  top: 1.1rem;
+  right: 1.1rem;
   display: grid;
   flex: 0 0 auto;
   width: 2.35rem;
@@ -1936,6 +1941,11 @@ html[data-application-mode="assets"] .asset-library-browser {
   margin-inline: auto;
 }
 
+.great-hall-preview-stage[data-viewport="narrow"] > .gh-hall {
+  width: min(31rem, 100%);
+  margin-inline: auto;
+}
+
 .gh-preview-viewport {
   min-height: 100%;
 }
@@ -2521,7 +2531,7 @@ html[data-application-mode="assets"] .asset-library-browser {
 }
 
 .gh-era-rail {
-  grid-template-columns: auto minmax(3rem, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(3rem, 1fr) auto auto auto auto;
   gap: 1.4%;
   padding: 1.3% 2%;
   border: 0;
@@ -2542,6 +2552,99 @@ html[data-application-mode="assets"] .asset-library-browser {
   left: 12%;
 }
 
+.gh-achievement-detail {
+  position: absolute;
+  z-index: 2;
+  right: 13%;
+  bottom: 1.6%;
+  left: 49%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.35rem;
+  align-items: baseline;
+  padding: 0.28rem 0.5rem;
+  border: 1px solid rgba(190, 151, 84, 0.72);
+  color: #ead9ae;
+  background: rgba(28, 20, 15, 0.9);
+}
+
+.gh-achievement-detail h4,
+.gh-achievement-detail p {
+  margin: 0;
+  font-size: clamp(0.48rem, 0.72vw, 0.66rem);
+  line-height: 1.25;
+}
+
+.gh-achievement-detail h4 {
+  color: #74d1cb;
+  text-transform: uppercase;
+}
+
+.gh-era-rail__direct {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #d8c79c;
+  font-size: 0.55rem;
+}
+
+.gh-era-rail__direct select {
+  min-height: 1.55rem;
+  border: 1px solid #7c5a35;
+  color: #e8dbb5;
+  background: #382319;
+}
+
+.great-hall__shared-renderer {
+  min-width: 0;
+}
+
+.great-hall__shared-renderer .gh-hall {
+  width: 100%;
+}
+
+@media (max-width: 620px) {
+  .great-hall {
+    padding: 0.35rem;
+  }
+
+  .great-hall__panel {
+    width: calc(100vw - 0.7rem);
+    max-height: calc(100dvh - 0.7rem);
+    padding: 0.45rem;
+  }
+
+  .great-hall__shared-renderer .gh-hall {
+    min-height: 57rem;
+    aspect-ratio: auto;
+    background-size: auto 100%;
+  }
+
+  .great-hall__shared-renderer .gh-hall__body {
+    inset: 8% 8% 8%;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    gap: 1rem;
+  }
+
+  .great-hall__shared-renderer .gh-era-wall,
+  .great-hall__shared-renderer .gh-memorial {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .great-hall__shared-renderer .gh-era-wall__portraits {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: repeat(6, minmax(4.5rem, 1fr));
+  }
+
+  .great-hall__shared-renderer .gh-achievement-detail {
+    right: 9%;
+    bottom: 1%;
+    left: 9%;
+  }
+}
+
 .great-hall-preview-stage[data-viewport="narrow"] .gh-hall__body {
   grid-template-columns: minmax(0, 0.78fr) minmax(0, 1fr);
 }
@@ -2552,7 +2655,7 @@ html[data-application-mode="assets"] .asset-library-browser {
 }
 
 .great-hall-preview-stage[data-viewport="narrow"] .gh-era-rail {
-  grid-template-columns: auto minmax(3rem, 1fr) auto auto auto;
+  grid-template-columns: auto minmax(3rem, 1fr) auto auto auto auto;
 }
 
 .great-hall-preview-stage[data-viewport="narrow"] .gh-era-rail > button:last-child {

@@ -89,8 +89,10 @@ not import Phaser.
   accessible tab navigation, URL history, and the three permanent mount regions.
   Library workspaces own their catalog partition, collision profiles,
   namespaced selection, and scene lifetime. The view-only Great Hall workspace
-  owns a fixed twenty-generation presentation fixture and no catalog or
-  gameplay authority. `AssetWorkspaceSceneFactory` selects the isolated scene
+  validates and varies a checked-in twenty-generation V1 fixture, then passes it
+  to the same bounded semantic renderer used by the game. A pure adapter maps
+  structured `GreatHallChronicle` fields into that contract; neither host gives
+  the fixture or renderer gameplay authority. `AssetWorkspaceSceneFactory` selects the isolated scene
   kind at composition. Stopping a workspace aborts its DOM listeners and Phaser
   bindings before another workspace starts.
 - The Islands workspace owns its focused properties, availability-status,

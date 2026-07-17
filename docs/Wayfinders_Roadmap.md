@@ -1,7 +1,7 @@
 # Wayfinders current roadmap
 
-Status: forward plan. The Great Hall approval preview is implemented and awaits
-the product-owner decision; other proposed implementation remains unauthorized.
+Status: forward plan. Great Hall integration through `GR-5.3` is implemented;
+ceremony and acceptance polish in `GR-5.4` remains unauthorized.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -52,18 +52,17 @@ authored runtime presentation are implemented. No further production-asset
 milestone is currently proposed.
 
 The water-system proposal remains a separate candidate track. Great Hall
-concept and planning work is complete. `GR-5.1` and the `GR-5.2` view-only
-approval workspace are implemented; `GR-5.2` remains open for product review.
-Game integration in `GR-5.3` remains blocked until the product owner records an
-explicit **Go**.
+concept and planning work is complete. The product owner accepted the `GR-5.2`
+view-only approval workspace and recorded **Go** on 2026-07-16. The shared
+presentation contract, renderer, fixture, game adapter, and bounded era
+integration in `GR-5.3` are implemented.
 
 ## Great Hall presentation
 
 ### GR-5 — Graphical Great Hall chronicle
 
-Status: `GR-5.1` and the `GR-5.2` approval workspace are implemented. Product
-review and an explicit **Go** are still required to close `GR-5.2`; later
-milestones remain gated by that decision.
+Status: implemented through `GR-5.3`. `GR-5.4` remains proposed and requires
+separate authorization.
 
 Replace the text-led Great Hall with the selected **Ancestor Wall** direction:
 reviewed navigator portraits, a stable achievement-symbol language, fixed
@@ -77,11 +76,11 @@ The implementation sequence is:
 1. `GR-5.1` — implemented information architecture, interaction prototype,
    fixtures, and measured model baseline through twenty generations;
 2. `GR-5.2` — implemented twenty predefined portraits, fixed Hall and symbol
-   art, and a first-class, direct-linkable Great Hall viewing workspace; open
-   only for interactive product review and the explicit decision;
+   art, and a first-class, direct-linkable Great Hall viewing workspace,
+   accepted by the product owner;
 3. `GR-5.3` — one versioned JSON-compatible presentation contract, a shared
    graphical renderer for the asset viewer and game, the chronicle adapter, and
-   bounded era paging after that preview approval; and
+   bounded era paging, all now implemented; and
 4. `GR-5.4` — ceremony modes, responsive/accessibility polish, visual review,
    shared-host equivalence, and twenty-generation performance acceptance.
 
@@ -142,9 +141,7 @@ second presentation-lifetime policy or simulation clock.
 
 ## Authorization boundary
 
-No further milestone is authorized for implementation. `GR-5.2` remains open
-only for product review and bounded revisions to its approval preview. `GR-5.3`
-and `GR-5.4` require the product-owner **Go** recorded after that review. The
-water proposal, gameplay persistence, a new gameplay or production-asset
+No further milestone is authorized for implementation. `GR-5.4` requires
+explicit authorization. The water proposal, gameplay persistence, a new gameplay or production-asset
 milestone, broad runtime content rollout, or any other deferred scope requires
 explicit user authorization.

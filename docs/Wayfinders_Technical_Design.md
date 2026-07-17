@@ -268,6 +268,18 @@ optionally browsable only at the exact home dock, and succession uses a focused
 non-dismissible mode. A fatal voyage exposes no provisional achievements; a
 later returned wreck survey may link identity and fate to the lost navigator.
 
+The graphical Hall consumes a validated JSON-compatible presentation contract
+V1. A pure adapter maps each chronicle navigator to one of twenty fixed portrait
+files, its lifecycle and known wreck fate, exactly four voyage positions, and
+achievement symbols with every exact returned label retained. One shared
+semantic HTML renderer serves the game dialog and asset workspace. It renders
+only the selected twelve-generation era, selected memorial, four voyage bands,
+and one exact-label detail surface; era navigation never creates hidden portrait
+controls for the complete lineage. Presentation portraits, paging, symbols, and
+fixture data never become gameplay identity or authority. Completion still
+takes priority over a pending handover, and host-owned dismissal and action
+callbacks preserve the existing movement and lifecycle gates.
+
 ## 9. Discoverable content and completion
 
 Fishing shoals, island dossiers, and survey sites share the same durable
@@ -402,21 +414,15 @@ their save, validation, review, and promotion operations continue to use the
 narrow serialized repository seams until a dedicated workspace milestone
 replaces them.
 
-The Great Hall workspace is a view-only product-review surface. A single
-navigator-count control reveals the first one through twenty entries of a fixed
-ordered portrait catalog; twelve-generation era pages bound portrait DOM, and
-the selected memorial always has four voyage bands. Representative active,
-completed, lost/unlocated, lost/confirmed, handover, completion, and ten
-achievement-symbol states come from immutable preview fixtures. Portrait and
-symbol files are read directly from `public/assets/gr5/great-hall`, so replacing
-a file and reloading shows the revision without runtime generation, asset
-promotion, or an editor. The workspace never constructs `GameSimulation`,
-reads live lineage, changes Great Hall gameplay, or authorizes game integration.
-The fixed preview model supports one through twenty generations, renders at
-most twelve portrait controls and four selected voyage bands, and has a `5 ms`
-p95 model-build regression budget at twenty generations. Browser image decode,
-layout, and interaction measurements remain part of the pending product-review
-pass rather than gameplay performance authority.
+The Great Hall workspace is a view-only fixture host. Its navigator-count and
+scenario controls derive one-through-twenty variations in memory from a checked-
+in, boundary-validated V1 JSON fixture. The fixture and live game adapter feed
+the same semantic renderer. Portrait and symbol files are read directly from
+`public/assets/gr5/great-hall`; no runtime generation, promotion, file write, or
+gameplay persistence path exists. The workspace never constructs
+`GameSimulation` or reads live lineage. The fixed structural ceiling is twelve
+portrait controls, four selected voyage bands, and one exact-label detail
+surface; the twenty-generation fixture-build p95 budget remains `5 ms`.
 
 The first approval composition uses one fixed empty Hall-interior image beneath
 all interactive content. The selected navigator and four pictorial voyage bands

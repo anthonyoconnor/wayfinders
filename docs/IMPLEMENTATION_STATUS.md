@@ -2,9 +2,9 @@
 
 Status: current development handoff, verified 2026-07-16.
 
-The asset workflow through GR-4.4 is implemented. The GR-5.1 information
-prototype and GR-5.2 view-only Great Hall approval workspace are also
-implemented and await interactive product review. Focused contract and
+The asset workflow through GR-4.4 and the graphical Great Hall through GR-5.3
+are implemented. The product owner accepted the GR-5.2 approval preview and
+authorized its shared-renderer game integration. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,
 deterministic shoreline seeding, atomic island availability, exact-mask round
 trips, duplicate identity rejection, rollback, and isolated-trial authority.
@@ -14,7 +14,7 @@ procedural shortfall. Presentation coverage verifies revision-matched texture
 loading, exact collision-bounds alignment, coherent fallback, and active-chunk
 creation and destruction. Browser smoke acceptance covers the game, zoom input,
 and the simplified Islands workspace without warning or error output.
-The twenty-generation preview-model baseline measured `0.082 ms` p95 over
+The twenty-generation presentation-fixture baseline measured `0.193 ms` p95 over
 2,000 serial samples on 2026-07-16. The implemented regression contract is
 owned by the technical design. The aggregate source gates and serial
 performance lane below pass against this current handoff tree, including
@@ -34,8 +34,9 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
   Hall workspaces. Islands use a focused import, properties,
   availability-status, sea-trial, collision-mask, and single-save workflow.
   Ships and Fishing shoals retain general asset inspection and production
-  controls. Great Hall is a view-only fixed-art approval preview with a one-to-
-  twenty navigator-count selector.
+  controls. Great Hall is a view-only host for the validated V1 fixture and the
+  same bounded renderer used by the game, with a one-to-twenty navigator-count
+  selector.
 - An imported island can launch a disposable open-water sea trial from its
   library record and return directly to that same record.
 - Gameplay-session saving is absent; refresh starts a new session.
@@ -66,9 +67,9 @@ membership; `tests/README.md` explains lane selection.
   sailing and representative mobile performance remain unimplemented.
 - Interactive WebGL acceptance remains appropriate for presentation, asset-tool
   usability, and browser frame-time changes even when automated gates pass.
-- Interactive Great Hall preview review is pending because the in-app browser
-  control runtime was unavailable during the implementation pass. Product
-  approval remains required before GR-5.3 game integration.
+- GR-5.4 ceremony animation, full responsive/accessibility polish, shared-host
+  screenshot equivalence, and repeated-open resource acceptance remain proposed
+  and unauthorized.
 - End-to-end browser departure responsiveness has not been remeasured after the
   current guidance and active-chunk architecture settled. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.

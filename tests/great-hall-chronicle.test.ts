@@ -11,6 +11,7 @@ import {
   NavigatorLineageSystem,
   type NavigatorVoyageAchievementInputV3,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
+import { adaptGreatHallChronicle } from "../src/wayfinders/rendering/greatHall/GreatHallPresentationAdapter.ts";
 
 const FISHING_LEAD_ID = createFishingShoalId(0);
 const FISHING_SURVEY_ID = createFishingShoalId(1);
@@ -141,6 +142,31 @@ function allStableKeys(chronicle: ReturnType<typeof buildGreatHallChronicle>): s
 }
 
 describe("Great Hall chronicle read model", () => {
+  it("adapts structured chronicle fields into the shared four-band graphical contract", () => {
+    const { lineage, sources } = threeGenerationHistory();
+    const chronicle = buildGreatHallChronicle(lineage.navigators, sources);
+    const model = adaptGreatHallChronicle(chronicle, {
+      mode: "home",
+      selectedNavigatorId: chronicle.navigators[1].navigatorId,
+    });
+
+    expect(model.version).toBe(1);
+    expect(model.selectedGeneration).toBe(2);
+    expect(model.navigators.map(({ portraitUrl }) => portraitUrl)).toEqual([
+      "/assets/gr5/great-hall/portraits/navigator-01.png",
+      "/assets/gr5/great-hall/portraits/navigator-02.png",
+      "/assets/gr5/great-hall/portraits/navigator-03.png",
+    ]);
+    expect(model.navigators[1].state).toBe("lost-confirmed");
+    expect(model.navigators[1].voyages.map(({ state }) => state)).toEqual(["returned", "lost", "closed", "closed"]);
+    expect(model.navigators[1].voyages[1].achievements).toEqual([]);
+    expect(model.navigators[2].voyages.map(({ state }) => state)).toEqual(["returned", "awaiting", "unsailed", "unsailed"]);
+    expect(model.navigators[0].voyages[0].achievements.map(({ kind, label }) => ({ kind, label }))).toEqual([
+      { kind: "supported-route", label: "Supported 5 route tiles" },
+      { kind: "mapped-water", label: "Mapped 2 enclosed water tiles" },
+    ]);
+  });
+
   it("derives completed, lost, and active entries with structured committed achievements", () => {
     const { lineage, sources } = threeGenerationHistory();
 

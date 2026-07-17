@@ -1159,6 +1159,28 @@ workbench, and a clean warning/error console. The clean production repository
 contains no non-home imported island, so exact image alignment is exercised by
 synthetic contract fixtures rather than a retained placeholder asset.
 
+## Graphical Great Hall integration
+
+#### GR-5.1 through GR-5.3 — Approved graphical chronicle and shared renderer
+
+Status: implemented and accepted on 2026-07-16.
+
+The product owner accepted the fixed-art Ancestor Wall preview and recorded the
+required **Go** for game integration. Twenty stable generation portraits and the
+closed ten-symbol achievement vocabulary now feed one validated, JSON-compatible
+presentation contract V1. The asset workspace derives scenarios from a checked-
+in fixture; the game uses a pure adapter over structured `GreatHallChronicle`
+fields. Both hosts pass the resulting object to one semantic HTML renderer.
+
+The renderer owns twelve-generation era paging, pointer and keyboard selection,
+direct generation access, a selected portrait, exactly four voyage bands,
+accessible state and voyage names, and exact returned-label detail. Live browser
+acceptance verified era traversal, exact-symbol activation, current-era image
+bounds, four voyage bands, and no horizontal overflow in desktop and narrow
+fixture hosts. Fatal voyages remain free of provisional credit, undiscovered
+idol hosts remain structurally absent, and home, handover, completion, focus,
+movement, and lifecycle actions remain owned by the existing game host.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development
@@ -1204,5 +1226,5 @@ determine whether the user-visible departure symptom remains.
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-4.1`, graphics and asset
-work through `GR-4.4`, and architecture work through `AM-6`. Upcoming, proposed,
+work through `GR-5.3`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.

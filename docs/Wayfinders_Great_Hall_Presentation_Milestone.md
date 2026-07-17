@@ -435,7 +435,7 @@ Acceptance gate:
 
 ### GR-5.2 — Predefined art set and approval preview
 
-Status: implemented and awaiting product-owner review and an explicit **Go**.
+Status: implemented and accepted by product-owner **Go** on 2026-07-16.
 Depends on `GR-5.1`.
 
 Create twenty complete pixel-art navigator portraits as fixed image assets.
@@ -500,8 +500,8 @@ Acceptance gate:
 
 ### GR-5.3 — Shared presentation contract and graphical Hall integration
 
-Status: proposed, not started, and not authorized. Depends on the explicit
-preview **Go** from `GR-5.2`.
+Status: implemented and accepted on 2026-07-16 after the explicit preview
+**Go** from `GR-5.2`.
 
 Define and validate one versioned, JSON-compatible
 `GreatHallPresentationModel`. Extract the approved graphical Hall from the
