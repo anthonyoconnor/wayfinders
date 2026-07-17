@@ -8,6 +8,7 @@ export class CargoRenderer {
   private readonly icons: Phaser.GameObjects.Graphics[] = [];
   private readonly status: HTMLElement;
   private displayedCount = -1;
+  private bottomClearance = 12;
 
   constructor(private readonly scene: Phaser.Scene) {
     this.rack = scene.add.graphics();
@@ -59,6 +60,14 @@ export class CargoRenderer {
     this.status.textContent = target === 1 ? "1 provision bundle aboard" : `${target} provision bundles aboard`;
     if (previous > target) this.container.setScale(1.025);
     this.scene.tweens.add({ targets: this.container, scale: 1, duration: 140 });
+  }
+
+  /** Keeps the rack above screen-space actions that occupy the bottom of the game host. */
+  setBottomClearance(clearance: number): void {
+    const nextClearance = Math.max(12, Math.ceil(Number.isFinite(clearance) ? clearance : 0));
+    if (nextClearance === this.bottomClearance) return;
+    this.bottomClearance = nextClearance;
+    this.positionRack();
   }
 
   destroy(): void {
@@ -114,7 +123,10 @@ export class CargoRenderer {
   }
 
   private positionRack = (): void => {
-    this.container.setPosition(this.scene.scale.width / 2, this.scene.scale.height - 12);
+    this.container.setPosition(
+      this.scene.scale.width / 2,
+      this.scene.scale.height - this.bottomClearance,
+    );
   };
 
   private readonly onResize = (): void => this.positionRack();
