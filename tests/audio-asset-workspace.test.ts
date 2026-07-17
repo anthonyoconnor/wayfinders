@@ -41,6 +41,7 @@ describe("AUD-1 Audio asset workspace", () => {
       "utf8",
     )));
     const source = audioWorkspaceCatalogSource({ ok: true, catalog: runtimeCatalog });
+    expect(runtimeCatalog.categories.ambience.defaultVolume).toBe(0.275);
     expect(source.catalog?.categories.map(({ id }) => id)).toEqual(["music", "ambience", "sfx", "ui"]);
     expect(source.catalog?.assets[0]).toMatchObject({
       id: "music.home-harbor",

@@ -10,7 +10,7 @@
     },
     "ambience": {
       "displayName": "Ambience",
-      "defaultVolume": 0.55,
+      "defaultVolume": 0.275,
       "voiceLimit": 3
     },
     "sfx": {
@@ -50,7 +50,7 @@
       "file": "./v1/ambience/ocean.wav",
       "loop": true,
       "baseVolume": 0.28,
-      "description": "Persistent ocean bed beneath music and cues"
+      "description": "Gentle irregular open-water wash beneath music and cues"
     },
     {
       "id": "ambience.wake",
@@ -59,7 +59,7 @@
       "file": "./v1/ambience/wake.wav",
       "loop": true,
       "baseVolume": 0.22,
-      "description": "Ship-speed-controlled wake layer"
+      "description": "Speed-controlled diffuse vessel wake"
     },
     {
       "id": "sfx.discovery",

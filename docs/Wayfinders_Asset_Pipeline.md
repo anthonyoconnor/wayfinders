@@ -52,16 +52,16 @@ interactive editing, interactive mixing, upload, or browser-write workflow.
 
 `scripts/generate-audio-assets.mjs` is the retained source for the shipped
 restrained palette: wooden percussion, prominent confirmation bells, low pads,
-four distinct rolling breakers in the ocean bed, and a pulsed water-and-bubble
-vessel wake.
+soft irregular breakers over a dark ocean bed, and a continuous low hull wash
+with overlapping vessel-wake eddies.
 It uses only Node.js standard-library APIs, deterministic seeds, and fixed
 arrangements to render all eleven complete `24 kHz`, `16-bit` integer-PCM WAVs.
-It normalizes the four loop families to their declared production peaks,
-applies click-free loop boundaries or one-shot edge fades, and overwrites only
-the existing V1 paths. Before writing, it verifies that its exact output set
-still matches the catalog; a catalog addition, removal, or path change therefore
-requires a deliberate renderer update. The renderer never changes the catalog,
-runtime code, or mixer metadata.
+It normalizes music loops to their production peaks, holds ambience to fixed
+RMS targets and peak ceilings, applies click-free loop boundaries or one-shot
+edge fades, and overwrites only the existing V1 paths. Before writing, it
+verifies that its exact output set still matches the catalog; a catalog addition,
+removal, or path change therefore requires a deliberate renderer update. The
+renderer never changes the catalog, runtime code, or mixer metadata.
 
 The `?mode=assets&workspace=audio` workspace groups the shared catalog and
 loads one selected stored file for browser playback. It supports play from

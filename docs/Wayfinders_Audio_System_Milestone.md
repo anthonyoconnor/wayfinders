@@ -122,7 +122,7 @@ The mixer has four categories:
 | Category | Content | Initial category gain | Initial voice limit |
 | --- | --- | ---: | ---: |
 | Music | score loops and lifecycle music transitions | `0.42` | `2` during a crossfade |
-| Ambience | ocean bed and speed-controlled wake | `0.55` | `3` |
+| Ambience | ocean bed and speed-controlled wake | `0.275` | `3` |
 | SFX | discoveries, surveys, returns, wrecks, and completion accents | `0.75` | `8` |
 | UI | confirm, cancel, toggle, and dialog actions | `0.60` | `2` |
 

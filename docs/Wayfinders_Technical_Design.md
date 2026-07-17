@@ -369,7 +369,7 @@ queued for replay. On blur/suspension, owned one-shots are discarded while
 Phaser pauses retained loops; focus only reconciles those current loops.
 
 Mixer state is in memory only. Initial master gain is `0.80`; initial category
-gains are music `0.42`, ambience `0.55`, sound effects `0.75`, and interface
+gains are music `0.42`, ambience `0.275`, sound effects `0.75`, and interface
 `0.60`. Effective instance gain is master by category by catalog base gain by
 transition gain, with every control clamped to `[0, 1]`. Category voice limits
 are respectively `2`, `3`, `8`, and `2`, with a hard total limit of `15`.

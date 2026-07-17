@@ -56,7 +56,7 @@ describe("AUD-1 game audio controls binding", () => {
       masterVolume: 0.8,
       categories: {
         music: { displayName: "Music", defaultVolume: 0.42, voiceLimit: 2 },
-        ambience: { displayName: "Ambience", defaultVolume: 0.55, voiceLimit: 3 },
+        ambience: { displayName: "Ambience", defaultVolume: 0.275, voiceLimit: 3 },
         sfx: { displayName: "Sound effects", defaultVolume: 0.75, voiceLimit: 8 },
         ui: { displayName: "Interface", defaultVolume: 0.6, voiceLimit: 2 },
       },
@@ -93,7 +93,7 @@ describe("AUD-1 game audio controls binding", () => {
       volume,
     }))).toEqual([
       { id: "music", displayName: "Music", volume: 0.42 },
-      { id: "ambience", displayName: "Ambience", volume: 0.55 },
+      { id: "ambience", displayName: "Ambience", volume: 0.275 },
       { id: "sfx", displayName: "Sound effects", volume: 0.75 },
       { id: "ui", displayName: "Interface", volume: 0.6 },
     ]);

@@ -116,6 +116,27 @@ function periodicNoise(frames, seconds, seed, lowHz, highHz, slope = 0.4) {
   return result;
 }
 
+/** Seamless low-pass noise built from deterministic cyclic control points. */
+function cyclicWaterNoise(frames, seconds, seed, controlPointsPerSecond) {
+  const random = seededRandom(seed);
+  const pointCount = Math.max(4, Math.round(seconds * controlPointsPerSecond));
+  const points = Array.from({ length: pointCount }, () => random() * 2 - 1);
+  const result = new Float64Array(frames);
+  let sumSquares = 0;
+  for (let frame = 0; frame < frames; frame += 1) {
+    const position = frame * pointCount / frames;
+    const point = Math.floor(position);
+    const fraction = position - point;
+    const smooth = fraction * fraction * (3 - 2 * fraction);
+    const sample = points[point] * (1 - smooth) + points[(point + 1) % pointCount] * smooth;
+    result[frame] = sample;
+    sumSquares += sample * sample;
+  }
+  const rms = Math.sqrt(sumSquares / frames) || 1;
+  for (let frame = 0; frame < frames; frame += 1) result[frame] /= rms;
+  return result;
+}
+
 function addNoiseBurst(sound, start, duration, amplitude, seed, lowHz, highHz, pan = 0) {
   const frames = Math.round(duration * SAMPLE_RATE);
   const noise = periodicNoise(frames, duration, seed, lowHz, highHz, 0.2);
@@ -143,7 +164,7 @@ function circularWaveEnvelope(time, seconds, start, attack, release) {
   return 0;
 }
 
-function normalize(sound, targetPeak, loop) {
+function normalize(sound, targetPeak, loop, targetRms) {
   for (const channel of sound) {
     let mean = 0;
     for (const sample of channel) mean += sample;
@@ -175,14 +196,26 @@ function normalize(sound, targetPeak, loop) {
   }
 
   let peak = 0;
-  for (const channel of sound) for (const sample of channel) peak = Math.max(peak, Math.abs(sample));
-  const gain = targetPeak / Math.max(peak, Number.EPSILON);
+  let sumSquares = 0;
+  let sampleCount = 0;
+  for (const channel of sound) {
+    for (const sample of channel) {
+      peak = Math.max(peak, Math.abs(sample));
+      sumSquares += sample * sample;
+      sampleCount++;
+    }
+  }
+  const peakGain = targetPeak / Math.max(peak, Number.EPSILON);
+  const rms = Math.sqrt(sumSquares / Math.max(sampleCount, 1));
+  const gain = targetRms === undefined
+    ? peakGain
+    : Math.min(peakGain, targetRms / Math.max(rms, Number.EPSILON));
   for (const channel of sound) for (let frame = 0; frame < channel.length; frame += 1) channel[frame] *= gain;
   return sound;
 }
 
-function writeWav(relativePath, sound, peak, loop) {
-  normalize(sound, peak, loop);
+function writeWav(relativePath, sound, peak, loop, rms) {
+  normalize(sound, peak, loop, rms);
   const frameCount = sound[0].length;
   const channelCount = sound.length;
   const dataSize = frameCount * channelCount * 2;
@@ -232,57 +265,65 @@ function renderMusic(kind) {
   return sound;
 }
 
-function renderAmbience(kind) {
-  const seconds = kind === "ocean" ? 12 : 6;
-  const channels = kind === "ocean" ? 2 : 1;
-  const sound = createSound(seconds, channels);
-  for (let channel = 0; channel < channels; channel += 1) {
-    const body = periodicNoise(
-      sound[channel].length,
-      seconds,
-      300 + channel + (kind === "wake" ? 20 : 0),
-      kind === "ocean" ? 24 : 90,
-      kind === "ocean" ? 620 : 1200,
-      kind === "ocean" ? 0.62 : 0.38,
-    );
-    const wash = periodicNoise(
-      sound[channel].length,
-      seconds,
-      350 + channel + (kind === "wake" ? 20 : 0),
-      kind === "ocean" ? 380 : 700,
-      kind === "ocean" ? 3400 : 4600,
-      0.08,
-    );
-    for (let frame = 0; frame < body.length; frame += 1) {
+function renderOceanAmbience() {
+  const seconds = 24;
+  const sound = createSound(seconds, 2);
+  const breakerStarts = [0.8, 5.25, 10.1, 15.45, 20.05];
+  const breakerLevels = [0.72, 1, 0.8, 0.92, 0.64];
+  const depth = cyclicWaterNoise(sound[0].length, seconds, 1_100, 55);
+  for (let channel = 0; channel < sound.length; channel += 1) {
+    const water = cyclicWaterNoise(sound[channel].length, seconds, 1_120 + channel, 310);
+    const foam = cyclicWaterNoise(sound[channel].length, seconds, 1_140 + channel, 1_050);
+    for (let frame = 0; frame < sound[channel].length; frame += 1) {
       const time = frame / SAMPLE_RATE;
-      let surge = 0;
-      if (kind === "ocean") {
-        for (const start of [0.15, 3.15, 6.15, 9.15]) {
-          surge += circularWaveEnvelope(time, seconds, start + channel * 0.12, 0.52, 1.55);
-        }
-        const undertow = 0.035 * Math.sin(2 * Math.PI * (4 / seconds) * time + channel * 0.35);
-        sound[channel][frame] += body[frame] * (0.028 + 0.115 * surge)
-          + wash[frame] * (0.008 + 0.052 * surge ** 1.6)
-          + undertow * (0.35 + 0.65 * surge);
-      } else {
-        for (const start of [0.10, 0.85, 1.60, 2.35, 3.10, 3.85, 4.60, 5.35]) {
-          surge += circularWaveEnvelope(time, seconds, start, 0.07, 0.34);
-        }
-        sound[channel][frame] += body[frame] * (0.055 + 0.105 * surge)
-          + wash[frame] * (0.012 + 0.050 * surge);
+      const drift = 0.72
+        + 0.16 * Math.sin(2 * Math.PI * (2 / seconds) * time + channel * 0.7)
+        + 0.08 * Math.sin(2 * Math.PI * (5 / seconds) * time + channel * 1.1);
+      let breaker = 0;
+      let retreat = 0;
+      for (let index = 0; index < breakerStarts.length; index += 1) {
+        const start = breakerStarts[index] + channel * 0.16;
+        breaker += breakerLevels[index]
+          * circularWaveEnvelope(time, seconds, start, 1.2, 2.8);
+        retreat += breakerLevels[index]
+          * circularWaveEnvelope(time, seconds, start + 2.05, 0.9, 3.1);
       }
+      sound[channel][frame] = depth[frame] * (0.012 + 0.010 * drift)
+        + water[frame] * (0.010 + 0.040 * breaker + 0.012 * retreat)
+        + foam[frame] * (0.002 + 0.009 * breaker ** 2);
     }
   }
-  if (kind === "wake") {
-    [0.32, 1.08, 1.84, 2.60, 3.36, 4.12, 4.88].forEach((start, index) => {
-      addTone(sound, 520 + (index % 3) * 115, 0.022, {
-        start,
-        duration: 0.18,
-        attack: 0.006,
-        release: 0.14,
-        decay: 8,
-      });
-    });
+  return sound;
+}
+
+function renderWakeAmbience() {
+  const seconds = 12;
+  const sound = createSound(seconds, 2);
+  const eddyStarts = [0.45, 1.95, 3.6, 5.25, 7.15, 8.65, 10.4, 11.55];
+  const eddyLevels = [0.7, 0.92, 0.62, 1, 0.74, 0.58, 0.86, 0.64];
+  const hull = cyclicWaterNoise(sound[0].length, seconds, 1_300, 95);
+  for (let channel = 0; channel < sound.length; channel += 1) {
+    const wash = cyclicWaterNoise(sound[channel].length, seconds, 1_320 + channel, 480);
+    const spray = cyclicWaterNoise(sound[channel].length, seconds, 1_340 + channel, 1_450);
+    for (let frame = 0; frame < sound[channel].length; frame += 1) {
+      const time = frame / SAMPLE_RATE;
+      const flow = 0.72
+        + 0.12 * Math.sin(2 * Math.PI * (3 / seconds) * time + channel * 0.45)
+        + 0.07 * Math.sin(2 * Math.PI * (7 / seconds) * time + channel * 0.9);
+      let eddy = 0;
+      for (let index = 0; index < eddyStarts.length; index += 1) {
+        eddy += eddyLevels[index] * circularWaveEnvelope(
+          time,
+          seconds,
+          eddyStarts[index] + channel * 0.09,
+          0.28,
+          1.2,
+        );
+      }
+      sound[channel][frame] = hull[frame] * (0.014 + 0.008 * flow)
+        + wash[frame] * (0.020 + 0.020 * flow + 0.018 * eddy)
+        + spray[frame] * (0.0015 + 0.0045 * eddy ** 1.4);
+    }
   }
   return sound;
 }
@@ -349,8 +390,8 @@ function assertCatalogContract() {
 assertCatalogContract();
 writeWav("music/home-harbor.wav", renderMusic("home"), 0.52, true);
 writeWav("music/open-water.wav", renderMusic("open"), 0.52, true);
-writeWav("ambience/ocean.wav", renderAmbience("ocean"), 0.42, true);
-writeWav("ambience/wake.wav", renderAmbience("wake"), 0.42, true);
+writeWav("ambience/ocean.wav", renderOceanAmbience(), 0.42, true, 0.055);
+writeWav("ambience/wake.wav", renderWakeAmbience(), 0.42, true, 0.060);
 writeWav("sfx/discovery.wav", renderDiscovery(), 0.70, false);
 writeWav("sfx/survey-complete.wav", renderSurvey(), 0.72, false);
 writeWav("sfx/dock-return.wav", renderDock(), 0.70, false);

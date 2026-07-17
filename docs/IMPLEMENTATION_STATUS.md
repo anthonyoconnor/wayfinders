@@ -18,15 +18,16 @@ master/category controls, bounded voice ownership, diagnostics, and silent
 fallback. The asset library has a play-only Audio workspace over the same
 eleven final WAVs. A deterministic Node.js renderer can regenerate that complete
 set at the stable paths without changing catalog or runtime code. Automated
-After the first product-owner audition, the ambience was revised from a
-broadband texture into discrete rolling breakers and a pulsed vessel wake; all
-survey, discovery, dock-return, wreck, and UI cues were made substantially more
-prominent. Current inspection reports `6.487 MiB` stored audio, exact zero-value
-loop boundaries, a `0.8414` maximum-control aligned stress peak, and a `0.4776`
-default-control aligned stress peak. The asset gate passes.
+checks cover that retained renderer. After product-owner audition, the ambience
+category default was halved to `0.275` and both ambience files were rebuilt as
+longer, irregular low-pass water textures without pitched or fixed-grid pulses.
+Current inspection reports `8.409 MiB` stored audio; ocean measures `0.055` RMS
+with a `0.2152` peak and wake measures `0.060` RMS with a `0.1938` peak before
+catalog and mixer gains. The asset gate passes.
 The explicit Enable sound activation now resumes Web Audio directly and
 completes unlock without requiring the player to leave and refocus the game;
-focused regression coverage starts a discovery cue immediately afterward.
+focused regression coverage starts a discovery cue immediately afterward. The
+product owner confirmed immediate unlock and live discovery/survey cue playback.
 Game mode reconciles a persistent ocean bed and a smoothed,
 speed-controlled wake from current presentation state without world queries.
 It also batches typed discovery, survey, idol, exact-return, wreck, and accepted
@@ -36,9 +37,10 @@ selects home-harbor or open-water music from current visible
 presentation state, crossfades two stable loops, and ducks them behind return,
 wreck, succession, and completion. Mixer, controller, ambience, cue and music
 policies/controllers, controls, preview, workspace, and composition checks
-pass. Live keyboard/media, audible-loop, cue, crossfade, and ducking browser
-acceptance is still pending because the in-app browser connection did not
-initialize during this handoff.
+pass. Live keyboard activation, stored-media playback, repeated ambience loops,
+crossfades, and ducking acceptance remain pending
+because the in-app browser connection did not initialize during this handoff;
+the rebuilt ambience also awaits product-owner audition.
 
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
@@ -56,9 +58,9 @@ The twenty-generation presentation-fixture baseline measured `0.193 ms` p95 over
 owned by the technical design. Architecture validation, source and test
 typechecks, the quick and integration lanes, focused GP-5.2 and audio contracts,
 audio repository-I/O checks, GP-5.2 browser acceptance, and the production
-bundle passed. The complete read-only asset gate also passes. Audio browser
-acceptance remains pending. The aggregate `npm.cmd run check` remains blocked
-in the contract lane by asset-only fixture drift that expects the former three-
+bundle passed. The complete read-only asset gate also passes. Remaining audio
+browser acceptance is described above. The aggregate `npm.cmd run check` remains
+blocked in the contract lane by asset-only fixture drift that expects the former three-
 package empty-source baseline while the current workspace contains additional
 island sources, candidates, and recipes. A cross-process collision
 test that timed out under parallel lane contention passes in isolation. Those

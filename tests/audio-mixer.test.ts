@@ -16,7 +16,7 @@ describe("audio mixer", () => {
       revision: 0,
       muted: false,
       masterVolume: 0.8,
-      categoryVolumes: { music: 0.42, ambience: 0.55, sfx: 0.75, ui: 0.6 },
+      categoryVolumes: { music: 0.42, ambience: 0.275, sfx: 0.75, ui: 0.6 },
       categoryVoiceLimits: { music: 2, ambience: 3, sfx: 8, ui: 2 },
       totalVoiceLimit: 15,
       activeVoiceCount: 0,
