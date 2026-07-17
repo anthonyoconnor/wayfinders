@@ -19,11 +19,13 @@ export interface CloudDescriptor {
   readonly baseY: number;
   readonly scale: number;
   readonly alpha: number;
+  readonly tint: number;
   readonly flipX: boolean;
   readonly driftAmplitudeX: number;
   readonly driftAmplitudeY: number;
   readonly driftPeriodMs: number;
   readonly phase: number;
+  readonly initialFade: number;
 }
 
 export interface CloudRouteEnvelope {
@@ -31,6 +33,17 @@ export interface CloudRouteEnvelope {
   readonly minY: number;
   readonly maxX: number;
   readonly maxY: number;
+}
+
+export interface CloudMotionSample {
+  readonly x: number;
+  readonly y: number;
+  readonly routeFade: number;
+}
+
+interface HomeAtmosphereAnchor {
+  readonly position: Readonly<{ x: number; y: number }>;
+  readonly ownerChunkKey: string;
 }
 
 interface CloudView {
@@ -71,6 +84,13 @@ function lerp(minimum: number, maximum: number, amount: number): number {
   return minimum + (maximum - minimum) * amount;
 }
 
+function ownerChunkKeyAt(
+  position: Readonly<{ x: number; y: number }>,
+  chunkSizePixels: number,
+): string {
+  return `${Math.floor(position.x / chunkSizePixels)},${Math.floor(position.y / chunkSizePixels)}`;
+}
+
 export function resolveCloudDescriptor(
   seed: number,
   entry: Readonly<ActiveChunkEntry>,
@@ -104,8 +124,14 @@ export function resolveCloudDescriptor(
     baseY: (chunkY + positionY) * chunkSizePixels,
     scale: lerp(cloudPackage.presentation.scale.minimum, cloudPackage.presentation.scale.maximum, sample(4)),
     alpha: lerp(cloudPackage.presentation.opacity.minimum, cloudPackage.presentation.opacity.maximum, sample(5)),
+    tint: rgbTint(cloudPackage.presentation.cloudTintsRgb[
+      Math.min(
+        cloudPackage.presentation.cloudTintsRgb.length - 1,
+        Math.floor(sample(13) * cloudPackage.presentation.cloudTintsRgb.length),
+      )
+    ]!),
     flipX: sample(6) < 0.5,
-    driftAmplitudeX: amplitude,
+    driftAmplitudeX: amplitude * (sample(12) < 0.5 ? -1 : 1),
     driftAmplitudeY: amplitude * lerp(0.18, 0.38, sample(8)) * (sample(9) < 0.5 ? -1 : 1),
     driftPeriodMs: lerp(
       cloudPackage.presentation.driftPeriodSeconds.minimum,
@@ -113,7 +139,60 @@ export function resolveCloudDescriptor(
       sample(10),
     ) * 1000,
     phase: sample(11) * TWO_PI,
+    initialFade: 0,
   });
+}
+
+export function resolveOpeningCloudDescriptors(
+  seed: number,
+  ownerChunkKey: string,
+  homeWorldPosition: Readonly<{ x: number; y: number }>,
+  cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
+): readonly Readonly<CloudDescriptor>[] {
+  const { image, presentation } = cloudPackage;
+  const opening = presentation.openingClouds;
+  const frameOffset = Math.floor(
+    seededValue(seed + CLOUD_NAMESPACE + 0x48_4f_4d_45, 0, 0) * image.frameCount,
+  );
+  return Object.freeze(opening.offsetPixels.map((offset, slot) => {
+    const slotSeed = seed + CLOUD_NAMESPACE + 0x48_4f_4d_45 + slot * 7_919;
+    const sample = (sampleSlot: number) => seededValue(slotSeed + sampleSlot * 977, slot, 0);
+    const amplitude = lerp(
+      opening.driftAmplitudePixels.minimum,
+      opening.driftAmplitudePixels.maximum,
+      sample(1),
+    );
+    const openingPhase = lerp(0.24, 0.76, slot / Math.max(1, opening.offsetPixels.length - 1));
+    const tintIndex = slot === 0
+      ? 0
+      : slot === opening.offsetPixels.length - 1
+        ? presentation.cloudTintsRgb.length - 1
+        : Math.floor((presentation.cloudTintsRgb.length - 1) / 2);
+    return Object.freeze({
+      id: `cloud:home:${slot}`,
+      ownerChunkKey,
+      frame: (frameOffset + slot) % image.frameCount,
+      baseX: homeWorldPosition.x + offset.x,
+      baseY: homeWorldPosition.y + offset.y,
+      scale: lerp(
+        opening.scale.minimum,
+        opening.scale.maximum,
+        slot / Math.max(1, opening.offsetPixels.length - 1),
+      ),
+      alpha: lerp(presentation.opacity.minimum, presentation.opacity.maximum, sample(3)),
+      tint: rgbTint(presentation.cloudTintsRgb[tintIndex]!),
+      flipX: sample(4) < 0.5,
+      driftAmplitudeX: amplitude * (sample(5) < 0.5 ? -1 : 1),
+      driftAmplitudeY: amplitude * lerp(0.2, 0.36, sample(6)) * (sample(7) < 0.5 ? -1 : 1),
+      driftPeriodMs: lerp(
+        opening.driftPeriodSeconds.minimum,
+        opening.driftPeriodSeconds.maximum,
+        sample(8),
+      ) * 1000,
+      phase: openingPhase * TWO_PI,
+      initialFade: opening.initialFade,
+    });
+  }));
 }
 
 export function isCloudFootprintFullyClear(
@@ -225,6 +304,32 @@ export function isCloudRouteEnvelopeDurablyClear(
   }, revealedIslandIds, paddingTiles);
 }
 
+function smoothstep(value: number): number {
+  const clamped = Math.min(1, Math.max(0, value));
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+export function resolveCloudMotion(
+  descriptor: Readonly<CloudDescriptor>,
+  timeMs: number,
+  reducedMotion: boolean,
+  cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
+): Readonly<CloudMotionSample> {
+  const phaseFraction = descriptor.phase / TWO_PI;
+  const rawCycle = reducedMotion ? phaseFraction : phaseFraction + timeMs / descriptor.driftPeriodMs;
+  const cycle = ((rawCycle % 1) + 1) % 1;
+  const routePosition = cycle * 2 - 1;
+  const fadeFraction = cloudPackage.presentation.routeFadeFraction;
+  const routeFade = reducedMotion || fadeFraction === 0
+    ? 1
+    : smoothstep(Math.min(cycle, 1 - cycle) / fadeFraction);
+  return Object.freeze({
+    x: descriptor.baseX + routePosition * descriptor.driftAmplitudeX,
+    y: descriptor.baseY + routePosition * descriptor.driftAmplitudeY,
+    routeFade,
+  });
+}
+
 /** Independent, deterministic, chunk-bounded atmosphere presentation. */
 export class CloudLayerRenderer {
   private readonly views = new Map<string, CloudView>();
@@ -241,6 +346,8 @@ export class CloudLayerRenderer {
   private totalShadowReleases = 0;
   private lastSyncAllocationCount = 0;
   private lastWorld: WorldGrid | undefined;
+  private motionEpochMs: number | undefined;
+  private homeAnchor: Readonly<HomeAtmosphereAnchor> | undefined;
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -264,12 +371,23 @@ export class CloudLayerRenderer {
     delta: Readonly<ActiveChunkDelta>,
     seed: number,
     chunkSizePixels: number,
+    homeWorldPosition?: Readonly<{ x: number; y: number }>,
   ): void {
     this.chunkCapacity = delta.telemetry.capacity;
     const worldChanged = this.seed !== seed || this.chunkSizePixels !== chunkSizePixels;
-    if (worldChanged) this.destroyViews();
+    const nextHomeAnchor = homeWorldPosition === undefined
+      ? undefined
+      : Object.freeze({
+        position: Object.freeze({ x: homeWorldPosition.x, y: homeWorldPosition.y }),
+        ownerChunkKey: ownerChunkKeyAt(homeWorldPosition, chunkSizePixels),
+      });
+    const homeChanged = this.homeAnchor?.position.x !== nextHomeAnchor?.position.x
+      || this.homeAnchor?.position.y !== nextHomeAnchor?.position.y
+      || this.homeAnchor?.ownerChunkKey !== nextHomeAnchor?.ownerChunkKey;
+    if (worldChanged || homeChanged) this.destroyViews();
     this.seed = seed;
     this.chunkSizePixels = chunkSizePixels;
+    this.homeAnchor = nextHomeAnchor;
 
     const desiredKeys = new Set(delta.active.map(({ key }) => key));
     for (const { key } of delta.deactivated) this.destroyChunkViews(key);
@@ -292,6 +410,8 @@ export class CloudLayerRenderer {
     const allocationsBefore = this.totalCloudAllocations + this.totalShadowAllocations;
     const worldChanged = this.lastWorld !== world;
     this.lastWorld = world;
+    if (worldChanged || this.motionEpochMs === undefined) this.motionEpochMs = timeMs;
+    const motionTimeMs = timeMs - this.motionEpochMs;
     const coverageRevision = `${world.knowledgeVersion}:${revealedIslandsRevision}`;
     const { presentation } = this.cloudPackage;
     const tileSize = this.chunkSizePixels / world.chunkSize;
@@ -314,11 +434,8 @@ export class CloudLayerRenderer {
       }
 
       const descriptor = view.descriptor;
-      const phase = this.reducedMotion
-        ? descriptor.phase
-        : descriptor.phase + (timeMs / descriptor.driftPeriodMs) * TWO_PI;
-      const x = descriptor.baseX + Math.cos(phase) * descriptor.driftAmplitudeX;
-      const y = descriptor.baseY + Math.sin(phase) * descriptor.driftAmplitudeY;
+      const motion = resolveCloudMotion(descriptor, motionTimeMs, this.reducedMotion, this.cloudPackage);
+      const { x, y } = motion;
       view.sprite.setPosition(x, y);
       view.shadow.setPosition(
         x + presentation.shadow.offsetPixels.x,
@@ -330,15 +447,18 @@ export class CloudLayerRenderer {
         view.shadow.setVisible(false);
         continue;
       }
-      if (view.visibilityStartedAt === undefined) view.visibilityStartedAt = timeMs;
       const fadeDurationMs = presentation.fadeInSeconds * 1000;
-      const fade = fadeDurationMs === 0
+      if (view.visibilityStartedAt === undefined) {
+        view.visibilityStartedAt = timeMs - fadeDurationMs * descriptor.initialFade;
+      }
+      const activationFade = fadeDurationMs === 0
         ? 1
         : Math.min(1, Math.max(0, (timeMs - view.visibilityStartedAt) / fadeDurationMs));
-      view.sprite.setAlpha(descriptor.alpha * fade).setVisible(true);
+      const fade = activationFade * motion.routeFade;
+      view.sprite.setAlpha(descriptor.alpha * fade).setVisible(fade > 0);
       view.shadow
         .setAlpha(descriptor.alpha * presentation.shadow.opacityMultiplier * fade)
-        .setVisible(true);
+        .setVisible(fade > 0);
     }
     this.lastSyncAllocationCount = (
       this.totalCloudAllocations + this.totalShadowAllocations - allocationsBefore
@@ -381,59 +501,75 @@ export class CloudLayerRenderer {
     this.activeEntries.clear();
     this.chunkCapacity = 0;
     this.lastWorld = undefined;
+    this.motionEpochMs = undefined;
+    this.homeAnchor = undefined;
   }
 
   private createActiveViews(): void {
     if (!this.scene.textures.exists(this.cloudPackage.image.textureKey)) return;
     for (const entry of this.activeEntries.values()) {
+      if (entry.key === this.homeAnchor?.ownerChunkKey) {
+        for (const descriptor of resolveOpeningCloudDescriptors(
+          this.seed,
+          entry.key,
+          this.homeAnchor.position,
+          this.cloudPackage,
+        )) this.createView(descriptor);
+        continue;
+      }
       for (let slot = 0; slot < this.cloudPackage.presentation.candidatesPerChunk; slot++) {
         const descriptor = resolveCloudDescriptor(this.seed, entry, this.chunkSizePixels, this.cloudPackage, slot);
-        if (!descriptor || this.views.has(descriptor.id)) continue;
-        const { image, presentation } = this.cloudPackage;
-        const shadow = this.scene.add.sprite(
-          descriptor.baseX + presentation.shadow.offsetPixels.x,
-          descriptor.baseY + presentation.shadow.offsetPixels.y,
-          image.textureKey,
-          descriptor.frame,
-        ).setOrigin(0.5)
-          .setScale(
-            descriptor.scale * presentation.shadow.scale.x,
-            descriptor.scale * presentation.shadow.scale.y,
-          )
-          .setAlpha(0)
-          .setFlipX(descriptor.flipX)
-          .setTint(rgbTint(presentation.shadow.tintRgb))
-          .setDepth(presentation.shadow.depth)
-          .setName(`${descriptor.id}:shadow`)
-          .setVisible(false);
-        const sprite = this.scene.add.sprite(
-          descriptor.baseX,
-          descriptor.baseY,
-          image.textureKey,
-          descriptor.frame,
-        ).setOrigin(0.5)
-          .setScale(descriptor.scale)
-          .setAlpha(0)
-          .setFlipX(descriptor.flipX)
-          .setDepth(presentation.depth)
-          .setName(descriptor.id)
-          .setVisible(false);
-        this.views.set(descriptor.id, {
-          descriptor,
-          sprite,
-          shadow,
-          routeEnvelope: resolveCloudRouteEnvelope(descriptor, this.cloudPackage),
-          coverageRevision: "",
-          clearOfFog: false,
-          visibilityStartedAt: undefined,
-        });
-        this.totalCloudAllocations++;
-        this.totalShadowAllocations++;
-        this.peakActiveClouds = Math.max(this.peakActiveClouds, this.views.size);
-        this.peakActiveShadows = Math.max(this.peakActiveShadows, this.views.size);
+        if (descriptor) this.createView(descriptor);
       }
     }
     this.assertResourceCap();
+  }
+
+  private createView(descriptor: Readonly<CloudDescriptor>): void {
+    if (this.views.has(descriptor.id)) return;
+    const { image, presentation } = this.cloudPackage;
+    const shadow = this.scene.add.sprite(
+      descriptor.baseX + presentation.shadow.offsetPixels.x,
+      descriptor.baseY + presentation.shadow.offsetPixels.y,
+      image.textureKey,
+      descriptor.frame,
+    ).setOrigin(0.5)
+      .setScale(
+        descriptor.scale * presentation.shadow.scale.x,
+        descriptor.scale * presentation.shadow.scale.y,
+      )
+      .setAlpha(0)
+      .setFlipX(descriptor.flipX)
+      .setTint(rgbTint(presentation.shadow.tintRgb))
+      .setDepth(presentation.shadow.depth)
+      .setName(`${descriptor.id}:shadow`)
+      .setVisible(false);
+    const sprite = this.scene.add.sprite(
+      descriptor.baseX,
+      descriptor.baseY,
+      image.textureKey,
+      descriptor.frame,
+    ).setOrigin(0.5)
+      .setScale(descriptor.scale)
+      .setAlpha(0)
+      .setFlipX(descriptor.flipX)
+      .setTint(descriptor.tint)
+      .setDepth(presentation.depth)
+      .setName(descriptor.id)
+      .setVisible(false);
+    this.views.set(descriptor.id, {
+      descriptor,
+      sprite,
+      shadow,
+      routeEnvelope: resolveCloudRouteEnvelope(descriptor, this.cloudPackage),
+      coverageRevision: "",
+      clearOfFog: false,
+      visibilityStartedAt: undefined,
+    });
+    this.totalCloudAllocations++;
+    this.totalShadowAllocations++;
+    this.peakActiveClouds = Math.max(this.peakActiveClouds, this.views.size);
+    this.peakActiveShadows = Math.max(this.peakActiveShadows, this.views.size);
   }
 
   private destroyViews(): void {

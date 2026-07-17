@@ -373,29 +373,43 @@ Cloud atmosphere is an independent presentation layer. Each candidate owns a
 paired shadow at depth `51` and cloud at depth `52`, above map art, knowledge,
 the ship, feature markers, and Voyage Sense guidance but below diagnostics,
 prompts, and UI. The shadow reuses the candidate silhouette and reflection with
-a dark tint, southeast offset, reduced opacity, and flattened vertical scale;
-it moves in lockstep with the cloud and can cross sea, terrain, or the ship.
+a dark tint, pronounced southeast offset, reduced opacity, and flattened
+vertical scale; the increased separation establishes height immediately. It
+moves in lockstep with the cloud and can cross sea, terrain, or the ship.
+Cloud sprites sample a seeded four-tone white-to-storm-blue palette and a wider
+`0.22` through `0.50` scale range while retaining the `0.35` opacity ceiling.
 
-Each active chunk has four deterministic corner-biased candidates that cycle
-through all four authored silhouettes. The world seed, chunk, and candidate
-slot also choose scale, horizontal reflection, opacity, drift amplitude, drift
-period, position, and phase. Eligibility is decided for the pair's complete
-padded route envelope: cloud and shadow footprints plus their full drift range.
+Each active chunk has four deterministic corner-biased candidate slots that
+cycle through all four authored silhouettes. The home-centre chunk reserves
+three of those slots at fixed offsets around the home island, guaranteeing an
+opening composition without adding another resource class. The world seed,
+chunk, and candidate slot choose scale, horizontal reflection, opacity, drift
+amplitude, drift period, direction, colour, position, and phase. The three
+opening slots deliberately use light, middle, and darkest tones together with
+small, middle, and large scales. Eligibility is decided for the pair's
+complete padded route envelope: cloud and shadow footprints plus their full
+drift range.
 Every covered tile must be Supported knowledge or belong to an exactly revealed
 island. Unknown, Personal, transient `visibleNow` sight, filtered fog edges, and
 world bounds suppress the pair. A pair that passes remains eligible throughout
-its complete orbit and is rechecked only when durable knowledge, exact-island
+its complete route and is rechecked only when durable knowledge, exact-island
 reveal state, or world identity changes. Ship proximity never hides or rebuilds
 the pair, so the offset shadow can pass continuously across the ship.
 
-Cloud drift uses rendering time and never simulation time. Seeded periods range
-from `180` through `300` seconds, and newly eligible pairs fade in over `6`
-seconds. Reduced-motion preference freezes every candidate at its seeded phase.
-The layer owns its paired sprites, deterministic descriptors, enabled state,
-and resource counters, but shares the scene's active-chunk lifetime. Disabling
-clouds destroys only cloud-owned pairs and turns stable sync into a bounded
-no-op; re-enabling reconstructs the current active candidates without
-invalidating terrain, water, fog, risk, markers, UI, or authoritative revisions.
+Cloud drift uses rendering time and never simulation time. Ordinary seeded
+routes last `120` through `180` seconds; the three opening routes last `100`
+through `140` seconds with a smaller travel range. Motion is continuous and
+directional across the route rather than a small orbit. Each route uses the
+first and last ten percent for smooth opacity easing, becoming transparent
+before its position wraps. Newly eligible ordinary pairs also fade in over `4`
+seconds, while opening pairs begin partially faded in so they are readable on
+the first rendered frame. Reduced-motion preference freezes every candidate at
+its seeded position and opacity. The layer owns its paired sprites,
+deterministic descriptors, enabled state, and resource counters, but shares the
+scene's active-chunk lifetime. Disabling clouds destroys only cloud-owned pairs
+and turns stable sync into a bounded no-op; re-enabling reconstructs the current
+active candidates without invalidating terrain, water, fog, risk, markers, UI,
+or authoritative revisions.
 
 The runtime authored packages provide the home island, animated player boat,
 fishing-shoal cue, and presentation-only four-frame cloud sheet. Available

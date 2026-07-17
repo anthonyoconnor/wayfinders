@@ -1270,12 +1270,21 @@ providing additional variety. The cloud layer shares only the scene's
 active-chunk delta and pure knowledge-coverage predicates.
 
 A 2026-07-17 refinement paired every cloud with an offset shadow, moved both
-above the ship, lengthened drift to `180` through `300` seconds, and gated the
-complete cloud/shadow drift envelope against durable clear knowledge. Transient
-sight and tile-boundary motion can no longer make an eligible pair pop in or
-out, while Unknown or Personal fog, filtered boundaries, and world edges still
-suppress the pair in full. The shadow crosses sea, terrain, and the ship in
-lockstep with its cloud.
+above the ship, and gated the complete cloud/shadow drift envelope against
+durable clear knowledge. Transient sight and tile-boundary motion can no longer
+make an eligible pair pop in or out, while Unknown or Personal fog, filtered
+boundaries, and world edges still suppress the pair in full. The shadow crosses
+sea, terrain, and the ship in lockstep with its cloud.
+
+Opening-view acceptance on 2026-07-17 reserved three deterministic routes around
+the home island, increased the shadow separation, and replaced the small orbit
+with readable directional drift. Ordinary routes last `120` through `180`
+seconds and ease opacity across both ends before a transparent position wrap;
+the home routes start partially faded in and remain within the same bounded
+candidate budget. A four-tone white-to-storm-blue palette and wider seeded
+scale range add darker weather and more varied silhouettes; the opening trio
+guarantees visibly distinct light, middle, and dark tones at small, middle, and
+large scales.
 
 The scene-owned **Cloud atmosphere** developer checkbox defaults on, immediately
 releases cloud/shadow pairs when disabled, and deterministically rebuilds only
@@ -1291,9 +1300,11 @@ under the CLD-1 asset paths.
 Contract coverage verifies package shape, all four variants across deterministic
 samples, transform and motion variety, conservative fog exclusion, independent
 toggle lifecycle, deterministic reconstruction, corner-crossing revealed-area
-placement, durable multi-orbit visibility, shadow transform/depth/visibility
-pairing, world-identity invalidation, paired resource caps and releases, and
-zero stable-sync allocations. Existing live browser acceptance confirms that
+placement, three-cloud opening composition, perceptible directional movement,
+route-end opacity easing, colour and size variety, shadow
+transform/depth/visibility pairing, world-identity invalidation, paired
+resource caps and releases, and zero stable-sync allocations. Existing live
+browser acceptance confirms that
 the scene-owned checkbox remains isolated from the other overlays. The approved
 current-game mockup remains reference-only at
 `concept_art/clouds/cloud-atmosphere-current-game-mockup.png`.

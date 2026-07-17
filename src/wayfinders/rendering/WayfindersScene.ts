@@ -51,7 +51,7 @@ import {
   type GreatHallReturnedVoyage,
 } from "../lineage/GreatHallChronicle";
 import type { NavigatorId } from "../lineage/NavigatorLineageSystem";
-import { worldToGrid } from "../world/CoordinateSystem";
+import { gridToWorld, worldToGrid } from "../world/CoordinateSystem";
 import {
   COLLISION_SUBCELL_SIZE,
   COLLISION_SUBCELLS_PER_TILE,
@@ -512,6 +512,10 @@ export class WayfindersScene extends Phaser.Scene {
       delta,
       this.simulation.generated.seed,
       this.simulation.world.chunkSize * this.simulation.config.navigation.tileSize,
+      gridToWorld(
+        this.simulation.generated.landmarks.homeCenter,
+        this.simulation.config.navigation.tileSize,
+      ),
     );
     this.riskOverlay.applyActiveChunkDelta(this.simulation.world, delta);
     this.wreckRenderer.applyActiveChunks(delta.active);

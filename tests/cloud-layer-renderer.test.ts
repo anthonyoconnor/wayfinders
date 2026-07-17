@@ -10,7 +10,9 @@ import {
   isCloudFootprintFullyClear,
   isCloudRouteEnvelopeDurablyClear,
   resolveCloudDescriptor,
+  resolveCloudMotion,
   resolveCloudRouteEnvelope,
+  resolveOpeningCloudDescriptors,
 } from "../src/wayfinders/rendering/CloudLayerRenderer";
 import { ActiveChunkSet, type ActiveChunkEntry } from "../src/wayfinders/rendering/activation";
 import { KnowledgeState } from "../src/wayfinders/world/TileData";
@@ -172,9 +174,19 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(CLOUD_ASSET_PACKAGE.image.opaqueBounds).toHaveLength(4);
     expect(new Set(CLOUD_ASSET_PACKAGE.variants).size).toBe(4);
     expect(CLOUD_ASSET_PACKAGE.presentation.opacity.maximum).toBeLessThanOrEqual(0.35);
-    expect(CLOUD_ASSET_PACKAGE.presentation.driftPeriodSeconds.minimum).toBeGreaterThanOrEqual(180);
+    expect(CLOUD_ASSET_PACKAGE.presentation.scale.minimum).toBeLessThanOrEqual(0.22);
+    expect(CLOUD_ASSET_PACKAGE.presentation.scale.maximum).toBeGreaterThanOrEqual(0.5);
+    expect(CLOUD_ASSET_PACKAGE.presentation.cloudTintsRgb).toHaveLength(4);
+    expect(CLOUD_ASSET_PACKAGE.presentation.cloudTintsRgb.at(-1)!.red).toBeLessThan(128);
+    expect(CLOUD_ASSET_PACKAGE.presentation.driftAmplitudePixels.minimum).toBeGreaterThanOrEqual(80);
+    expect(CLOUD_ASSET_PACKAGE.presentation.driftPeriodSeconds.maximum).toBeLessThanOrEqual(180);
+    expect(CLOUD_ASSET_PACKAGE.presentation.openingClouds.offsetPixels).toHaveLength(3);
+    expect(CLOUD_ASSET_PACKAGE.presentation.openingClouds.initialFade).toBeGreaterThanOrEqual(0.4);
+    expect(CLOUD_ASSET_PACKAGE.presentation.routeFadeFraction).toBeGreaterThan(0);
     expect(CLOUD_ASSET_PACKAGE.presentation.shadow.depth).toBeGreaterThan(50);
     expect(CLOUD_ASSET_PACKAGE.presentation.shadow.depth).toBeLessThan(CLOUD_ASSET_PACKAGE.presentation.depth);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.offsetPixels.x).toBeGreaterThanOrEqual(80);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.offsetPixels.y).toBeGreaterThanOrEqual(50);
 
     const calls: unknown[][] = [];
     preloadCloudAsset({
@@ -207,8 +219,38 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(new Set(descriptors.map(({ frame }) => frame))).toEqual(new Set([0, 1, 2, 3]));
     expect(new Set(descriptors.map(({ scale }) => scale.toFixed(3))).size).toBeGreaterThan(8);
     expect(new Set(descriptors.map(({ alpha }) => alpha.toFixed(3))).size).toBeGreaterThan(8);
+    expect(new Set(descriptors.map(({ tint }) => tint)).size).toBeGreaterThan(2);
     expect(new Set(descriptors.map(({ flipX }) => flipX)).size).toBe(2);
     expect(new Set(descriptors.map(({ driftPeriodMs }) => Math.round(driftPeriodMs))).size).toBeGreaterThan(8);
+  });
+
+  it("moves perceptibly along a slow route and eases opacity at both ends", () => {
+    const cloudPackage = testCloudPackage({
+      driftAmplitudePixels: { minimum: 96, maximum: 96 },
+      driftPeriodSeconds: { minimum: 120, maximum: 120 },
+      routeFadeFraction: 0.1,
+    });
+    const descriptor = resolveCloudDescriptor(13_371, entry(1, 1), 32 * 32, cloudPackage)!;
+    const phaseFraction = descriptor.phase / (Math.PI * 2);
+    const timeForCycle = (cycle: number) => (
+      ((cycle - phaseFraction + 1) % 1) * descriptor.driftPeriodMs
+    );
+    const entering = resolveCloudMotion(descriptor, timeForCycle(0.05), false, cloudPackage);
+    const full = resolveCloudMotion(descriptor, timeForCycle(0.25), false, cloudPackage);
+    const leaving = resolveCloudMotion(descriptor, timeForCycle(0.95), false, cloudPackage);
+    const tenSecondsLater = resolveCloudMotion(
+      descriptor,
+      timeForCycle(0.25) + 10_000,
+      false,
+      cloudPackage,
+    );
+
+    expect(entering.routeFade).toBeGreaterThan(0);
+    expect(entering.routeFade).toBeLessThan(1);
+    expect(full.routeFade).toBe(1);
+    expect(leaving.routeFade).toBeCloseTo(entering.routeFade);
+    expect(resolveCloudMotion(descriptor, timeForCycle(0), true, cloudPackage).routeFade).toBe(1);
+    expect(Math.hypot(tenSecondsLater.x - full.x, tenSecondsLater.y - full.y)).toBeGreaterThan(10);
   });
 
   it("shows a cloud only when its padded footprint is fully outside fog", () => {
@@ -245,7 +287,7 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(isCloudRouteEnvelopeDurablyClear(world, envelope, new Set(), 32, 1)).toBe(false);
   });
 
-  it("places at least one unobtrusive candidate in a revealed region crossing chunk corners", () => {
+  it("reserves three immediately readable opening clouds around the revealed home island", () => {
     const world = new WorldGrid(64, 64, 32);
     const knowledge = new Uint8Array(world.tileCount).fill(KnowledgeState.Unknown);
     for (let y = 0; y < 64; y++) {
@@ -261,25 +303,50 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
       prefetchRing: 0,
       maxActiveChunks: 9,
     });
-    const renderer = new CloudLayerRenderer(scene as never, true);
-    renderer.applyActiveChunkDelta(chunks.update({ minX: 0, minY: 0, maxX: 2, maxY: 2 }), 13_371, 32 * 32);
-    renderer.sync(world, new Set(), 0, 10_000);
-    renderer.sync(world, new Set(), 0, 17_000);
+    const renderer = new CloudLayerRenderer(scene as never, false);
+    const homeWorldPosition = { x: 32 * 32 + 16, y: 32 * 32 + 16 };
+    const delta = chunks.update({ minX: 0, minY: 0, maxX: 2, maxY: 2 });
+    renderer.applyActiveChunkDelta(
+      delta,
+      13_371,
+      32 * 32,
+      homeWorldPosition,
+    );
+    const openingDescriptors = resolveOpeningCloudDescriptors(
+      13_371,
+      "1,1",
+      homeWorldPosition,
+    );
+    expect(openingDescriptors).toHaveLength(3);
+    expect(new Set(openingDescriptors.map(({ tint }) => tint)).size).toBe(3);
+    expect(new Set(openingDescriptors.map(({ scale }) => scale.toFixed(3))).size).toBe(3);
+    renderer.sync(world, new Set(), 0, 0);
 
-    expect(renderer.getResourceTelemetry()).toMatchObject({
-      clearCloudFootprints: expect.any(Number),
-      visibleClouds: expect.any(Number),
-    });
-    expect(renderer.getResourceTelemetry().clearCloudFootprints).toBeGreaterThan(0);
-    expect(renderer.getResourceTelemetry().visibleClouds).toBeGreaterThan(0);
+    const openingClouds = sprites.filter(({ name }) => /^cloud:home:\d+$/.test(name));
+    const openingShadows = sprites.filter(({ name }) => /^cloud:home:\d+:shadow$/.test(name));
+    expect(openingClouds).toHaveLength(3);
+    expect(openingShadows).toHaveLength(3);
+    expect(openingClouds.every(({ visible, alpha }) => visible && alpha > 0)).toBe(true);
+    expect(openingShadows.every(({ visible, alpha }) => visible && alpha > 0)).toBe(true);
+    expect(new Set(openingClouds.map(({ tint }) => tint))).toEqual(
+      new Set(openingDescriptors.map(({ tint }) => tint)),
+    );
+    expect(new Set(openingClouds.map(({ scaleX }) => scaleX.toFixed(3))).size).toBe(3);
+    expect(renderer.getResourceTelemetry().activeClouds).toBeLessThanOrEqual(
+      delta.telemetry.capacity * CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
+    );
+    const initialAlphas = openingClouds.map(({ alpha }) => alpha);
+
+    renderer.sync(world, new Set(), 0, 4_000);
+    expect(openingClouds.every(({ alpha }, index) => alpha > initialAlphas[index]!)).toBe(true);
     expect(renderer.getResourceTelemetry().visibleShadows).toBe(renderer.getResourceTelemetry().visibleClouds);
-    expect(sprites.some(({ name, alpha }) => !name.endsWith(":shadow") && alpha > 0)).toBe(true);
   });
 
   it("keeps an eligible cloud pair visible throughout multiple slow drift cycles", () => {
     const cloudPackage = testCloudPackage({
       driftAmplitudePixels: { minimum: 48, maximum: 48 },
       driftPeriodSeconds: { minimum: 200, maximum: 200 },
+      routeFadeFraction: 0,
     });
     const { scene, sprites } = createSpriteScene();
     const renderer = new CloudLayerRenderer(scene as never, false, cloudPackage);

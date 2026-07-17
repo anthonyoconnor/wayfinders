@@ -3,7 +3,7 @@
   "assetId": "presentation.clouds.primary",
   "kind": "cloud-atmosphere",
   "sourceAssetId": "generated.cloud-atmosphere.source.v1",
-  "runtimeRevision": 2,
+  "runtimeRevision": 3,
   "image": {
     "imageId": "presentation.clouds.primary.frames",
     "textureKey": "wayfinders:image:cloud-atmosphere",
@@ -23,16 +23,34 @@
     "candidatesPerChunk": 4,
     "chunkDensity": 1,
     "opacity": { "minimum": 0.18, "maximum": 0.32 },
-    "scale": { "minimum": 0.28, "maximum": 0.42 },
-    "driftAmplitudePixels": { "minimum": 24, "maximum": 52 },
-    "driftPeriodSeconds": { "minimum": 180, "maximum": 300 },
-    "fadeInSeconds": 6,
+    "scale": { "minimum": 0.22, "maximum": 0.5 },
+    "cloudTintsRgb": [
+      { "red": 255, "green": 255, "blue": 255 },
+      { "red": 215, "green": 232, "blue": 237 },
+      { "red": 158, "green": 186, "blue": 197 },
+      { "red": 102, "green": 136, "blue": 149 }
+    ],
+    "driftAmplitudePixels": { "minimum": 80, "maximum": 128 },
+    "driftPeriodSeconds": { "minimum": 120, "maximum": 180 },
+    "fadeInSeconds": 4,
+    "routeFadeFraction": 0.1,
     "clearPaddingTiles": 1,
+    "openingClouds": {
+      "offsetPixels": [
+        { "x": -80, "y": -48 },
+        { "x": 80, "y": -48 },
+        { "x": 0, "y": 80 }
+      ],
+      "scale": { "minimum": 0.24, "maximum": 0.42 },
+      "driftAmplitudePixels": { "minimum": 56, "maximum": 80 },
+      "driftPeriodSeconds": { "minimum": 100, "maximum": 140 },
+      "initialFade": 0.4
+    },
     "shadow": {
       "depth": 51,
-      "offsetPixels": { "x": 52, "y": 34 },
-      "opacityMultiplier": 0.36,
-      "scale": { "x": 0.96, "y": 0.56 },
+      "offsetPixels": { "x": 84, "y": 56 },
+      "opacityMultiplier": 0.32,
+      "scale": { "x": 0.9, "y": 0.5 },
       "tintRgb": { "red": 24, "green": 55, "blue": 68 }
     }
   },
