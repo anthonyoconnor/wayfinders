@@ -568,14 +568,14 @@ function buildHomeShoreOverlay(home) {
 }
 
 const HOME_DEPTH_PALETTE = Object.freeze([
-  [110, 202, 190, 255],
-  [87, 190, 184, 255],
-  [68, 176, 179, 255],
-  [51, 156, 168, 255],
-  [38, 136, 154, 255],
-  [28, 116, 138, 255],
-  [20, 94, 118, 255],
-  [12, 67, 88, 255],
+  [118, 210, 193, 255],
+  [92, 199, 192, 255],
+  [68, 184, 187, 255],
+  [50, 168, 180, 255],
+  [36, 149, 169, 255],
+  [25, 126, 150, 255],
+  [17, 101, 127, 255],
+  [11, 72, 94, 255],
 ]);
 
 function angularLobe(angle, center, width) {
@@ -589,22 +589,22 @@ function homeShelfRadii(angle) {
   const south = angularLobe(angle, Math.PI / 2, 0.7);
   const southWest = angularLobe(angle, Math.PI * 0.72, 0.48);
   const northWest = angularLobe(angle, -Math.PI * 0.72, 0.5);
-  const inner = 198
-    + east * 11
-    + south * 7
+  const inner = 202
+    + east * 6
+    + south * 4
     + Math.sin(angle * 3 + 0.45) * 5
     + Math.sin(angle * 7 - 0.8) * 3;
   const outer = clamp(
-    250
-      + east * 58
-      + southEast * 18
-      + south * 65
-      + southWest * 25
-      - northWest * 11
-      + Math.sin(angle * 4 + 0.3) * 7
-      + Math.sin(angle * 9 - 0.6) * 4,
-    241,
-    338,
+    238
+      + east * 90
+      + southEast * 34
+      + south * 104
+      + southWest * 14
+      - northWest * 12
+      + Math.sin(angle * 4 + 0.3) * 9
+      + Math.sin(angle * 9 - 0.6) * 5,
+    242,
+    370,
   );
   return { inner, outer };
 }
@@ -623,38 +623,77 @@ function crescentStrength(dx, dy, centerX, centerY, radiusX, radiusY, cutX, cutY
   return clamp(outer - cut * 0.94, 0, 1);
 }
 
+function brokenPatchStrength(dx, dy, centerX, centerY, radiusX, radiusY, seed) {
+  const envelope = irregularEllipse(dx, dy, centerX, centerY, radiusX, radiusY, seed);
+  const breakup = Math.sin((dx + seed) * 0.071 + dy * 0.023)
+    + Math.sin(dx * 0.033 - (dy - seed) * 0.089) * 0.72
+    + Math.sin((dx + dy + seed) * 0.047) * 0.48;
+  return envelope * (0.1 + smoothstep(-0.35, 0.85, breakup) * 0.9);
+}
+
+function homeSubstrateAt(dx, dy) {
+  return clamp(
+    brokenPatchStrength(dx, dy, -208, 156, 58, 37, 19) * 0.27
+      + brokenPatchStrength(dx, dy, 178, 174, 63, 41, 41) * 0.29
+      + brokenPatchStrength(dx, dy, 244, 78, 43, 30, 67) * 0.23
+      + brokenPatchStrength(dx, dy, -80, 254, 55, 31, 101) * 0.22
+      + brokenPatchStrength(dx, dy, -239, 28, 35, 78, 131) * 0.16
+      + brokenPatchStrength(dx, dy, 18, -246, 76, 29, 157) * 0.17,
+    0,
+    0.3,
+  );
+}
+
+function brokenCrescentStrength(dx, dy, centerX, centerY, radiusX, radiusY, cutX, cutY, seed) {
+  const crescent = crescentStrength(dx, dy, centerX, centerY, radiusX, radiusY, cutX, cutY);
+  const breakup = Math.sin((dx + seed) * 0.094 + dy * 0.021)
+    + Math.sin(dx * 0.043 - (dy - seed) * 0.112) * 0.65;
+  return crescent * (0.55 + smoothstep(-0.48, 0.92, breakup) * 0.45);
+}
+
+function homeSandbarAt(dx, dy) {
+  return clamp(
+    brokenCrescentStrength(dx, dy, 155, 218, 58, 20, 19, -5, 17) * 0.15
+      + brokenCrescentStrength(dx, dy, 238, 132, 46, 16, 15, -4, 53) * 0.1,
+    0,
+    0.17,
+  );
+}
+
+function homeChannelAt(dx, dy) {
+  const channelCenterY = 4
+    + Math.sin((dx - 112) * 0.025) * 19
+    + Math.sin((dx - 38) * 0.009) * 9
+    + Math.max(0, dx - 178) * 0.24;
+  const channelWidth = 17 + smoothstep(185, 350, dx) * 17;
+  const brokenEdge = Math.sin(dx * 0.081 + dy * 0.027) * 2.5
+    + Math.sin(dx * 0.031 - dy * 0.067) * 1.7;
+  return (1 - smoothstep(channelWidth * 0.4, channelWidth, Math.abs(dy - channelCenterY) + brokenEdge))
+    * smoothstep(165, 225, dx)
+    * (1 - smoothstep(365, 410, dx));
+}
+
 function homeDepthAt(dx, dy) {
-  const radius = Math.hypot(dx, dy);
-  const angle = Math.atan2(dy, dx);
+  const shelfX = dx - 16;
+  const shelfY = dy - 22;
+  const radius = Math.hypot(shelfX, shelfY);
+  const angle = Math.atan2(shelfY, shelfX);
   const { inner, outer } = homeShelfRadii(angle);
-  const macroWarp = Math.sin(dx * 0.016 + Math.sin(dy * 0.009) * 1.7) * 8
-    + Math.sin(dy * 0.013 - dx * 0.006) * 6
-    + Math.sin((dx + dy) * 0.007) * 5;
+  const macroWarp = Math.sin(shelfX * 0.016 + Math.sin(shelfY * 0.009) * 1.7) * 14
+    + Math.sin(shelfY * 0.013 - shelfX * 0.006) * 10
+    + Math.sin((shelfX + shelfY) * 0.007) * 7;
   const normalizedDepth = clamp((radius + macroWarp - inner) / Math.max(1, outer - inner), 0, 1);
-  let depth = normalizedDepth ** 0.78;
+  let depth = normalizedDepth ** 0.75;
 
   // The east harbor opens through a darker, gently winding navigation channel.
-  const channelCenterY = 4
-    + Math.sin((dx - 125) * 0.027) * 14
-    + Math.sin((dx - 60) * 0.009) * 6
-    + Math.max(0, dx - 185) * 0.12;
-  const channelWidth = 9 + smoothstep(185, 350, dx) * 9;
-  const channel = (1 - smoothstep(channelWidth * 0.46, channelWidth, Math.abs(dy - channelCenterY)))
-    * smoothstep(180, 225, dx)
-    * (1 - smoothstep(365, 410, dx));
-  depth += channel * (0.11 + smoothstep(220, 350, dx) * 0.08);
+  const channel = homeChannelAt(dx, dy);
+  depth += channel * (0.065 + smoothstep(220, 350, dx) * 0.045);
 
   // Detached darker substrate patches keep the shelf from reading as a ring.
-  depth += irregularEllipse(dx, dy, -208, 156, 58, 37, 19) * 0.27;
-  depth += irregularEllipse(dx, dy, 178, 174, 63, 41, 41) * 0.29;
-  depth += irregularEllipse(dx, dy, 244, 78, 43, 30, 67) * 0.23;
-  depth += irregularEllipse(dx, dy, -80, 254, 55, 31, 101) * 0.22;
-  depth += irregularEllipse(dx, dy, -239, 28, 35, 78, 131) * 0.16;
-  depth += irregularEllipse(dx, dy, 18, -246, 76, 29, 157) * 0.17;
+  depth += homeSubstrateAt(dx, dy) * 0.7;
 
   // Two offset sandy crescents echo the selected concept without outlining it.
-  depth -= crescentStrength(dx, dy, 145, 222, 61, 27, 20, -7) * 0.22;
-  depth -= crescentStrength(dx, dy, -175, 205, 55, 25, -18, -6) * 0.18;
+  depth -= homeSandbarAt(dx, dy);
   const shelfMottle = Math.sin(dx * 0.031 + dy * 0.017) * 0.024
     + Math.sin(dx * 0.014 - dy * 0.037 + 0.8) * 0.019;
   depth += shelfMottle * smoothstep(0.04, 0.3, depth) * (1 - smoothstep(0.78, 0.98, depth));
@@ -690,12 +729,11 @@ function buildHomeDepthHandoff(masters) {
         + Math.sin(dy * 0.075 + Math.sin(dx * 0.02)) * 4
         + Math.sin((dx + dy) * 0.045) * 2
         + Math.sin(dy * 0.18 + dx * 0.025) * 3;
-      let edgeOpacity = 1 - smoothstep(356 + edgeWarp * 0.35, 393 + edgeWarp * 0.55, radius);
+      let edgeOpacity = 1 - smoothstep(386 + edgeWarp * 0.25, 398 + edgeWarp * 0.25, radius);
       if (x < 2 || y < 2 || x >= frameSize - 2 || y >= frameSize - 2) edgeOpacity = 0;
       const rawDepth = homeDepthAt(dx, dy);
-      const stencilCover = 1 - smoothstep(258, 292, radius + edgeWarp * 0.9);
-      const shelfCover = 1 - smoothstep(0.78, 0.995, rawDepth);
-      let opacity = edgeOpacity * Math.max(stencilCover, shelfCover);
+      const shelfCover = 1 - smoothstep(0.92, 0.995, rawDepth);
+      let opacity = edgeOpacity * shelfCover;
       opacity = Math.round(clamp(opacity, 0, 1) * 31) / 31;
       if (opacity === 0) {
         setPixel(baseFrame, frameSize, x, y, [0, 0, 0, 0]);
@@ -705,8 +743,8 @@ function buildHomeDepthHandoff(masters) {
       rawDepthByPixel[y * frameSize + x] = Math.round(rawDepth * 255);
       const clusterX = Math.floor(x / 3);
       const clusterY = Math.floor(y / 3);
-      const dither = ((hash32(clusterX, clusterY, 0x5a17) & 1023) / 1023 - 0.5) * 0.075;
-      const depth = Math.round(clamp(rawDepth + dither, 0, 1) * 12) / 12;
+      const dither = ((hash32(clusterX, clusterY, 0x5a17) & 1023) / 1023 - 0.5) * 0.06;
+      const depth = Math.round(clamp(rawDepth + dither, 0, 1) * 14) / 14;
       const sampleX = Math.floor(x / 2) * 5;
       const sampleY = Math.floor(y / 2) * 5;
       const deep = gradeColor(
@@ -724,8 +762,19 @@ function buildHomeDepthHandoff(masters) {
         0,
       );
       const material = mix(coastal, deep, rawDepth);
-      let color = mix(paletteColor(depth), material, 0.58);
-      color = mix(color, deep, smoothstep(0.82, 0.98, rawDepth));
+      const substrate = homeSubstrateAt(dx, dy);
+      const sandbar = homeSandbarAt(dx, dy);
+      const channel = homeChannelAt(dx, dy);
+      const reefGrain = smoothstep(
+        -0.58,
+        0.74,
+        Math.sin((dx + 31) * 0.19) + Math.sin((dy - 17) * 0.23) * 0.68,
+      );
+      let color = mix(paletteColor(depth), material, 0.32);
+      color = mix(color, [24, 104, 112, 255], smoothstep(0.035, 0.24, substrate) * (0.07 + reefGrain * 0.1));
+      color = mix(color, [122, 203, 186, 255], smoothstep(0.02, 0.14, sandbar) * 0.15);
+      color = mix(color, deep, channel * 0.025);
+      color = mix(color, deep, smoothstep(0.78, 0.94, rawDepth));
       setPixel(baseFrame, frameSize, x, y, [color[0], color[1], color[2], opacity * 255]);
     }
   }
@@ -765,7 +814,7 @@ function buildHomeDepthHandoff(masters) {
       }
     }
   }
-  return { width, height, pixels: sheet };
+  return { width, height, pixels: sheet, rawDepthByPixel };
 }
 
 function validateHomeDepthHandoff(handoff) {
@@ -793,9 +842,26 @@ function validateHomeDepthHandoff(handoff) {
     maximumAxisRun = Math.max(maximumAxisRun, currentRun);
     previous = boundary;
   }
+  const center = HOME_HANDOFF_FRAME_SIZE / 2;
   const shelfWidths = Array.from({ length: 64 }, (_, index) => {
-    const { inner, outer } = homeShelfRadii(index / 64 * Math.PI * 2 - Math.PI);
-    return outer - inner;
+    const angle = index / 64 * Math.PI * 2 - Math.PI;
+    const cosine = Math.cos(angle);
+    const sine = Math.sin(angle);
+    let innerRadius;
+    let outerRadius;
+    for (let radius = 0; radius < center - 2; radius++) {
+      const x = Math.floor(center + cosine * radius);
+      const y = Math.floor(center + sine * radius);
+      const alpha = handoff.pixels[(y * handoff.width + x) * 4 + 3];
+      if (alpha <= 8) continue;
+      outerRadius = radius;
+      const rawDepth = handoff.rawDepthByPixel[y * HOME_HANDOFF_FRAME_SIZE + x] / 255;
+      if (innerRadius === undefined && rawDepth >= 0.08) innerRadius = radius;
+    }
+    if (innerRadius === undefined || outerRadius === undefined || outerRadius <= innerRadius) {
+      throw new Error(`Home depth handoff has no measurable rendered shelf at angle ${angle.toFixed(3)}`);
+    }
+    return outerRadius - innerRadius;
   });
   const minimumShelfWidth = Math.min(...shelfWidths);
   const maximumShelfWidth = Math.max(...shelfWidths);

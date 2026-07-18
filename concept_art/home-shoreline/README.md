@@ -24,12 +24,17 @@ pixel-for-pixel copy:
 
 - at least five perceptible stages from seafoam through aqua and turquoise to
   blue-teal and deep navy;
-- roughly three-to-one variation between the broadest and narrowest shallow
+- at least three-to-one variation between the broadest and narrowest shallow
   reaches;
 - a darker, sinuous channel connecting the east harbor to open water;
 - detached sand/reef patches that break any enclosing ring;
 - continuous wave detail across depth zones; and
 - no tile, chunk, axis-aligned opacity, or continuous contour boundary.
+
+The retained in-game comparison and final capture are documented in
+[`COMPARISON.md`](COMPARISON.md). The final treatment uses the selected
+direction's asymmetric shelf, but keeps the concept's painted features more
+restrained so the production island art remains the focal point.
 
 ## Retained explorations
 
@@ -72,4 +77,3 @@ source-photo pixels:
 - [NASA: Tidal Flats and Channels, Long Island](https://earthobservatory.nasa.gov/images/48159/tidal-flats-and-channels-long-island-bahamas) — branching deep-water channels through pale shallows.
 - [NASA: Lagoons and Reefs of New Caledonia](https://science.nasa.gov/earth/earth-observatory/lagoons-and-reefs-of-new-caledonia-8948/) — progressive aquamarine-to-deep-blue depth cues.
 - [NOAA Benthic Habitat Viewer](https://products.coastalscience.noaa.gov/bhv/) — patch reefs, scattered coral/rock in sand, and sand-channel morphology.
-
