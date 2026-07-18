@@ -8,6 +8,11 @@ const TILE_SIZE = 32;
 const FRAME_COUNT = 8;
 const VARIANT_COUNT = 4;
 const TRANSITION_FRAME_COUNT = 4;
+const HOME_ISLAND_FRAME_SIZE = 480;
+const HOME_HANDOFF_MARGIN = 160;
+const HOME_HANDOFF_FRAME_SIZE = HOME_ISLAND_FRAME_SIZE + HOME_HANDOFF_MARGIN * 2;
+const HOME_HANDOFF_COLUMNS = 4;
+const HOME_HANDOFF_ROWS = FRAME_COUNT / HOME_HANDOFF_COLUMNS;
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const sourceRoot = path.join(root, "source");
@@ -562,6 +567,253 @@ function buildHomeShoreOverlay(home) {
   return { width, height, pixels: sheet };
 }
 
+const HOME_DEPTH_PALETTE = Object.freeze([
+  [110, 202, 190, 255],
+  [87, 190, 184, 255],
+  [68, 176, 179, 255],
+  [51, 156, 168, 255],
+  [38, 136, 154, 255],
+  [28, 116, 138, 255],
+  [20, 94, 118, 255],
+  [12, 67, 88, 255],
+]);
+
+function angularLobe(angle, center, width) {
+  const delta = Math.atan2(Math.sin(angle - center), Math.cos(angle - center));
+  return Math.exp(-0.5 * (delta / width) ** 2);
+}
+
+function homeShelfRadii(angle) {
+  const east = angularLobe(angle, 0, 0.72);
+  const southEast = angularLobe(angle, Math.PI * 0.28, 0.5);
+  const south = angularLobe(angle, Math.PI / 2, 0.7);
+  const southWest = angularLobe(angle, Math.PI * 0.72, 0.48);
+  const northWest = angularLobe(angle, -Math.PI * 0.72, 0.5);
+  const inner = 198
+    + east * 11
+    + south * 7
+    + Math.sin(angle * 3 + 0.45) * 5
+    + Math.sin(angle * 7 - 0.8) * 3;
+  const outer = clamp(
+    250
+      + east * 58
+      + southEast * 18
+      + south * 65
+      + southWest * 25
+      - northWest * 11
+      + Math.sin(angle * 4 + 0.3) * 7
+      + Math.sin(angle * 9 - 0.6) * 4,
+    241,
+    338,
+  );
+  return { inner, outer };
+}
+
+function irregularEllipse(dx, dy, centerX, centerY, radiusX, radiusY, seed) {
+  const localX = (dx - centerX) / radiusX;
+  const localY = (dy - centerY) / radiusY;
+  const warp = Math.sin((dx + seed) * 0.052 + dy * 0.019) * 0.08
+    + Math.sin(dx * 0.017 - (dy - seed) * 0.061) * 0.055;
+  return 1 - smoothstep(0.56, 1.04, Math.hypot(localX, localY) + warp);
+}
+
+function crescentStrength(dx, dy, centerX, centerY, radiusX, radiusY, cutX, cutY) {
+  const outer = irregularEllipse(dx, dy, centerX, centerY, radiusX, radiusY, 37);
+  const cut = irregularEllipse(dx, dy, centerX + cutX, centerY + cutY, radiusX * 0.78, radiusY * 0.78, 83);
+  return clamp(outer - cut * 0.94, 0, 1);
+}
+
+function homeDepthAt(dx, dy) {
+  const radius = Math.hypot(dx, dy);
+  const angle = Math.atan2(dy, dx);
+  const { inner, outer } = homeShelfRadii(angle);
+  const macroWarp = Math.sin(dx * 0.016 + Math.sin(dy * 0.009) * 1.7) * 8
+    + Math.sin(dy * 0.013 - dx * 0.006) * 6
+    + Math.sin((dx + dy) * 0.007) * 5;
+  const normalizedDepth = clamp((radius + macroWarp - inner) / Math.max(1, outer - inner), 0, 1);
+  let depth = normalizedDepth ** 0.78;
+
+  // The east harbor opens through a darker, gently winding navigation channel.
+  const channelCenterY = 4
+    + Math.sin((dx - 125) * 0.027) * 14
+    + Math.sin((dx - 60) * 0.009) * 6
+    + Math.max(0, dx - 185) * 0.12;
+  const channelWidth = 9 + smoothstep(185, 350, dx) * 9;
+  const channel = (1 - smoothstep(channelWidth * 0.46, channelWidth, Math.abs(dy - channelCenterY)))
+    * smoothstep(180, 225, dx)
+    * (1 - smoothstep(365, 410, dx));
+  depth += channel * (0.11 + smoothstep(220, 350, dx) * 0.08);
+
+  // Detached darker substrate patches keep the shelf from reading as a ring.
+  depth += irregularEllipse(dx, dy, -208, 156, 58, 37, 19) * 0.27;
+  depth += irregularEllipse(dx, dy, 178, 174, 63, 41, 41) * 0.29;
+  depth += irregularEllipse(dx, dy, 244, 78, 43, 30, 67) * 0.23;
+  depth += irregularEllipse(dx, dy, -80, 254, 55, 31, 101) * 0.22;
+  depth += irregularEllipse(dx, dy, -239, 28, 35, 78, 131) * 0.16;
+  depth += irregularEllipse(dx, dy, 18, -246, 76, 29, 157) * 0.17;
+
+  // Two offset sandy crescents echo the selected concept without outlining it.
+  depth -= crescentStrength(dx, dy, 145, 222, 61, 27, 20, -7) * 0.22;
+  depth -= crescentStrength(dx, dy, -175, 205, 55, 25, -18, -6) * 0.18;
+  const shelfMottle = Math.sin(dx * 0.031 + dy * 0.017) * 0.024
+    + Math.sin(dx * 0.014 - dy * 0.037 + 0.8) * 0.019;
+  depth += shelfMottle * smoothstep(0.04, 0.3, depth) * (1 - smoothstep(0.78, 0.98, depth));
+  return clamp(depth, 0, 1);
+}
+
+function paletteColor(depth) {
+  const scaled = clamp(depth, 0, 1) * (HOME_DEPTH_PALETTE.length - 1);
+  const left = Math.floor(scaled);
+  const right = Math.min(HOME_DEPTH_PALETTE.length - 1, left + 1);
+  return mix(HOME_DEPTH_PALETTE[left], HOME_DEPTH_PALETTE[right], scaled - left);
+}
+
+function buildHomeDepthHandoff(masters) {
+  const frameSize = HOME_HANDOFF_FRAME_SIZE;
+  const width = frameSize * HOME_HANDOFF_COLUMNS;
+  const height = frameSize * HOME_HANDOFF_ROWS;
+  const center = frameSize / 2;
+  const sheet = Buffer.alloc(width * height * 4);
+  const baseFrame = Buffer.alloc(frameSize * frameSize * 4);
+  const rawDepthByPixel = new Uint8Array(frameSize * frameSize);
+  const deepProfile = profiles.find(({ id }) => id === "deep");
+  const coastalProfile = profiles.find(({ id }) => id === "coastal");
+  if (!deepProfile || !coastalProfile) throw new Error("Deep and coastal profiles are required for the home depth handoff");
+
+  for (let y = 0; y < frameSize; y++) {
+    for (let x = 0; x < frameSize; x++) {
+      const dx = x + 0.5 - center;
+      const dy = y + 0.5 - center;
+      const radius = Math.hypot(dx, dy);
+      const edgeWarp = Math.sin(Math.atan2(dy, dx) * 5 + 0.8) * 7
+        + Math.sin(dx * 0.021 - dy * 0.014) * 5
+        + Math.sin(dy * 0.075 + Math.sin(dx * 0.02)) * 4
+        + Math.sin((dx + dy) * 0.045) * 2
+        + Math.sin(dy * 0.18 + dx * 0.025) * 3;
+      let edgeOpacity = 1 - smoothstep(356 + edgeWarp * 0.35, 393 + edgeWarp * 0.55, radius);
+      if (x < 2 || y < 2 || x >= frameSize - 2 || y >= frameSize - 2) edgeOpacity = 0;
+      const rawDepth = homeDepthAt(dx, dy);
+      const stencilCover = 1 - smoothstep(258, 292, radius + edgeWarp * 0.9);
+      const shelfCover = 1 - smoothstep(0.78, 0.995, rawDepth);
+      let opacity = edgeOpacity * Math.max(stencilCover, shelfCover);
+      opacity = Math.round(clamp(opacity, 0, 1) * 31) / 31;
+      if (opacity === 0) {
+        setPixel(baseFrame, frameSize, x, y, [0, 0, 0, 0]);
+        continue;
+      }
+
+      rawDepthByPixel[y * frameSize + x] = Math.round(rawDepth * 255);
+      const clusterX = Math.floor(x / 3);
+      const clusterY = Math.floor(y / 3);
+      const dither = ((hash32(clusterX, clusterY, 0x5a17) & 1023) / 1023 - 0.5) * 0.075;
+      const depth = Math.round(clamp(rawDepth + dither, 0, 1) * 12) / 12;
+      const sampleX = Math.floor(x / 2) * 5;
+      const sampleY = Math.floor(y / 2) * 5;
+      const deep = gradeColor(
+        pixel(masters.deep, sampleX, sampleY),
+        deepProfile,
+        Math.floor(x / 2),
+        Math.floor(y / 2),
+        0,
+      );
+      const coastal = gradeColor(
+        pixel(masters.shallow, sampleX, sampleY),
+        coastalProfile,
+        Math.floor(x / 2),
+        Math.floor(y / 2),
+        0,
+      );
+      const material = mix(coastal, deep, rawDepth);
+      let color = mix(paletteColor(depth), material, 0.58);
+      color = mix(color, deep, smoothstep(0.82, 0.98, rawDepth));
+      setPixel(baseFrame, frameSize, x, y, [color[0], color[1], color[2], opacity * 255]);
+    }
+  }
+
+  for (let frame = 0; frame < FRAME_COUNT; frame++) {
+    const frameColumn = frame % HOME_HANDOFF_COLUMNS;
+    const frameRow = Math.floor(frame / HOME_HANDOFF_COLUMNS);
+    for (let y = 0; y < frameSize; y++) {
+      baseFrame.copy(
+        sheet,
+        ((frameRow * frameSize + y) * width + frameColumn * frameSize) * 4,
+        y * frameSize * 4,
+        (y + 1) * frameSize * 4,
+      );
+    }
+    const phase = frame / FRAME_COUNT * Math.PI * 2;
+    for (let y = 0; y < frameSize; y += 2) {
+      for (let x = 0; x < frameSize; x += 2) {
+        const rawDepth = rawDepthByPixel[y * frameSize + x] / 255;
+        if (rawDepth >= 0.94) continue;
+        const ripple = Math.sin(x * 0.115 + y * 0.071 + phase)
+          * Math.sin(x * 0.041 - y * 0.127 - phase * 0.7);
+        const causticGate = (hash32(Math.floor(x / 4), Math.floor(y / 3), 0xc451) & 7) < 3 ? 1 : 0;
+        const caustic = Math.max(0, ripple - 0.42) * causticGate * (1 - rawDepth) * 13;
+        if (caustic <= 0) continue;
+        for (let offsetY = 0; offsetY < 2; offsetY++) {
+          for (let offsetX = 0; offsetX < 2; offsetX++) {
+            const targetX = frameColumn * frameSize + x + offsetX;
+            const targetY = frameRow * frameSize + y + offsetY;
+            const index = (targetY * width + targetX) * 4;
+            if (sheet[index + 3] === 0) continue;
+            sheet[index] = clamp(sheet[index] + caustic);
+            sheet[index + 1] = clamp(sheet[index + 1] + caustic);
+            sheet[index + 2] = clamp(sheet[index + 2] + caustic);
+          }
+        }
+      }
+    }
+  }
+  return { width, height, pixels: sheet };
+}
+
+function validateHomeDepthHandoff(handoff) {
+  const alphaLevels = new Set();
+  const lumaBands = new Set();
+  const leftBoundaries = [];
+  for (let y = 0; y < HOME_HANDOFF_FRAME_SIZE; y++) {
+    let left = -1;
+    for (let x = 0; x < HOME_HANDOFF_FRAME_SIZE; x++) {
+      const [r, g, b, alpha] = readPixel(handoff.pixels, handoff.width, x, y);
+      alphaLevels.add(alpha);
+      if (alpha >= 220) lumaBands.add(Math.round((r * 0.2126 + g * 0.7152 + b * 0.0722) / 10));
+      if (left < 0 && alpha > 8) left = x;
+      if ((x < 2 || y < 2 || x >= HOME_HANDOFF_FRAME_SIZE - 2 || y >= HOME_HANDOFF_FRAME_SIZE - 2) && alpha !== 0) {
+        throw new Error("Home depth handoff must have a fully transparent two-pixel perimeter");
+      }
+    }
+    if (left >= 0) leftBoundaries.push(left);
+  }
+  let maximumAxisRun = 0;
+  let currentRun = 0;
+  let previous;
+  for (const boundary of leftBoundaries) {
+    currentRun = boundary === previous ? currentRun + 1 : 1;
+    maximumAxisRun = Math.max(maximumAxisRun, currentRun);
+    previous = boundary;
+  }
+  const shelfWidths = Array.from({ length: 64 }, (_, index) => {
+    const { inner, outer } = homeShelfRadii(index / 64 * Math.PI * 2 - Math.PI);
+    return outer - inner;
+  });
+  const minimumShelfWidth = Math.min(...shelfWidths);
+  const maximumShelfWidth = Math.max(...shelfWidths);
+  const shelfWidthRatio = maximumShelfWidth / minimumShelfWidth;
+  if (alphaLevels.size < 24) throw new Error(`Home depth handoff needs a gradual alpha ramp; found ${alphaLevels.size} levels`);
+  if (lumaBands.size < 10) throw new Error(`Home depth handoff needs broad color depth; found ${lumaBands.size} luma bands`);
+  if (maximumAxisRun >= TILE_SIZE) throw new Error(`Home depth handoff outer contour has a ${maximumAxisRun}px axis-aligned run`);
+  if (shelfWidthRatio < 3) throw new Error(`Home depth handoff shelf-width ratio ${shelfWidthRatio.toFixed(2)} is below 3:1`);
+  return {
+    alphaLevels: alphaLevels.size,
+    lumaBands: lumaBands.size,
+    maximumAxisRun,
+    minimumShelfWidth: Number(minimumShelfWidth.toFixed(2)),
+    maximumShelfWidth: Number(maximumShelfWidth.toFixed(2)),
+    shelfWidthRatio: Number(shelfWidthRatio.toFixed(2)),
+  };
+}
+
 async function writePng(filename, width, height, pixels) {
   await writeFile(path.join(runtimeRoot, filename), encodePng(width, height, pixels));
 }
@@ -679,8 +931,28 @@ async function main() {
   }
   await writePng("water-contact-sheet.png", contactWidth, contactHeight, contact);
 
-  const homePath = path.join(repositoryRoot, "dist", "assets", "gr1", "images", "home-island.png");
+  const homePath = path.join(repositoryRoot, "public", "assets", "gr1", "images", "home-island.png");
   const home = decodePng(await readFile(homePath), homePath);
+  if (home.width !== HOME_ISLAND_FRAME_SIZE || home.height !== HOME_ISLAND_FRAME_SIZE) {
+    throw new RangeError(`Home island must be ${HOME_ISLAND_FRAME_SIZE}x${HOME_ISLAND_FRAME_SIZE}`);
+  }
+  const homeHandoff = buildHomeDepthHandoff(masters);
+  const transparentHomeHandoffPixels = validateTransparentRgb(homeHandoff.pixels, "water-home-depth-handoff");
+  const homeHandoffValidation = validateHomeDepthHandoff(homeHandoff);
+  const runtimeHomeHandoff = extrudeSheet(
+    homeHandoff.pixels,
+    homeHandoff.width,
+    HOME_HANDOFF_COLUMNS,
+    HOME_HANDOFF_ROWS,
+    HOME_HANDOFF_FRAME_SIZE,
+    HOME_HANDOFF_FRAME_SIZE,
+  );
+  await writePng(
+    "water-home-depth-handoff.png",
+    runtimeHomeHandoff.width,
+    runtimeHomeHandoff.height,
+    runtimeHomeHandoff.pixels,
+  );
   const homeOverlay = buildHomeShoreOverlay(home);
   const transparentHomeOverlayPixels = validateTransparentRgb(homeOverlay.pixels, "water-home-shore-overlay");
   const runtimeHomeOverlay = extrudeSheet(homeOverlay.pixels, homeOverlay.width, FRAME_COUNT, 1, home.width, home.height);
@@ -691,14 +963,10 @@ async function main() {
     runtimeHomeOverlay.pixels,
   );
 
-  const previewSize = 640;
+  const previewSize = 960;
   const preview = Buffer.alloc(previewSize * previewSize * 4);
   const gridSize = previewSize / TILE_SIZE;
-  const isPreviewShallow = (x, y) => {
-    const dx = x + 0.5 - gridSize / 2;
-    const dy = y + 0.5 - gridSize / 2;
-    return Math.hypot(dx, dy) < 8.5;
-  };
+  const isPreviewShallow = () => false;
   for (let tileY = 0; tileY < gridSize; tileY++) {
     for (let tileX = 0; tileX < gridSize; tileX++) {
       const shallow = isPreviewShallow(tileX, tileY);
@@ -726,6 +994,22 @@ async function main() {
   }
   const homeX = Math.floor((previewSize - home.width) / 2);
   const homeY = Math.floor((previewSize - home.height) / 2);
+  const homeHandoffX = homeX - HOME_HANDOFF_MARGIN;
+  const homeHandoffY = homeY - HOME_HANDOFF_MARGIN;
+  for (let y = 0; y < HOME_HANDOFF_FRAME_SIZE; y++) {
+    for (let x = 0; x < HOME_HANDOFF_FRAME_SIZE; x++) {
+      const foreground = readPixel(homeHandoff.pixels, homeHandoff.width, x, y);
+      if (foreground[3] === 0) continue;
+      const background = readPixel(preview, previewSize, homeHandoffX + x, homeHandoffY + y);
+      const alpha = foreground[3] / 255;
+      setPixel(preview, previewSize, homeHandoffX + x, homeHandoffY + y, [
+        foreground[0] * alpha + background[0] * (1 - alpha),
+        foreground[1] * alpha + background[1] * (1 - alpha),
+        foreground[2] * alpha + background[2] * (1 - alpha),
+        255,
+      ]);
+    }
+  }
   for (let y = 0; y < home.height; y++) {
     for (let x = 0; x < home.width; x++) {
       const foreground = pixel(home, x, y);
@@ -761,6 +1045,7 @@ async function main() {
     ["water-static.png", runtimeStatic.width, runtimeStatic.height],
     ["water-depth-transitions.png", runtimeTransitions.width, runtimeTransitions.height],
     ["water-overlays.png", runtimeOverlays.width, runtimeOverlays.height],
+    ["water-home-depth-handoff.png", runtimeHomeHandoff.width, runtimeHomeHandoff.height],
     ["water-home-shore-overlay.png", runtimeHomeOverlay.width, runtimeHomeOverlay.height],
     ["water-contact-sheet.png", contactWidth, contactHeight],
     ["water-home-island-preview.png", previewSize, previewSize],
@@ -776,6 +1061,8 @@ async function main() {
       checkedBaseFrames,
       ...loopValidation,
       transparentOverlayPixels,
+      transparentHomeHandoffPixels,
+      homeHandoff: homeHandoffValidation,
       transparentHomeOverlayPixels,
     },
     profiles: profiles.map(({ id, source, terrain, framesPerSecond }) => ({ id, source, terrain, framesPerSecond })),

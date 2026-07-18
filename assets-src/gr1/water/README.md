@@ -30,12 +30,14 @@ shore collision lattice is not used as an art grid.
 | `water-depth-transitions.png` | 1692 x 144 | 47 gated eight-neighbor masks across and four phases down |
 | `water-overlays.png` | 288 x 144 | Alpha clips for glints, caustics, currents, and whitecaps |
 | `water-home-shore-overlay.png` | 3872 x 484 | Eight 480 px frames aligned exactly to `home.island.primary` |
+| `water-home-depth-handoff.png` | 3216 x 1608 | Eight 800 px asymmetric sand-shelf frames in a 4-by-2 sheet, extending 160 px beyond the home island |
 | `build-report.json` | n/a | Deterministic dimensions and SHA-256 output hashes |
 
 The base sheet contains animated frames so it can support visual tests and rare
 profile-wide motion. The intended first implementation freezes base water from
-`water-static.png` and animates only sparse overlay cells and the home-aligned
-shore clip. That keeps motion restrained and avoids updating every ocean tile.
+`water-static.png` and animates only sparse overlay cells and the two
+home-aligned clips. That keeps motion restrained and avoids updating every
+ocean tile.
 
 ## Frame addressing
 
@@ -52,6 +54,15 @@ the corner rule in `water-package.json`, find it in `maskLookup`, then use:
 ```text
 sourceX = 2 + maskIndex * 36
 sourceY = 2 + phase * 36
+```
+
+For `water-home-depth-handoff.png`:
+
+```text
+sourceX = 2 + (frame % 4) * 804
+sourceY = 2 + floor(frame / 4) * 804
+worldX = homeTopLeftX - 160
+worldY = homeTopLeftY - 160
 ```
 
 Variant choice, orientation, and phase must come from a stable presentation
@@ -87,4 +98,6 @@ The authored home island already contains an organic turquoise shore fringe,
 foam, harbor water, and a transparent exterior. Water must continue under those
 transparent pixels. Generic grid foam stays below the composition; only
 `water-home-shore-overlay.png`, positioned at the same top-left and scale as the
-home island, may render above it.
+home island, may render above it. The selected asymmetric Bahamian sand-shelf
+handoff is presentation-only: place `water-home-depth-handoff.png` 160 px above
+and left of the home top-left, above generic water but below the home island.

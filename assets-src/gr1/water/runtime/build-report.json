@@ -58,6 +58,15 @@
     "maximumStepLumaDelta": 8.641,
     "maximumWrapLumaDelta": 7.808,
     "transparentOverlayPixels": 31987,
+    "transparentHomeHandoffPixels": 2759112,
+    "homeHandoff": {
+      "alphaLevels": 32,
+      "lumaBands": 16,
+      "maximumAxisRun": 12,
+      "minimumShelfWidth": 40.76,
+      "maximumShelfWidth": 138.98,
+      "shelfWidthRatio": 3.41
+    },
     "transparentHomeOverlayPixels": 1821509
   },
   "profiles": [
@@ -136,6 +145,12 @@
       "sha256": "3ca79cb39f50f46aa92b888c51c926296cb9651d612dd435b56eff3d034d6467"
     },
     {
+      "filename": "water-home-depth-handoff.png",
+      "width": 3216,
+      "height": 1608,
+      "sha256": "dd59c7eeba3e8862c363a50b4dd5ad62dee76fd8ec8d4030c9b8f2418ead3092"
+    },
+    {
       "filename": "water-home-shore-overlay.png",
       "width": 3872,
       "height": 484,
@@ -149,9 +164,9 @@
     },
     {
       "filename": "water-home-island-preview.png",
-      "width": 640,
-      "height": 640,
-      "sha256": "34a439f36e03ed7e2a5f544a2b1d5a0f30d8bf2e4f129f8c4ae86da0c4601da4"
+      "width": 960,
+      "height": 960,
+      "sha256": "597309db5bed79a41104f43f322f60f30fbaa2c3ed7cae7d79a08295b0b0db18"
     }
   ]
 }

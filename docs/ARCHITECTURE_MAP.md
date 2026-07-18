@@ -128,9 +128,13 @@ adapter may own Phaser sound instances.
   `WaterRenderer` consumes that same delta and owns exactly one base and one
   surface canvas texture per referenced canonical chunk. Periodic image aliases
   share those textures, aliases add no redraw work, and a visible canonical
-  surface redraws at most once per presentation frame. The aligned home-shore
-  overlay follows periodic footprint visibility. `WorldRenderer` owns the
-  lifted deferred-gap ocean backdrop and no longer draws water or waves.
+  surface redraws at most once per presentation frame. Inside the authored-home
+  footprint and its one-tile collar, the renderer presents deep base water and
+  suppresses the generic tile transition so one periodic home-aligned
+  bathymetry handoff can own the asymmetric sub-tile shelf without changing
+  terrain or layout authority. That handoff and the separate aligned
+  home-shore overlay follow one periodic alias lifetime. `WorldRenderer` owns
+  the lifted deferred-gap ocean backdrop and no longer draws water or waves.
 - `src/wayfinders/audio/index.ts` is the public stored-audio and mixer seam. It
   validates the canonical catalog, resolves catalog-relative runtime URLs, and
   owns in-memory master/category gain, bounded deterministic voice decisions,

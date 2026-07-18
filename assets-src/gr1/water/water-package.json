@@ -94,6 +94,21 @@
       "origin": { "x": 0, "y": 0 },
       "placement": "same top-left and scale as home.island.primary",
       "alpha": true
+    },
+    {
+      "imageId": "world.water.home-depth-handoff",
+      "file": "runtime/water-home-depth-handoff.png",
+      "loader": "spritesheet",
+      "pixelSize": { "width": 3216, "height": 1608 },
+      "frameSize": { "width": 800, "height": 800 },
+      "margin": 2,
+      "spacing": 4,
+      "frameCount": 8,
+      "framesPerSecond": 5,
+      "origin": { "x": -160, "y": -160 },
+      "placement": "relative to the home top-left, above generic water and below the home island",
+      "role": "selected asymmetric Bahamian sand-shelf depth handoff; presentation-only",
+      "alpha": true
     }
   ],
   "previewImages": [

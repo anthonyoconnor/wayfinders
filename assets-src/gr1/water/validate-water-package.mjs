@@ -5,13 +5,21 @@ import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const runtimeRoot = path.join(root, "runtime");
+const HOME_DEPTH_HANDOFF_ID = "world.water.home-depth-handoff";
+const HOME_DEPTH_HANDOFF_FILE = "water-home-depth-handoff.png";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
 function pngHeader(buffer, label) {
-  assert(buffer.length >= 29 && buffer.subarray(0, 8).toString("hex") === "89504e470d0a1a0a", `${label} is not PNG`);
+  assert(
+    buffer.length >= 33
+      && buffer.subarray(0, 8).toString("hex") === "89504e470d0a1a0a"
+      && buffer.readUInt32BE(8) === 13
+      && buffer.subarray(12, 16).toString("ascii") === "IHDR",
+    `${label} has an invalid PNG header`,
+  );
   return {
     width: buffer.readUInt32BE(16),
     height: buffer.readUInt32BE(20),
@@ -45,6 +53,25 @@ assert(
 );
 assert(report.validation.transparentOverlayPixels > 0, "overlay alpha validation did not run");
 assert(report.validation.transparentHomeOverlayPixels > 0, "home-overlay alpha validation did not run");
+assert(report.validation.transparentHomeHandoffPixels > 0, "home-depth-handoff alpha validation did not run");
+assert(report.validation.homeHandoff?.alphaLevels >= 24, "home-depth-handoff must retain at least 24 alpha levels");
+assert(report.validation.homeHandoff?.lumaBands >= 10, "home-depth-handoff must retain at least 10 luma bands");
+assert(report.validation.homeHandoff?.maximumAxisRun < 32, "home-depth-handoff contour contains a long axis-aligned run");
+assert(report.validation.homeHandoff?.shelfWidthRatio >= 3, "home-depth-handoff shelf width is too uniform");
+
+const homeDepthHandoff = manifest.images.find(({ imageId }) => imageId === HOME_DEPTH_HANDOFF_ID);
+assert(homeDepthHandoff, `${HOME_DEPTH_HANDOFF_ID} is missing from the manifest`);
+assert(homeDepthHandoff.file === `runtime/${HOME_DEPTH_HANDOFF_FILE}`, `${HOME_DEPTH_HANDOFF_ID} file mismatch`);
+assert(homeDepthHandoff.loader === "spritesheet", `${HOME_DEPTH_HANDOFF_ID} loader must be spritesheet`);
+assert(homeDepthHandoff.pixelSize.width === 3216 && homeDepthHandoff.pixelSize.height === 1608, `${HOME_DEPTH_HANDOFF_ID} pixel size mismatch`);
+assert(homeDepthHandoff.frameSize.width === 800 && homeDepthHandoff.frameSize.height === 800, `${HOME_DEPTH_HANDOFF_ID} frame size mismatch`);
+assert(homeDepthHandoff.margin === 2 && homeDepthHandoff.spacing === 4, `${HOME_DEPTH_HANDOFF_ID} frame gutter mismatch`);
+assert(homeDepthHandoff.frameCount === 8, `${HOME_DEPTH_HANDOFF_ID} frame count mismatch`);
+assert(homeDepthHandoff.framesPerSecond === 5, `${HOME_DEPTH_HANDOFF_ID} playback rate mismatch`);
+assert(homeDepthHandoff.origin.x === -160 && homeDepthHandoff.origin.y === -160, `${HOME_DEPTH_HANDOFF_ID} origin mismatch`);
+assert(homeDepthHandoff.placement === "relative to the home top-left, above generic water and below the home island", `${HOME_DEPTH_HANDOFF_ID} placement mismatch`);
+assert(homeDepthHandoff.role === "selected asymmetric Bahamian sand-shelf depth handoff; presentation-only", `${HOME_DEPTH_HANDOFF_ID} role mismatch`);
+assert(homeDepthHandoff.alpha === true, `${HOME_DEPTH_HANDOFF_ID} must retain alpha`);
 
 const reportByFile = new Map(report.outputs.map((output) => [output.filename, output]));
 for (const output of report.outputs) {
@@ -63,6 +90,7 @@ const expectedFrames = new Map([
   ["world.water.depth-transitions", 188],
   ["world.water.surface-overlays", 32],
   ["world.water.home-shore-overlay", 8],
+  [HOME_DEPTH_HANDOFF_ID, 8],
 ]);
 for (const image of manifest.images) {
   const filename = image.file.replace(/^runtime\//u, "");

@@ -686,12 +686,21 @@ visible canonical surface advances at most once on a discrete presentation
 frame, and additional aliases cause no redraw. The base texture exposes its
 exact chunk-sized frame one pixel inside an opaque extruded gutter so linear
 sampling cannot reveal a backdrop join between periodic images; the animated
-surface texture remains exact-sized. The surface plane composes
-directional depth transitions, glints, currents, and rough-water/whitecap
-accents. A lifted ocean rectangle covers deferred gaps. Every visible periodic
-image of the exact home footprint may own an aligned shoreline-overlay alias;
-the aliases share package frames and follow the same active lifetime. Reduced
-motion leaves cached static frames in place. Knowledge, fog, risk, and route
+surface texture remains exact-sized. The surface plane composes directional
+depth transitions, glints, currents, and rough-water/whitecap accents. A lifted
+ocean rectangle covers deferred gaps.
+
+Every visible periodic image of the expanded home footprint may own one aligned
+home-water alias. In the authored-home footprint and its one-tile collar,
+ordinary chunk water is presented as deep and its coarse directional transition
+and coastal caustic are suppressed beneath that alias; authoritative terrain
+and generated layout facts do not change. The alias pairs an `800 x 800`
+bathymetry handoff below the home art with the separate `480 x 480` shoreline
+animation above it. The handoff has a five-tile margin, an asymmetric shelf
+whose broadest reach is at least three times its narrowest, a curved harbor
+channel, detached substrate and sandbar patches, and a broken multi-stage
+alpha/color ramp. Both images share one periodic lifetime and frame phase.
+Reduced motion leaves frame zero in place. Knowledge, fog, risk, and route
 renderers remain later layers and do not feed water classification.
 
 Fishing-ground presentation uses the fog-filtered read model. Hidden-quality
