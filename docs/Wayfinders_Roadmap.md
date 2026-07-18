@@ -56,9 +56,10 @@ water system are implemented. No further production-presentation milestone is
 currently proposed.
 
 The Voyage Sense thread and its supply commitments are implemented through
-`GP-5.2`. Remaining audio acceptance follow-up requires no new runtime scope;
-the production water system is complete through `WTR-2.6`. Great Hall concept
-and planning work is complete. The product owner accepted the
+`GP-5.2`. The proposed `GP-6` continuous-world conversion is the next gameplay
+candidate track. Remaining audio acceptance follow-up requires no new runtime
+scope; the production water system is complete through `WTR-2.6`. Great Hall
+concept and planning work is complete. The product owner accepted the
 `GR-5.2` view-only approval workspace and recorded **Go** on 2026-07-16. The
 shared presentation contract, renderer, fixture, game adapter, and bounded era
 integration in `GR-5.3` are implemented.
@@ -119,6 +120,63 @@ its scope and acceptance evidence are archived.
 implemented behavior is owned by the technical design and its acceptance
 evidence is archived. The rack intentionally contains no visible words or
 numbers; exact quantities remain available to assistive technology.
+
+## Continuous global world
+
+### GP-6 — Continuous global world
+
+Status: proposed, not started, and not authorized.
+
+Replace the generated game's hard world boundary with a finite, two-axis
+wrapping topology. West/east and north/south become ordinary neighbours, so the
+ship can circumnavigate continuously through every seam and corner. This is a
+top-down toroidal world that feels globe-like; it is not a spherical projection
+and does not add poles, latitude distortion, or an infinite world.
+
+The implementation sequence is:
+
+1. `GP-6.1` — establish the explicit gameplay/asset topology contexts,
+   canonical and lifted coordinate contract, wrapped query primitives,
+   deterministic manifest identity, and `P0`/`P1`/`P2` baselines;
+2. `GP-6.2` — make physical movement, coarse/fine collision, graph edges,
+   supported connectivity, forward range, return paths, and travel segments
+   cross seams without a synthetic boundary or long canonical jump;
+3. `GP-6.3` — remove the generator's privileged edge band, support
+   seam-crossing authored and procedural footprints, and make analysis,
+   generated water facts, connectivity, coastlines, and spatial indexes
+   periodic and deduplicated;
+4. `GP-6.4` — move sight, knowledge, provisions, feature placement and
+   interactions, expeditions, docking, wrecks, and completion onto the shared
+   periodic topology with exactly-once mutations and events;
+5. `GP-6.5` — use a continuous lifted camera and periodic image entries through
+   the one bounded `ActiveChunkSet` for production water, terrain, authored art,
+   overlays, Voyage Sense, clouds, markers, ship/wake, diagnostics, and input;
+   and
+6. `GP-6.6` — close deterministic circumnavigation journeys, named-profile
+   performance and resource budgets, full verification, browser acceptance,
+   current-state documentation, and archived evidence.
+
+```mermaid
+flowchart LR
+    B["Current bounded gameplay world"] --> G61["GP-6.1 topology contract"]
+    G61 --> G62["GP-6.2 movement and navigation"]
+    G62 --> G63["GP-6.3 generation and spatial world"]
+    G63 --> G64["GP-6.4 gameplay integration"]
+    G64 --> G65["GP-6.5 continuous presentation"]
+    G65 --> G66["GP-6.6 acceptance and closeout"]
+```
+
+The detailed topology decisions, subsystem tasks, test assignment, performance
+budgets, risks, and acceptance gates are defined in
+`Wayfinders_Continuous_World_Milestone.md`. Generated gameplay worlds wrap on
+both axes; isolated asset sea trials and authored collision-validation grids
+remain explicitly bounded. The six gates are one coordinated conversion, not a
+user-facing finite/toroidal game-mode choice. The implemented `WTR-2` layout and
+renderer are migrated inside `GP-6`; they are not replaced by another water
+track. `GP-6.2` proves traversal against explicit worlds; production generation
+does not adopt that graph until `GP-6.3` replaces its finite-edge acceptance.
+The gates through `GP-6.5` are checkpoints on one integration branch and do not
+land as separately supported runtime configurations.
 
 ## Audio presentation
 
@@ -185,7 +243,7 @@ archived in `Wayfinders_Roadmap_Archive.md`.
 ## Authorization boundary
 
 WTR-1.0 through WTR-1.5 and WTR-2.0 through WTR-2.6 are complete. No later water
-milestone is authorized. Any later gameplay or production-asset milestone still
-requires explicit user authorization. Do not implement gameplay saving; it may
-return only through an explicitly authorized milestone designed for the game
-that exists at that time.
+milestone is authorized. `GP-6` and any later gameplay or production-asset
+milestone require explicit user authorization. Do not implement gameplay
+saving; it may return only through an explicitly authorized milestone designed
+for the game that exists at that time.

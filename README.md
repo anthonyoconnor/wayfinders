@@ -109,6 +109,8 @@ checking and the automated test suite, and creates the production build.
   review, promotion, and repository-transaction contracts.
 - [Asset production quickstart](docs/ASSET_PRODUCTION_QUICKSTART.md) is the
   current operator workflow.
-- [Water-system proposal](docs/Wayfinders_Water_System_Milestone.md) owns the
-  detailed design and acceptance criteria for that proposed presentation track.
+- [Water-system design](docs/Wayfinders_Water_System_Milestone.md) retains the
+  detailed design and acceptance criteria for the implemented water track.
+- [Continuous-world proposal](docs/Wayfinders_Continuous_World_Milestone.md)
+  owns the detailed topology design and acceptance gates for proposed `GP-6`.
 - [Agent guide](AGENTS.md) owns development process and documentation rules.
