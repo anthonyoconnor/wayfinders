@@ -587,12 +587,14 @@ Cloud atmosphere is an independent presentation layer. Each candidate owns a
 paired shadow at depth `51` and cloud at depth `52`, above map art, knowledge,
 the ship, feature markers, and Voyage Sense guidance but below diagnostics,
 prompts, and UI. The shadow reuses the candidate silhouette and reflection with
-a dark tint, pronounced southeast offset, reduced opacity, and flattened
-vertical scale; the increased separation establishes height immediately. It
-moves in lockstep with the cloud and can cross sea, terrain, or the ship.
-Cloud sprites sample a seeded four-tone white-to-storm-blue palette and a wider
-`0.22` through `0.50` scale range. Their `0.34` through `0.52` opacity range
-keeps silhouettes readable while preserving a `0.55` package ceiling.
+a dark navy tint, a `56 x 42`-pixel southeast offset, a `0.68` opacity
+multiplier, and a broad `1.08 x 0.58` scale; the separation and flattened
+silhouette establish height immediately. It moves in lockstep with the cloud
+and can cross sea, terrain, or the ship. Cloud sprites use four fuller, top-lit
+pixel-art cumulus formations with detached puffs and sample a seeded near-white
+ivory-to-cool-blue palette across the existing `0.22` through `0.50` scale
+range. Their `0.88` through `0.98` opacity range preserves the source art's
+dimensional highlights and blue-gray undersides over the ocean.
 
 Each referenced canonical chunk defaults to six deterministic candidate slots
 distributed by a stable low-discrepancy sequence; increasing frequency adds
@@ -602,7 +604,7 @@ island, guaranteeing the default opening composition without adding another
 resource class, then fills any remaining frequency with ordinary slots. The world seed,
 chunk, and candidate slot choose scale, horizontal reflection, opacity, drift
 amplitude, drift period, direction, colour, position, and phase. The three
-opening slots deliberately use light, middle, and darkest tones together with
+opening slots deliberately use white, pale-blue, and coolest tones together with
 small, middle, and large scales. Candidate creation, motion, phase, and route
 progress are independent of fog. Each existing pair continues moving while
 hidden and is never rebuilt merely because knowledge or live sight changes.

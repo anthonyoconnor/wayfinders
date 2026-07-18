@@ -2,8 +2,8 @@
   "contractVersion": 1,
   "assetId": "presentation.clouds.primary",
   "kind": "cloud-atmosphere",
-  "sourceAssetId": "generated.cloud-atmosphere.source.v1",
-  "runtimeRevision": 4,
+  "sourceAssetId": "generated.cloud-atmosphere.source.v2",
+  "runtimeRevision": 5,
   "image": {
     "imageId": "presentation.clouds.primary.frames",
     "textureKey": "wayfinders:image:cloud-atmosphere",
@@ -12,23 +12,23 @@
     "frameSize": { "width": 627, "height": 627 },
     "frameCount": 4,
     "opaqueBounds": [
-      { "x": 77, "y": 264, "width": 498, "height": 89 },
-      { "x": 110, "y": 190, "width": 378, "height": 217 },
-      { "x": 70, "y": 265, "width": 497, "height": 120 },
-      { "x": 73, "y": 217, "width": 484, "height": 217 }
+      { "x": 56, "y": 248, "width": 536, "height": 192 },
+      { "x": 108, "y": 161, "width": 450, "height": 314 },
+      { "x": 66, "y": 199, "width": 537, "height": 199 },
+      { "x": 34, "y": 156, "width": 543, "height": 291 }
     ]
   },
   "presentation": {
     "depth": 52,
     "candidatesPerChunk": 6,
     "chunkDensity": 1,
-    "opacity": { "minimum": 0.34, "maximum": 0.52 },
+    "opacity": { "minimum": 0.88, "maximum": 0.98 },
     "scale": { "minimum": 0.22, "maximum": 0.5 },
     "cloudTintsRgb": [
       { "red": 255, "green": 255, "blue": 255 },
-      { "red": 215, "green": 232, "blue": 237 },
-      { "red": 158, "green": 186, "blue": 197 },
-      { "red": 102, "green": 136, "blue": 149 }
+      { "red": 247, "green": 249, "blue": 246 },
+      { "red": 232, "green": 240, "blue": 243 },
+      { "red": 212, "green": 225, "blue": 232 }
     ],
     "driftAmplitudePixels": { "minimum": 80, "maximum": 128 },
     "driftPeriodSeconds": { "minimum": 120, "maximum": 180 },
@@ -48,10 +48,10 @@
     },
     "shadow": {
       "depth": 51,
-      "offsetPixels": { "x": 84, "y": 56 },
-      "opacityMultiplier": 0.32,
-      "scale": { "x": 0.9, "y": 0.5 },
-      "tintRgb": { "red": 24, "green": 55, "blue": 68 }
+      "offsetPixels": { "x": 56, "y": 42 },
+      "opacityMultiplier": 0.68,
+      "scale": { "x": 1.08, "y": 0.58 },
+      "tintRgb": { "red": 11, "green": 41, "blue": 56 }
     }
   },
   "variants": [

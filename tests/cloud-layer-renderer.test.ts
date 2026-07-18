@@ -238,18 +238,19 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     });
   });
 
-  it("validates four distinct runtime frames and preloads the declared sheet", () => {
+  it("validates four distinct runtime frames and the reference-led presentation", () => {
     expect(validateCloudAssetPackage(CLOUD_ASSET_PACKAGE as never)).toBe(CLOUD_ASSET_PACKAGE);
     expect(CLOUD_ASSET_PACKAGE.variants).toHaveLength(4);
     expect(CLOUD_ASSET_PACKAGE.image.opaqueBounds).toHaveLength(4);
     expect(new Set(CLOUD_ASSET_PACKAGE.variants).size).toBe(4);
     expect(CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk).toBe(6);
-    expect(CLOUD_ASSET_PACKAGE.presentation.opacity.minimum).toBeGreaterThanOrEqual(0.3);
-    expect(CLOUD_ASSET_PACKAGE.presentation.opacity.maximum).toBeLessThanOrEqual(0.55);
+    expect(CLOUD_ASSET_PACKAGE.presentation.opacity.minimum).toBeGreaterThanOrEqual(0.85);
+    expect(CLOUD_ASSET_PACKAGE.presentation.opacity.maximum).toBeGreaterThanOrEqual(0.95);
+    expect(CLOUD_ASSET_PACKAGE.presentation.opacity.maximum).toBeLessThanOrEqual(1);
     expect(CLOUD_ASSET_PACKAGE.presentation.scale.minimum).toBeLessThanOrEqual(0.22);
     expect(CLOUD_ASSET_PACKAGE.presentation.scale.maximum).toBeGreaterThanOrEqual(0.5);
     expect(CLOUD_ASSET_PACKAGE.presentation.cloudTintsRgb).toHaveLength(4);
-    expect(CLOUD_ASSET_PACKAGE.presentation.cloudTintsRgb.at(-1)!.red).toBeLessThan(128);
+    expect(CLOUD_ASSET_PACKAGE.presentation.cloudTintsRgb.at(-1)!.red).toBeGreaterThanOrEqual(200);
     expect(CLOUD_ASSET_PACKAGE.presentation.driftAmplitudePixels.minimum).toBeGreaterThanOrEqual(80);
     expect(CLOUD_ASSET_PACKAGE.presentation.driftPeriodSeconds.maximum).toBeLessThanOrEqual(180);
     expect(CLOUD_ASSET_PACKAGE.presentation.openingClouds.offsetPixels).toHaveLength(3);
@@ -257,8 +258,15 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(CLOUD_ASSET_PACKAGE.presentation.routeFadeFraction).toBeGreaterThan(0);
     expect(CLOUD_ASSET_PACKAGE.presentation.shadow.depth).toBeGreaterThan(50);
     expect(CLOUD_ASSET_PACKAGE.presentation.shadow.depth).toBeLessThan(CLOUD_ASSET_PACKAGE.presentation.depth);
-    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.offsetPixels.x).toBeGreaterThanOrEqual(80);
-    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.offsetPixels.y).toBeGreaterThanOrEqual(50);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.offsetPixels.x).toBeGreaterThanOrEqual(48);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.offsetPixels.x).toBeLessThanOrEqual(64);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.offsetPixels.y).toBeGreaterThanOrEqual(36);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.offsetPixels.y).toBeLessThanOrEqual(48);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.opacityMultiplier).toBeGreaterThanOrEqual(0.65);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.scale.x).toBeGreaterThan(1);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.scale.y).toBeGreaterThan(0.5);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.scale.y).toBeLessThanOrEqual(0.65);
+    expect(CLOUD_ASSET_PACKAGE.presentation.shadow.tintRgb.red).toBeLessThan(24);
 
     const calls: unknown[][] = [];
     preloadCloudAsset({
