@@ -12,7 +12,7 @@ import {
   waterTypeIndex,
 } from "./WaterTypeCatalog";
 
-export const WATER_LAYOUT_VERSION = "wayfinders-water-layout-v1";
+export const WATER_LAYOUT_VERSION = "wayfinders-water-layout-v2";
 
 export interface WaterLayoutChunkSnapshot {
   readonly chunkX: number;
@@ -110,6 +110,7 @@ export class WaterLayoutPlanner {
     const variants = new Uint8Array(tileCount);
     const phases = new Uint8Array(tileCount);
     const deep = waterTypeIndex(this.catalog, WATER_TYPE_IDS.deep);
+    const coastal = waterTypeIndex(this.catalog, WATER_TYPE_IDS.coastal);
     const islandsById = new Map(islands.map((island) => [island.id, island]));
     const orderedBaseTypes = this.catalog.types
       .filter(({ role, automaticallyPlaced }) => role === "base" && automaticallyPlaced)
@@ -138,10 +139,27 @@ export class WaterLayoutPlanner {
       }
     }
 
+    reserveDeepCoastalTransitionCollar(
+      baseTypes,
+      analysis,
+      grid.width,
+      grid.height,
+      deep,
+      coastal,
+    );
+
     for (let y = 0; y < grid.height; y++) {
       for (let x = 0; x < grid.width; x++) {
         const index = y * grid.width + x;
-        transitions[index] = transitionMask(baseTypes, grid.width, grid.height, x, y);
+        transitions[index] = transitionMask(
+          baseTypes,
+          grid.width,
+          grid.height,
+          x,
+          y,
+          deep,
+          coastal,
+        );
       }
     }
 
@@ -157,6 +175,41 @@ export class WaterLayoutPlanner {
       phases,
     );
   }
+}
+
+/**
+ * The current blend sheet only supports deep-to-coastal transitions. Preserve
+ * a one-tile deep host collar when a contextual far-water profile such as
+ * abyss reaches an island, so every coastal shelf still receives that blend.
+ */
+function reserveDeepCoastalTransitionCollar(
+  base: Uint8Array,
+  analysis: Readonly<WorldAnalysisIndex>,
+  width: number,
+  height: number,
+  deepIndex: number,
+  coastalIndex: number,
+): void {
+  const replace = new Uint8Array(base.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const index = y * width + x;
+      if (analysis.terrainAt(index) !== TerrainType.DeepOcean || base[index] === coastalIndex) continue;
+      for (let dy = -1; dy <= 1 && replace[index] === 0; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          if (base[ny * width + nx] === coastalIndex) {
+            replace[index] = 1;
+            break;
+          }
+        }
+      }
+    }
+  }
+  for (let index = 0; index < base.length; index++) if (replace[index] !== 0) base[index] = deepIndex;
 }
 
 function placementMatches(
@@ -261,8 +314,23 @@ function regionContains(
   });
 }
 
-function transitionMask(base: Uint8Array, width: number, height: number, x: number, y: number): number {
+/**
+ * The checked-in transition atlas is directional: it starts as deep water and
+ * introduces coastal pixels only along the flagged edges. It is not a generic
+ * alpha mask, so applying it to the coastal side or to unrelated profile pairs
+ * would replace the correct base with an opaque deep/coastal square.
+ */
+function transitionMask(
+  base: Uint8Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  deepIndex: number,
+  coastalIndex: number,
+): number {
   const own = base[y * width + x]!;
+  if (own !== deepIndex) return 0;
   const neighbors = [
     [0, -1, 1], [1, 0, 2], [0, 1, 4], [-1, 0, 8],
     [1, -1, 16], [1, 1, 32], [-1, 1, 64], [-1, -1, 128],
@@ -271,7 +339,8 @@ function transitionMask(base: Uint8Array, width: number, height: number, x: numb
   for (const [dx, dy, bit] of neighbors) {
     const nx = x + dx;
     const ny = y + dy;
-    if (nx < 0 || ny < 0 || nx >= width || ny >= height || base[ny * width + nx] !== own) mask |= bit;
+    if (nx >= 0 && ny >= 0 && nx < width && ny < height
+      && base[ny * width + nx] === coastalIndex) mask |= bit;
   }
   if ((mask & 3) !== 3) mask &= ~16;
   if ((mask & 6) !== 6) mask &= ~32;

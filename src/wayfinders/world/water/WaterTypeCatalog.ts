@@ -1,7 +1,7 @@
 import { TerrainType } from "../TileData";
 
 export const WATER_TYPE_CATALOG_VERSION = 1 as const;
-export const WATER_TYPE_CATALOG_FINGERPRINT = "wayfinders-water-types-v1";
+export const WATER_TYPE_CATALOG_FINGERPRINT = "wayfinders-water-types-v2";
 
 export const WATER_TYPE_IDS = Object.freeze({
   abyss: "abyss",
@@ -73,7 +73,9 @@ const DEFINITIONS: readonly WaterTypeDefinitionV1[] = [
     label: "Coastal",
     role: "base",
     authority: "terrain",
-    eligibleTerrain: [TerrainType.ShallowOcean],
+    // Blocked island cells still need a coastal underpaint because authored
+    // shoreline art contains transparent pixels around its organic silhouette.
+    eligibleTerrain: [TerrainType.ShallowOcean, TerrainType.Rock, TerrainType.Land],
     priority: 30,
     placementStrategy: "island-shelf",
     automaticallyPlaced: true,

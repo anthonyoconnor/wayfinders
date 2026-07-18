@@ -4,12 +4,17 @@ import {
   type WaterAssetWorkspaceModule,
 } from "../workspaces/AssetWorkspace";
 import { resolveAuthoredHomeIslandPlacement } from "../AuthoredHomeIsland";
+import {
+  AVAILABLE_AUTHORED_ISLAND_CATALOG,
+  AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+} from "../AssetLibraryCatalog";
 import { TerrainType } from "../../world/TileData";
 import { WorldGenerator, type GeneratedWorld } from "../../world/WorldGenerator";
 import { WATER_TYPE_IDS } from "../../world/water";
-import { WATER_ASSET_URLS } from "./WaterAssetContract";
+import { WATER_ASSET_URLS, WATER_TRANSITION_MASKS } from "./WaterAssetContract";
 
 const WATER_STATIC_URL = WATER_ASSET_URLS.static;
+const WATER_TRANSITIONS_URL = WATER_ASSET_URLS.transitions;
 const WATER_OVERLAYS_URL = WATER_ASSET_URLS.overlays;
 const PLAYER_BOAT_URL = "/assets/gr1/images/player-boat.png";
 const PLAYER_WAKE_URL = "/assets/gr1/images/player-wake.png";
@@ -37,14 +42,15 @@ const PROFILES = Object.freeze([
 type WaterProfileId = (typeof PROFILES)[number]["id"];
 type ShoalStrength = "lean" | "steady" | "rich";
 
-interface IslandPlacement {
-  readonly id: string;
-  readonly label: string;
+interface PreviewAuthoredIslandLayer {
+  readonly assetId: string;
   readonly url: string;
-  readonly x: number;
-  readonly y: number;
-  readonly width: number;
-  readonly height: number;
+  readonly opacity: number;
+  readonly blendMode: "normal" | "multiply" | "screen" | "add";
+}
+
+interface LoadedAuthoredIslandLayer extends PreviewAuthoredIslandLayer {
+  readonly image: HTMLImageElement;
 }
 
 interface ShoalPlacement {
@@ -80,9 +86,17 @@ interface WaterWorldModel {
   readonly shore: readonly ShorePoint[];
 }
 
-const ISLANDS: readonly IslandPlacement[] = Object.freeze([
-  { id: "home", label: "Home Island", url: HOME_ISLAND_URL, x: 56, y: 58, width: 23, height: 23 },
-]);
+const AUTHORED_ISLAND_LAYERS: readonly PreviewAuthoredIslandLayer[] = Object.freeze(
+  AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG.islands.flatMap((island) => island.layers.map((layer) => ({
+    assetId: island.assetId,
+    url: layer.url,
+    opacity: layer.opacity,
+    blendMode: layer.blendMode,
+  }))),
+);
+const TRANSITION_MASK_INDEX = new Map<number, number>(
+  WATER_TRANSITION_MASKS.map((mask, index) => [mask, index]),
+);
 
 const SHOAL_STRENGTHS: readonly ShoalStrengthVisual[] = Object.freeze([
   {
@@ -383,25 +397,39 @@ export class WaterPreviewScene extends Phaser.Scene {
     if (!canvas || !motionCanvas) return;
     if (this.animationFrame !== undefined) cancelAnimationFrame(this.animationFrame);
     this.animationFrame = undefined;
-    const [staticSheet, overlaySheet, boat, wake, ...prototypeImages] = await Promise.all([
+    const [staticSheet, transitionSheet, overlaySheet, boat, wake, homeImage, ...previewImages] = await Promise.all([
       loadPreviewImage(WATER_STATIC_URL),
+      loadPreviewImage(WATER_TRANSITIONS_URL),
       loadPreviewImage(WATER_OVERLAYS_URL),
       loadPreviewImage(PLAYER_BOAT_URL),
       loadPreviewImage(PLAYER_WAKE_URL),
-      ...ISLANDS.map(({ url }) => loadPreviewImage(url)),
+      loadPreviewImage(HOME_ISLAND_URL),
+      ...AUTHORED_ISLAND_LAYERS.map(({ url }) => loadPreviewImage(url)),
       ...SHOAL_STRENGTHS.map(({ url }) => loadPreviewImage(url)),
     ]);
     if (revision !== this.renderRevision || !canvas.isConnected || !motionCanvas.isConnected) return;
     const context = canvas.getContext("2d");
     const motionContext = motionCanvas.getContext("2d");
     if (!context || !motionContext) return;
-    const islandImages = prototypeImages.slice(0, ISLANDS.length);
-    const shoalImages = prototypeImages.slice(ISLANDS.length);
+    const authoredIslandImages: readonly LoadedAuthoredIslandLayer[] = AUTHORED_ISLAND_LAYERS.map(
+      (layer, index) => ({ ...layer, image: previewImages[index]! }),
+    );
+    const shoalImages = previewImages.slice(AUTHORED_ISLAND_LAYERS.length);
     const model = buildWorldModel(this.worldSeed);
     context.imageSmoothingEnabled = false;
     motionContext.imageSmoothingEnabled = false;
     const cell = this.worldCellSize;
-    drawStaticWorld(context, staticSheet, boat, wake, islandImages, model, cell, this.showOverlays);
+    drawStaticWorld(
+      context,
+      staticSheet,
+      boat,
+      wake,
+      homeImage,
+      authoredIslandImages,
+      model,
+      cell,
+      this.showOverlays,
+    );
 
     const startedAt = performance.now();
     let lastRenderedAt = Number.NEGATIVE_INFINITY;
@@ -415,6 +443,7 @@ export class WaterPreviewScene extends Phaser.Scene {
       lastRenderedAt = now;
       drawWorldMotion(
         motionContext,
+        transitionSheet,
         overlaySheet,
         shoalImages,
         model,
@@ -446,7 +475,7 @@ export class WaterPreviewScene extends Phaser.Scene {
 }
 
 function buildWorldModel(seed: number): WaterWorldModel {
-  const generated = new WorldGenerator().generate(seed);
+  const generated = new WorldGenerator(undefined, AVAILABLE_AUTHORED_ISLAND_CATALOG).generate(seed);
   const land = new Uint8Array(WORLD_GRID_SIZE * WORLD_GRID_SIZE);
   const landCells: Array<readonly [number, number]> = [];
   for (let y = 0; y < WORLD_GRID_SIZE; y++) {
@@ -507,7 +536,8 @@ function drawStaticWorld(
   staticSheet: HTMLImageElement,
   boat: HTMLImageElement,
   wake: HTMLImageElement,
-  islandImages: readonly HTMLImageElement[],
+  homeImage: HTMLImageElement,
+  authoredIslandImages: readonly LoadedAuthoredIslandLayer[],
   model: WaterWorldModel,
   cell: number,
   showOverlays: boolean,
@@ -544,10 +574,17 @@ function drawStaticWorld(
     }
   }
 
+  const authoredIslandIds = new Set(model.generated.islands
+    .filter(({ sourceKind, authoredAssetId }) => sourceKind === "authored"
+      && authoredAssetId !== undefined
+      && authoredIslandImages.some(({ assetId }) => assetId === authoredAssetId))
+    .map(({ id }) => id));
   context.fillStyle = "#779459";
   for (let y = 0; y < WORLD_GRID_SIZE; y++) {
     for (let x = 0; x < WORLD_GRID_SIZE; x++) {
       const terrain = model.generated.grid.getTerrain(x, y);
+      const islandId = model.generated.grid.getIslandId(x, y);
+      if (islandId === 0 || authoredIslandIds.has(islandId)) continue;
       if (terrain === TerrainType.Land) context.fillRect(x * cell, y * cell, cell, cell);
       else if (terrain === TerrainType.Rock) {
         context.fillStyle = "#626e6e";
@@ -556,11 +593,25 @@ function drawStaticWorld(
       }
     }
   }
-  const home = islandImages[0];
-  if (home) {
-    const placement = resolveAuthoredHomeIslandPlacement({ x: WORLD_GRID_SIZE / 2, y: WORLD_GRID_SIZE / 2 });
-    context.drawImage(home, placement.topLeft.x * cell, placement.topLeft.y * cell, 15 * cell, 15 * cell);
+  for (const island of model.generated.islands) {
+    if (island.sourceKind !== "authored" || !island.authoredAssetId) continue;
+    const layers = authoredIslandImages.filter(({ assetId }) => assetId === island.authoredAssetId);
+    for (const layer of layers) {
+      context.save();
+      context.globalAlpha = clamp01(layer.opacity);
+      context.globalCompositeOperation = canvasBlendMode(layer.blendMode);
+      context.drawImage(
+        layer.image,
+        island.bounds.minX * cell,
+        island.bounds.minY * cell,
+        (island.bounds.maxX - island.bounds.minX + 1) * cell,
+        (island.bounds.maxY - island.bounds.minY + 1) * cell,
+      );
+      context.restore();
+    }
   }
+  const placement = resolveAuthoredHomeIslandPlacement({ x: WORLD_GRID_SIZE / 2, y: WORLD_GRID_SIZE / 2 });
+  context.drawImage(homeImage, placement.topLeft.x * cell, placement.topLeft.y * cell, 15 * cell, 15 * cell);
 
   const boatSize = cell * 4;
   const boatX = cell * 44;
@@ -573,6 +624,7 @@ function drawStaticWorld(
 
 function drawWorldMotion(
   context: CanvasRenderingContext2D,
+  transitionSheet: HTMLImageElement,
   overlaySheet: HTMLImageElement,
   shoalImages: readonly HTMLImageElement[],
   model: WaterWorldModel,
@@ -582,6 +634,23 @@ function drawWorldMotion(
 ): void {
   context.clearRect(0, 0, context.canvas.width, context.canvas.height);
   const frame = Math.floor(seconds * 7) % 8;
+  for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+    for (let x = 0; x < WORLD_GRID_SIZE; x++) {
+      const phase = (frame + model.generated.water.phaseAt(x, y)) % 8;
+      const mask = model.generated.water.transitionMaskAt(x, y);
+      const maskIndex = TRANSITION_MASK_INDEX.get(mask);
+      if (mask !== 0 && maskIndex !== undefined) {
+        drawTransitionFrame(
+          context,
+          transitionSheet,
+          (phase % 4) * WATER_TRANSITION_MASKS.length + maskIndex,
+          x * cell,
+          y * cell,
+          cell,
+        );
+      }
+    }
+  }
   if (showOverlays) {
     drawWind(context, model, cell, seconds);
     for (let y = 0; y < WORLD_GRID_SIZE; y++) {
@@ -788,6 +857,39 @@ function drawOverlayFrame(
     size,
   );
   context.globalAlpha = 1;
+}
+
+function drawTransitionFrame(
+  context: CanvasRenderingContext2D,
+  sheet: HTMLImageElement,
+  frame: number,
+  x: number,
+  y: number,
+  size: number,
+): void {
+  const columns = WATER_TRANSITION_MASKS.length;
+  context.drawImage(
+    sheet,
+    SHEET_MARGIN + (frame % columns) * SHEET_PITCH,
+    SHEET_MARGIN + Math.floor(frame / columns) * SHEET_PITCH,
+    TILE_SIZE,
+    TILE_SIZE,
+    x,
+    y,
+    size,
+    size,
+  );
+}
+
+function canvasBlendMode(
+  blendMode: PreviewAuthoredIslandLayer["blendMode"],
+): GlobalCompositeOperation {
+  switch (blendMode) {
+    case "multiply": return "multiply";
+    case "screen": return "screen";
+    case "add": return "lighter";
+    default: return "source-over";
+  }
 }
 
 function coordinateHash(x: number, y: number): number {

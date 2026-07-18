@@ -6,6 +6,7 @@ import {
 } from "../src/wayfinders/world/AuthoredIslandCatalog";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
 import { serializeWorldManifestV1 } from "../src/wayfinders/world/manifest";
+import { TerrainType } from "../src/wayfinders/world/TileData";
 import { createWorldProfileConfig } from "./fixtures/worldProfiles";
 
 function entry(index: number): Readonly<AuthoredIslandCatalogEntry> {
@@ -25,6 +26,17 @@ function entry(index: number): Readonly<AuthoredIslandCatalogEntry> {
 
 function catalog(entries: readonly Readonly<AuthoredIslandCatalogEntry>[]) {
   return validateAuthoredIslandCatalog({ revision: "catalog-test", islands: entries });
+}
+
+function sparseEntry(): Readonly<AuthoredIslandCatalogEntry> {
+  return {
+    assetId: "production.island.sparse-silhouette",
+    name: "Sparse Silhouette",
+    revision: "revision-sparse",
+    gridWidth: 7,
+    gridHeight: 7,
+    solidSubcells: [{ x: 0, y: 12 }, { x: 12, y: 12 }],
+  };
 }
 
 describe("GR-4.3 authored-island world planning", () => {
@@ -65,5 +77,31 @@ describe("GR-4.3 authored-island world planning", () => {
     expect(generated.grid.getFineCollisionMask(island.bounds.minX, island.bounds.minY)).toBe(0b0000_0000_0000_0011);
     expect(generated.grid.getFineCollisionMask(island.bounds.minX + 1, island.bounds.minY + 1)).toBe(1);
     expect(generated.grid.getFineCollisionMask(island.bounds.minX + 1, island.bounds.minY)).toBe(0);
+  });
+
+  it("leaves distant transparent canvas cells as ocean and grows only a bounded shelf", () => {
+    const config = createWorldProfileConfig("P0");
+    const authored = sparseEntry();
+    const generated = new WorldGenerator(config, catalog([authored])).generate(7_003);
+    const island = generated.islands.find(({ authoredAssetId }) => authoredAssetId === authored.assetId);
+    if (!island) throw new Error("Expected the sparse authored island in the generated world");
+
+    const solid = { x: island.bounds.minX + 3, y: island.bounds.minY + 3 };
+    const shelf = { x: solid.x - 1, y: solid.y };
+    const exteriorShelf = { x: island.bounds.minX - 1, y: solid.y };
+    const transparentCorner = { x: island.bounds.minX, y: island.bounds.minY };
+    expect(generated.grid.getTerrain(solid.x, solid.y)).toBe(TerrainType.Land);
+    expect(generated.grid.getIslandId(solid.x, solid.y)).toBe(island.id);
+    expect(generated.grid.getTerrain(shelf.x, shelf.y)).toBe(TerrainType.ShallowOcean);
+    expect(generated.grid.getIslandId(shelf.x, shelf.y)).toBe(island.id);
+    expect(generated.grid.getTerrain(exteriorShelf.x, exteriorShelf.y)).toBe(TerrainType.ShallowOcean);
+    expect(generated.grid.getIslandId(exteriorShelf.x, exteriorShelf.y)).toBe(-1);
+    expect(generated.grid.getTerrain(transparentCorner.x, transparentCorner.y)).toBe(TerrainType.DeepOcean);
+    expect(generated.grid.getIslandId(transparentCorner.x, transparentCorner.y)).toBe(-1);
+    expect(generated.grid.getFineCollisionMask(transparentCorner.x, transparentCorner.y)).toBeUndefined();
+
+    const footprintArea = generated.analysis.getIslandIndices(island.id).length;
+    expect(footprintArea).toBeGreaterThan(1);
+    expect(footprintArea).toBeLessThan(7 * 7);
   });
 });

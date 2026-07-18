@@ -109,6 +109,7 @@ const PROFILE_NAMESPACE = 3_011;
 const SHAPE_NAMESPACE = 5_009;
 const TERRAIN_NAMESPACE = 7_001;
 const AUTHORED_SELECTION_NAMESPACE = 8_191;
+const AUTHORED_SHELF_NAMESPACE = 9_173;
 const TWO_PI = Math.PI * 2;
 
 function lerp(from: number, to: number, amount: number): number {
@@ -569,16 +570,51 @@ export class IslandGenerator {
       const index = cellY * collision.gridWidth + cellX;
       masks[index] |= collisionSubcellBit(point.x % 4, point.y % 4);
     }
+    const exteriorEmpty = authoredExteriorEmptyCells(
+      masks,
+      collision.gridWidth,
+      collision.gridHeight,
+    );
     for (let cellY = 0; cellY < collision.gridHeight; cellY++) {
       for (let cellX = 0; cellX < collision.gridWidth; cellX++) {
         const x = island.bounds.minX + cellX;
         const y = island.bounds.minY + cellY;
         if (!grid.inBounds(x, y)) throw new RangeError(`Authored island ${island.authoredAssetId} left world bounds`);
-        const mask = masks[cellY * collision.gridWidth + cellX];
+        const index = cellY * collision.gridWidth + cellX;
+        const mask = masks[index];
+        if (mask === 0 && !authoredShelfContains(
+          masks,
+          exteriorEmpty,
+          collision.gridWidth,
+          collision.gridHeight,
+          cellX,
+          cellY,
+          island.shapeSeed,
+        )) continue;
         grid.setTerrain(x, y, mask === 0 ? TerrainType.ShallowOcean : TerrainType.Land);
         grid.setFineCollisionMask(x, y, mask);
         grid.setIslandId(x, y, island.id);
         grid.setKnowledge(x, y, KnowledgeState.Unknown, 0);
+      }
+    }
+    const shelfRadius = 2;
+    for (let cellY = -shelfRadius; cellY < collision.gridHeight + shelfRadius; cellY++) {
+      for (let cellX = -shelfRadius; cellX < collision.gridWidth + shelfRadius; cellX++) {
+        if (cellX >= 0 && cellY >= 0 && cellX < collision.gridWidth && cellY < collision.gridHeight) continue;
+        if (!authoredShelfDistanceContains(
+          masks,
+          collision.gridWidth,
+          collision.gridHeight,
+          cellX,
+          cellY,
+          island.shapeSeed,
+        )) continue;
+        const x = island.bounds.minX + cellX;
+        const y = island.bounds.minY + cellY;
+        if (!grid.inBounds(x, y) || grid.getIslandId(x, y) >= 0) continue;
+        if (grid.getTerrain(x, y) === TerrainType.DeepOcean) {
+          grid.setTerrain(x, y, TerrainType.ShallowOcean);
+        }
       }
     }
   }
@@ -731,4 +767,82 @@ export class IslandGenerator {
       }
     }
   }
+}
+
+/** Marks transparent canvas space connected to the asset bounds as exterior. */
+function authoredExteriorEmptyCells(
+  masks: Uint16Array,
+  width: number,
+  height: number,
+): Uint8Array {
+  const exterior = new Uint8Array(masks.length);
+  const queue = new Int32Array(masks.length);
+  let head = 0;
+  let tail = 0;
+  const enqueue = (x: number, y: number): void => {
+    const index = y * width + x;
+    if (masks[index] !== 0 || exterior[index] !== 0) return;
+    exterior[index] = 1;
+    queue[tail++] = index;
+  };
+  for (let x = 0; x < width; x++) {
+    enqueue(x, 0);
+    if (height > 1) enqueue(x, height - 1);
+  }
+  for (let y = 1; y + 1 < height; y++) {
+    enqueue(0, y);
+    if (width > 1) enqueue(width - 1, y);
+  }
+  while (head < tail) {
+    const index = queue[head++];
+    const x = index % width;
+    const y = Math.floor(index / width);
+    if (x > 0) enqueue(x - 1, y);
+    if (x + 1 < width) enqueue(x + 1, y);
+    if (y > 0) enqueue(x, y - 1);
+    if (y + 1 < height) enqueue(x, y + 1);
+  }
+  return exterior;
+}
+
+/**
+ * Keeps enclosed water and grows a narrow, deterministic non-uniform shelf
+ * around the collision silhouette. Far transparent canvas cells remain the
+ * ocean they were before the authored asset was stamped.
+ */
+function authoredShelfContains(
+  masks: Uint16Array,
+  exteriorEmpty: Uint8Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  shapeSeed: number,
+): boolean {
+  const index = y * width + x;
+  if (exteriorEmpty[index] === 0) return true;
+  return authoredShelfDistanceContains(masks, width, height, x, y, shapeSeed);
+}
+
+function authoredShelfDistanceContains(
+  masks: Uint16Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  shapeSeed: number,
+): boolean {
+  let nearestSquared = Number.POSITIVE_INFINITY;
+  const radius = 2;
+  for (let solidY = Math.max(0, y - radius); solidY <= Math.min(height - 1, y + radius); solidY++) {
+    for (let solidX = Math.max(0, x - radius); solidX <= Math.min(width - 1, x + radius); solidX++) {
+      if (masks[solidY * width + solidX] === 0) continue;
+      const dx = solidX - x;
+      const dy = solidY - y;
+      nearestSquared = Math.min(nearestSquared, dx * dx + dy * dy);
+    }
+  }
+  if (nearestSquared <= 2) return true;
+  return nearestSquared <= 5
+    && seededValue(shapeSeed + AUTHORED_SHELF_NAMESPACE, x, y) > 0.66;
 }

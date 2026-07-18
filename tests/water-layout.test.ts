@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { TerrainType } from "../src/wayfinders/world/TileData";
+import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
+import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import { WorldAnalysisIndex } from "../src/wayfinders/world/analysis";
 import {
   DEFAULT_WATER_TYPE_CATALOG,
+  WATER_LAYOUT_VERSION,
   WATER_TYPE_IDS,
   WATER_TYPE_CATALOG_VERSION,
   WaterLayoutPlanner,
@@ -54,6 +57,45 @@ describe("generated water layout", () => {
     }
     expect(currentTiles).toBeGreaterThan(0);
     expect(roughTiles).toBeGreaterThan(0);
+  });
+
+  it("uses the opaque transition atlas only from deep water toward coastal water", () => {
+    const grid = new WorldGrid(5, 3, 5);
+    grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    grid.setTerrain(2, 1, TerrainType.ShallowOcean);
+    grid.setTerrain(4, 1, TerrainType.Land);
+    const analysis = WorldAnalysisIndex.build(grid);
+    const layout = new WaterLayoutPlanner().plan(
+      grid,
+      analysis,
+      [],
+      {
+        waterLayout: {
+          version: WATER_LAYOUT_VERSION,
+          catalogFingerprint: DEFAULT_WATER_TYPE_CATALOG.fingerprint,
+          regions: [{
+            id: "water:abyss:test" as const,
+            typeId: WATER_TYPE_IDS.abyss,
+            strategy: "ellipse" as const,
+            seed: 9,
+            center: { x: 2, y: 1 },
+            radiusX: 20,
+            radiusY: 20,
+          }],
+        },
+      },
+      17,
+    );
+
+    expect(layout.baseTypeAt(2, 1)).toBe(WATER_TYPE_IDS.coastal);
+    expect(layout.baseTypeAt(4, 1)).toBe(WATER_TYPE_IDS.coastal);
+    expect(layout.baseTypeAt(0, 1)).toBe(WATER_TYPE_IDS.abyss);
+    expect(layout.baseTypeAt(1, 1)).toBe(WATER_TYPE_IDS.deep);
+    expect(layout.baseTypeAt(3, 1)).toBe(WATER_TYPE_IDS.deep);
+    expect(layout.transitionMaskAt(2, 1)).toBe(0);
+    expect(layout.transitionMaskAt(4, 1)).toBe(0);
+    expect(layout.transitionMaskAt(1, 1)).toBe(2);
+    expect(layout.transitionMaskAt(3, 1)).toBe(10);
   });
 
   it("accepts a new catalog type through an existing placement strategy", () => {

@@ -41,7 +41,7 @@ export interface WorldLandmarks {
   hiddenResource: GridPoint;
 }
 
-export const WORLD_GENERATOR_VERSION = "wayfinders-world-v3";
+export const WORLD_GENERATOR_VERSION = "wayfinders-world-v4";
 
 export interface PlannedWorld {
   seed: number;

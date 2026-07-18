@@ -128,8 +128,13 @@ islands only for the configured shortfall. Catalog traversal order cannot
 change selection. Authored canvas and collision bounds retain edge, home,
 starter-lane, and navigable-channel clearances.
 
-Authored island rasterization installs the complete saved `32`/`8` mask as
-collision authority; rendered pixels are not sampled. Procedural islands retain
+Authored island rasterization installs the saved `32`/`8` solid mask as
+collision authority, retains enclosed water, and derives a narrow deterministic
+non-uniform shallow shelf from that mask. The passable shelf may continue for
+up to two cells beyond a cropped art edge without extending island identity;
+transparent canvas cells beyond the shelf remain the ocean that existed before
+placement. Neither terrain nor island identity expands to the rectangular art
+bounds. Rendered pixels are not sampled. Procedural islands retain
 stable kind, size, centre, radii, rotation, shape seed, and bounds. Placement,
 shape, terrain, dossier content, and visual content use separate deterministic
 namespaces. High Island, Low Cay, Atoll, and Rocky Skerry remain procedural
@@ -556,9 +561,14 @@ World generation runs `WaterLayoutPlanner` after authoritative terrain
 rasterization and `WorldAnalysisIndex` construction. The manifest records the
 water-layout version, catalog fingerprint, and stable coherent ellipse/ribbon
 regions; `GeneratedWaterLayout` exposes chunk-addressable base IDs, overlay
-masks, canonical transition masks, variants, and phases. Reef is selected only
-from `TerrainType.Reef`; coastal and protected lagoon water are derived from
-shallow terrain and island context; deep is the ocean fallback. Abyss, current,
+masks, directional transition masks, variants, and phases. The checked-in depth
+atlas is used only on a deep host tile facing coastal water; it is never applied
+symmetrically or reused for unrelated profile pairs. A one-tile deep host collar
+keeps contextual far-water regions from bypassing that island blend. Reef is selected only from
+`TerrainType.Reef`; coastal and protected lagoon water are derived from shallow
+terrain and island context, and coastal water also underpaints blocked island
+cells so transparent shoreline pixels never reveal the ocean backdrop. Deep is
+the ocean fallback. Abyss, current,
 and rough regions are deterministic presentation facts. Brackish remains
 catalogued but is not placed without a future authoritative context. None of
 these presentation facts mutate terrain, collision, navigation, resources,
@@ -567,7 +577,7 @@ knowledge, provisions, islands, or feature outcomes.
 `WaterRenderer` consumes the scene-owned `ActiveChunkDelta`. Each active chunk
 owns one cached base canvas texture and one surface canvas texture; prefetched
 chunks remain static and only visible surface textures advance on discrete
-presentation frames. The surface plane composes canonical depth transitions,
+presentation frames. The surface plane composes directional depth transitions,
 glints, currents, and rough-water/whitecap accents. A constant ocean rectangle
 covers deferred gaps, and the exact home transform owns one aligned shoreline
 overlay while its chunk is active. Reduced motion leaves the cached static

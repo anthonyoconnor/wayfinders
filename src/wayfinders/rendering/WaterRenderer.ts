@@ -167,7 +167,7 @@ export class WaterRenderer {
     for (let y = snapshot.startY; y < snapshot.startY + snapshot.height; y++) {
       for (let x = snapshot.startX; x < snapshot.startX + snapshot.width; x++) {
         const terrain = generated.grid.getTerrain(x, y);
-        if (terrain === TerrainType.Land || terrain === TerrainType.Rock) continue;
+        const blockedIslandCell = terrain === TerrainType.Land || terrain === TerrainType.Rock;
         const localX = (x - snapshot.startX) * tileSize;
         const localY = (y - snapshot.startY) * tileSize;
         const type = generated.water.baseTypeAt(x, y);
@@ -188,19 +188,27 @@ export class WaterRenderer {
         const mask = generated.water.transitionMaskAt(x, y);
         const maskIndex = this.transitionMaskIndex.get(mask);
         if (maskIndex !== undefined && mask !== 0) {
-          this.drawFrame(surfaceContext, WATER_TEXTURE_KEYS.transitions, (phase % 4) * 47 + maskIndex, 47, localX, localY);
+          this.drawFrame(
+            surfaceContext,
+            WATER_TEXTURE_KEYS.transitions,
+            (phase % 4) * WATER_TRANSITION_MASKS.length + maskIndex,
+            WATER_TRANSITION_MASKS.length,
+            localX,
+            localY,
+          );
         }
-        if (generated.water.hasOverlay(x, y, WATER_TYPE_IDS.current)) {
+        if (!blockedIslandCell && generated.water.hasOverlay(x, y, WATER_TYPE_IDS.current)) {
           this.drawFrame(surfaceContext, WATER_TEXTURE_KEYS.overlays, 16 + phase, 8, localX, localY);
         }
-        if (generated.water.hasOverlay(x, y, WATER_TYPE_IDS.rough)) {
+        if (!blockedIslandCell && generated.water.hasOverlay(x, y, WATER_TYPE_IDS.rough)) {
           this.drawFrame(surfaceContext, WATER_TEXTURE_KEYS.overlays, 24 + phase, 8, localX, localY);
         } else if (
+          !blockedIslandCell &&
           (type === WATER_TYPE_IDS.coastal || type === WATER_TYPE_IDS.lagoon || type === WATER_TYPE_IDS.reef)
           && (x + y + variant) % 3 === 0
         ) {
           this.drawFrame(surfaceContext, WATER_TEXTURE_KEYS.overlays, 8 + phase, 8, localX, localY, 0.58);
-        } else if ((x + y + variant) % 17 === 0) {
+        } else if (!blockedIslandCell && (x + y + variant) % 17 === 0) {
           this.drawFrame(surfaceContext, WATER_TEXTURE_KEYS.overlays, phase, 8, localX, localY, 0.7);
         }
         this.tilesDrawn++;

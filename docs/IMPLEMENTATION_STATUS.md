@@ -45,8 +45,9 @@ the rebuilt ambience also awaits product-owner audition.
 WTR-2.0 through WTR-2.6 are implemented. The world manifest carries stable water
 regions and generation resolves a deterministic chunk-addressable water layout
 without changing gameplay terrain. The active-chunk `WaterRenderer` owns cached
-base and surface textures, visible-only discrete animation, canonical depth
-transitions, current/rough accents, reduced motion, and the aligned home-shore
+base and surface textures, visible-only discrete animation, directional
+deep-to-coastal transitions, coastal underpainting beneath transparent island
+edges, current/rough accents, reduced motion, and the aligned home-shore
 overlay. Fishing grounds use neutral hidden-quality presentation and lean,
 steady, or rich surveyed cues with no visible fish. The Water workspace uses the
 real generator and runtime assets with seed, zoom, overlay, pause, and comparison

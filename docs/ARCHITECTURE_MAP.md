@@ -76,7 +76,9 @@ adapter may own Phaser sound instances.
   `WorldAnalysisIndex` is the shared source for connectivity and coastline
   analysis; `WaterTypeCatalogV1`, `WaterLayoutPlanner`, and
   `GeneratedWaterLayout` own renderer-neutral water presentation facts after
-  analysis without changing terrain authority.
+  analysis without changing terrain authority. Its transition masks are
+  directional and currently governed by the deep-to-coastal atlas contract,
+  rather than treating every different neighbour as a compatible blend pair.
 - `WorldSpatialIndex` owns deterministic chunk buckets.
   `WorldDescriptorRegistry` adapts heterogeneous descriptors at composition;
   feature systems remain responsible for exact range, state, and approach
