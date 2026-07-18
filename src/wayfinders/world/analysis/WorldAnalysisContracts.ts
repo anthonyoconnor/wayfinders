@@ -49,10 +49,6 @@ export interface WorldWaterComponentFacts {
   readonly id: number;
   readonly tileCount: number;
   readonly bounds: Readonly<WorldTileBounds>;
-  readonly touchesNorthEdge: boolean;
-  readonly touchesEastEdge: boolean;
-  readonly touchesSouthEdge: boolean;
-  readonly touchesWestEdge: boolean;
 }
 
 export interface WorldCoastlineRun {
@@ -63,6 +59,7 @@ export interface WorldCoastlineRun {
 }
 
 export interface WorldAnalysisTileQuery {
+  /** Canonical or lifted bounds, decomposed through the analyzed world topology. */
   readonly bounds?: Readonly<WorldTileBounds>;
   readonly terrain?: TerrainType;
   readonly islandId?: number;

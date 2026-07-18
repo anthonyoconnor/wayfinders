@@ -1,3 +1,4 @@
+import type { WorldTopology } from "../WorldTopology";
 import type {
   SpatialBounds,
   SpatialChunk,
@@ -14,7 +15,8 @@ import type {
 
 interface IndexedEntity<TDescriptor extends SpatialEntityDescriptor> {
   readonly descriptor: TDescriptor;
-  readonly bounds: Readonly<SpatialBounds>;
+  readonly sourceBounds: Readonly<SpatialBounds>;
+  readonly footprint: readonly Readonly<SpatialBounds>[];
   readonly membership: SpatialEntityMembership<TDescriptor["id"]>;
   readonly chunkKeys: readonly string[];
 }
@@ -25,14 +27,21 @@ interface CandidateCollection<TDescriptor extends SpatialEntityDescriptor> {
   readonly bucketEntriesExamined: number;
 }
 
+interface AxisInterval {
+  readonly minimum: number;
+  readonly maximum: number;
+}
+
 const DEFAULT_MAX_CHUNKS_PER_ENTITY = 65_536;
 
 /**
- * Deterministic chunk-bucket index for durable world descriptors.
+ * Deterministic canonical chunk-bucket index for durable world descriptors.
  *
- * Descriptor objects and IDs are treated as immutable. Bounds are copied into
- * private records so an accidental external bounds mutation cannot corrupt
- * bucket membership or query correctness.
+ * A descriptor supplies one lifted, closed integer bounds rectangle. The index
+ * validates it against the explicit world topology and privately decomposes it
+ * into one to four canonical pieces. Descriptor IDs and objects remain single
+ * authoritative identities even when several pieces or query images touch the
+ * same buckets.
  */
 export class WorldSpatialIndex<TDescriptor extends SpatialEntityDescriptor> {
   private records = new Map<TDescriptor["id"], IndexedEntity<TDescriptor>>();
@@ -44,12 +53,13 @@ export class WorldSpatialIndex<TDescriptor extends SpatialEntityDescriptor> {
   private totalEntitiesExamined = 0;
   private totalEntitiesMatched = 0;
 
+  readonly topology: WorldTopology;
   readonly chunkSize: number;
   readonly maxChunksPerEntity: number;
 
   constructor(options: Readonly<WorldSpatialIndexOptions>) {
-    assertPositiveFinite(options.chunkSize, "chunkSize");
-    this.chunkSize = options.chunkSize;
+    this.topology = options.topology;
+    this.chunkSize = options.topology.chunkSize;
     this.maxChunksPerEntity = options.maxChunksPerEntity ?? DEFAULT_MAX_CHUNKS_PER_ENTITY;
     if (!Number.isSafeInteger(this.maxChunksPerEntity) || this.maxChunksPerEntity <= 0) {
       throw new RangeError("maxChunksPerEntity must be a positive safe integer");
@@ -114,7 +124,7 @@ export class WorldSpatialIndex<TDescriptor extends SpatialEntityDescriptor> {
 
     const previous = this.records.get(id);
     if (!previous) throw new RangeError(`Unknown spatial entity ID ${String(id)}`);
-    if (previous.descriptor === descriptor && sameBounds(previous.bounds, descriptor.bounds)) {
+    if (previous.descriptor === descriptor && sameBounds(previous.sourceBounds, descriptor.bounds)) {
       return this.unchangedMutation();
     }
 
@@ -166,46 +176,51 @@ export class WorldSpatialIndex<TDescriptor extends SpatialEntityDescriptor> {
       .map((record) => record.descriptor));
   }
 
-  /** Finds descriptors whose closed bounds contain the point. */
+  /** Finds descriptors whose canonical periodic footprint contains the point. */
   queryPoint(point: Readonly<SpatialPoint>): SpatialQueryResult<TDescriptor> {
     assertPoint(point);
-    const candidates = this.collectCandidates({
-      minX: point.x,
-      minY: point.y,
-      maxX: point.x,
-      maxY: point.y,
+    const normalized = this.normalizeQueryPoint(point);
+    const pieces = this.decomposeQueryBounds({
+      minX: normalized.x,
+      minY: normalized.y,
+      maxX: normalized.x,
+      maxY: normalized.y,
     });
+    const candidates = this.collectCandidates(pieces);
     const matched = candidates.records
-      .filter((record) => containsPoint(record.bounds, point))
+      .filter((record) => record.footprint.some((piece) => containsPoint(piece, normalized)))
       .sort(compareRecordsById);
     return this.completeQuery(candidates, matched);
   }
 
-  /** Finds descriptors whose bounds intersect the closed query bounds. */
+  /** Finds descriptors whose footprint intersects the closed periodic region. */
   queryBounds(bounds: Readonly<SpatialBounds>): SpatialQueryResult<TDescriptor> {
-    const normalized = copyAndValidateBounds(bounds);
-    const candidates = this.collectCandidates(normalized);
+    const normalized = copyAndValidateQueryBounds(bounds);
+    const pieces = this.decomposeQueryBounds(normalized);
+    const candidates = this.collectCandidates(pieces);
     const matched = candidates.records
-      .filter((record) => intersectsBounds(record.bounds, normalized))
+      .filter((record) => footprintsIntersect(record.footprint, pieces))
       .sort(compareRecordsById);
     return this.completeQuery(candidates, matched);
   }
 
-  /** Finds descriptors whose bounds are at most radius units from the centre. */
+  /** Finds descriptors whose footprint is at most radius units from the centre. */
   queryRadius(centre: Readonly<SpatialPoint>, radius: number): SpatialQueryResult<TDescriptor> {
     assertPoint(centre);
     assertNonNegativeFinite(radius, "radius");
-    const candidates = this.collectRadiusCandidates(centre, radius);
+    const normalizedCentre = this.normalizeQueryPoint(centre);
+    const candidates = this.collectRadiusCandidates(normalizedCentre, radius);
     const radiusSquared = radius * radius;
     const matched = candidates.records
-      .filter((record) => distanceToBoundsSquared(centre, record.bounds) <= radiusSquared)
+      .filter((record) => this.distanceToFootprintSquared(normalizedCentre, record.footprint) <= radiusSquared)
       .sort(compareRecordsById);
     return this.completeQuery(candidates, matched);
   }
 
   /**
    * Radius query ordered nearest-first, with entity ID as a stable tie-breaker.
-   * The limit is applied after exact distance filtering and deterministic sort.
+   * The limit is applied after ID deduplication, exact periodic filtering, and
+   * deterministic sorting.
    */
   queryNearby(
     centre: Readonly<SpatialPoint>,
@@ -215,24 +230,42 @@ export class WorldSpatialIndex<TDescriptor extends SpatialEntityDescriptor> {
     assertPoint(centre);
     assertNonNegativeFinite(radius, "radius");
     if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("limit must be a non-negative safe integer");
-    const candidates = this.collectRadiusCandidates(centre, radius);
+    const normalizedCentre = this.normalizeQueryPoint(centre);
+    const candidates = this.collectRadiusCandidates(normalizedCentre, radius);
     const radiusSquared = radius * radius;
     const matched = candidates.records
-      .filter((record) => distanceToBoundsSquared(centre, record.bounds) <= radiusSquared)
-      .sort((left, right) => {
-        const distanceDifference = distanceToBoundsSquared(centre, left.bounds)
-          - distanceToBoundsSquared(centre, right.bounds);
-        return distanceDifference || compareEntityIds(left.descriptor.id, right.descriptor.id);
-      })
-      .slice(0, limit);
+      .map((record) => Object.freeze({
+        record,
+        distanceSquared: this.distanceToFootprintSquared(normalizedCentre, record.footprint),
+      }))
+      .filter(({ distanceSquared }) => distanceSquared <= radiusSquared)
+      .sort((left, right) => (
+        left.distanceSquared - right.distanceSquared
+        || compareEntityIds(left.record.descriptor.id, right.record.descriptor.id)
+      ))
+      .slice(0, limit)
+      .map(({ record }) => record);
     return this.completeQuery(candidates, matched);
   }
 
-  /** Returns descriptors intersecting one explicit bucket. */
+  /** Returns descriptors intersecting one canonical bucket or periodic alias. */
   queryChunk(chunk: Readonly<SpatialChunk>): SpatialQueryResult<TDescriptor> {
     assertChunk(chunk);
-    const key = chunkKey(chunk.x, chunk.y);
-    const ids = this.buckets.get(key);
+    const canonicalX = canonicalizeDiscreteAxis(
+      chunk.x,
+      this.topology.chunkColumns,
+      this.topology.wrapsX,
+    );
+    const canonicalY = canonicalizeDiscreteAxis(
+      chunk.y,
+      this.topology.chunkRows,
+      this.topology.wrapsY,
+    );
+    if (canonicalX === undefined || canonicalY === undefined) {
+      return this.completeQuery({ records: [], bucketsExamined: 0, bucketEntriesExamined: 0 }, []);
+    }
+
+    const ids = this.buckets.get(chunkKey(canonicalX, canonicalY));
     const records = ids
       ? [...ids].map((id) => this.records.get(id)).filter(isDefined)
       : [];
@@ -272,37 +305,36 @@ export class WorldSpatialIndex<TDescriptor extends SpatialEntityDescriptor> {
     centre: Readonly<SpatialPoint>,
     radius: number,
   ): CandidateCollection<TDescriptor> {
-    return this.collectCandidates({
+    return this.collectCandidates(this.decomposeQueryBounds({
       minX: centre.x - radius,
       minY: centre.y - radius,
       maxX: centre.x + radius,
       maxY: centre.y + radius,
-    });
+    }));
   }
 
-  private collectCandidates(bounds: Readonly<SpatialBounds>): CandidateCollection<TDescriptor> {
-    const minChunkX = Math.floor(bounds.minX / this.chunkSize);
-    const maxChunkX = Math.floor(bounds.maxX / this.chunkSize);
-    const minChunkY = Math.floor(bounds.minY / this.chunkSize);
-    const maxChunkY = Math.floor(bounds.maxY / this.chunkSize);
+  private collectCandidates(
+    pieces: readonly Readonly<SpatialBounds>[],
+  ): CandidateCollection<TDescriptor> {
+    const chunks = this.canonicalChunksForPieces(pieces);
     const candidateIds = new Set<TDescriptor["id"]>();
-    let bucketsExamined = 0;
     let bucketEntriesExamined = 0;
 
-    for (let chunkY = minChunkY; chunkY <= maxChunkY; chunkY++) {
-      for (let chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-        bucketsExamined++;
-        const bucket = this.buckets.get(chunkKey(chunkX, chunkY));
-        if (!bucket) continue;
-        bucketEntriesExamined += bucket.size;
-        for (const id of bucket) candidateIds.add(id);
-      }
+    for (const chunk of chunks) {
+      const bucket = this.buckets.get(chunkKey(chunk.x, chunk.y));
+      if (!bucket) continue;
+      bucketEntriesExamined += bucket.size;
+      for (const id of bucket) candidateIds.add(id);
     }
 
     const records = [...candidateIds]
       .map((id) => this.records.get(id))
       .filter(isDefined);
-    return { records, bucketsExamined, bucketEntriesExamined };
+    return {
+      records,
+      bucketsExamined: chunks.length,
+      bucketEntriesExamined,
+    };
   }
 
   private completeQuery(
@@ -332,45 +364,144 @@ export class WorldSpatialIndex<TDescriptor extends SpatialEntityDescriptor> {
 
   private createRecord(descriptor: TDescriptor): IndexedEntity<TDescriptor> {
     assertEntityId(descriptor.id);
-    const bounds = Object.freeze(copyAndValidateBounds(descriptor.bounds));
-    const minChunkX = Math.floor(bounds.minX / this.chunkSize);
-    const maxChunkX = Math.floor(bounds.maxX / this.chunkSize);
-    const minChunkY = Math.floor(bounds.minY / this.chunkSize);
-    const maxChunkY = Math.floor(bounds.maxY / this.chunkSize);
-    const columnCount = maxChunkX - minChunkX + 1;
-    const rowCount = maxChunkY - minChunkY + 1;
-    const chunkCount = columnCount * rowCount;
-    if (!Number.isSafeInteger(chunkCount) || chunkCount > this.maxChunksPerEntity) {
+    const sourceBounds = Object.freeze(copyAndValidateDescriptorBounds(descriptor.bounds));
+    this.assertDescriptorAxis(sourceBounds.minX, sourceBounds.maxX, this.topology.tileWidth, this.topology.wrapsX, "x");
+    this.assertDescriptorAxis(sourceBounds.minY, sourceBounds.maxY, this.topology.tileHeight, this.topology.wrapsY, "y");
+
+    const footprint = Object.freeze(this.topology.decomposeTileBounds(sourceBounds)
+      .map((piece) => Object.freeze({ ...piece }))
+      .sort(compareBoundsRowMajor));
+    if (footprint.length < 1 || footprint.length > 4) {
+      throw new RangeError(`Spatial entity ${String(descriptor.id)} must have one to four canonical footprint pieces`);
+    }
+
+    const chunks = this.canonicalChunksForPieces(footprint);
+    if (chunks.length > this.maxChunksPerEntity) {
       throw new RangeError(
-        `Spatial entity ${String(descriptor.id)} intersects ${String(chunkCount)} chunks; maximum is ${this.maxChunksPerEntity}`,
+        `Spatial entity ${String(descriptor.id)} intersects ${String(chunks.length)} chunks; maximum is ${this.maxChunksPerEntity}`,
       );
     }
 
-    const chunks: SpatialChunk[] = [];
-    const chunkKeys: string[] = [];
-    for (let chunkY = minChunkY; chunkY <= maxChunkY; chunkY++) {
-      for (let chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
-        chunks.push(Object.freeze({ x: chunkX, y: chunkY }));
-        chunkKeys.push(chunkKey(chunkX, chunkY));
-      }
-    }
-    const centreX = bounds.minX + (bounds.maxX - bounds.minX) / 2;
-    const centreY = bounds.minY + (bounds.maxY - bounds.minY) / 2;
+    const centre = this.normalizeQueryPoint({
+      x: sourceBounds.minX + (sourceBounds.maxX - sourceBounds.minX) / 2,
+      y: sourceBounds.minY + (sourceBounds.maxY - sourceBounds.minY) / 2,
+    });
+    const canonicalCentre = Object.freeze({ ...centre });
     const homeChunk = Object.freeze({
-      x: Math.floor(centreX / this.chunkSize),
-      y: Math.floor(centreY / this.chunkSize),
+      x: Math.floor(canonicalCentre.x / this.chunkSize),
+      y: Math.floor(canonicalCentre.y / this.chunkSize),
     });
     const membership: SpatialEntityMembership<TDescriptor["id"]> = Object.freeze({
       entityId: descriptor.id,
+      canonicalCentre,
+      footprint,
       homeChunk,
-      chunks: Object.freeze(chunks),
+      chunks,
     });
     return Object.freeze({
       descriptor,
-      bounds,
+      sourceBounds,
+      footprint,
       membership,
-      chunkKeys: Object.freeze(chunkKeys),
+      chunkKeys: Object.freeze(chunks.map((chunk) => chunkKey(chunk.x, chunk.y))),
     });
+  }
+
+  private assertDescriptorAxis(
+    minimum: number,
+    maximum: number,
+    span: number,
+    wraps: boolean,
+    axis: "x" | "y",
+  ): void {
+    if (wraps) {
+      if (maximum - minimum >= span) {
+        throw new RangeError(`Spatial descriptor ${axis}-footprint must be strictly smaller than world span ${span}`);
+      }
+      return;
+    }
+    if (minimum < 0 || maximum >= span) {
+      throw new RangeError(`Spatial descriptor ${axis}-bounds must stay inside bounded world span 0..${span - 1}`);
+    }
+  }
+
+  private normalizeQueryPoint(point: Readonly<SpatialPoint>): SpatialPoint {
+    return {
+      x: this.topology.wrapsX ? positiveModulo(point.x, this.topology.tileWidth) : point.x,
+      y: this.topology.wrapsY ? positiveModulo(point.y, this.topology.tileHeight) : point.y,
+    };
+  }
+
+  private decomposeQueryBounds(bounds: Readonly<SpatialBounds>): readonly Readonly<SpatialBounds>[] {
+    const xPieces = decomposeClosedInterval(
+      bounds.minX,
+      bounds.maxX,
+      this.topology.tileWidth,
+      this.topology.wrapsX,
+    );
+    const yPieces = decomposeClosedInterval(
+      bounds.minY,
+      bounds.maxY,
+      this.topology.tileHeight,
+      this.topology.wrapsY,
+    );
+    const pieces: SpatialBounds[] = [];
+    for (const yPiece of yPieces) {
+      for (const xPiece of xPieces) {
+        pieces.push(Object.freeze({
+          minX: xPiece.minimum,
+          minY: yPiece.minimum,
+          maxX: xPiece.maximum,
+          maxY: yPiece.maximum,
+        }));
+      }
+    }
+    return Object.freeze(pieces.sort(compareBoundsRowMajor));
+  }
+
+  private canonicalChunksForPieces(
+    pieces: readonly Readonly<SpatialBounds>[],
+  ): readonly Readonly<SpatialChunk>[] {
+    const chunksByKey = new Map<string, Readonly<SpatialChunk>>();
+    for (const piece of pieces) {
+      const minChunkX = clamp(Math.floor(piece.minX / this.chunkSize), 0, this.topology.chunkColumns - 1);
+      const maxChunkX = clamp(Math.floor(piece.maxX / this.chunkSize), 0, this.topology.chunkColumns - 1);
+      const minChunkY = clamp(Math.floor(piece.minY / this.chunkSize), 0, this.topology.chunkRows - 1);
+      const maxChunkY = clamp(Math.floor(piece.maxY / this.chunkSize), 0, this.topology.chunkRows - 1);
+      if (minChunkX > maxChunkX || minChunkY > maxChunkY) continue;
+      for (let chunkY = minChunkY; chunkY <= maxChunkY; chunkY++) {
+        for (let chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+          const key = chunkKey(chunkX, chunkY);
+          if (!chunksByKey.has(key)) chunksByKey.set(key, Object.freeze({ x: chunkX, y: chunkY }));
+        }
+      }
+    }
+    return Object.freeze([...chunksByKey.values()].sort(compareChunks));
+  }
+
+  private distanceToFootprintSquared(
+    point: Readonly<SpatialPoint>,
+    footprint: readonly Readonly<SpatialBounds>[],
+  ): number {
+    let minimum = Number.POSITIVE_INFINITY;
+    for (const bounds of footprint) {
+      const dx = distanceToInterval(
+        point.x,
+        bounds.minX,
+        bounds.maxX,
+        this.topology.tileWidth,
+        this.topology.wrapsX,
+      );
+      const dy = distanceToInterval(
+        point.y,
+        bounds.minY,
+        bounds.maxY,
+        this.topology.tileHeight,
+        this.topology.wrapsY,
+      );
+      minimum = Math.min(minimum, dx * dx + dy * dy);
+    }
+    return minimum;
   }
 
   private changedMutation(
@@ -476,6 +607,13 @@ function compareChunks(left: Readonly<SpatialChunk>, right: Readonly<SpatialChun
   return left.y - right.y || left.x - right.x;
 }
 
+function compareBoundsRowMajor(left: Readonly<SpatialBounds>, right: Readonly<SpatialBounds>): number {
+  return left.minY - right.minY
+    || left.minX - right.minX
+    || left.maxY - right.maxY
+    || left.maxX - right.maxX;
+}
+
 function chunkKey(x: number, y: number): string {
   return `${x},${y}`;
 }
@@ -487,6 +625,13 @@ function containsPoint(bounds: Readonly<SpatialBounds>, point: Readonly<SpatialP
     && point.y <= bounds.maxY;
 }
 
+function footprintsIntersect(
+  left: readonly Readonly<SpatialBounds>[],
+  right: readonly Readonly<SpatialBounds>[],
+): boolean {
+  return left.some((leftPiece) => right.some((rightPiece) => intersectsBounds(leftPiece, rightPiece)));
+}
+
 function intersectsBounds(left: Readonly<SpatialBounds>, right: Readonly<SpatialBounds>): boolean {
   return left.minX <= right.maxX
     && left.maxX >= right.minX
@@ -494,14 +639,21 @@ function intersectsBounds(left: Readonly<SpatialBounds>, right: Readonly<Spatial
     && left.maxY >= right.minY;
 }
 
-function distanceToBoundsSquared(point: Readonly<SpatialPoint>, bounds: Readonly<SpatialBounds>): number {
-  const dx = point.x < bounds.minX
-    ? bounds.minX - point.x
-    : point.x > bounds.maxX ? point.x - bounds.maxX : 0;
-  const dy = point.y < bounds.minY
-    ? bounds.minY - point.y
-    : point.y > bounds.maxY ? point.y - bounds.maxY : 0;
-  return dx * dx + dy * dy;
+function distanceToInterval(
+  value: number,
+  minimum: number,
+  maximum: number,
+  span: number,
+  wraps: boolean,
+): number {
+  let result = planarDistanceToInterval(value, minimum, maximum);
+  if (!wraps) return result;
+  result = Math.min(result, planarDistanceToInterval(value, minimum - span, maximum - span));
+  return Math.min(result, planarDistanceToInterval(value, minimum + span, maximum + span));
+}
+
+function planarDistanceToInterval(value: number, minimum: number, maximum: number): number {
+  return value < minimum ? minimum - value : value > maximum ? value - maximum : 0;
 }
 
 function sameBounds(left: Readonly<SpatialBounds>, right: Readonly<SpatialBounds>): boolean {
@@ -511,7 +663,15 @@ function sameBounds(left: Readonly<SpatialBounds>, right: Readonly<SpatialBounds
     && left.maxY === right.maxY;
 }
 
-function copyAndValidateBounds(bounds: Readonly<SpatialBounds>): SpatialBounds {
+function copyAndValidateDescriptorBounds(bounds: Readonly<SpatialBounds>): SpatialBounds {
+  const copy = copyAndValidateQueryBounds(bounds);
+  for (const [name, value] of Object.entries(copy)) {
+    if (!Number.isSafeInteger(value)) throw new RangeError(`bounds.${name} must be a safe integer`);
+  }
+  return copy;
+}
+
+function copyAndValidateQueryBounds(bounds: Readonly<SpatialBounds>): SpatialBounds {
   const copy = {
     minX: bounds.minX,
     minY: bounds.minY,
@@ -523,6 +683,49 @@ function copyAndValidateBounds(bounds: Readonly<SpatialBounds>): SpatialBounds {
     throw new RangeError("Spatial bounds minimums cannot exceed maximums");
   }
   return copy;
+}
+
+function decomposeClosedInterval(
+  minimum: number,
+  maximum: number,
+  span: number,
+  wraps: boolean,
+): readonly AxisInterval[] {
+  if (!wraps) {
+    const clippedMinimum = Math.max(0, minimum);
+    const clippedMaximum = Math.min(span - 1, maximum);
+    return clippedMinimum <= clippedMaximum
+      ? [Object.freeze({ minimum: clippedMinimum, maximum: clippedMaximum })]
+      : [];
+  }
+
+  const extent = maximum - minimum;
+  if (extent >= span) return [Object.freeze({ minimum: 0, maximum: span - 1 })];
+  const start = positiveModulo(minimum, span);
+  const end = start + extent;
+  if (end < span) return [Object.freeze({ minimum: start, maximum: end })];
+  return [
+    Object.freeze({ minimum: start, maximum: span }),
+    Object.freeze({ minimum: 0, maximum: end - span }),
+  ];
+}
+
+function canonicalizeDiscreteAxis(value: number, span: number, wraps: boolean): number | undefined {
+  if (value >= 0 && value < span) return value;
+  return wraps ? positiveModulo(value, span) : undefined;
+}
+
+function positiveModulo(value: number, span: number): number {
+  const remainder = value % span;
+  if (Object.is(remainder, -0)) return 0;
+  const normalized = remainder < 0 ? remainder + span : remainder;
+  // Adding a negative sub-ulp remainder can round back to the span. Preserve
+  // the topology's half-open canonical interval instead of leaking its edge.
+  return normalized === span ? 0 : normalized;
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
 }
 
 function assertPoint(point: Readonly<SpatialPoint>): void {
@@ -548,11 +751,6 @@ function assertEntityId(id: SpatialEntityId): void {
 
 function assertFinite(value: number, name: string): void {
   if (!Number.isFinite(value)) throw new RangeError(`${name} must be finite`);
-}
-
-function assertPositiveFinite(value: number, name: string): void {
-  assertFinite(value, name);
-  if (value <= 0) throw new RangeError(`${name} must be greater than zero`);
 }
 
 function assertNonNegativeFinite(value: number, name: string): void {

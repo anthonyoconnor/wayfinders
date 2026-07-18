@@ -19,12 +19,18 @@ import { ActiveChunkSet, type ActiveChunkEntry } from "../src/wayfinders/renderi
 import { gridToWorld } from "../src/wayfinders/world/CoordinateSystem";
 import { KnowledgeState } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+  WorldTopology,
+} from "../src/wayfinders/world/WorldTopology";
 import { makeConfig } from "./helpers";
 
 function entry(x: number, y: number): Readonly<ActiveChunkEntry> {
   return {
-    key: `${x},${y}`,
-    coordinate: { x, y },
+    viewKey: `${x},${y}@0,0`,
+    canonicalChunk: { x, y },
+    imageOffset: { x: 0, y: 0 },
     band: "visible",
     ringDistance: 0,
     loadPriority: y * 100 + x,
@@ -32,7 +38,7 @@ function entry(x: number, y: number): Readonly<ActiveChunkEntry> {
 }
 
 function supportedWorld(size = 32, chunkSize = 8): WorldGrid {
-  const world = new WorldGrid(size, size, chunkSize);
+  const world = new WorldGrid(size, size, chunkSize, BOUNDED_WORLD_TOPOLOGY);
   world.replaceKnowledge(
     new Uint8Array(world.tileCount).fill(KnowledgeState.Supported),
     new Uint32Array(world.tileCount),
@@ -162,15 +168,76 @@ function testCloudPackage(
 }
 
 function oneChunkDelta(x = 1, y = 1): ReturnType<ActiveChunkSet["update"]> {
+  const chunkSize = 32;
+  const topology = new WorldTopology(
+    Math.max(1, x + 1) * chunkSize,
+    Math.max(1, y + 1) * chunkSize,
+    32,
+    chunkSize,
+    BOUNDED_WORLD_TOPOLOGY,
+  );
   const chunks = new ActiveChunkSet({
-    worldBounds: { minX: x, minY: y, maxX: x + 1, maxY: y + 1 },
+    topology,
     prefetchRing: 0,
     maxActiveChunks: 1,
   });
-  return chunks.update({ minX: x, minY: y, maxX: x + 1, maxY: y + 1 });
+  return chunks.update({
+    minX: x * chunkSize,
+    minY: y * chunkSize,
+    maxX: (x + 1) * chunkSize - 1,
+    maxY: (y + 1) * chunkSize - 1,
+  });
 }
 
 describe("cloud atmosphere assets and deterministic presentation", () => {
+  it("renders canonical cloud motion in each seam image and releases aliases independently", () => {
+    const world = new WorldGrid(4, 1, 4, WRAPPING_WORLD_TOPOLOGY);
+    world.replaceKnowledge(
+      new Uint8Array(world.tileCount).fill(KnowledgeState.Supported),
+      new Uint32Array(world.tileCount),
+    );
+    const activeChunks = new ActiveChunkSet({
+      topology: world.topology,
+      prefetchRing: 0,
+      maxActiveChunks: 2,
+    });
+    const { scene, sprites } = createSpriteScene();
+    const renderer = new CloudLayerRenderer(
+      scene as never,
+      true,
+      testCloudPackage({ candidatesPerChunk: 1, chunkDensity: 1 }),
+    );
+    renderer.applyActiveChunkDelta(
+      activeChunks.update({ minX: -1, minY: 0, maxX: 0, maxY: 0 }),
+      13_371,
+      4 * 32,
+    );
+    renderer.sync(world, new Set(), 0, 0);
+
+    const clouds = sprites.filter(({ name }) => name.startsWith("cloud:") && !name.endsWith(":shadow"));
+    expect(clouds).toHaveLength(2);
+    expect(Math.abs(clouds[1]!.x - clouds[0]!.x)).toBe(world.topology.pixelWidth);
+    expect(clouds[0]!.y).toBe(clouds[1]!.y);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 2,
+      activeClouds: 2,
+      activeShadows: 2,
+    });
+
+    renderer.applyActiveChunkDelta(
+      activeChunks.update({ minX: 2, minY: 0, maxX: 2, maxY: 0 }),
+      13_371,
+      4 * 32,
+    );
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 1,
+      activeClouds: 1,
+      activeShadows: 1,
+      totalCloudAllocations: 2,
+      totalCloudReleases: 1,
+    });
+  });
+
   it("validates four distinct runtime frames and preloads the declared sheet", () => {
     expect(validateCloudAssetPackage(CLOUD_ASSET_PACKAGE as never)).toBe(CLOUD_ASSET_PACKAGE);
     expect(CLOUD_ASSET_PACKAGE.variants).toHaveLength(4);
@@ -303,7 +370,7 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
   });
 
   it("reserves three immediately readable opening clouds around the revealed home island", () => {
-    const world = new WorldGrid(64, 64, 32);
+    const world = new WorldGrid(64, 64, 32, BOUNDED_WORLD_TOPOLOGY);
     const knowledge = new Uint8Array(world.tileCount).fill(KnowledgeState.Unknown);
     for (let y = 0; y < 64; y++) {
       for (let x = 0; x < 64; x++) {
@@ -314,13 +381,13 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
 
     const { scene, sprites } = createSpriteScene();
     const chunks = new ActiveChunkSet({
-      worldBounds: { minX: 0, minY: 0, maxX: 2, maxY: 2 },
+      topology: world.topology,
       prefetchRing: 0,
       maxActiveChunks: 9,
     });
     const renderer = new CloudLayerRenderer(scene as never, false);
     const homeWorldPosition = { x: 32 * 32 + 16, y: 32 * 32 + 16 };
-    const delta = chunks.update({ minX: 0, minY: 0, maxX: 2, maxY: 2 });
+    const delta = chunks.update({ minX: 0, minY: 0, maxX: 63, maxY: 63 });
     renderer.applyActiveChunkDelta(
       delta,
       13_371,
@@ -337,8 +404,12 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(new Set(openingDescriptors.map(({ scale }) => scale.toFixed(3))).size).toBe(3);
     renderer.sync(world, new Set(), 0, 0);
 
-    const openingClouds = sprites.filter(({ name }) => /^cloud:home:\d+$/.test(name));
-    const openingShadows = sprites.filter(({ name }) => /^cloud:home:\d+:shadow$/.test(name));
+    const openingClouds = sprites.filter(({ name }) => (
+      name.startsWith("cloud:home:") && !name.endsWith(":shadow")
+    ));
+    const openingShadows = sprites.filter(({ name }) => (
+      name.startsWith("cloud:home:") && name.endsWith(":shadow")
+    ));
     expect(openingClouds).toHaveLength(3);
     expect(openingShadows).toHaveLength(3);
     expect(openingClouds.every(({ visible, alpha }) => visible && alpha > 0)).toBe(true);
@@ -411,7 +482,9 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
       0,
     );
 
-    expect(sprites.filter(({ name, visible }) => /^cloud:home:\d+$/.test(name) && visible)).toHaveLength(3);
+    expect(sprites.filter(({ name, visible }) => (
+      name.startsWith("cloud:home:") && !name.endsWith(":shadow") && visible
+    ))).toHaveLength(3);
     expect(renderer.getResourceTelemetry()).toMatchObject({
       activeClouds: CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
       activeShadows: CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
@@ -461,7 +534,7 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
       x: descriptor.baseX,
       y: descriptor.baseY,
     }, cloudPackage);
-    const personalWorld = new WorldGrid(96, 96, 32);
+    const personalWorld = new WorldGrid(96, 96, 32, BOUNDED_WORLD_TOPOLOGY);
     personalWorld.replaceKnowledge(
       new Uint8Array(personalWorld.tileCount).fill(KnowledgeState.Personal),
       new Uint32Array(personalWorld.tileCount).fill(1),
@@ -543,12 +616,13 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
 
   it("toggles and rebuilds only cloud-owned resources without stable-frame allocation", () => {
     const { scene, sprites } = createSpriteScene();
+    const topology = new WorldTopology(24, 24, 32, 8, BOUNDED_WORLD_TOPOLOGY);
     const chunks = new ActiveChunkSet({
-      worldBounds: { minX: 0, minY: 0, maxX: 2, maxY: 2 },
+      topology,
       prefetchRing: 0,
       maxActiveChunks: 9,
     });
-    const delta = chunks.update({ minX: 0, minY: 0, maxX: 2, maxY: 2 });
+    const delta = chunks.update({ minX: 0, minY: 0, maxX: 23, maxY: 23 });
     const renderer = new CloudLayerRenderer(scene as never, false);
     renderer.applyActiveChunkDelta(delta, 13_371, 8 * 32);
     const initial = renderer.getResourceTelemetry();

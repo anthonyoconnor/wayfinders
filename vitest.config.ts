@@ -15,6 +15,7 @@ const quickTests = [
   "tests/world-analysis-index.test.ts",
   "tests/world-manifest.test.ts",
   "tests/world-spatial-index.test.ts",
+  "tests/world-topology.test.ts",
 ];
 
 // These suites validate checked-in repository artifacts. Keeping them in the
@@ -41,6 +42,7 @@ const integrationTests = [
   "tests/island-dossiers.test.ts",
   "tests/islands.test.ts",
   "tests/navigator-voyages.test.ts",
+  "tests/periodic-game-simulation-journeys.test.ts",
   "tests/simulation-clock.test.ts",
   "tests/survey-sites-integration.test.ts",
   "tests/survey-sites.test.ts",

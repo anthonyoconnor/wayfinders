@@ -1,6 +1,7 @@
 import type { GridPoint } from "../../core/types";
 import { TerrainType } from "../TileData";
 import type { WorldGrid } from "../WorldGrid";
+import type { WorldTopology } from "../WorldTopology";
 import type {
   CoastlineKind,
   WorldAnalysisBuildDiagnostics,
@@ -38,6 +39,7 @@ const TERRAIN_TYPES = Object.freeze([
  * they never call back into the grid and cannot mutate the captured facts.
  */
 export class WorldAnalysisIndex {
+  private readonly topology: WorldTopology;
   private readonly terrainByIndex: Uint8Array;
   private readonly islandByIndex: Int32Array;
   private readonly passableMask: Uint8Array;
@@ -71,6 +73,7 @@ export class WorldAnalysisIndex {
     this.width = world.width;
     this.height = world.height;
     this.tileCount = world.tileCount;
+    this.topology = world.topology;
     this.terrainByIndex = new Uint8Array(this.tileCount);
     this.islandByIndex = new Int32Array(this.tileCount);
     this.passableMask = new Uint8Array(this.tileCount);
@@ -110,15 +113,27 @@ export class WorldAnalysisIndex {
     let cardinalNeighborChecks = 0;
     const coastalWater: number[] = [];
     const islandShore: number[] = [];
+    const cardinalNeighborScratch = new Int32Array(4);
+    const wrapsX = this.topology.wrapsX;
+    const wrapsY = this.topology.wrapsY;
     for (let index = 0; index < this.tileCount; index++) {
       const islandId = this.islandByIndex[index];
       let bordersIsland = false;
       let bordersPassable = false;
-      this.forEachCardinalNeighbor(index, (neighbor) => {
+      const neighborCount = writeUniqueCardinalNeighborIndices(
+        index,
+        this.width,
+        this.height,
+        wrapsX,
+        wrapsY,
+        cardinalNeighborScratch,
+      );
+      for (let neighborOffset = 0; neighborOffset < neighborCount; neighborOffset++) {
+        const neighbor = cardinalNeighborScratch[neighborOffset];
         cardinalNeighborChecks++;
         if (this.islandByIndex[neighbor] >= 0) bordersIsland = true;
         if (this.passableMask[neighbor] !== 0) bordersPassable = true;
-      });
+      }
       if (this.passableMask[index] !== 0 && islandId < 0 && bordersIsland) {
         this.coastalWaterMask[index] = 1;
         coastalWater.push(index);
@@ -142,10 +157,6 @@ export class WorldAnalysisIndex {
       let minY = this.height;
       let maxX = -1;
       let maxY = -1;
-      let touchesNorthEdge = false;
-      let touchesEastEdge = false;
-      let touchesSouthEdge = false;
-      let touchesWestEdge = false;
       const members: number[] = [];
       this.componentByIndex[start] = componentId;
       queue[tail++] = start;
@@ -158,26 +169,27 @@ export class WorldAnalysisIndex {
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
-        touchesNorthEdge ||= y === 0;
-        touchesEastEdge ||= x === this.width - 1;
-        touchesSouthEdge ||= y === this.height - 1;
-        touchesWestEdge ||= x === 0;
-        this.forEachCardinalNeighbor(index, (neighbor) => {
+        const neighborCount = writeUniqueCardinalNeighborIndices(
+          index,
+          this.width,
+          this.height,
+          wrapsX,
+          wrapsY,
+          cardinalNeighborScratch,
+        );
+        for (let neighborOffset = 0; neighborOffset < neighborCount; neighborOffset++) {
+          const neighbor = cardinalNeighborScratch[neighborOffset];
           cardinalNeighborChecks++;
-          if (this.passableMask[neighbor] === 0 || this.componentByIndex[neighbor] !== 0) return;
+          if (this.passableMask[neighbor] === 0 || this.componentByIndex[neighbor] !== 0) continue;
           this.componentByIndex[neighbor] = componentId;
           queue[tail++] = neighbor;
-        });
+        }
       }
       componentMembers.set(componentId, members);
       componentFacts.set(componentId, Object.freeze({
         id: componentId,
         tileCount: members.length,
         bounds: Object.freeze({ minX, minY, maxX, maxY }),
-        touchesNorthEdge,
-        touchesEastEdge,
-        touchesSouthEdge,
-        touchesWestEdge,
       }));
     }
 
@@ -225,6 +237,8 @@ export class WorldAnalysisIndex {
   isCurrentFor(world: WorldGrid): boolean {
     return world.width === this.width
       && world.height === this.height
+      && world.topology.definition.x === this.topology.definition.x
+      && world.topology.definition.y === this.topology.definition.y
       && world.terrainVersion === this.provenance.terrainVersion
       && world.collisionVersion === this.provenance.collisionVersion;
   }
@@ -310,6 +324,8 @@ export class WorldAnalysisIndex {
    */
   queryTiles(query: Readonly<WorldAnalysisTileQuery> = {}): Readonly<WorldAnalysisQueryResult> {
     const bounds = query.bounds === undefined ? undefined : this.normalizeBounds(query.bounds);
+    const boundsIndices = bounds === undefined ? undefined : this.indicesWithin(bounds);
+    const boundsMembership = boundsIndices === undefined ? undefined : new Set(boundsIndices);
     if (query.islandId !== undefined) assertIslandId(query.islandId);
     if (query.componentId !== undefined) assertComponentId(query.componentId);
     if (query.terrain !== undefined && !this.terrainIndices.has(query.terrain)) {
@@ -317,7 +333,7 @@ export class WorldAnalysisIndex {
     }
 
     const candidates: CandidateSource[] = [{ source: "world", indices: this.allIndices }];
-    if (bounds) candidates.push({ source: "bounds", indices: this.indicesWithin(bounds) });
+    if (boundsIndices) candidates.push({ source: "bounds", indices: boundsIndices });
     if (query.terrain !== undefined) {
       candidates.push({ source: "terrain", indices: this.getTerrainIndices(query.terrain) });
     }
@@ -340,7 +356,7 @@ export class WorldAnalysisIndex {
     const selected = candidates[0];
     const matched: number[] = [];
     for (const index of selected.indices) {
-      if (bounds && !indexInsideBounds(index, bounds, this.width)) continue;
+      if (boundsMembership && !boundsMembership.has(index)) continue;
       if (query.terrain !== undefined && this.terrainByIndex[index] !== query.terrain) continue;
       if (query.islandId !== undefined && this.islandByIndex[index] !== query.islandId) continue;
       if (query.passable !== undefined && (this.passableMask[index] !== 0) !== query.passable) continue;
@@ -384,16 +400,14 @@ export class WorldAnalysisIndex {
     this.assertPoint(source);
     if (componentId !== undefined) assertComponentId(componentId);
     const candidates: Array<{ index: number; distanceSquared: number }> = [];
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const x = source.x + dx;
-        const y = source.y + dy;
-        if (!this.inBounds(x, y)) continue;
-        const index = y * this.width + x;
-        if (this.passableMask[index] === 0) continue;
-        if (componentId !== undefined && this.componentByIndex[index] !== componentId) continue;
-        candidates.push({ index, distanceSquared: dx * dx + dy * dy });
-      }
+    for (const tile of [source, ...this.topology.uniqueEightNeighbors(source)]) {
+      const index = tile.y * this.width + tile.x;
+      if (this.passableMask[index] === 0) continue;
+      if (componentId !== undefined && this.componentByIndex[index] !== componentId) continue;
+      candidates.push({
+        index,
+        distanceSquared: this.topology.minimumImageTileDistanceSquared(source, tile),
+      });
     }
     candidates.sort((left, right) => left.distanceSquared - right.distanceSquared || left.index - right.index);
     return candidates[0] === undefined ? undefined : this.pointFromIndex(candidates[0].index);
@@ -434,11 +448,13 @@ export class WorldAnalysisIndex {
   }
 
   private indicesWithin(bounds: Readonly<WorldTileBounds>): readonly number[] {
-    const indices: number[] = [];
-    for (let y = bounds.minY; y <= bounds.maxY; y++) {
-      for (let x = bounds.minX; x <= bounds.maxX; x++) indices.push(y * this.width + x);
+    const indices = new Set<number>();
+    for (const piece of this.topology.decomposeTileBounds(bounds)) {
+      for (let y = piece.minY; y <= piece.maxY; y++) {
+        for (let x = piece.minX; x <= piece.maxX; x++) indices.add(y * this.width + x);
+      }
     }
-    return indices;
+    return [...indices].sort((left, right) => left - right);
   }
 
   private normalizeBounds(bounds: Readonly<WorldTileBounds>): Readonly<WorldTileBounds> {
@@ -447,9 +463,6 @@ export class WorldAnalysisIndex {
     }
     if (bounds.minX > bounds.maxX || bounds.minY > bounds.maxY) {
       throw new RangeError("World query bounds must not be inverted");
-    }
-    if (!this.inBounds(bounds.minX, bounds.minY) || !this.inBounds(bounds.maxX, bounds.maxY)) {
-      throw new RangeError("World query bounds must be inside the analyzed world");
     }
     return bounds;
   }
@@ -470,14 +483,42 @@ export class WorldAnalysisIndex {
     }
   }
 
-  private forEachCardinalNeighbor(index: number, visitor: (neighbor: number) => void): void {
-    const x = index % this.width;
-    const y = Math.floor(index / this.width);
-    if (x > 0) visitor(index - 1);
-    if (x + 1 < this.width) visitor(index + 1);
-    if (y > 0) visitor(index - this.width);
-    if (y + 1 < this.height) visitor(index + this.width);
-  }
+}
+
+/**
+ * Writes unique neighbours in the public topology order: west, east, north,
+ * south. The caller reuses one four-slot buffer across the analysis build, so
+ * coastline and component scans create no per-tile neighbour objects or sets.
+ */
+function writeUniqueCardinalNeighborIndices(
+  index: number,
+  width: number,
+  height: number,
+  wrapsX: boolean,
+  wrapsY: boolean,
+  target: Int32Array,
+): number {
+  const x = index % width;
+  const y = Math.floor(index / width);
+  const west = x > 0
+    ? index - 1
+    : wrapsX && width > 1 ? index + width - 1 : -1;
+  const east = x + 1 < width
+    ? index + 1
+    : wrapsX && width > 1 ? index - width + 1 : -1;
+  const north = y > 0
+    ? index - width
+    : wrapsY && height > 1 ? index + width * (height - 1) : -1;
+  const south = y + 1 < height
+    ? index + width
+    : wrapsY && height > 1 ? index - width * (height - 1) : -1;
+
+  let count = 0;
+  if (west >= 0) target[count++] = west;
+  if (east >= 0 && east !== west) target[count++] = east;
+  if (north >= 0 && north !== west && north !== east) target[count++] = north;
+  if (south >= 0 && south !== west && south !== east && south !== north) target[count++] = south;
+  return count;
 }
 
 function freezeNumbers(indices: number[]): readonly number[] {
@@ -511,12 +552,6 @@ function buildRuns(
     }
   }
   return Object.freeze(runs);
-}
-
-function indexInsideBounds(index: number, bounds: Readonly<WorldTileBounds>, width: number): boolean {
-  const x = index % width;
-  const y = Math.floor(index / width);
-  return x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY;
 }
 
 function assertIslandId(islandId: number): void {

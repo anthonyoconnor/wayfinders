@@ -16,6 +16,7 @@ import {
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology.ts";
 import { makeConfig } from "./helpers.ts";
 
 const SEED = 13_371;
@@ -45,17 +46,14 @@ function reachableWater(world: WorldGrid, startX: number, startY: number): Uint8
   queue[tail++] = start;
   while (head < tail) {
     const index = queue[head++];
-    const x = index % world.width;
-    const y = Math.floor(index / world.width);
     const visit = (candidate: number): void => {
       if (reachable[candidate] || world.isMovementBlockedAtIndex(candidate)) return;
       reachable[candidate] = 1;
       queue[tail++] = candidate;
     };
-    if (x > 0) visit(index - 1);
-    if (x + 1 < world.width) visit(index + 1);
-    if (y > 0) visit(index - world.width);
-    if (y + 1 < world.height) visit(index + world.width);
+    for (const neighbor of world.topology.uniqueCardinalNeighbors(world.pointFromIndex(index))) {
+      visit(world.index(neighbor.x, neighbor.y));
+    }
   }
   return reachable;
 }
@@ -135,7 +133,7 @@ describe("island-dossier catalog", () => {
         const point = world.pointFromIndex(index);
         const minimumDistance = Math.min(...definition.footprintIndices.map((footprintIndex) => {
           const footprint = world.pointFromIndex(footprintIndex);
-          return Math.hypot(point.x - footprint.x, point.y - footprint.y);
+          return Math.sqrt(world.topology.minimumImageTileDistanceSquared(point, footprint));
         }));
         expect(minimumDistance).toBeLessThanOrEqual(ISLAND_DOSSIER_INTERACTION_RANGE_TILES);
       }
@@ -146,12 +144,14 @@ describe("island-dossier catalog", () => {
         for (let dy = -extent; dy <= extent; dy++) {
           for (let dx = -extent; dx <= extent; dx++) {
             if (Math.hypot(dx, dy) > ISLAND_DOSSIER_INTERACTION_RANGE_TILES) continue;
-            const x = footprint.x + dx;
-            const y = footprint.y + dy;
-            if (!world.inBounds(x, y)) continue;
-            const candidate = world.index(x, y);
+            const tile = world.topology.canonicalizeTile(footprint.x + dx, footprint.y + dy);
+            if (!tile) continue;
+            const candidate = world.index(tile.x, tile.y);
             if (!world.isMovementBlockedAtIndex(candidate) && reachable[candidate]) {
-              expect(approaches.has(candidate), `island ${definition.islandId} approach ${x},${y}`).toBe(true);
+              expect(
+                approaches.has(candidate),
+                `island ${definition.islandId} approach ${tile.x},${tile.y}`,
+              ).toBe(true);
             }
           }
         }
@@ -170,7 +170,7 @@ describe("island-dossier catalog", () => {
   });
 
   it("excludes an isolated passable footprint cell while retaining reachable coast cells", () => {
-    const world = new WorldGrid(7, 7, 4);
+    const world = new WorldGrid(7, 7, 4, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     world.setTerrain(3, 3, TerrainType.ShallowOcean);
     world.setIslandId(3, 3, 1);

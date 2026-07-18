@@ -1,6 +1,7 @@
 import type { GridPoint } from "../../core/types";
+import type { WorldTopologyDefinition } from "../WorldTopology";
 
-export const WORLD_MANIFEST_SCHEMA_VERSION = 1 as const;
+export const WORLD_MANIFEST_SCHEMA_VERSION = 2 as const;
 
 export const WORLD_MANIFEST_LANDMARK_KINDS = Object.freeze([
   "dock",
@@ -32,32 +33,32 @@ export type StableIslandId = `island:${string}`;
 export type StableLandmarkId = `landmark:${WorldManifestLandmarkKind}`;
 export type StableWaterRegionId = `water:${string}`;
 
-export interface WorldManifestDimensionsV1 {
+export interface WorldManifestDimensionsV2 {
   readonly width: number;
   readonly height: number;
   readonly chunkSize: number;
 }
 
-export interface WorldManifestBoundsV1 {
+export interface WorldManifestBoundsV2 {
   readonly minX: number;
   readonly minY: number;
   readonly maxX: number;
   readonly maxY: number;
 }
 
-export interface WorldManifestLandmarkV1 {
+export interface WorldManifestLandmarkV2 {
   readonly id: StableLandmarkId;
   readonly kind: WorldManifestLandmarkKind;
   readonly position: Readonly<GridPoint>;
 }
 
-interface WorldManifestWaterRegionBaseV1 {
+interface WorldManifestWaterRegionBaseV2 {
   readonly id: StableWaterRegionId;
   readonly typeId: string;
   readonly seed: number;
 }
 
-export interface WorldManifestWaterEllipseRegionV1 extends WorldManifestWaterRegionBaseV1 {
+export interface WorldManifestWaterEllipseRegionV2 extends WorldManifestWaterRegionBaseV2 {
   readonly strategy: "ellipse";
   readonly typeId: string;
   readonly center: Readonly<{ x: number; y: number }>;
@@ -65,26 +66,38 @@ export interface WorldManifestWaterEllipseRegionV1 extends WorldManifestWaterReg
   readonly radiusY: number;
 }
 
-export interface WorldManifestWaterRibbonRegionV1 extends WorldManifestWaterRegionBaseV1 {
+export interface WorldManifestWaterRibbonRegionV2 extends WorldManifestWaterRegionBaseV2 {
   readonly strategy: "ribbon";
   readonly typeId: string;
   readonly start: Readonly<{ x: number; y: number }>;
   readonly end: Readonly<{ x: number; y: number }>;
+  /** Whole-world offsets applied to `end` before measuring the ribbon. */
+  readonly imageOffset: Readonly<{ x: number; y: number }>;
   readonly width: number;
 }
 
-export type WorldManifestWaterRegionV1 =
-  | WorldManifestWaterEllipseRegionV1
-  | WorldManifestWaterRibbonRegionV1;
+export type WorldManifestWaterRegionV2 =
+  | WorldManifestWaterEllipseRegionV2
+  | WorldManifestWaterRibbonRegionV2;
 
-export interface WorldManifestWaterLayoutV1 {
+export interface WorldManifestWaterLayoutV2 {
   readonly version: string;
   readonly catalogFingerprint: string;
-  readonly regions: readonly Readonly<WorldManifestWaterRegionV1>[];
+  readonly regions: readonly Readonly<WorldManifestWaterRegionV2>[];
+}
+
+/**
+ * One island-local lifted rectangle and its exact canonical decomposition.
+ * The lifted bounds preserve local geometry while the at-most-four pieces are
+ * the only rectangles used for canonical indexing and presentation lookup.
+ */
+export interface WorldManifestWrappedFootprintV2 {
+  readonly liftedBounds: Readonly<WorldManifestBoundsV2>;
+  readonly pieces: readonly Readonly<WorldManifestBoundsV2>[];
 }
 
 /** Durable island facts. Runtime state and generated tile data do not belong here. */
-export interface WorldManifestIslandV1 {
+export interface WorldManifestIslandV2 {
   /** Stable across traversal-order changes; derived from sourceId, never array position. */
   readonly id: StableIslandId;
   /** Existing numeric island identity used by the prototype grid and feature systems. */
@@ -97,12 +110,12 @@ export interface WorldManifestIslandV1 {
   readonly outerRadius: number;
   readonly rotation: number;
   readonly shapeSeed: number;
-  readonly bounds: Readonly<WorldManifestBoundsV1>;
+  readonly footprint: Readonly<WorldManifestWrappedFootprintV2>;
   readonly sourceKind: "authored" | "procedural";
   readonly authoredAssetId?: string;
 }
 
-export interface WorldManifestV1 {
+export interface WorldManifestV2 {
   readonly schemaVersion: typeof WORLD_MANIFEST_SCHEMA_VERSION;
   /** Version of the deterministic generation algorithm, independent of schema. */
   readonly generatorVersion: string;
@@ -112,13 +125,14 @@ export interface WorldManifestV1 {
   /** Optional build-produced hash of all generator settings. */
   readonly settingsFingerprint?: string;
   readonly authoredIslandCatalogRevision: string;
-  readonly dimensions: Readonly<WorldManifestDimensionsV1>;
-  readonly landmarks: readonly Readonly<WorldManifestLandmarkV1>[];
-  readonly islands: readonly Readonly<WorldManifestIslandV1>[];
-  readonly waterLayout: Readonly<WorldManifestWaterLayoutV1>;
+  readonly dimensions: Readonly<WorldManifestDimensionsV2>;
+  readonly topology: Readonly<WorldTopologyDefinition>;
+  readonly landmarks: readonly Readonly<WorldManifestLandmarkV2>[];
+  readonly islands: readonly Readonly<WorldManifestIslandV2>[];
+  readonly waterLayout: Readonly<WorldManifestWaterLayoutV2>;
 }
 
-export type WorldManifestInputV1 = Omit<WorldManifestV1, "schemaVersion">;
+export type WorldManifestInputV2 = Omit<WorldManifestV2, "schemaVersion">;
 
 export function stableIslandId(sourceId: number): StableIslandId {
   if (!Number.isSafeInteger(sourceId) || sourceId <= 0) {

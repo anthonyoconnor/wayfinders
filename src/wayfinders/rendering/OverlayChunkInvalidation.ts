@@ -8,11 +8,26 @@ export function addPaddedChunkNeighbours(
   paddingTiles: number,
   dirtyChunks: Set<WorldChunk>,
 ): void {
-  const chunkRadius = Math.ceil(Math.max(0, paddingTiles) / world.chunkSize);
-  for (let dy = -chunkRadius; dy <= chunkRadius; dy++) {
-    for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
-      const neighbour = world.getChunk(changed.chunkX + dx, changed.chunkY + dy);
-      if (neighbour) dirtyChunks.add(neighbour);
+  const padding = Math.max(0, Math.ceil(paddingTiles));
+  const minX = changed.chunkX * world.chunkSize;
+  const minY = changed.chunkY * world.chunkSize;
+  const maxX = Math.min(world.width, minX + world.chunkSize) - 1;
+  const maxY = Math.min(world.height, minY + world.chunkSize) - 1;
+  for (const piece of world.topology.decomposeTileBounds({
+    minX: minX - padding,
+    minY: minY - padding,
+    maxX: maxX + padding,
+    maxY: maxY + padding,
+  })) {
+    const minimumChunkX = Math.floor(piece.minX / world.chunkSize);
+    const maximumChunkX = Math.floor(piece.maxX / world.chunkSize);
+    const minimumChunkY = Math.floor(piece.minY / world.chunkSize);
+    const maximumChunkY = Math.floor(piece.maxY / world.chunkSize);
+    for (let chunkY = minimumChunkY; chunkY <= maximumChunkY; chunkY++) {
+      for (let chunkX = minimumChunkX; chunkX <= maximumChunkX; chunkX++) {
+        const neighbour = world.getChunk(chunkX, chunkY);
+        if (neighbour) dirtyChunks.add(neighbour);
+      }
     }
   }
 }
@@ -28,26 +43,21 @@ export function addCardinalChunkDependents(
 ): void {
   const x = worldIndex % world.width;
   const y = Math.floor(worldIndex / world.width);
-  const chunkX = Math.floor(x / world.chunkSize);
-  const chunkY = Math.floor(y / world.chunkSize);
-  const ownChunk = world.getChunk(chunkX, chunkY);
-  if (!ownChunk) return;
-  dirtyChunks.add(ownChunk);
-
-  const localX = x - chunkX * world.chunkSize;
-  const localY = y - chunkY * world.chunkSize;
-  if (localX === 0) addChunkIfLoaded(world, chunkX - 1, chunkY, dirtyChunks);
-  if (localX + 1 === world.chunkSize) addChunkIfLoaded(world, chunkX + 1, chunkY, dirtyChunks);
-  if (localY === 0) addChunkIfLoaded(world, chunkX, chunkY - 1, dirtyChunks);
-  if (localY + 1 === world.chunkSize) addChunkIfLoaded(world, chunkX, chunkY + 1, dirtyChunks);
+  addTileOwnerChunkIfLoaded(world, x, y, dirtyChunks);
+  for (const neighbour of world.topology.uniqueCardinalNeighbors({ x, y })) {
+    addTileOwnerChunkIfLoaded(world, neighbour.x, neighbour.y, dirtyChunks);
+  }
 }
 
-function addChunkIfLoaded(
+function addTileOwnerChunkIfLoaded(
   world: WorldGrid,
-  chunkX: number,
-  chunkY: number,
+  tileX: number,
+  tileY: number,
   dirtyChunks: Set<WorldChunk>,
 ): void {
-  const chunk = world.getChunk(chunkX, chunkY);
+  const chunk = world.getChunk(
+    Math.floor(tileX / world.chunkSize),
+    Math.floor(tileY / world.chunkSize),
+  );
   if (chunk) dirtyChunks.add(chunk);
 }

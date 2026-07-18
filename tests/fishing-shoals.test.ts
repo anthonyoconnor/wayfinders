@@ -9,9 +9,11 @@ import {
 import { FishingShoalSystem } from "../src/wayfinders/exploration/FishingShoalSystem";
 import { generateIslandDossierCatalog } from "../src/wayfinders/exploration/IslandDossierCatalog";
 import { createSurveyBudget } from "../src/wayfinders/exploration/SurveyContracts";
+import { GridGraph } from "../src/wayfinders/navigation/GridGraph";
 import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
 import { drainForwardGuidance } from "./helpers";
 
@@ -32,6 +34,43 @@ function terrainSignature(simulation: GameSimulation): number[] {
 
 function surveyBudget(availableProvisionUnits = 12, returnCost = 0) {
   return createSurveyBudget(2, availableProvisionUnits, returnCost);
+}
+
+function teleportAlongNavigablePath(
+  simulation: GameSimulation,
+  target: Readonly<{ x: number; y: number }>,
+): void {
+  const graph = new GridGraph(simulation.world, simulation.config);
+  const start = simulation.world.index(
+    simulation.ship.currentTileX,
+    simulation.ship.currentTileY,
+  );
+  const goal = simulation.world.index(target.x, target.y);
+  const unvisited = -2;
+  const root = -1;
+  const parents = new Int32Array(simulation.world.tileCount);
+  const queue = new Int32Array(simulation.world.tileCount);
+  parents.fill(unvisited);
+  parents[start] = root;
+  let head = 0;
+  let tail = 0;
+  queue[tail++] = start;
+  while (head < tail && parents[goal] === unvisited) {
+    const current = queue[head++];
+    graph.forEachTraversableCardinalEdge(current, (neighbor) => {
+      if (parents[neighbor] !== unvisited) return;
+      parents[neighbor] = current;
+      queue[tail++] = neighbor;
+    });
+  }
+  if (parents[goal] === unvisited) throw new Error("Expected a navigable route to the fishing ground");
+
+  const route: number[] = [];
+  for (let index = goal; index !== start; index = parents[index]) route.push(index);
+  route.reverse();
+  for (const index of route) {
+    expect(simulation.teleport(simulation.world.pointFromIndex(index))).toBe(true);
+  }
 }
 
 describe("deterministic fishing-shoal catalog", () => {
@@ -75,18 +114,18 @@ describe("deterministic fishing-shoal catalog", () => {
       expect(first.world.getIslandIdAtIndex(index)).toBeLessThan(0);
       expect(first.world.getResourceIdAtIndex(index)).toBeLessThan(0);
       expect([TerrainType.DeepOcean, TerrainType.ShallowOcean]).toContain(first.world.getTerrain(x, y));
-      expect(Math.hypot(
-        x - first.generated.landmarks.homeReturnTile.x,
-        y - first.generated.landmarks.homeReturnTile.y,
-      )).toBeGreaterThanOrEqual(18);
+      expect(Math.sqrt(first.world.topology.minimumImageTileDistanceSquared(
+        { x, y },
+        first.generated.landmarks.homeReturnTile,
+      ))).toBeGreaterThanOrEqual(18);
       expect(definition.serviceAnchor).toEqual(definition.tile);
     }
     for (let left = 0; left < catalog.length; left++) {
       for (let right = left + 1; right < catalog.length; right++) {
-        expect(Math.hypot(
-          catalog[left].tile.x - catalog[right].tile.x,
-          catalog[left].tile.y - catalog[right].tile.y,
-        )).toBeGreaterThanOrEqual(14);
+        expect(Math.sqrt(first.world.topology.minimumImageTileDistanceSquared(
+          catalog[left].tile,
+          catalog[right].tile,
+        ))).toBeGreaterThanOrEqual(14);
       }
     }
   });
@@ -509,7 +548,7 @@ describe("returned fishing-shoal lifecycle", () => {
     );
     expect(simulation.acknowledgeGenerationHandover()).toBe(true);
 
-    expect(simulation.teleport(target.tile)).toBe(true);
+    teleportAlongNavigablePath(simulation, target.tile);
     expect(simulation.interactWithFishingShoal({
       contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
       type: "survey",
@@ -532,7 +571,7 @@ describe("returned fishing-shoal lifecycle", () => {
     let returnReports = 0;
     simulation.events.on("fishingShoalsReturned", () => returnReports++);
 
-    expect(simulation.teleport(target.tile)).toBe(true);
+    teleportAlongNavigablePath(simulation, target.tile);
     expect(simulation.interactWithFishingShoal({
       contractVersion: FISHING_SHOAL_CONTRACT_VERSION,
       type: "survey",
@@ -580,7 +619,7 @@ describe("returned fishing-shoal lifecycle", () => {
 
 describe("returned-ground Supported connectivity", () => {
   it("derives connection and activation from exact topology without rebuilding on unrelated changes", () => {
-    const world = new WorldGrid(5, 2, 5);
+    const world = new WorldGrid(5, 2, 5, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const id = createFishingShoalId(0);
     const system = new FishingShoalSystem(

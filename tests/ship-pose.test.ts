@@ -19,4 +19,15 @@ describe("ship presentation interpolation", () => {
     expect(interpolateShipPose(previous, current, -1).worldX).toBe(1);
     expect(interpolateShipPose(previous, current, 2).worldX).toBe(5);
   });
+
+  it("interpolates the supplied short lifted seam segment", () => {
+    const pose = interpolateShipPose(
+      { worldX: 3_070, worldY: 64, heading: 0, speed: 3 },
+      { worldX: 3_078, worldY: 64, heading: 0, speed: 3 },
+      0.5,
+    );
+
+    expect(pose.worldX).toBe(3_074);
+    expect(pose.worldY).toBe(64);
+  });
 });

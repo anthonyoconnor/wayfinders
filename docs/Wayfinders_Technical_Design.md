@@ -9,9 +9,9 @@ future scope in `Wayfinders_Roadmap.md`.
 
 Wayfinders is a browser exploration prototype about leaving safe water,
 building knowledge through travel, deciding when to return, and passing a
-stronger chart to later navigators. The finite world goal is to rediscover and
-return the locations of idols lost when the world split into islands. The idols
-themselves are not recovered.
+stronger chart to later navigators. Its finite long-term objective is to
+rediscover and return the configured catalog of idol locations lost when the
+world split into islands. The idols themselves are not recovered.
 
 The implementation follows these rules:
 
@@ -61,6 +61,7 @@ Default prototype values:
 | Setting | Value |
 | --- | ---: |
 | World | `96 x 96` navigation tiles |
+| Gameplay topology | wrap west/east and north/south |
 | Navigation tile | `32` world pixels |
 | Art lattice | `16` world pixels |
 | Chunk | `32 x 32` navigation tiles |
@@ -88,8 +89,24 @@ same rendered frame.
 
 ## 4. World model and generation
 
+Every world has an explicit `WorldTopology`. Generated gameplay worlds wrap on
+both axes. Authored collision canvases, isolated sea trials, and other named
+asset contexts remain explicitly bounded. There is no runtime finite/toroidal
+game-mode choice.
+
+Authoritative tile indices and stored world positions are canonical: tile
+coordinates are inside `[0, width) x [0, height)` and pixel coordinates are
+inside the matching half-open pixel rectangle. Lifted coordinates identify a
+physical traversal or presentation image and may lie outside that rectangle by
+whole world spans. `WorldTopology` owns canonicalization, minimum-image
+displacement and distance, direction-tagged cardinal steps, wrapped bounds
+decomposition, and periodic chunk-image enumeration. Exact half-span
+displacements retain their signed direction; one-cell wrapped axes do not add
+self-edges, while opposite directions on a two-cell axis remain distinct.
+
 Integer `(tileX, tileY)` coordinates drive terrain, knowledge, cost, and route
-queries. Continuous pixels drive movement and rendering. A tile centre is:
+queries. Continuous pixels drive movement and rendering. A canonical tile
+centre is:
 
 ```text
 worldX = tileX * tileSize + tileSize / 2
@@ -100,32 +117,48 @@ worldY = tileY * tileSize + tileSize / 2
 terrain, knowledge, visibility, movement and sight blocking, expedition stamps,
 island IDs, and resource IDs. Sparse sets and counters provide known-water,
 visibility, expedition, and return-root indices without ordinary full-world
-scans.
+scans. Reads and writes require canonical coordinates; systems cross a seam
+through `WorldTopology` before touching storage.
 
 Generation has three explicit stages:
 
-1. **Plan** creates a versioned `WorldManifest` with stable settings identity,
-   home geometry, bounded island descriptors, and deterministic namespaces.
-2. **Rasterize** paints authoritative tiles and validates navigation,
-   dock/open-edge connectivity, channels, and atoll entrances.
+1. **Plan** creates a schema-2 `WorldManifestV2` with stable settings identity,
+   explicit topology, home geometry, deterministic namespaces, stable water
+   regions, and one lifted footprint plus its exact one-to-four canonical
+   pieces for each island. A footprint must be strictly smaller than each
+   wrapped world span. Ribbon regions carry an explicit whole-world tile image
+   offset for intentional winding.
+2. **Rasterize** paints each authoritative tile at most once per descriptor and
+   validates periodic navigation, minimum channels, atoll entrances, and the
+   global-ocean contract.
 3. **Analyze** performs one row-major capture into an immutable
-   `WorldAnalysisIndex` for passability, components, coastline runs, islands,
-   and bounded candidate queries.
+   `WorldAnalysisIndex` for periodic passability, components, coastline runs,
+   islands, and bounded candidate queries.
 
 The seed and generation settings produce the home island and exact dock,
-Supported-water boundary, base terrain, a clear departure corridor, non-home
-islands, and passable ocean connected to every world edge. Island placement is
-spatially indexed, deterministic, and attempt-bounded. The configured island
-count is a maximum: a profile with no legal position after its bounded random
-attempts and complete fallback scan is omitted, and planning continues with
-later profiles.
+Supported-water boundary, base terrain, a clear finite eastbound departure
+corridor, non-home islands, and one global ocean. The dock component must be
+uniquely largest, contain independent horizontal and vertical lifted winding
+cycles, and contain every atoll lagoon centre. A seam edge by itself is not a
+winding cycle. Feature catalogs additionally require mandatory service and
+approach anchors to belong to that component.
+
+Island centres may occupy the complete canonical domain. Home clearance,
+inter-island channels, and placement conflict use minimum-image distance. The
+starter exclusion ends one half-world east of the dock and does not
+circumnavigate. Procedural and authored footprints rasterize from island-local
+lifted geometry through periodic pieces, so seam crossing does not split shape,
+collision, or identity. Island placement is spatially indexed, deterministic,
+and attempt-bounded. The configured island count is a maximum: a profile with
+no legal position after its bounded random attempts and complete fallback scan
+is omitted, and planning continues with later profiles.
 
 Non-home island manifests record stable numeric identity, source kind, and—when
 authored—the stable asset ID. Planning receives a validated catalog snapshot
 sorted by stable asset ID, selects authored islands deterministically without
 replacement, uses each selected asset at most once, and creates procedural
 islands only for the configured shortfall. Catalog traversal order cannot
-change selection. Authored canvas and collision bounds retain edge, home,
+change selection. Authored canvas and collision bounds retain periodic home,
 starter-lane, and navigable-channel clearances.
 
 Authored island rasterization installs the saved `32`/`8` solid mask as
@@ -140,17 +173,34 @@ shape, terrain, dossier content, and visual content use separate deterministic
 namespaces. High Island, Low Cay, Atoll, and Rocky Skerry remain procedural
 kinds; atolls receive a navigable passage.
 
+`WorldAnalysisIndex` uses periodic cardinal/eight-neighbour topology for
+components, coastlines, service anchors, and split bounds. Coordinate zero is
+not a coastline or openness fact.
+
 `WorldSpatialIndex` provides deterministic closed-bounds point, region, radius,
-nearby, and chunk queries. `WorldDescriptorRegistry` adapts heterogeneous
+nearby, and chunk queries over canonical buckets. Descriptors supply one lifted
+bounds rectangle; the index validates and decomposes it into periodic pieces,
+deduplicates by stable ID before exact filtering, and orders nearby results by
+minimum-image distance then ID. `WorldDescriptorRegistry` adapts heterogeneous
 descriptors at composition. Feature systems use indexed candidates but retain
-exact state, range, sight, and approach checks.
+exact periodic state, range, sight, and approach checks.
 
 ## 5. Movement and collision
 
 The ship has continuous position, heading, speed, and a current navigation tile.
 Keyboard input supplies turning and forward/reverse thrust. Movement sweeps the
-authored hull along the continuous segment, stops before the first solid
-primitive, and emits crossed tile centres in order.
+authored hull along a lifted continuous segment, maps broad- and fine-phase
+collision cells to canonical storage through `WorldTopology`, and stops before
+the first solid primitive. The final ship position and tile remain canonical.
+Every physical tile-centre entry is emitted once in order, including repeated
+seam crossings in one accepted move.
+
+`MovementResult` carries the accepted `liftedDisplacement`, the whole-world
+pixel `worldImageOffset` relating the lifted and canonical endpoints, ordered
+canonical `enteredTiles`, and short `TravelSegment` records. Segment endpoints
+stay lifted while each segment's cost/knowledge tile is canonical. Provision,
+visibility, camera, wake, and presentation consumers use that published
+physical result instead of reconstructing direction from canonical endpoints.
 
 The `32 x 32` navigation grid remains terrain and route authority. A sparse
 collision override can replace a coarse cell with a `4 x 4` grid of `8 x 8`
@@ -162,9 +212,12 @@ package/config disagreement and creates an authoritative movement view, so live
 speed tuning cannot replace the hull implicitly.
 
 Swept collision uses intersected coarse cells as a broad phase and at most 16
-fine primitives per overridden cell as a narrow phase. `GridGraph` caches
+fine primitives per overridden cell as a narrow phase. A wrapped coordinate
+edge is ordinary water unless canonical collision blocks it; synthetic walls
+exist only in explicitly bounded contexts. `GridGraph` caches direction-tagged
 cardinal edge classification by collision revision after applying the same
-centre-to-centre swept-hull clearance test. Manual sailing, return paths,
+centre-to-centre swept-hull clearance test. Each edge retains its destination
+image offset, and its reverse edge is symmetric. Manual sailing, return paths,
 forward range, service connectivity, and generation validation therefore share
 one traversal predicate. Unknown blockers are filtered only for predictive
 forward guidance so hidden islands are not revealed.
@@ -174,16 +227,17 @@ and land also block sight. Runtime PNG pixels are never sampled for collision.
 
 ## 6. Visibility, knowledge, and provisions
 
-Current visibility is a Euclidean disc with line traversal against sight
-blockers. Blocking tiles remain visible and obscure tiles behind them. Movement
-evaluates sight at every crossed tile centre; the final disc becomes
-`visibleNow`, while the union supports trail creation without high-speed gaps.
+Current visibility is a periodic Euclidean disc with nearest-image line
+traversal against sight blockers. Blocking tiles remain visible and obscure
+tiles behind them. Movement evaluates sight at every published lifted crossed
+centre; the final disc becomes `visibleNow`, while the deduplicated canonical
+union supports trail creation without high-speed or seam gaps.
 
 Normal sight does not immediately convert visible Unknown water to Personal:
 
 - water at and ahead of the ship stays Unknown;
 - leaving a tile centre stamps a broad perpendicular Personal trail owned by
-  the active expedition;
+  the active expedition and split periodically into canonical tiles;
 - visible blocked landmarks may become Personal immediately; and
 - Personal and Supported knowledge never downgrade through sight.
 
@@ -198,9 +252,12 @@ available = provisions - provisionAccumulator
 ```
 
 Movement prepares charges from crossed segments before visibility or knowledge
-updates. Entering water that was Unknown at segment start therefore pays the
-Unknown rate even when that move reveals it. Replenishment clears the
-accumulator.
+updates. It consumes each segment's canonical tile and physical length, so
+entering water that was Unknown at segment start pays the Unknown rate even
+when that move reveals it. Replenishment clears the accumulator. Tiny Unknown
+pocket cleanup uses periodic connectivity and the existing size bound;
+coordinate zero is not an escape boundary, and a seam-spanning component is one
+component.
 
 ## 7. Forward and return guidance
 
@@ -209,7 +266,8 @@ the current available provisions. Predictive search treats unseen blockers as
 Unknown water so the overlay cannot expose hidden terrain. The logical mask and
 candidate list contain every reachable Unknown cell. Separate presentation
 outputs retain only the outermost Unknown-cost band, clip that sparse frontier
-to a heading-centred cone, and draw contour edges rather than filled tiles.
+to a heading-centred minimum-image cone, and draw periodic contour edges rather
+than filled tiles.
 
 Forward guidance is derived, not movement authority. `GameSimulation` is its
 only scheduler and publisher:
@@ -218,7 +276,7 @@ only scheduler and publisher:
   revisions, origin, and provision budget;
 - repeated invalidations coalesce and cancel obsolete work;
 - the exact search advances cooperatively with a default `3 ms` wall-clock
-  target and `32,768` work-unit safety cap per slice;
+  target and `49,152` work-unit safety cap per slice;
 - stale or cancelled tasks never publish;
 - a complete result swaps atomically from an inactive reusable buffer; and
 - heading changes reclip current sparse candidates without restarting an
@@ -233,14 +291,17 @@ tasks.
 Return guidance remains synchronous authority. `ReturnPathSystem` finds one
 minimum-provision route from the ship to reachable Supported water. It may cross
 Unknown water only inside current sight and otherwise follows Personal water.
-The ordered route is presentation input for the **Voyage Sense thread**. A
-bounded padded corridor remains available to diagnostics but is not rendered.
-Presentation rounds cardinal turns within the traversable route-tile envelope
-and indexes the resulting sparse segments by chunk; it never recalculates the
-route or becomes navigation authority. One faint soft-edged thread applies a
-single risk colour to the whole route from the remaining provision margin:
-green, yellow, orange, then red as supply falls. The thread is absent when the
-ship is already in Supported water or no eligible known route exists.
+Supported/Personal boundary roots and connectivity are periodic. The ordered
+canonical route includes direction-preserving `pathEdges` with local and
+cumulative image offsets and lifted endpoints. It is presentation input for the
+**Voyage Sense thread**. A bounded padded corridor remains available to
+diagnostics but is not rendered. Presentation rounds cardinal turns within the
+traversable route-tile envelope, splits geometry into short image-local pieces,
+and indexes canonical copies by chunk; it never recalculates the route or
+becomes navigation authority. One faint soft-edged thread applies a single risk
+colour to the whole route from the remaining provision margin: green, yellow,
+orange, then red as supply falls. The thread is absent when the ship is already
+in Supported water or no eligible known route exists.
 
 The screen-space cargo rack consumes one renderer-neutral partition of physical
 bundles rather than recalculating gameplay rules. Natural bundle material is
@@ -259,13 +320,15 @@ frames.
 ## 8. Expedition, wreck, and lineage lifecycle
 
 An expedition begins when ordinary movement crosses from Supported to
-non-Supported water. Reaching Supported water away from home does not settle it.
+non-Supported water, including across a canonical seam. Reaching Supported
+water away from home does not settle it.
 
 Exact-home-dock return is one ordered transaction:
 
 1. place the ship at the dock centre;
 2. commit expedition-owned Personal water to Supported;
-3. close only bounded tiny enclosed Unknown pockets;
+3. close only tiny periodically enclosed Unknown pockets within the configured
+   size bound;
 4. commit all expedition-owned feature leads, surveys, wreck reports, and idol
    findings;
 5. close the expedition and advance its ID;
@@ -312,7 +375,10 @@ Fishing shoals, island dossiers, and survey sites share the same durable
 branching rule: sighting is free and provisional, surveying spends provisions,
 exact-dock return commits the lead or report, and wreck rolls back only the
 current expedition's records. Stable IDs make revisits, ordering, lineage
-credit, and presentation deterministic.
+credit, and presentation deterministic. Catalog placement, sight, range,
+approach, service-anchor, home exclusion, and inter-feature separation use
+minimum-image distance and periodic spatial queries. Coordinate-zero seams do
+not create an empty feature band.
 
 Every non-home island has one immutable dossier definition with stable island
 identity, exact footprint, dock-reachable coastal approaches, a deterministic
@@ -338,9 +404,9 @@ survey owns return and rollback. Undiscovered hosts never enter presentation or
 the Great Hall read model.
 
 The completion state is `in-progress`, `awaiting-choice`, or `continued`. Only
-the exact-dock return that reaches the configured idol-location total enters
-`awaiting-choice`, after ordinary settlement and lineage credit. Movement and
-lifecycle interactions are suppressed until the player chooses. **Continue**
+the exact canonical home-dock return that reaches the configured idol-location
+total enters `awaiting-choice`, after ordinary settlement and lineage credit.
+Movement and lifecycle interactions are suppressed until the player chooses. **Continue**
 preserves the completed world and prevents another ending. **Start new game**
 uses a distinct deterministic seed and constructs a fresh world and lineage.
 If the final return also completes a fourth voyage, completion presentation has
@@ -348,10 +414,23 @@ priority and the committed handover waits underneath it.
 
 ## 10. Rendering and authored assets
 
-The game uses Phaser WebGL. `WayfindersScene` derives one closed viewport chunk
-region and updates one `ActiveChunkSet`. The active set prioritizes visible
-chunks, adds a prefetch ring when capacity allows, and enforces a hard five-by-
-five (`25`) chunk resource budget. Deactivation runs before activation.
+The game uses Phaser WebGL. Authoritative simulation poses stay canonical;
+`WayfindersScene` owns a `LiftedViewAnchor` that advances from each accepted
+movement's lifted displacement and wrap offset. The ship and unbounded camera
+interpolate along the short lifted segment. Teleports relocate to the nearest
+image, world/session replacement resets the anchor, and long-running view
+coordinates rebase by whole world spans without changing canonical state.
+Pointer and developer-tool coordinates normalize through `WorldTopology` before
+candidate selection or mutation.
+
+The scene converts its lifted camera rectangle to closed tile bounds and
+updates one `ActiveChunkSet`. Each `ActiveChunkEntry` has a `viewKey`, canonical
+chunk owner, whole-world pixel `imageOffset`, visible/prefetch band, and stable
+priority. The active set enumerates periodic images directly, handles partial
+final chunks at the exact world span, prioritizes visible demand, adds one
+prefetch ring when capacity allows, and enforces a hard `25`-image-entry budget.
+Multiple entries may reference one canonical chunk. Deactivation runs before
+activation; visible deferred images use the lifted ocean placeholder.
 
 ### Audio foundation, sailing ambience, and discrete cues
 
@@ -475,26 +554,34 @@ sound-effect, and UI set remains auditionable through the play-only Audio
 workspace. The stored artifact, deterministic regeneration, and replacement
 contract is owned by `Wayfinders_Asset_Pipeline.md`.
 
-Chunk-local terrain, authored home-island objects, imported authored-island
-layers, knowledge/risk textures, cloud/shadow pairs, and marker pools all consume
-the same active-chunk delta. Inactive presentation resources are destroyed or
-returned to bounded pools; non-creating world reads prevent the renderer from
-expanding authoritative storage. Shared package and available-island textures,
-the player-boat visual, and one four-frame cloud sheet remain scene-owned. The
-ocean backdrop is the deterministic placeholder if visible demand exceeds the
-active budget.
+Terrain, authored-island art, knowledge/risk masks, Voyage Sense, cloud/shadow
+pairs, and marker pools consume the same periodic active-chunk delta. Logical
+records, revisions, dirty state, and canvas textures remain canonical; image
+views carry the entry's offset and may share one owner. Inactive aliases are
+destroyed or returned to bounded pools, and non-creating world reads prevent
+the renderer from expanding authoritative storage. Shared package and
+available-island textures, the player-boat visual, and one four-frame cloud
+sheet remain scene-owned. The ocean backdrop is resized around the lifted
+viewport and provides the deterministic placeholder if visible demand exceeds
+the active budget.
 
-Knowledge and Voyage Sense overlays update only dirty chunks and required neighbours.
-Static terrain, feature markers, and authored island objects are constructed
-only for active chunks. Each imported island resolves the stable asset ID
-recorded in its manifest descriptor, positions visible prepared layers at the
-descriptor's collision-bounds origin, and scales them to the exact saved grid
-canvas. The island centre chunk owns those layers without per-update world
-scans or duplicate placement state. Retained chunks create no duplicate image;
-deactivation destroys every layer. A missing texture or catalog-revision
-disagreement uses the complete procedural developer presentation instead of a
-partial imported visual. Camera zoom changes no placement calculation. The ship
-interpolates between fixed simulation steps. No texture is allocated per frame.
+Knowledge and risk overlays maintain their fixed texture resources per
+referenced canonical chunk, invalidate periodic neighbours, and attach
+translated image sprites.
+Voyage Sense consumes lifted path edges, divides long geometry into short local
+pieces, and stores canonical chunk copies for alias rendering. Static terrain,
+feature markers, diagnostic bounds, prompts, and picking use the same canonical
+owner plus image-view split. Stable frames allocate no new texture.
+
+Each imported island resolves the stable asset ID recorded in its manifest
+descriptor, positions visible prepared layers at the lifted collision-bounds
+origin, and scales them to the exact saved grid canvas. Periodic footprint
+intersection activates a view even when the island's canonical centre chunk is
+outside the viewport. One descriptor, feature state, and texture set back all
+views; view identity includes the whole-world offset. A missing texture or
+catalog-revision disagreement uses the complete procedural developer
+presentation instead of a partial imported visual. Camera zoom changes no
+placement calculation.
 
 Cloud atmosphere is an independent presentation layer. Each candidate owns a
 paired shadow at depth `51` and cloud at depth `52`, above map art, knowledge,
@@ -507,9 +594,9 @@ Cloud sprites sample a seeded four-tone white-to-storm-blue palette and a wider
 `0.22` through `0.50` scale range. Their `0.34` through `0.52` opacity range
 keeps silhouettes readable while preserving a `0.55` package ceiling.
 
-Each active chunk defaults to six deterministic candidate slots distributed by
-a stable low-discrepancy sequence; increasing frequency adds positions without
-moving existing slots. Slots cycle through all four authored silhouettes. The
+Each referenced canonical chunk defaults to six deterministic candidate slots
+distributed by a stable low-discrepancy sequence; increasing frequency adds
+positions without moving existing slots. Slots cycle through all four authored silhouettes. The
 home-centre chunk reserves the first three at fixed offsets around the home
 island, guaranteeing the default opening composition without adding another
 resource class, then fills any remaining frequency with ordinary slots. The world seed,
@@ -520,11 +607,14 @@ small, middle, and large scales. Candidate creation, motion, phase, and route
 progress are independent of fog. Each existing pair continues moving while
 hidden and is never rebuilt merely because knowledge or live sight changes.
 
-Presentation visibility follows the knowledge overlay's current clear coverage.
+Each active chunk image may display an offset view of those canonical
+candidates without duplicating descriptor or fog authority. Presentation
+visibility follows the knowledge overlay's current clear coverage.
 The renderer checks the pair's current padded cloud-and-shadow footprint, not
 its complete route: every covered tile must be Supported, currently visible, or
-belong to an exactly revealed island. Unknown or occluded Personal fog,
-filtered fog edges, and world bounds hide the pair without changing its motion.
+belong to an exactly revealed island. The footprint samples canonical wrapped
+tiles, so Unknown or occluded Personal fog hides the pair without a false wall
+at a coordinate seam and without changing its motion.
 The check is invalidated by knowledge, live-visibility, exact-island reveal, or
 world identity changes and when motion crosses a tile boundary. This lets the
 ship's sight naturally uncover a cloud already moving beyond the fog. Ship
@@ -560,13 +650,16 @@ preview coordinates only; it does not create another gameplay simulation.
 World generation runs `WaterLayoutPlanner` after authoritative terrain
 rasterization and `WorldAnalysisIndex` construction. The manifest records the
 water-layout version, catalog fingerprint, and stable coherent ellipse/ribbon
-regions; `GeneratedWaterLayout` exposes chunk-addressable base IDs, overlay
-masks, directional transition masks, variants, and phases. The checked-in depth
-atlas is used only on a deep host tile facing coastal water; it is never applied
-symmetrically or reused for unrelated profile pairs. A one-tile deep host collar
-keeps contextual far-water regions from bypassing that island blend. Reef is selected only from
-`TerrainType.Reef`; coastal and protected lagoon water are derived from shallow
-terrain and island context, and coastal water also underpaints blocked island
+regions. Ellipses use minimum-image containment; ribbons apply their explicit
+lift/winding before distance tests. Protected shallows, collars, masks, and
+neighbour classification use periodic topology. `GeneratedWaterLayout` exposes
+canonical chunk-addressable base IDs, overlay masks, directional transition
+masks, variants, and phases; presentation offsets never enter these facts. The
+checked-in depth atlas is used only on a deep host tile facing coastal water; it
+is never applied symmetrically or reused for unrelated profile pairs. A one-tile deep host collar
+keeps contextual far-water regions from bypassing that island blend. Reef is
+selected only from `TerrainType.Reef`; coastal and protected lagoon water are
+derived from shallow terrain and island context, and coastal water also underpaints blocked island
 cells so transparent shoreline pixels never reveal the ocean backdrop. Deep is
 the ocean fallback. Abyss, current,
 and rough regions are deterministic presentation facts. Brackish remains
@@ -574,15 +667,21 @@ catalogued but is not placed without a future authoritative context. None of
 these presentation facts mutate terrain, collision, navigation, resources,
 knowledge, provisions, islands, or feature outcomes.
 
-`WaterRenderer` consumes the scene-owned `ActiveChunkDelta`. Each active chunk
-owns one cached base canvas texture and one surface canvas texture; prefetched
-chunks remain static and only visible surface textures advance on discrete
-presentation frames. The surface plane composes directional depth transitions,
-glints, currents, and rough-water/whitecap accents. A constant ocean rectangle
-covers deferred gaps, and the exact home transform owns one aligned shoreline
-overlay while its chunk is active. Reduced motion leaves the cached static
-frame in place. Knowledge, fog, risk, and route renderers remain later layers
-and do not feed water classification.
+`WaterRenderer` consumes the scene-owned `ActiveChunkDelta`. Each referenced
+canonical chunk owns one cached base canvas texture and one surface canvas
+texture. Every periodic `ActiveChunkEntry` creates translated base/surface image
+objects that share those textures. Prefetched owners remain static, each
+visible canonical surface advances at most once on a discrete presentation
+frame, and additional aliases cause no redraw. The base texture exposes its
+exact chunk-sized frame one pixel inside an opaque extruded gutter so linear
+sampling cannot reveal a backdrop join between periodic images; the animated
+surface texture remains exact-sized. The surface plane composes
+directional depth transitions, glints, currents, and rough-water/whitecap
+accents. A lifted ocean rectangle covers deferred gaps. Every visible periodic
+image of the exact home footprint may own an aligned shoreline-overlay alias;
+the aliases share package frames and follow the same active lifetime. Reduced
+motion leaves cached static frames in place. Knowledge, fog, risk, and route
+renderers remain later layers and do not feed water classification.
 
 Fishing-ground presentation uses the fog-filtered read model. Hidden-quality
 states always use the neutral steady surface cue; surveyed states may select
@@ -607,7 +706,10 @@ permanent left-library, centre-preview, and right-workbench regions. Water is th
 production inspection surface: it reads the versioned water package and the
 same `WorldGenerator`/`GeneratedWaterLayout` facts as the game, offers seed,
 profile, overlay, pause, fit, and 1:1 controls, and displays the lean, steady,
-and rich 96 x 64 fishing-ground cues without visible fish. It omits the general
+and rich 96 x 64 fishing-ground cues without visible fish. Its inspection
+camera remains bounded by design while its derived shore/distance facts are
+periodic, so fit and 1:1 views can inspect both sides of each world seam from
+the same canonical layout. It omits the general
 production-tooling sidebar and cannot mutate gameplay or asset authority. The
 active workspace is URL-addressable and follows
 browser history; accessible arrow-key navigation uses roving focus. A typed
@@ -718,14 +820,15 @@ Normal sailing avoids work proportional to total world or island count:
 - visibility clears only the previous visible set;
 - knowledge and expedition work uses maintained sparse sets;
 - collision visits the swept coarse AABB and cached cardinal topology;
-- interaction and marker queries start from spatially local candidates;
+- interaction and marker queries split only the local periodic buckets and
+  deduplicate candidates before exact filtering;
 - forward guidance is cooperative, cancellable, and atomically published;
 - return rendering follows one sparse, chunk-indexed Voyage Sense thread;
-- clouds retain six cloud/shadow pairs per active chunk by default and at most
-  twelve under live debug tuning, compute one bounded current footprint per
-  pair, and rescan fog tiles only when overlay coverage changes or motion
-  crosses a tile boundary;
-- overlays update dirty active chunks only; and
+- clouds retain six cloud/shadow descriptors per referenced canonical chunk by
+  default and at most twelve under live debug tuning, compute one bounded
+  current footprint per descriptor, and give active images only translated
+  views;
+- overlays update dirty canonical chunks only and aliases add no redraw; and
 - diagnostics are sampled and capped.
 
 Current automated budgets are:
@@ -733,10 +836,24 @@ Current automated budgets are:
 - `P0` and `P1` authoritative tile-entry work: p95 below `4 ms`;
 - `P2` cooperative forward-guidance slice: p95 below `4 ms`, with p95 no more
   than 24 slices per request;
-- presentation resources: no more than 25 active chunks;
-- `P2`: deterministic 300-island plan/rasterization over 100 fixed seeds; and
-- `P2-500`: placement terminates within declared random and fallback attempt
-  bounds, returning a deterministic plan of up to 500 islands.
+- complete generation p95: `P0 <= 350 ms`, `P1 <= 600 ms`, and
+  `P2 <= 3,500 ms` under the named serial benchmark;
+- `P2-500`: complete generation at or below `7.5 s`, with each island limited
+  to its configured random attempts plus the declared finite row-major fallback
+  scan, returning a deterministic plan of up to 500 islands;
+- the reference sub-chunk seam-radius query: no more than four canonical
+  buckets and sixteen candidate descriptors examined;
+- presentation: no more than 25 active periodic image entries, including
+  aliases of the same canonical chunk;
+- water: exactly two canvas textures per referenced canonical chunk, at most one
+  surface redraw per visible canonical owner per presentation frame, and zero
+  redraws attributable to aliases; and
+- repeated laps: per-step authoritative, query, resource, texture, and redraw
+  work reaches a stable plateau independent of lap count.
+
+The named generation acceptance also retains deterministic `P2` 300-island
+seed sweeps, exact manifest replay, periodic channel/global-ocean validation,
+and bounded placement diagnostics.
 
 World planning, rasterization, and analysis may scale with total area because
 they run at explicit generation time. Normal frames may not. A worker or route
@@ -751,11 +868,14 @@ headless worlds. Integration tests construct `GameSimulation` only for
 cross-subsystem journeys. Filesystem transactions and generated artifacts use
 the I/O lane; scale sweeps and timing budgets use the serial performance lane.
 
-Automated tests cover deterministic generation, collision/topology, knowledge,
-guidance equivalence and scheduling, expedition and feature lifecycles, lineage,
-completion, rendering invalidation/resource bounds, asset contracts, and
-repository transactions. Exact counts are intentionally not part of this
-contract.
+Automated tests cover deterministic periodic generation, seam/corner movement,
+collision/topology, sight and knowledge, guidance equivalence and scheduling,
+expedition and feature lifecycles, lineage, completion, rendering invalidation/
+resource bounds, asset contracts, and repository transactions. Full cardinal
+circumnavigations and diagonal corner journeys compare fixed-step partitions,
+canonical state, provisions, knowledge, route edge provenance, events, and
+diagnostics; same-seed regeneration must replay identically. Exact counts are
+intentionally not part of this contract.
 
 Desktop keyboard and pointer play is the validated platform target. Responsive
 resize exists.

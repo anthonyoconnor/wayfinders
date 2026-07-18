@@ -106,23 +106,32 @@ export function firstShipCollisionTime(
   for (let y = minimumTileY; y <= maximumTileY; y++) {
     for (let x = minimumTileX; x <= maximumTileX; x++) {
       if (options.stats) options.stats.broadPhaseCells++;
+      let canonicalX = x;
+      let canonicalY = y;
       if (!world.inBounds(x, y)) {
-        testPrimitive({
-          left: x * tileSize,
-          right: (x + 1) * tileSize,
-          top: y * tileSize,
-          bottom: (y + 1) * tileSize,
-        }, undefined);
-        continue;
+        const canonical = world.topology?.canonicalizeTile(x, y);
+        if (!canonical) {
+          testPrimitive({
+            left: x * tileSize,
+            right: (x + 1) * tileSize,
+            top: y * tileSize,
+            bottom: (y + 1) * tileSize,
+          }, undefined);
+          continue;
+        }
+        canonicalX = canonical.x;
+        canonicalY = canonical.y;
       }
 
-      const worldIndex = y * world.width + x;
-      if (options.includeTile && !options.includeTile(x, y, worldIndex)) continue;
+      const worldIndex = canonicalY * world.width + canonicalX;
+      if (options.includeTile && !options.includeTile(canonicalX, canonicalY, worldIndex)) continue;
       const fineMask = world.getFineCollisionMaskAtIndex(worldIndex);
       if (fineMask !== undefined) {
         for (let subY = 0; subY < COLLISION_SUBCELLS_PER_TILE; subY++) {
           for (let subX = 0; subX < COLLISION_SUBCELLS_PER_TILE; subX++) {
             if (!isCollisionSubcellSolid(fineMask, subX, subY)) continue;
+            // Collision ownership is canonical, but the primitive must remain
+            // in the lifted image actually crossed by this sweep.
             const left = x * tileSize + subX * COLLISION_SUBCELL_SIZE;
             const top = y * tileSize + subY * COLLISION_SUBCELL_SIZE;
             testPrimitive({

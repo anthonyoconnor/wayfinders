@@ -111,7 +111,7 @@ export class FishingShoalSystem {
           ? "returned-lead"
           : undefined;
       if (!state) continue;
-      const distance = Math.hypot(definition.tile.x - tile.x, definition.tile.y - tile.y);
+      const distance = this.interactionDistance(definition, tile);
       if (distance > FISHING_SHOAL_INTERACTION_RANGE_TILES) continue;
       if (
         closest
@@ -146,10 +146,9 @@ export class FishingShoalSystem {
     if (!id) return this.reject(undefined, "unknown-opportunity");
     const definition = this.definitionById.get(id);
     if (!definition) return this.reject(id, "unknown-opportunity");
-    if (
-      Math.hypot(definition.tile.x - shipTile.x, definition.tile.y - shipTile.y)
-      > FISHING_SHOAL_INTERACTION_RANGE_TILES
-    ) return this.reject(id, "out-of-range");
+    if (this.interactionDistance(definition, shipTile) > FISHING_SHOAL_INTERACTION_RANGE_TILES) {
+      return this.reject(id, "out-of-range");
+    }
 
     const provisional = this.provisionalById.get(id);
     const returned = this.returnedById.get(id);
@@ -348,10 +347,23 @@ export class FishingShoalSystem {
       yield* this.definitions;
       return;
     }
+    const seen = new Set<string>();
     for (const id of candidateIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
       const definition = this.definitionById.get(id);
       if (definition) yield definition;
     }
+  }
+
+  private interactionDistance(
+    definition: Readonly<FishingShoalDefinition>,
+    tile: Readonly<GridPoint>,
+  ): number {
+    return Math.sqrt(this.world.topology.minimumImageTileDistanceSquared(
+      tile,
+      definition.serviceAnchor,
+    ));
   }
 
   private readModelDefinitions(candidateIds: Iterable<string>): readonly Readonly<FishingShoalDefinition>[] {

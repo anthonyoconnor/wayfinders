@@ -5,10 +5,11 @@ import type {
   SurveySiteType,
 } from "../exploration/SurveySiteContracts";
 import { gridToChunk, gridToWorld } from "../world/CoordinateSystem";
+import type { ActiveChunkEntry } from "./activation";
 import {
   ChunkActivatedViewPool,
   type ChunkActivatedViewTelemetry,
-  type PresentationChunkCoordinate,
+  type PresentationChunkImage,
 } from "./lifetime";
 
 type SurveySiteState = SurveySiteReadModel<string>["state"];
@@ -77,9 +78,9 @@ export class SurveySiteRenderer {
       idOf: ({ id }) => id,
       chunkOf: ({ tile }) => gridToChunk(tile),
       create: () => this.createView(),
-      update: (view, record) => this.updateView(view, record),
-      activate: (view, { id }) => {
-        view.container.setActive(true).setVisible(true).setName(id);
+      update: (view, record, image) => this.updateView(view, record, image),
+      activate: (view, { id }, image) => {
+        view.container.setActive(true).setVisible(true).setName(`${id}@${image.viewKey}`);
         view.renderedState = undefined;
         view.renderedType = undefined;
         view.renderedPresentationId = undefined;
@@ -98,9 +99,9 @@ export class SurveySiteRenderer {
   }
 
   applyActiveChunks(
-    chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
+    chunks: readonly Readonly<ActiveChunkEntry>[],
   ): void {
-    this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
+    this.views.setActiveChunkImages(chunks);
   }
 
   getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
@@ -114,9 +115,13 @@ export class SurveySiteRenderer {
   private updateView(
     view: SurveySiteView,
     record: Readonly<SurveySiteReadModel<string>>,
+    image: Readonly<PresentationChunkImage>,
   ): void {
     const position = gridToWorld(record.tile, prototypeConfig.navigation.tileSize);
-    view.container.setPosition(position.x, position.y);
+    view.container.setPosition(
+      position.x + image.imageOffset.x,
+      position.y + image.imageOffset.y,
+    );
     if (
       view.renderedState !== record.state
       || view.renderedType !== record.type

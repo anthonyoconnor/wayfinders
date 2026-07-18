@@ -3,10 +3,11 @@ import { ProvisionSystem, availableProvisionUnits } from "../src/wayfinders/expl
 import { createSurveyBudget } from "../src/wayfinders/exploration/SurveyContracts.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { BOUNDED_WORLD_TOPOLOGY, WRAPPING_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology.ts";
 import { makeConfig, makeSegment, makeShip } from "./helpers.ts";
 
 function createWorld(state: KnowledgeState): WorldGrid {
-  const world = new WorldGrid(4, 2, 2);
+  const world = new WorldGrid(4, 2, 2, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, state);
   return world;
 }
@@ -79,6 +80,59 @@ it("keeps visible Unknown water at Unknown travel cost", () => {
   expect(world.getKnowledge(0, 0)).toBe(KnowledgeState.Unknown);
   expect(result.cost).toBe(1);
   expect(ship.provisions).toBe(4);
+});
+
+it("charges a lifted seam segment against its canonical tile", () => {
+  const config = makeConfig({ navigation: { tileSize: 32 }, provisions: { supportedCost: 0, unknownCost: 1 } });
+  const world = new WorldGrid(4, 2, 2, WRAPPING_WORLD_TOPOLOGY);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  const ship = makeShip();
+
+  const result = new ProvisionSystem(world, config).chargeMovement(ship, [{
+    fromWorldX: 128,
+    fromWorldY: 16,
+    toWorldX: 144,
+    toWorldY: 16,
+    distancePixels: 16,
+    tileX: 0,
+    tileY: 0,
+  }]);
+
+  expect(result.cost).toBe(0);
+  expect(ship.provisions).toBe(5);
+});
+
+it("keeps lifted seam charges partition-equivalent and fixed to pre-observation canonical knowledge", () => {
+  const config = makeConfig({
+    navigation: { tileSize: 32 },
+    provisions: { supportedCost: 0.25, unknownCost: 1 },
+  });
+  const world = new WorldGrid(4, 2, 2, WRAPPING_WORLD_TOPOLOGY);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setKnowledge(0, 0, KnowledgeState.Supported);
+  const system = new ProvisionSystem(world, config);
+  const whole = system.prepareMovement([
+    { fromWorldX: 112, fromWorldY: 16, toWorldX: 128, toWorldY: 16, distancePixels: 16, tileX: 3, tileY: 0 },
+    { fromWorldX: 128, fromWorldY: 16, toWorldX: 144, toWorldY: 16, distancePixels: 16, tileX: 0, tileY: 0 },
+  ]);
+  const split = system.prepareMovement([
+    { fromWorldX: 112, fromWorldY: 16, toWorldX: 120, toWorldY: 16, distancePixels: 8, tileX: 3, tileY: 0 },
+    { fromWorldX: 120, fromWorldY: 16, toWorldX: 128, toWorldY: 16, distancePixels: 8, tileX: 3, tileY: 0 },
+    { fromWorldX: 128, fromWorldY: 16, toWorldX: 136, toWorldY: 16, distancePixels: 8, tileX: 0, tileY: 0 },
+    { fromWorldX: 136, fromWorldY: 16, toWorldX: 144, toWorldY: 16, distancePixels: 8, tileX: 0, tileY: 0 },
+  ]);
+
+  world.setKnowledge(3, 0, KnowledgeState.Personal, 4);
+  const wholeShip = makeShip();
+  const splitShip = makeShip();
+  const wholeResult = system.applyPreparedMovement(wholeShip, whole);
+  const splitResult = system.applyPreparedMovement(splitShip, split);
+
+  expect(whole.segmentKnowledge).toEqual(Uint8Array.of(KnowledgeState.Unknown, KnowledgeState.Supported));
+  expect(splitResult.cost).toBeCloseTo(wholeResult.cost, 12);
+  expect(splitShip.provisions).toBe(wholeShip.provisions);
+  expect(splitShip.provisionAccumulator).toBeCloseTo(wholeShip.provisionAccumulator, 12);
 });
 
 it("makes partial movement accumulation frame-rate independent", () => {

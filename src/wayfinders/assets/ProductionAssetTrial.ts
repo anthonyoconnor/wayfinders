@@ -11,6 +11,7 @@ import {
 } from "../world/CollisionMask";
 import { KnowledgeState, TerrainType } from "../world/TileData";
 import { WorldGrid } from "../world/WorldGrid";
+import { BOUNDED_WORLD_TOPOLOGY } from "../world/WorldTopology";
 import type {
   AssetLibraryImageLayer,
   ProductionCandidateCollisionDraft,
@@ -251,7 +252,13 @@ export function createProductionAssetTrial(
   const marginTiles = MINIMUM_WATER_MARGIN_TILES;
   const worldWidth = draft.grid.width + marginTiles * 2;
   const worldHeight = draft.grid.height + marginTiles * 2;
-  const world = new WorldGrid(worldWidth, worldHeight, config.navigation.chunkSize);
+  const world = new WorldGrid(
+    worldWidth,
+    worldHeight,
+    config.navigation.chunkSize,
+    BOUNDED_WORLD_TOPOLOGY,
+    config.navigation.tileSize,
+  );
   world.fill(TerrainType.DeepOcean, KnowledgeState.Supported);
 
   const masks = candidateCollisionMasks(draft);

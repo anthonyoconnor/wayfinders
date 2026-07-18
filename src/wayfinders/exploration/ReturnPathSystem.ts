@@ -3,12 +3,15 @@ import type { GridPoint, ShipState } from "../core/types";
 import {
   dijkstra,
   DijkstraWorkspace,
+  reconstructDijkstraEdges,
   reconstructDijkstraPath,
+  type DijkstraNeighborVisitor,
   type DijkstraResult,
 } from "../navigation/Dijkstra";
 import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState } from "../world/TileData";
 import { WorldGrid } from "../world/WorldGrid";
+import { CARDINAL_DIRECTIONS, type CardinalDirection } from "../world/WorldTopology";
 import { availableProvisionUnits, knowledgeTravelCost } from "./ProvisionSystem";
 import type { ReturnQuery } from "./ReturnQuery";
 
@@ -28,12 +31,27 @@ export interface ReturnPathResult extends DijkstraResult {
   supportedBoundaryIndices: readonly number[];
   /** Minimum-cost path ordered from the ship through the first Supported tile. */
   pathIndices: readonly number[];
+  /** Direction-preserving lifted edges for the same ship-to-Supported path. */
+  pathEdges: readonly ReturnPathEdge[];
   /** Passable Personal/currently-visible cells within configured padding of the path. */
   corridorIndices: readonly number[];
   returnCost: number;
   returnMargin: number;
   riskLevel: ReturnRiskLevel;
   riskCounts: ReturnRiskCounts;
+}
+
+export interface ReturnPathEdge {
+  readonly fromIndex: number;
+  readonly toIndex: number;
+  readonly direction: CardinalDirection;
+  /** Edge-local tile offset selecting the adjacent image of `toIndex`. */
+  readonly imageOffset: Readonly<GridPoint>;
+  /** Accumulated tile offset selecting the destination image for the path so far. */
+  readonly destinationImageOffset: Readonly<GridPoint>;
+  /** Short, physically adjacent tile-centre coordinates anchored at the canonical origin. */
+  readonly liftedFrom: Readonly<GridPoint>;
+  readonly liftedTo: Readonly<GridPoint>;
 }
 
 export interface ReturnRiskCounts {
@@ -67,8 +85,16 @@ export class ReturnPathSystem implements ReturnQuery {
   private budgetCaches = new WeakMap<ReturnPathResult, ReturnBudgetCache>();
   private readonly searchWorkspace = new DijkstraWorkspace();
   private readonly boundaryWorkspace = new Set<number>();
-  private relaxNeighbor: (neighbor: number, traversalCost: number) => void = () => undefined;
-  private readonly visitGraphNeighbor = (neighbor: number): void => {
+  private relaxNeighbor: DijkstraNeighborVisitor = () => undefined;
+  private readonly visitGraphNeighbor = (
+    neighbor: number,
+    _x: number,
+    _y: number,
+    direction: CardinalDirection,
+    _reverseDirection: CardinalDirection,
+    imageOffsetX: number,
+    imageOffsetY: number,
+  ): void => {
     const knowledge = this.world.getKnowledgeAtIndex(neighbor);
     // Supported boundary cells are the search roots. There is no reason to
     // flood the interior zero-cost Supported component after leaving a root.
@@ -76,14 +102,20 @@ export class ReturnPathSystem implements ReturnQuery {
     // Current sight is known to the player even though outward-travel water is
     // intentionally not committed to Personal until it falls behind the ship.
     if (knowledge === KnowledgeState.Unknown && !this.world.isVisibleNowAtIndex(neighbor)) return;
-    this.relaxNeighbor(neighbor, knowledgeTravelCost(knowledge, this.config));
+    this.relaxNeighbor(
+      neighbor,
+      knowledgeTravelCost(knowledge, this.config),
+      direction,
+      imageOffsetX,
+      imageOffsetY,
+    );
   };
   private readonly forEachSearchNeighbor = (
     node: number,
-    visit: (neighbor: number, traversalCost: number) => void,
+    visit: DijkstraNeighborVisitor,
   ): void => {
     this.relaxNeighbor = visit;
-    this.graph.forEachTraversableCardinalNeighbor(node, this.visitGraphNeighbor);
+    this.graph.forEachTraversableCardinalEdge(node, this.visitGraphNeighbor);
   };
   private readonly collectSupportedNeighbor = (neighbor: number): void => {
     if (
@@ -158,7 +190,9 @@ export class ReturnPathSystem implements ReturnQuery {
     });
 
     const budget = availableProvisionUnits(ship);
-    const pathIndices = this.pathIndicesToSupported(search, originIndex);
+    const path = this.pathToSupportedResult(search, originIndex);
+    const pathIndices = path.indices;
+    const pathEdges = path.edges;
     const hasKnownReturn = pathIndices.length > 0;
     const returnCost = hasKnownReturn ? search.costs[originIndex] : Number.POSITIVE_INFINITY;
     const returnMargin = Number.isFinite(returnCost) ? budget - returnCost : Number.NEGATIVE_INFINITY;
@@ -181,6 +215,7 @@ export class ReturnPathSystem implements ReturnQuery {
       originIndex,
       supportedBoundaryIndices,
       pathIndices,
+      pathEdges,
       corridorIndices,
       returnCost,
       returnMargin,
@@ -227,17 +262,64 @@ export class ReturnPathSystem implements ReturnQuery {
     return true;
   }
 
-  private pathIndicesToSupported(
-    result: Pick<DijkstraResult, "visited" | "parents">,
+  private pathToSupportedResult(
+    result: Pick<
+      DijkstraResult,
+      | "visited"
+      | "parents"
+      | "parentDirections"
+      | "parentImageOffsetX"
+      | "parentImageOffsetY"
+    >,
     originIndex: number,
-  ): number[] {
-    if (!result.visited[originIndex]) return [];
+  ): { indices: number[]; edges: ReturnPathEdge[] } {
+    if (!result.visited[originIndex]) return { indices: [], edges: [] };
     const path = reconstructDijkstraPath(result, originIndex).reverse();
     const destination = path[path.length - 1];
     if (destination === undefined || this.world.getKnowledgeAtIndex(destination) !== KnowledgeState.Supported) {
-      return [];
+      return { indices: [], edges: [] };
     }
-    return path;
+
+    const outwardEdges = reconstructDijkstraEdges(result, originIndex);
+    const edges: ReturnPathEdge[] = [];
+    let cumulativeOffsetX = 0;
+    let cumulativeOffsetY = 0;
+    for (let position = outwardEdges.length - 1; position >= 0; position--) {
+      const outward = outwardEdges[position];
+      const outwardDirection = CARDINAL_DIRECTIONS[outward.direction as CardinalDirection];
+      if (!outwardDirection) throw new Error("Return path is missing cardinal edge provenance");
+      const direction = outwardDirection.reverseDirection;
+      const imageOffsetX = outward.imageOffsetX === 0 ? 0 : -outward.imageOffsetX;
+      const imageOffsetY = outward.imageOffsetY === 0 ? 0 : -outward.imageOffsetY;
+      const from = {
+        x: outward.to % this.world.width,
+        y: Math.floor(outward.to / this.world.width),
+      };
+      const to = {
+        x: outward.from % this.world.width,
+        y: Math.floor(outward.from / this.world.width),
+      };
+      const liftedFrom = {
+        x: from.x + cumulativeOffsetX,
+        y: from.y + cumulativeOffsetY,
+      };
+      cumulativeOffsetX += imageOffsetX;
+      cumulativeOffsetY += imageOffsetY;
+      const liftedTo = {
+        x: to.x + cumulativeOffsetX,
+        y: to.y + cumulativeOffsetY,
+      };
+      edges.push({
+        fromIndex: outward.to,
+        toIndex: outward.from,
+        direction,
+        imageOffset: { x: imageOffsetX, y: imageOffsetY },
+        destinationImageOffset: { x: cumulativeOffsetX, y: cumulativeOffsetY },
+        liftedFrom,
+        liftedTo,
+      });
+    }
+    return { indices: path, edges };
   }
 
   private buildCorridor(pathIndices: readonly number[]): number[] {
@@ -264,7 +346,7 @@ export class ReturnPathSystem implements ReturnQuery {
     for (let head = 0; head < queue.length; head++) {
       const depth = depths[head];
       if (depth >= padding) continue;
-      this.graph.forEachTraversableCardinalNeighbor(queue[head], (neighbor) => tryAdd(neighbor, depth + 1));
+      this.graph.forEachTraversableCardinalEdge(queue[head], (neighbor) => tryAdd(neighbor, depth + 1));
     }
     return [...corridor].sort((left, right) => left - right);
   }
@@ -284,7 +366,7 @@ export class ReturnPathSystem implements ReturnQuery {
       if (knowledge === KnowledgeState.Supported && this.hasTraversablePersonalNeighbor(index)) {
         this.boundaryWorkspace.add(index);
       } else if (knowledge === KnowledgeState.Personal) {
-        this.graph.forEachTraversableCardinalNeighbor(index, this.collectSupportedNeighbor);
+        this.graph.forEachTraversableCardinalEdge(index, this.collectSupportedNeighbor);
       }
     });
     for (const visibleIndex of this.world.getVisibleIndices()) {
@@ -292,14 +374,14 @@ export class ReturnPathSystem implements ReturnQuery {
         this.world.getKnowledgeAtIndex(visibleIndex) !== KnowledgeState.Unknown
         || !this.graph.isNavigationNodePassable(visibleIndex)
       ) continue;
-      this.graph.forEachTraversableCardinalNeighbor(visibleIndex, this.collectSupportedNeighbor);
+      this.graph.forEachTraversableCardinalEdge(visibleIndex, this.collectSupportedNeighbor);
     }
     return [...this.boundaryWorkspace].sort((left, right) => left - right);
   }
 
   private hasTraversablePersonalNeighbor(supportedIndex: number): boolean {
     let found = false;
-    this.graph.forEachTraversableCardinalNeighbor(supportedIndex, (neighbor) => {
+    this.graph.forEachTraversableCardinalEdge(supportedIndex, (neighbor) => {
       if (this.world.getKnowledgeAtIndex(neighbor) === KnowledgeState.Personal) found = true;
     });
     return found;

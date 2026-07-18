@@ -101,10 +101,7 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
           ? "returned-lead"
           : undefined;
       if (!state) continue;
-      const distance = Math.hypot(
-        definition.serviceAnchor.x - shipTile.x,
-        definition.serviceAnchor.y - shipTile.y,
-      );
+      const distance = this.interactionDistance(definition, shipTile);
       if (distance > SURVEY_SITE_INTERACTION_RANGE_TILES) continue;
       if (
         closest
@@ -145,10 +142,7 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
     const definition = this.definitionById.get(id);
     if (!definition) return this.reject(id, "unknown-site");
 
-    const distance = Math.hypot(
-      definition.serviceAnchor.x - shipTile.x,
-      definition.serviceAnchor.y - shipTile.y,
-    );
+    const distance = this.interactionDistance(definition, shipTile);
     if (distance > SURVEY_SITE_INTERACTION_RANGE_TILES) return this.reject(id, "out-of-range");
 
     const provisional = this.provisionalById.get(id);
@@ -351,10 +345,7 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
       )
     ) throw new RangeError(`Survey site ${definition.id} has an invalid service anchor`);
     if (
-      Math.hypot(
-        definition.tile.x - definition.serviceAnchor.x,
-        definition.tile.y - definition.serviceAnchor.y,
-      ) > SURVEY_SITE_INTERACTION_RANGE_TILES
+      this.interactionDistance(definition, definition.tile) > SURVEY_SITE_INTERACTION_RANGE_TILES
     ) throw new RangeError(`Survey site ${definition.id} service anchor is out of range`);
     this.definitionById.set(definition.id, definition);
   }
@@ -366,10 +357,23 @@ export class SurveySiteSystem<TType extends string = SurveySiteType> {
       yield* this.definitions;
       return;
     }
+    const seen = new Set<string>();
     for (const id of candidateIds) {
+      if (seen.has(id)) continue;
+      seen.add(id);
       const definition = this.definitionById.get(id as SurveySiteId);
       if (definition) yield definition;
     }
+  }
+
+  private interactionDistance(
+    definition: Readonly<SurveySiteDefinition<TType>>,
+    shipTile: Readonly<GridPoint>,
+  ): number {
+    return Math.sqrt(this.world.topology.minimumImageTileDistanceSquared(
+      shipTile,
+      definition.serviceAnchor,
+    ));
   }
 
   private readModelDefinitions(candidateIds: Iterable<string>): readonly Readonly<SurveySiteDefinition<TType>>[] {

@@ -14,13 +14,19 @@ import {
 } from "./VoyageSenseThread";
 import type { ActiveChunkDelta, ActiveChunkEntry } from "./activation";
 
-interface OverlayChunkView {
+interface OverlayChunkResource {
   forwardTexture: Phaser.Textures.CanvasTexture;
-  forwardImage: Phaser.GameObjects.Image;
   forwardKey: string;
   returnTexture: Phaser.Textures.CanvasTexture;
-  returnImage: Phaser.GameObjects.Image;
   returnKey: string;
+  readonly widthTiles: number;
+  readonly heightTiles: number;
+}
+
+interface OverlayChunkView {
+  forwardImage: Phaser.GameObjects.Image;
+  returnImage: Phaser.GameObjects.Image;
+  readonly canonicalKey: string;
 }
 
 /** Lightweight counters for renderer-owned decoded presentation resources. */
@@ -50,8 +56,9 @@ const FORWARD_DASH_LENGTH = 2;
  */
 export class RiskOverlayRenderer {
   private readonly views = new Map<string, OverlayChunkView>();
+  private readonly resources = new Map<string, OverlayChunkResource>();
   private readonly activeEntries = new Map<string, Readonly<ActiveChunkEntry>>();
-  private readonly pendingActivationKeys = new Set<string>();
+  private readonly pendingResourceKeys = new Set<string>();
   private readonly keyPrefix: string;
   private lastWorld?: WorldGrid;
   private lastRevision = -1;
@@ -64,7 +71,7 @@ export class RiskOverlayRenderer {
   private lastForwardPresentationCandidates: readonly number[] = [];
   private lastForwardCandidates: readonly number[] = [];
   private lastForwardLogicalRevision = -1;
-  private lastReturnPath?: readonly number[];
+  private lastReturnEdges?: ReturnPathResult["pathEdges"];
   private lastReturnRiskLevel = ReturnRiskLevel.Hidden;
   private returnThread: VoyageSenseThreadGeometry = {
     segments: [],
@@ -96,39 +103,47 @@ export class RiskOverlayRenderer {
       );
     }
 
-    const desiredKeys = new Set(delta.active.map(({ key }) => key));
-    for (const { key } of delta.deactivated) this.destroyView(key);
+    const desiredKeys = new Set(delta.active.map(({ viewKey }) => viewKey));
+    const desiredResourceKeys = new Set(delta.active.map(({ canonicalChunk }) => (
+      `${canonicalChunk.x},${canonicalChunk.y}`
+    )));
+    for (const { viewKey } of delta.deactivated) this.destroyView(viewKey);
     for (const key of [...this.views.keys()]) {
       if (!desiredKeys.has(key)) this.destroyView(key);
     }
+    // Alias keys are presentation identities, not decoded-resource owners. A
+    // whole-world rebase can replace every alias while retaining every
+    // canonical chunk, so keep the destination owners alive through the swap.
+    this.releaseResourcesNotIn(desiredResourceKeys);
 
     this.activeEntries.clear();
     for (const entry of delta.active) {
-      this.activeEntries.set(entry.key, entry);
-      const chunk = world.getChunk(entry.coordinate.x, entry.coordinate.y);
+      this.activeEntries.set(entry.viewKey, entry);
+      const chunk = world.getChunk(entry.canonicalChunk.x, entry.canonicalChunk.y);
       if (!chunk) continue;
-      if (!this.views.has(entry.key)) {
-        const view = this.getOrCreateChunkView(chunk);
+      const resource = this.getOrCreateChunkResource(world, chunk);
+      if (!this.views.has(entry.viewKey)) {
+        const view = this.createImageView(chunk, entry, resource);
         if (this.lastForwardVisible !== undefined) view.forwardImage.setVisible(this.lastForwardVisible);
         if (this.lastReturnVisible !== undefined) view.returnImage.setVisible(this.lastReturnVisible);
-        this.pendingActivationKeys.add(entry.key);
       }
     }
+    this.releaseUnreferencedResources();
     this.assertResourceCap();
   }
 
   getResourceTelemetry(): Readonly<RiskOverlayResourceTelemetry> {
     let estimatedTextureBytes = 0;
-    for (const { forwardTexture, returnTexture } of this.views.values()) {
+    for (const { forwardTexture, returnTexture } of this.resources.values()) {
       estimatedTextureBytes += (forwardTexture.width * forwardTexture.height
         + returnTexture.width * returnTexture.height) * 4;
     }
-    const activeTextures = this.views.size * 2;
+    const activeTextures = this.resources.size * 2;
     return Object.freeze({
       chunkCapacity: this.chunkCapacity,
-      activeChunks: this.views.size,
+      activeChunks: this.activeEntries.size,
       activeTextures,
-      activeSprites: activeTextures,
+      activeSprites: this.views.size * 2,
       estimatedTextureBytes,
       peakActiveTextures: this.peakActiveTextures,
       totalTextureAllocations: this.totalTextureAllocations,
@@ -166,21 +181,19 @@ export class RiskOverlayRenderer {
     const returnGeometryChanged = worldChanged
       || styleChanged
       || returning !== this.lastReturning
-      || returning.pathIndices !== this.lastReturnPath;
+      || returning.pathEdges !== this.lastReturnEdges;
     const returnChanged = returnGeometryChanged
       || returning.riskLevel !== this.lastReturnRiskLevel;
-    const chunksChanged = chunks.length !== this.views.size || this.pendingActivationKeys.size > 0;
+    const chunksChanged = this.pendingResourceKeys.size > 0;
     const debugChanged = debug.forwardRange !== this.lastForwardVisible
       || debug.returnViability !== this.lastReturnVisible;
     if (!force && !worldChanged && !styleChanged && !visibilityChanged && !dataChanged && !chunksChanged && !debugChanged) {
       return;
     }
 
-    const newChunks: WorldChunk[] = [];
     if (worldChanged || chunksChanged) {
       for (const chunk of chunks) {
-        if (!this.views.has(this.chunkKey(chunk))) newChunks.push(chunk);
-        this.getOrCreateChunkView(chunk);
+        this.getOrCreateChunkResource(world, chunk);
       }
     }
     if (worldChanged || chunksChanged || debugChanged) {
@@ -197,7 +210,7 @@ export class RiskOverlayRenderer {
     if (returnGeometryChanged) {
       this.returnThread = buildVoyageSenseThread(
         world,
-        returning.pathIndices,
+        returning.pathEdges,
         prototypeConfig.navigation.tileSize,
         prototypeConfig.overlays.returnThreadCurveRadius,
         prototypeConfig.overlays.returnThreadWidth,
@@ -228,12 +241,8 @@ export class RiskOverlayRenderer {
     } else if (chunksChanged) {
       // Chunks are append-only. Any view without prior presented pixels must be
       // uploaded once even when the simulation data itself did not change.
-      for (const chunk of newChunks) {
-        dirtyForward.add(chunk);
-        dirtyReturn.add(chunk);
-      }
-      for (const key of this.pendingActivationKeys) {
-        const viewChunk = this.chunkForKey(world, key);
+      for (const key of this.pendingResourceKeys) {
+        const viewChunk = this.chunkForCanonicalKey(world, key);
         if (!viewChunk) continue;
         dirtyForward.add(viewChunk);
         dirtyReturn.add(viewChunk);
@@ -241,16 +250,16 @@ export class RiskOverlayRenderer {
     }
 
     for (const chunk of dirtyForward) {
-      const view = this.views.get(this.chunkKey(chunk));
-      if (!view) continue;
-      this.renderForwardChunk(world, forward, chunk, view.forwardTexture);
-      view.forwardTexture.refresh();
+      const resource = this.resources.get(this.chunkKey(chunk));
+      if (!resource) continue;
+      this.renderForwardChunk(world, forward, chunk, resource);
+      resource.forwardTexture.refresh();
     }
     for (const chunk of dirtyReturn) {
-      const view = this.views.get(this.chunkKey(chunk));
-      if (!view) continue;
-      this.renderReturnChunk(returning.riskLevel, chunk, view.returnTexture);
-      view.returnTexture.refresh();
+      const resource = this.resources.get(this.chunkKey(chunk));
+      if (!resource) continue;
+      this.renderReturnChunk(returning.riskLevel, chunk, resource.returnTexture);
+      resource.returnTexture.refresh();
     }
 
     this.lastRevision = revision;
@@ -264,16 +273,17 @@ export class RiskOverlayRenderer {
     this.lastForwardCandidates = [...forward.candidateIndices];
     this.lastForwardLogicalRevision = forward.logicalRevision;
     this.lastForwardPresentationCandidates = [...forward.presentationCandidateIndices];
-    this.lastReturnPath = returning.pathIndices;
+    this.lastReturnEdges = returning.pathEdges;
     this.lastReturnRiskLevel = returning.riskLevel;
     this.lastVisibleIndices = [...world.getVisibleIndices()];
     this.lastForwardVisible = debug.forwardRange;
     this.lastReturnVisible = debug.returnViability;
-    this.pendingActivationKeys.clear();
+    this.pendingResourceKeys.clear();
   }
 
   destroy(): void {
     this.destroyViews();
+    this.releaseUnreferencedResources();
     this.lastWorld = undefined;
     this.forwardPresented = new Uint8Array(0);
     this.forwardReachable = new Uint8Array(0);
@@ -282,14 +292,14 @@ export class RiskOverlayRenderer {
     this.lastForwardPresentationCandidates = [];
     this.lastForwardCandidates = [];
     this.lastForwardLogicalRevision = -1;
-    this.lastReturnPath = undefined;
+    this.lastReturnEdges = undefined;
     this.lastReturnRiskLevel = ReturnRiskLevel.Hidden;
     this.returnThread = { segments: [], segmentsByChunk: new Map() };
     this.lastVisibleIndices = [];
     this.lastForwardVisible = undefined;
     this.lastReturnVisible = undefined;
     this.activeEntries.clear();
-    this.pendingActivationKeys.clear();
+    this.pendingResourceKeys.clear();
     this.chunkCapacity = 0;
   }
 
@@ -328,48 +338,77 @@ export class RiskOverlayRenderer {
     addCardinalChunkDependents(world, index, dirtyChunks);
   }
 
-  private getOrCreateChunkView(chunk: WorldChunk): OverlayChunkView {
+  private getOrCreateChunkResource(world: WorldGrid, chunk: WorldChunk): OverlayChunkResource {
     const key = this.chunkKey(chunk);
-    const existing = this.views.get(key);
+    const existing = this.resources.get(key);
     if (existing) return existing;
 
-    const texturePixels = chunk.size * OVERLAY_SCALE;
-    const displayPixels = chunk.size * prototypeConfig.navigation.tileSize;
-    const worldX = chunk.chunkX * displayPixels;
-    const worldY = chunk.chunkY * displayPixels;
+    const widthTiles = Math.min(chunk.size, world.width - chunk.chunkX * chunk.size);
+    const heightTiles = Math.min(chunk.size, world.height - chunk.chunkY * chunk.size);
     const forwardKey = `${this.keyPrefix}-forward-${chunk.chunkX}-${chunk.chunkY}`;
     const returnKey = `${this.keyPrefix}-return-${chunk.chunkX}-${chunk.chunkY}`;
-    const forwardTexture = this.scene.textures.createCanvas(forwardKey, texturePixels, texturePixels);
-    const returnTexture = this.scene.textures.createCanvas(returnKey, texturePixels, texturePixels);
+    const forwardTexture = this.scene.textures.createCanvas(
+      forwardKey,
+      widthTiles * OVERLAY_SCALE,
+      heightTiles * OVERLAY_SCALE,
+    );
+    const returnTexture = this.scene.textures.createCanvas(
+      returnKey,
+      widthTiles * OVERLAY_SCALE,
+      heightTiles * OVERLAY_SCALE,
+    );
     if (!forwardTexture || !returnTexture) throw new Error("Could not create range-overlay chunk textures");
     forwardTexture.setFilter(Phaser.Textures.FilterMode.LINEAR);
     returnTexture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-
-    const worldBounds = {
-      left: worldX,
-      right: worldX + displayPixels,
-      top: worldY,
-      bottom: worldY + displayPixels,
-    };
-    const forwardImage = createCameraCulledImage(this.scene, worldX, worldY, forwardKey, undefined, worldBounds)
-      .setOrigin(0)
-      .setDisplaySize(displayPixels, displayPixels)
-      .setDepth(37);
-    const returnImage = createCameraCulledImage(this.scene, worldX, worldY, returnKey, undefined, worldBounds)
-      .setOrigin(0)
-      .setDisplaySize(displayPixels, displayPixels)
-      .setDepth(38);
-    const view = {
+    const resource = {
       forwardTexture,
-      forwardImage,
       forwardKey,
       returnTexture,
-      returnImage,
       returnKey,
+      widthTiles,
+      heightTiles,
     };
-    this.views.set(key, view);
+    this.resources.set(key, resource);
+    this.pendingResourceKeys.add(key);
     this.totalTextureAllocations += 2;
-    this.peakActiveTextures = Math.max(this.peakActiveTextures, this.views.size * 2);
+    this.peakActiveTextures = Math.max(this.peakActiveTextures, this.resources.size * 2);
+    return resource;
+  }
+
+  private createImageView(
+    chunk: WorldChunk,
+    entry: Readonly<ActiveChunkEntry>,
+    resource: Readonly<OverlayChunkResource>,
+  ): OverlayChunkView {
+    const tileSize = prototypeConfig.navigation.tileSize;
+    const worldX = chunk.chunkX * chunk.size * tileSize + entry.imageOffset.x;
+    const worldY = chunk.chunkY * chunk.size * tileSize + entry.imageOffset.y;
+    const displayWidth = resource.widthTiles * tileSize;
+    const displayHeight = resource.heightTiles * tileSize;
+    const worldBounds = {
+      left: worldX,
+      right: worldX + displayWidth,
+      top: worldY,
+      bottom: worldY + displayHeight,
+    };
+    const forwardImage = createCameraCulledImage(
+      this.scene, worldX, worldY, resource.forwardKey, undefined, worldBounds,
+    )
+      .setOrigin(0)
+      .setDisplaySize(displayWidth, displayHeight)
+      .setDepth(37);
+    const returnImage = createCameraCulledImage(
+      this.scene, worldX, worldY, resource.returnKey, undefined, worldBounds,
+    )
+      .setOrigin(0)
+      .setDisplaySize(displayWidth, displayHeight)
+      .setDepth(38);
+    const view = {
+      forwardImage,
+      returnImage,
+      canonicalKey: this.chunkKey(chunk),
+    };
+    this.views.set(entry.viewKey, view);
     this.assertResourceCap();
     return view;
   }
@@ -383,16 +422,29 @@ export class RiskOverlayRenderer {
     if (!view) return;
     view.forwardImage.destroy();
     view.returnImage.destroy();
-    if (this.scene.textures.exists(view.forwardKey)) this.scene.textures.remove(view.forwardKey);
-    if (this.scene.textures.exists(view.returnKey)) this.scene.textures.remove(view.returnKey);
     this.views.delete(key);
-    this.pendingActivationKeys.delete(key);
-    this.totalTextureReleases += 2;
+  }
+
+  private releaseUnreferencedResources(): void {
+    const referenced = new Set([...this.views.values()].map(({ canonicalKey }) => canonicalKey));
+    this.releaseResourcesNotIn(referenced);
+  }
+
+  private releaseResourcesNotIn(referenced: ReadonlySet<string>): void {
+    for (const [key, resource] of [...this.resources]) {
+      if (referenced.has(key)) continue;
+      if (this.scene.textures.exists(resource.forwardKey)) this.scene.textures.remove(resource.forwardKey);
+      if (this.scene.textures.exists(resource.returnKey)) this.scene.textures.remove(resource.returnKey);
+      this.resources.delete(key);
+      this.pendingResourceKeys.delete(key);
+      this.totalTextureReleases += 2;
+    }
   }
 
   private prepareWorld(world: WorldGrid): boolean {
     if (this.lastWorld === world) return false;
     this.destroyViews();
+    this.releaseUnreferencedResources();
     this.forwardPresented = new Uint8Array(world.tileCount);
     this.forwardReachable = new Uint8Array(world.tileCount);
     this.lastWorld = world;
@@ -404,7 +456,7 @@ export class RiskOverlayRenderer {
     this.lastForwardPresentationCandidates = [];
     this.lastForwardCandidates = [];
     this.lastForwardLogicalRevision = -1;
-    this.lastReturnPath = undefined;
+    this.lastReturnEdges = undefined;
     this.lastReturnRiskLevel = ReturnRiskLevel.Hidden;
     this.returnThread = { segments: [], segmentsByChunk: new Map() };
     this.lastVisibleIndices = [];
@@ -416,20 +468,22 @@ export class RiskOverlayRenderer {
   private presentationChunks(world: WorldGrid): readonly WorldChunk[] {
     const chunks: WorldChunk[] = [];
     for (const entry of this.activeEntries.values()) {
-      const chunk = world.getChunk(entry.coordinate.x, entry.coordinate.y);
-      if (chunk) chunks.push(chunk);
+      const chunk = world.getChunk(entry.canonicalChunk.x, entry.canonicalChunk.y);
+      if (chunk && !chunks.includes(chunk)) chunks.push(chunk);
     }
     return chunks;
   }
 
-  private chunkForKey(world: WorldGrid, key: string): WorldChunk | undefined {
-    const entry = this.activeEntries.get(key);
-    return entry ? world.getChunk(entry.coordinate.x, entry.coordinate.y) : undefined;
+  private chunkForCanonicalKey(world: WorldGrid, key: string): WorldChunk | undefined {
+    const [x, y] = key.split(",").map(Number);
+    return Number.isSafeInteger(x) && Number.isSafeInteger(y) ? world.getChunk(x!, y!) : undefined;
   }
 
   private assertResourceCap(): void {
-    if (this.views.size > this.chunkCapacity) {
-      throw new Error(`Risk overlay texture cap exceeded: ${this.views.size * 2}/${this.chunkCapacity * 2}`);
+    if (this.views.size > this.chunkCapacity || this.resources.size > this.chunkCapacity) {
+      throw new Error(
+        `Risk overlay resource cap exceeded: ${this.views.size} views, ${this.resources.size * 2} textures/${this.chunkCapacity}`,
+      );
     }
   }
 
@@ -437,47 +491,78 @@ export class RiskOverlayRenderer {
     world: WorldGrid,
     forward: ForwardRangeResult,
     chunk: WorldChunk,
-    texture: Phaser.Textures.CanvasTexture,
+    resource: Readonly<OverlayChunkResource>,
   ): void {
+    const { forwardTexture: texture } = resource;
     const context = texture.getContext();
     context.clearRect(0, 0, texture.width, texture.height);
     const opacity = prototypeConfig.overlays.forwardOverlayOpacity;
+    const horizontalDashPeriod = world.topology.wrapsX
+      ? greatestCommonDivisor(FORWARD_DASH_PERIOD, world.width * OVERLAY_SCALE)
+      : FORWARD_DASH_PERIOD;
+    const verticalDashPeriod = world.topology.wrapsY
+      ? greatestCommonDivisor(FORWARD_DASH_PERIOD, world.height * OVERLAY_SCALE)
+      : FORWARD_DASH_PERIOD;
     context.fillStyle = `rgba(226, 230, 210, ${opacity})`;
 
-    for (let localY = 0; localY < chunk.size; localY++) {
+    for (let localY = 0; localY < resource.heightTiles; localY++) {
       const y = chunk.chunkY * chunk.size + localY;
       if (y >= world.height) break;
-      for (let localX = 0; localX < chunk.size; localX++) {
+      for (let localX = 0; localX < resource.widthTiles; localX++) {
         const x = chunk.chunkX * chunk.size + localX;
         if (x >= world.width) break;
         const index = y * world.width + x;
         if (!this.forwardPresented[index]) continue;
         const px = localX * OVERLAY_SCALE;
         const py = localY * OVERLAY_SCALE;
-        if (y === 0 || forward.mask[index - world.width] === 0) {
-          this.drawHorizontalForwardSegment(context, px, py, x * OVERLAY_SCALE);
+        if (!this.forwardNeighbourIsReachable(world, forward, x, y, 2)) {
+          this.drawHorizontalForwardSegment(
+            context, px, py, x * OVERLAY_SCALE, horizontalDashPeriod,
+          );
         }
-        if (y + 1 >= world.height || forward.mask[index + world.width] === 0) {
+        if (!this.forwardNeighbourIsReachable(world, forward, x, y, 3)) {
           this.drawHorizontalForwardSegment(
             context,
             px,
             py + OVERLAY_SCALE - 1,
             x * OVERLAY_SCALE,
+            horizontalDashPeriod,
           );
         }
-        if (x === 0 || forward.mask[index - 1] === 0) {
-          this.drawVerticalForwardSegment(context, px, py, y * OVERLAY_SCALE);
+        if (!this.forwardNeighbourIsReachable(world, forward, x, y, 0)) {
+          this.drawVerticalForwardSegment(
+            context, px, py, y * OVERLAY_SCALE, verticalDashPeriod,
+          );
         }
-        if (x + 1 >= world.width || forward.mask[index + 1] === 0) {
+        if (!this.forwardNeighbourIsReachable(world, forward, x, y, 1)) {
           this.drawVerticalForwardSegment(
             context,
             px + OVERLAY_SCALE - 1,
             py,
             y * OVERLAY_SCALE,
+            verticalDashPeriod,
           );
         }
       }
     }
+  }
+
+  private forwardNeighbourIsReachable(
+    world: WorldGrid,
+    forward: ForwardRangeResult,
+    x: number,
+    y: number,
+    direction: 0 | 1 | 2 | 3,
+  ): boolean {
+    const offset = direction === 0
+      ? { x: -1, y: 0 }
+      : direction === 1
+        ? { x: 1, y: 0 }
+        : direction === 2
+          ? { x: 0, y: -1 }
+          : { x: 0, y: 1 };
+    const neighbour = world.topology.canonicalizeTile(x + offset.x, y + offset.y);
+    return neighbour !== undefined && forward.mask[world.index(neighbour.x, neighbour.y)] !== 0;
   }
 
   private drawHorizontalForwardSegment(
@@ -485,9 +570,11 @@ export class RiskOverlayRenderer {
     px: number,
     py: number,
     worldPixelX: number,
+    dashPeriod: number,
   ): void {
+    const dashLength = Math.min(FORWARD_DASH_LENGTH, dashPeriod);
     for (let offset = 0; offset < OVERLAY_SCALE; offset++) {
-      if ((worldPixelX + offset) % FORWARD_DASH_PERIOD < FORWARD_DASH_LENGTH) {
+      if ((worldPixelX + offset) % dashPeriod < dashLength) {
         context.fillRect(px + offset, py, 1, 1);
       }
     }
@@ -498,9 +585,11 @@ export class RiskOverlayRenderer {
     px: number,
     py: number,
     worldPixelY: number,
+    dashPeriod: number,
   ): void {
+    const dashLength = Math.min(FORWARD_DASH_LENGTH, dashPeriod);
     for (let offset = 0; offset < OVERLAY_SCALE; offset++) {
-      if ((worldPixelY + offset) % FORWARD_DASH_PERIOD < FORWARD_DASH_LENGTH) {
+      if ((worldPixelY + offset) % dashPeriod < dashLength) {
         context.fillRect(px, py + offset, 1, 1);
       }
     }
@@ -574,4 +663,11 @@ export class RiskOverlayRenderer {
   private chunkKey(chunk: WorldChunk): string {
     return `${chunk.chunkX},${chunk.chunkY}`;
   }
+}
+
+function greatestCommonDivisor(left: number, right: number): number {
+  let a = Math.abs(left);
+  let b = Math.abs(right);
+  while (b !== 0) [a, b] = [b, a % b];
+  return Math.max(1, a);
 }

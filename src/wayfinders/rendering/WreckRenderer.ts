@@ -2,10 +2,11 @@ import Phaser from "phaser";
 import { prototypeConfig } from "../config/prototypeConfig";
 import type { ShipwreckState } from "../core/types";
 import type { WorldGrid } from "../world/WorldGrid";
+import type { ActiveChunkEntry } from "./activation";
 import {
   ChunkActivatedViewPool,
   type ChunkActivatedViewTelemetry,
-  type PresentationChunkCoordinate,
+  type PresentationChunkImage,
 } from "./lifetime";
 
 interface WreckView {
@@ -31,9 +32,9 @@ export class WreckRenderer {
         y: Math.floor(wreck.tileY / prototypeConfig.navigation.chunkSize),
       }),
       create: ({ wreck }) => this.create(wreck),
-      update: (view, record) => this.updateView(view, record),
-      activate: (view, { wreck }) => {
-        view.container.setActive(true).setVisible(true).setName(`wreck:${wreck.id}`);
+      update: (view, record, image) => this.updateView(view, record, image),
+      activate: (view, { wreck }, image) => {
+        view.container.setActive(true).setVisible(true).setName(`wreck:${wreck.id}@${image.viewKey}`);
       },
       deactivate: (view) => {
         view.container.setActive(false).setVisible(false).setName("wreck:pooled");
@@ -51,9 +52,9 @@ export class WreckRenderer {
   }
 
   applyActiveChunks(
-    chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
+    chunks: readonly Readonly<ActiveChunkEntry>[],
   ): void {
-    this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
+    this.views.setActiveChunkImages(chunks);
   }
 
   getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
@@ -64,9 +65,16 @@ export class WreckRenderer {
     this.views.destroy();
   }
 
-  private updateView(view: WreckView, record: Readonly<WreckPresentationRecord>): void {
+  private updateView(
+    view: WreckView,
+    record: Readonly<WreckPresentationRecord>,
+    image: Readonly<PresentationChunkImage>,
+  ): void {
     const { wreck } = record;
-    view.container.setPosition(wreck.worldX, wreck.worldY).setAlpha(record.visibleNow ? 1 : 0.72);
+    view.container.setPosition(
+      wreck.worldX + image.imageOffset.x,
+      wreck.worldY + image.imageOffset.y,
+    ).setAlpha(record.visibleNow ? 1 : 0.72);
     view.hull.setRotation(Phaser.Math.DegToRad(wreck.heading));
     view.label.setText(wreck.survey.state === "unexamined"
       ? "UNIDENTIFIED WRECK"

@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_PROTOTYPE_CONFIG, prototypeConfig } from "../src/wayfinders/config/prototypeConfig";
 import {
+  worldGenerationProfileIdForConfig,
+  worldGenerationSettingsFingerprint,
+} from "../src/wayfinders/world/WorldGenerationProfiles";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+} from "../src/wayfinders/world/WorldTopology";
+import {
   createWorldProfileConfig,
   WORLD_PROFILES,
   type WorldProfileName,
@@ -20,6 +28,7 @@ describe("architecture world profiles", () => {
       expect(profile.config.islands.count).toBe(islandCount);
       expect(profile.density.islandCount).toBe(islandCount);
       expect(profile.areaMultiplier).toBe(areaMultiplier);
+      expect(profile.topology).toEqual(WRAPPING_WORLD_TOPOLOGY);
     },
   );
 
@@ -49,7 +58,6 @@ describe("architecture world profiles", () => {
         maxRadius: 3,
         minimumChannelWidth: 4,
         homeClearance: 1,
-        edgeMargin: 3,
         placementAttempts: 48,
         archipelagoClusters: 24,
         archipelagoRadius: 24,
@@ -63,7 +71,16 @@ describe("architecture world profiles", () => {
     expect(profile.density.islandCount).toBe(300);
     expect(profile.islandSize).toEqual({ minRadius: 1, maxRadius: 3 });
     expect(profile.archipelago).toEqual({ clusters: 24, radius: 24, bias: 0.6 });
-    expect(profile.minimumChannel).toEqual({ width: 4, edgeMargin: 3, homeClearance: 1 });
+    expect(profile.minimumChannel).toEqual({ width: 4, homeClearance: 1 });
     expect(profile.placementAttemptLimit).toBe(48);
+  });
+
+  it("includes explicit axis topology in profile and fingerprint identity", () => {
+    const config = createWorldProfileConfig("P0");
+    expect(worldGenerationProfileIdForConfig(config, WRAPPING_WORLD_TOPOLOGY)).toBe("P0");
+    expect(worldGenerationProfileIdForConfig(config, BOUNDED_WORLD_TOPOLOGY)).toBe("custom");
+    expect(worldGenerationSettingsFingerprint(config, WRAPPING_WORLD_TOPOLOGY)).not.toBe(
+      worldGenerationSettingsFingerprint(config, BOUNDED_WORLD_TOPOLOGY),
+    );
   });
 });

@@ -90,6 +90,7 @@ import { GridGraph } from "../navigation/GridGraph";
 import {
   WorldDescriptorRegistry,
   boundsForWorldIndices,
+  boundsForWorldPoints,
   createBoundsDescriptor,
   createPointDescriptor,
   type WorldDescriptorCandidates,
@@ -107,6 +108,7 @@ import {
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import { WorldGenerator } from "../world/WorldGenerator";
 import type { WorldGrid } from "../world/WorldGrid";
+import { worldToGrid } from "../world/CoordinateSystem";
 import { KnowledgeState } from "../world/TileData";
 import { GameEvents, type ReplenishmentReason } from "./GameEvents";
 import {
@@ -119,6 +121,7 @@ import type {
   MovementResult,
   ShipState,
   ShipwreckState,
+  WorldPoint,
 } from "./types";
 
 export interface DebugVisibilityState {
@@ -217,10 +220,12 @@ export interface GameSimulationOptions {
 }
 
 const DEFAULT_FORWARD_GUIDANCE_SLICE_BUDGET_MS = 3;
-const DEFAULT_FORWARD_GUIDANCE_WORK_UNITS = 32_768;
+const DEFAULT_FORWARD_GUIDANCE_WORK_UNITS = 49_152;
 
 const NO_MOVEMENT: MovementResult = {
   movedDistancePixels: 0,
+  liftedDisplacement: { x: 0, y: 0 },
+  worldImageOffset: { x: 0, y: 0 },
   collided: false,
   enteredTiles: [],
   segments: [],
@@ -629,16 +634,16 @@ export class GameSimulation {
         || wreck.survey.state !== "unexamined"
         || wreck.generation >= this.generation
       ) continue;
-      const distance = Math.hypot(
-        wreck.tileX - this.ship.currentTileX,
-        wreck.tileY - this.ship.currentTileY,
-      );
-      if (distance > WRECK_SURVEY_INTERACTION_RANGE_TILES) continue;
+      const distanceSquared = this.wreckDistanceSquared(wreck);
+      if (distanceSquared > WRECK_SURVEY_INTERACTION_RANGE_TILES ** 2) continue;
       if (
         closest
-        && (distance > closest.distance || (distance === closest.distance && wreck.id > closest.wreck.id))
+        && (
+          distanceSquared > closest.distance
+          || (distanceSquared === closest.distance && wreck.id > closest.wreck.id)
+        )
       ) continue;
-      closest = { wreck, distance };
+      closest = { wreck, distance: distanceSquared };
     }
     if (!closest) return undefined;
     return Object.freeze({
@@ -682,6 +687,7 @@ export class GameSimulation {
       return NO_MOVEMENT;
     }
     const previousTile = { x: this.ship.currentTileX, y: this.ship.currentTileY };
+    const previousWorld = { x: this.ship.worldX, y: this.ship.worldY };
     const previousHeading = this.ship.heading;
     const previousKnowledge = this.world.getKnowledge(previousTile.x, previousTile.y);
     const previousBundles = this.ship.provisions;
@@ -693,6 +699,7 @@ export class GameSimulation {
     );
     const headingChanged = this.ship.heading !== previousHeading;
     this.lastMovement = movement;
+    const crossedCenters = this.liftedCrossedCenters(previousTile, previousWorld, movement);
     const preparedCharge = this.provisions.prepareMovement(movement.segments);
     const charge = this.provisions.applyPreparedMovement(this.ship, preparedCharge, (remaining) => {
       this.events.emit("provisionConsumed", { remaining });
@@ -720,14 +727,19 @@ export class GameSimulation {
       if (
         !this.activeExpedition
         && previousKnowledge === KnowledgeState.Supported
-        && currentKnowledgeBeforeObservation !== KnowledgeState.Supported
+        && (
+          currentKnowledgeBeforeObservation !== KnowledgeState.Supported
+          || movement.enteredTiles.some(({ x, y }) => (
+            this.world.getKnowledge(x, y) !== KnowledgeState.Supported
+          ))
+        )
       ) {
         this.startExpedition();
         lifecycleChanged = true;
       }
 
       measureSimulationPhase(this.trace, "observation", () => {
-        const visibility = this.visibility.updateForMovement(previousTile, currentTile);
+        const visibility = this.visibility.updateForCrossedCenters(crossedCenters);
         const knowledge = this.knowledge.applyTrailingVisibility(visibility, this.expeditionId);
         knowledgeChanged += knowledge.changedCount;
         const visibleCandidates = this.visibleDescriptorCandidates();
@@ -817,7 +829,7 @@ export class GameSimulation {
     this.provisions = new ProvisionSystem(this.world, this.config);
     this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
-    this.descriptorRegistry = new WorldDescriptorRegistry(this.config.navigation.chunkSize);
+    this.descriptorRegistry = new WorldDescriptorRegistry(this.world.topology);
     this.interactionCandidateCache = undefined;
     this.visibleCandidateCache = undefined;
     this.riskResultsInitialized = false;
@@ -1186,11 +1198,7 @@ export class GameSimulation {
     const wreck = this.shipwrecks.find(({ id }) => id === wreckId);
     if (!wreck) return this.rejectWreckSurvey(wreckId, "unknown-wreck");
     if (!wreck.discovered) return this.rejectWreckSurvey(wreckId, "not-discovered");
-    const distance = Math.hypot(
-      wreck.tileX - this.ship.currentTileX,
-      wreck.tileY - this.ship.currentTileY,
-    );
-    if (distance > WRECK_SURVEY_INTERACTION_RANGE_TILES) {
+    if (this.wreckDistanceSquared(wreck) > WRECK_SURVEY_INTERACTION_RANGE_TILES ** 2) {
       return this.rejectWreckSurvey(wreckId, "out-of-range");
     }
     if (wreck.generation >= this.generation) {
@@ -1936,6 +1944,45 @@ export class GameSimulation {
     return this.world.getKnowledge(this.ship.currentTileX, this.ship.currentTileY) === KnowledgeState.Supported;
   }
 
+  /**
+   * Reconstructs the authoritative lifted tile-image order from accepted
+   * movement segments. Canonical entered-tile IDs alone cannot distinguish
+   * winding on a two-tile axis or after an immediate reversal.
+   */
+  private liftedCrossedCenters(
+    previousTile: Readonly<GridPoint>,
+    previousWorld: Readonly<WorldPoint>,
+    movement: Readonly<MovementResult>,
+  ): GridPoint[] {
+    const crossedCenters: GridPoint[] = [{ ...previousTile }];
+    const append = (point: Readonly<GridPoint>): void => {
+      const previous = crossedCenters[crossedCenters.length - 1];
+      if (previous.x !== point.x || previous.y !== point.y) crossedCenters.push({ ...point });
+    };
+    const tileSize = this.config.navigation.tileSize;
+    for (const segment of movement.segments) {
+      if (segment.distancePixels <= 0) continue;
+      append(worldToGrid(
+        (segment.fromWorldX + segment.toWorldX) / 2,
+        (segment.fromWorldY + segment.toWorldY) / 2,
+        tileSize,
+      ));
+    }
+    append(worldToGrid(
+      previousWorld.x + movement.liftedDisplacement.x,
+      previousWorld.y + movement.liftedDisplacement.y,
+      tileSize,
+    ));
+    return crossedCenters;
+  }
+
+  private wreckDistanceSquared(wreck: Readonly<ShipwreckState>): number {
+    return this.world.topology.minimumImageTileDistanceSquared(
+      { x: this.ship.currentTileX, y: this.ship.currentTileY },
+      { x: wreck.tileX, y: wreck.tileY },
+    );
+  }
+
   private rejectWreckSurvey(
     wreckId: number,
     reason: WreckSurveyRejectionReasonV1,
@@ -1978,18 +2025,17 @@ export class GameSimulation {
       entries.push(createPointDescriptor("fishing-shoal", definition.id, definition.tile));
     }
     for (const definition of this.surveySiteSystem.definitions) {
-      entries.push(createBoundsDescriptor("survey-site", definition.id, {
-        minX: Math.min(definition.tile.x, definition.serviceAnchor.x),
-        minY: Math.min(definition.tile.y, definition.serviceAnchor.y),
-        maxX: Math.max(definition.tile.x, definition.serviceAnchor.x),
-        maxY: Math.max(definition.tile.y, definition.serviceAnchor.y),
-      }));
+      entries.push(createBoundsDescriptor(
+        "survey-site",
+        definition.id,
+        boundsForWorldPoints([definition.tile, definition.serviceAnchor], this.world.topology),
+      ));
     }
     for (const definition of this.islandDossierSystem.definitions) {
       entries.push(createBoundsDescriptor(
         "island-dossier",
         definition.islandId,
-        boundsForWorldIndices(definition.approachIndices, this.world.width),
+        boundsForWorldIndices(definition.approachIndices, this.world.topology),
       ));
     }
     for (const wreck of this.shipwrecks) {
@@ -2045,19 +2091,9 @@ export class GameSimulation {
       });
       return NO_DESCRIPTOR_CANDIDATES;
     }
-    let minX = this.world.width;
-    let minY = this.world.height;
-    let maxX = -1;
-    let maxY = -1;
-    for (const index of visible) {
-      const x = index % this.world.width;
-      const y = Math.floor(index / this.world.width);
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
-    }
-    const candidates = this.descriptorRegistry.queryBounds({ minX, minY, maxX, maxY }).candidates;
+    const candidates = this.descriptorRegistry.queryBounds(
+      boundsForWorldIndices([...visible], this.world.topology),
+    ).candidates;
     this.visibleCandidateCache = Object.freeze({
       visibilityRevision: this.world.visibilityVersion,
       spatialRevision: this.descriptorRegistry.revision,

@@ -1,11 +1,8 @@
-/** A chunk coordinate in presentation space. */
-export interface ActiveChunkCoordinate {
-  readonly x: number;
-  readonly y: number;
-}
+import type { GridPoint, WorldPoint } from "../../core/types";
+import type { WorldTopology } from "../../world/WorldTopology";
 
-/** Closed, inclusive bounds in chunk coordinates. */
-export interface ChunkRegion {
+/** Closed, inclusive bounds in lifted tile coordinates. */
+export interface LiftedTileBounds {
   readonly minX: number;
   readonly minY: number;
   readonly maxX: number;
@@ -13,24 +10,28 @@ export interface ChunkRegion {
 }
 
 export interface ActiveChunkSetOptions {
-  /** Closed bounds for chunks that can be presented. */
-  readonly worldBounds: Readonly<ChunkRegion>;
-  /** Number of chunks to prepare beyond every visible edge. */
+  /** Authoritative dimensions, chunk layout, and per-axis boundary behaviour. */
+  readonly topology: WorldTopology;
+  /** Number of chunk-width tile rings to prepare beyond every visible edge. */
   readonly prefetchRing: number;
-  /** Hard cap for fully active presentation chunks. */
+  /** Hard cap for active periodic image entries. */
   readonly maxActiveChunks: number;
 }
 
 export type ActiveChunkBand = "visible" | "prefetch";
 
-/** A deterministic presentation-resource request. Lower priorities load first. */
+/** A deterministic request for one lifted image of one canonical chunk. */
 export interface ActiveChunkEntry {
-  readonly key: string;
-  readonly coordinate: Readonly<ActiveChunkCoordinate>;
+  /** Unique presentation identity for this canonical chunk image. */
+  readonly viewKey: string;
+  /** Canonical logical/resource-owner identity. */
+  readonly canonicalChunk: Readonly<GridPoint>;
+  /** Whole-world pixel offset that places this image in lifted view space. */
+  readonly imageOffset: Readonly<WorldPoint>;
   readonly band: ActiveChunkBand;
-  /** Chebyshev distance from the closed visible region. Zero is visible. */
+  /** Chebyshev tile-gap distance measured in chunk-width rings. */
   readonly ringDistance: number;
-  /** Total deterministic order across both active and deferred chunks. */
+  /** Total deterministic order across both active and deferred images. */
   readonly loadPriority: number;
 }
 
@@ -40,12 +41,12 @@ export interface DeactivatedChunkEntry extends ActiveChunkEntry {
   readonly reason: ChunkDeactivationReason;
 }
 
-/** Current and lifetime counters; no deep renderer snapshot is required. */
+/** Current and lifetime counters; counts refer to image entries, not canonical owners. */
 export interface ActiveChunkTelemetry {
   readonly updateCount: number;
   /** Changes when the effective visible target, priorities, or budget result changes. */
   readonly revision: number;
-  /** Changes only when active membership changes. */
+  /** Changes only when active image membership changes. */
   readonly membershipRevision: number;
   readonly capacity: number;
   readonly activeChunks: number;
@@ -66,13 +67,13 @@ export interface ActiveChunkTelemetry {
 export interface ActiveChunkDelta {
   readonly revision: number;
   readonly membershipRevision: number;
-  /** Effective region after clipping to world bounds. */
-  readonly visibleRegion: Readonly<ChunkRegion> | null;
+  /** Lifted tile coverage requested by the current camera. */
+  readonly visibleTileBounds: Readonly<LiftedTileBounds> | null;
   /** Load in this order after processing deactivations. */
   readonly activated: readonly Readonly<ActiveChunkEntry>[];
   /** Lowest-value former requests are returned first so resources can be freed early. */
   readonly deactivated: readonly Readonly<DeactivatedChunkEntry>[];
-  /** Retained chunks whose band or priority changed. */
+  /** Retained images whose band or priority changed. */
   readonly updated: readonly Readonly<ActiveChunkEntry>[];
   readonly active: readonly Readonly<ActiveChunkEntry>[];
   /** Desired requests outside the hard cap; visible entries need a placeholder. */

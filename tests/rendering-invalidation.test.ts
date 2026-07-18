@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { prototypeConfig } from "../src/wayfinders/config/prototypeConfig";
 import type { ForwardRangeResult } from "../src/wayfinders/exploration/ForwardRangeSystem";
-import { ReturnRiskLevel, type ReturnPathResult } from "../src/wayfinders/exploration/ReturnPathSystem";
+import {
+  ReturnRiskLevel,
+  type ReturnPathEdge,
+  type ReturnPathResult,
+} from "../src/wayfinders/exploration/ReturnPathSystem";
 import {
   addCardinalChunkDependents,
   addPaddedChunkNeighbours,
@@ -11,6 +15,10 @@ import { createCameraCulledImage } from "../src/wayfinders/rendering/CameraCulle
 import { ActiveChunkSet } from "../src/wayfinders/rendering/activation";
 import type { WorldChunk } from "../src/wayfinders/world/WorldChunk";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+} from "../src/wayfinders/world/WorldTopology";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 
 vi.mock("phaser", () => ({
@@ -163,13 +171,13 @@ function activateAllChunks(renderer: RiskOverlayRenderer, world: WorldGrid): voi
   const maxX = Math.ceil(world.width / world.chunkSize) - 1;
   const maxY = Math.ceil(world.height / world.chunkSize) - 1;
   const activeChunks = new ActiveChunkSet({
-    worldBounds: { minX: 0, minY: 0, maxX, maxY },
+    topology: world.topology,
     prefetchRing: 0,
     maxActiveChunks: (maxX + 1) * (maxY + 1),
   });
   renderer.applyActiveChunkDelta(
     world,
-    activeChunks.update({ minX: 0, minY: 0, maxX, maxY }),
+    activeChunks.update({ minX: 0, minY: 0, maxX: world.width - 1, maxY: world.height - 1 }),
   );
 }
 
@@ -177,6 +185,7 @@ function emptyReturn(world: WorldGrid): ReturnPathResult {
   return {
     risk: new Uint8Array(world.tileCount),
     pathIndices: [],
+    pathEdges: [],
     corridorIndices: [],
     riskLevel: ReturnRiskLevel.Hidden,
   } as unknown as ReturnPathResult;
@@ -190,7 +199,43 @@ function makeReturn(
 ): ReturnPathResult {
   const risk = new Uint8Array(world.tileCount);
   for (const index of corridorIndices) risk[index] = riskLevel;
-  return { risk, pathIndices, corridorIndices, riskLevel } as unknown as ReturnPathResult;
+  return {
+    risk,
+    pathIndices,
+    pathEdges: pathEdgesFor(world, pathIndices),
+    corridorIndices,
+    riskLevel,
+  } as unknown as ReturnPathResult;
+}
+
+function pathEdgesFor(world: WorldGrid, pathIndices: readonly number[]): ReturnPathEdge[] {
+  const result: ReturnPathEdge[] = [];
+  let imageOffset = { x: 0, y: 0 };
+  for (let index = 1; index < pathIndices.length; index++) {
+    const fromIndex = pathIndices[index - 1]!;
+    const toIndex = pathIndices[index]!;
+    const from = world.pointFromIndex(fromIndex);
+    const to = world.pointFromIndex(toIndex);
+    const step = world.topology.cardinalSteps(from).find(({ point }) => (
+      point.x === to.x && point.y === to.y
+    ));
+    if (!step) throw new Error("test return path must be cardinal");
+    const destinationImageOffset = {
+      x: imageOffset.x + step.imageOffset.x,
+      y: imageOffset.y + step.imageOffset.y,
+    };
+    result.push({
+      fromIndex,
+      toIndex,
+      direction: step.direction,
+      imageOffset: step.imageOffset,
+      destinationImageOffset,
+      liftedFrom: { x: from.x + imageOffset.x, y: from.y + imageOffset.y },
+      liftedTo: { x: to.x + destinationImageOffset.x, y: to.y + destinationImageOffset.y },
+    });
+    imageOffset = destinationImageOffset;
+  }
+  return result;
 }
 
 const debugVisibility = {
@@ -226,7 +271,7 @@ function keys(chunks: ReadonlySet<WorldChunk>): string[] {
 
 describe("overlay chunk invalidation", () => {
   it("invalidates every chunk sampled by a padded knowledge-mask chunk", () => {
-    const world = new WorldGrid(12, 12, 4);
+    const world = new WorldGrid(12, 12, 4, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const dirty = new Set<WorldChunk>();
 
@@ -240,7 +285,7 @@ describe("overlay chunk invalidation", () => {
   });
 
   it("invalidates only cardinal chunk dependents for a frontier-contour change", () => {
-    const world = new WorldGrid(12, 12, 4);
+    const world = new WorldGrid(12, 12, 4, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const dirty = new Set<WorldChunk>();
 
@@ -250,7 +295,7 @@ describe("overlay chunk invalidation", () => {
   });
 
   it("keeps an interior frontier-contour change local to its owning chunk", () => {
-    const world = new WorldGrid(12, 12, 4);
+    const world = new WorldGrid(12, 12, 4, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const dirty = new Set<WorldChunk>();
 
@@ -258,16 +303,110 @@ describe("overlay chunk invalidation", () => {
 
     expect(keys(dirty)).toEqual(["1,1"]);
   });
+
+  it("invalidates wrapped padding and cardinal dependents across both corner seams", () => {
+    const world = new WorldGrid(8, 8, 4, WRAPPING_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const padded = new Set<WorldChunk>();
+    addPaddedChunkNeighbours(world, world.getChunk(0, 0)!, 1, padded);
+    expect(keys(padded)).toEqual(["0,0", "0,1", "1,0", "1,1"]);
+
+    const cardinal = new Set<WorldChunk>();
+    addCardinalChunkDependents(world, world.index(0, 0), cardinal);
+    expect(keys(cardinal)).toEqual(["0,0", "0,1", "1,0"]);
+  });
 });
 
 describe("forward frontier rendering", () => {
+  it("shares canonical textures across periodic image aliases and keeps their lifetime bounded", () => {
+    const world = new WorldGrid(4, 1, 4, WRAPPING_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const activeChunks = new ActiveChunkSet({
+      topology: world.topology,
+      prefetchRing: 0,
+      maxActiveChunks: 2,
+    });
+    const { renderer, textureKeys } = makeRendererHarness("risk-alias-test");
+    const forward = makeForward(world, [], []);
+
+    renderer.applyActiveChunkDelta(
+      world,
+      activeChunks.update({ minX: -1, minY: 0, maxX: 0, maxY: 0 }),
+    );
+    renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 2,
+      activeTextures: 2,
+      activeSprites: 4,
+      totalTextureAllocations: 2,
+    });
+    expect(textureKeys()).toEqual([
+      "risk-alias-test-risk-forward-0-0",
+      "risk-alias-test-risk-return-0-0",
+    ]);
+
+    renderer.applyActiveChunkDelta(
+      world,
+      activeChunks.update({ minX: 2, minY: 0, maxX: 2, maxY: 0 }),
+    );
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 1,
+      activeTextures: 2,
+      activeSprites: 2,
+      totalTextureAllocations: 2,
+      totalTextureReleases: 0,
+    });
+  });
+
+  it("retains canonical textures when a rebase replaces every periodic image alias", () => {
+    const world = new WorldGrid(8, 1, 4, WRAPPING_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const activeChunks = new ActiveChunkSet({
+      topology: world.topology,
+      prefetchRing: 0,
+      maxActiveChunks: 2,
+    });
+    const { renderer, texture, returnTexture } = makeRendererHarness("risk-rebase-test");
+    const forward = makeForward(world, [], []);
+    const returning = emptyReturn(world);
+    const first = activeChunks.update({ minX: 0, minY: 0, maxX: 7, maxY: 0 });
+    renderer.applyActiveChunkDelta(world, first);
+    renderer.sync(world, forward, returning, debugVisibility, 1);
+    const refreshes = [
+      texture(0, 0).refreshCount,
+      returnTexture(0, 0).refreshCount,
+      texture(1, 0).refreshCount,
+      returnTexture(1, 0).refreshCount,
+    ];
+
+    const rebased = activeChunks.update({ minX: 8, minY: 0, maxX: 15, maxY: 0 });
+    expect(rebased.activated).toHaveLength(2);
+    expect(rebased.deactivated).toHaveLength(2);
+    renderer.applyActiveChunkDelta(world, rebased);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 2,
+      activeTextures: 4,
+      activeSprites: 4,
+      totalTextureAllocations: 4,
+      totalTextureReleases: 0,
+    });
+
+    renderer.sync(world, forward, returning, debugVisibility, 1);
+    expect([
+      texture(0, 0).refreshCount,
+      returnTexture(0, 0).refreshCount,
+      texture(1, 0).refreshCount,
+      returnTexture(1, 0).refreshCount,
+    ]).toEqual(refreshes);
+  });
+
   it("keeps textures capped and renders current data when an inactive chunk activates", () => {
-    const world = new WorldGrid(8, 1, 2);
+    const world = new WorldGrid(8, 1, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const farFrontier = world.index(7, 0);
     const forward = makeForward(world, [farFrontier], [farFrontier]);
     const activeChunks = new ActiveChunkSet({
-      worldBounds: { minX: 0, minY: 0, maxX: 3, maxY: 0 },
+      topology: world.topology,
       prefetchRing: 0,
       maxActiveChunks: 1,
     });
@@ -275,7 +414,7 @@ describe("forward frontier rendering", () => {
 
     renderer.applyActiveChunkDelta(
       world,
-      activeChunks.update({ minX: 0, minY: 0, maxX: 0, maxY: 0 }),
+      activeChunks.update({ minX: 0, minY: 0, maxX: 1, maxY: 0 }),
     );
     renderer.sync(world, forward, emptyReturn(world), debugVisibility, 1);
     expect(textureKeys()).toEqual([
@@ -287,13 +426,13 @@ describe("forward frontier rendering", () => {
       activeChunks: 1,
       activeTextures: 2,
       activeSprites: 2,
-      estimatedTextureBytes: 1_152,
+      estimatedTextureBytes: 576,
       peakActiveTextures: 2,
     });
 
     renderer.applyActiveChunkDelta(
       world,
-      activeChunks.update({ minX: 3, minY: 0, maxX: 3, maxY: 0 }),
+      activeChunks.update({ minX: 6, minY: 0, maxX: 7, maxY: 0 }),
     );
     // Data identity and revisions are unchanged: activation itself must dirty
     // the replacement view and upload the already-current sparse masks.
@@ -313,7 +452,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("draws thin pale segments only on edges facing outside the logical reach mask", () => {
-    const world = new WorldGrid(3, 3, 3);
+    const world = new WorldGrid(3, 3, 3, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const center = world.index(1, 1);
     const forward = makeForward(
@@ -340,7 +479,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("keeps dash phase continuous across chunk seams without drawing a radial seam wall", () => {
-    const world = new WorldGrid(4, 3, 2);
+    const world = new WorldGrid(4, 3, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const row = [0, 1, 2, 3].map((x) => world.index(x, 1));
     const forward = makeForward(world, row, [row[1], row[2]]);
@@ -359,7 +498,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("redraws seam dependents when only an adjacent logical reach bit changes", () => {
-    const world = new WorldGrid(4, 1, 2);
+    const world = new WorldGrid(4, 1, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const frontier = world.index(1, 0);
     const seamNeighbour = world.index(2, 0);
@@ -380,7 +519,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("redraws same-count logical changes when a reusable result keeps its identity", () => {
-    const world = new WorldGrid(4, 1, 2);
+    const world = new WorldGrid(4, 1, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const frontier = world.index(1, 0);
     const oldNeighbour = world.index(2, 0);
@@ -403,7 +542,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("clears the previous contour after its published buffer is reused", () => {
-    const world = new WorldGrid(4, 1, 2);
+    const world = new WorldGrid(4, 1, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const oldFrontier = world.index(1, 0);
     const newFrontier = world.index(3, 0);
@@ -427,7 +566,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("suppresses the forward contour on currently visible frontier cells", () => {
-    const world = new WorldGrid(3, 3, 3);
+    const world = new WorldGrid(3, 3, 3, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const center = world.index(1, 1);
     world.setVisibleNowAtIndex(center, true);
@@ -441,7 +580,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("renders the Voyage Sense thread from the ordered path instead of corridor tiles", () => {
-    const world = new WorldGrid(4, 2, 2);
+    const world = new WorldGrid(4, 2, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Personal);
     const path = [world.index(0, 0), world.index(1, 0), world.index(2, 0), world.index(2, 1)];
     const corridorOnly = world.index(3, 1);
@@ -458,13 +597,13 @@ describe("forward frontier rendering", () => {
     expect(strokes.every(({ style }) => style.startsWith("rgba(91, 184, 116,"))).toBe(true);
     expect(returnTexture(1, 0).calls).toEqual([]);
     expect(renderer.getResourceTelemetry()).toMatchObject({
-      returnThreadSegments: 3,
+      returnThreadSegments: 4,
       returnThreadChunkBuckets: 2,
     });
   });
 
   it("recolors the whole thread through green, yellow, orange, and red risk states", () => {
-    const world = new WorldGrid(3, 1, 3);
+    const world = new WorldGrid(3, 1, 3, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Personal);
     const path = [0, 1, 2].map((x) => world.index(x, 0));
     const forward = makeForward(world, [], []);
@@ -486,7 +625,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("clears stale thread geometry when the route moves to another chunk or becomes hidden", () => {
-    const world = new WorldGrid(4, 2, 2);
+    const world = new WorldGrid(4, 2, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Personal);
     const forward = makeForward(world, [], []);
     const { renderer, returnTexture } = makeRendererHarness("return-replace-test");
@@ -515,7 +654,7 @@ describe("forward frontier rendering", () => {
   });
 
   it("skips full logical-candidate diffing for a presentation-only heading change", () => {
-    const world = new WorldGrid(4, 2, 2);
+    const world = new WorldGrid(4, 2, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const left = world.index(1, 0);
     const right = world.index(2, 0);

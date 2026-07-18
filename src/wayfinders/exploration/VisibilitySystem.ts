@@ -13,6 +13,7 @@ export interface VisibilityUpdate {
   currentVisibleIndices: readonly number[];
   /** Union of visible tiles at every navigation-tile centre crossed this update. */
   observedIndices: readonly number[];
+  /** Direction-preserving lifted physical centres crossed by this update. */
   crossedCenters: readonly GridPoint[];
 }
 
@@ -72,7 +73,7 @@ export class VisibilitySystem {
   }
 
   getVisibleIndices(origin: GridPoint): number[] {
-    this.assertTile(origin, "Visibility origin");
+    this.assertLiftedTile(origin, "Visibility origin");
     this.ensureOffsets();
 
     const visible: number[] = [];
@@ -81,22 +82,28 @@ export class VisibilitySystem {
   }
 
   /**
-   * Updates current LOS at the destination while also returning the observation
-   * union from every crossed tile centre. KnowledgeSystem consumes that union.
+   * Updates sight from physical tile centres supplied in traversal order.
+   * Coordinates are lifted and may sit outside the canonical rectangle on a
+   * wrapping axis. Callers must retain this physical provenance rather than
+   * reconstructing it from canonical endpoints.
    */
-  updateForMovement(from: GridPoint, to: GridPoint): VisibilityUpdate {
-    this.assertTile(from, "Visibility start");
-    this.assertTile(to, "Visibility destination");
+  updateForCrossedCenters(crossedCenters: readonly GridPoint[]): VisibilityUpdate {
+    if (crossedCenters.length === 0) {
+      throw new RangeError("Visibility update requires at least one crossed centre");
+    }
+    const liftedCenters = crossedCenters.map((center, index) => {
+      this.assertLiftedTile(center, `Visibility crossed centre ${index}`);
+      return { x: center.x, y: center.y };
+    });
     this.ensureOffsets();
 
-    const crossedCenters = traceGridCenters(from, to);
     const observedIndices: number[] = [];
     const currentVisibleIndices: number[] = [];
     const stamp = this.nextObservationStamp();
-    const finalCenterIndex = crossedCenters.length - 1;
-    for (let centerIndex = 0; centerIndex < crossedCenters.length; centerIndex++) {
+    const finalCenterIndex = liftedCenters.length - 1;
+    for (let centerIndex = 0; centerIndex < liftedCenters.length; centerIndex++) {
       this.appendMovementVisibility(
-        crossedCenters[centerIndex],
+        liftedCenters[centerIndex],
         observedIndices,
         stamp,
         centerIndex === finalCenterIndex ? currentVisibleIndices : undefined,
@@ -109,11 +116,18 @@ export class VisibilitySystem {
     // The former full-mask scan produced ascending world indices. Preserve that
     // observable ordering while sorting only the radius-bounded observation set.
     observedIndices.sort((left, right) => left - right);
-    return { currentVisibleIndices, observedIndices, crossedCenters };
+    return { currentVisibleIndices, observedIndices, crossedCenters: liftedCenters };
+  }
+
+  /** Traces and observes an explicitly lifted physical movement segment. */
+  updateForLiftedMovement(from: GridPoint, to: GridPoint): VisibilityUpdate {
+    this.assertLiftedTile(from, "Visibility start");
+    this.assertLiftedTile(to, "Visibility destination");
+    return this.updateForCrossedCenters(traceGridCenters(from, to));
   }
 
   updateAt(tile: GridPoint): VisibilityUpdate {
-    return this.updateForMovement(tile, tile);
+    return this.updateForCrossedCenters([tile]);
   }
 
   private ensureOffsets(): void {
@@ -137,14 +151,7 @@ export class VisibilitySystem {
   }
 
   private appendVisibleIndices(origin: GridPoint, output: number[]): void {
-    for (const offset of this.offsets) {
-      const targetX = origin.x + offset.dx;
-      const targetY = origin.y + offset.dy;
-      if (!this.world.inBounds(targetX, targetY)) continue;
-      if (this.hasLineOfSight(origin.x, origin.y, targetX, targetY)) {
-        output.push(this.world.index(targetX, targetY));
-      }
-    }
+    this.forEachVisibleIndex(origin, (index) => output.push(index));
   }
 
   private appendMovementVisibility(
@@ -153,17 +160,33 @@ export class VisibilitySystem {
     stamp: number,
     currentVisibleIndices?: number[],
   ): void {
-    for (const offset of this.offsets) {
-      const targetX = origin.x + offset.dx;
-      const targetY = origin.y + offset.dy;
-      if (!this.world.inBounds(targetX, targetY)) continue;
-      if (!this.hasLineOfSight(origin.x, origin.y, targetX, targetY)) continue;
-
-      const index = this.world.index(targetX, targetY);
+    this.forEachVisibleIndex(origin, (index) => {
       currentVisibleIndices?.push(index);
-      if (this.observedStamps[index] === stamp) continue;
+      if (this.observedStamps[index] === stamp) return;
       this.observedStamps[index] = stamp;
       observedIndices.push(index);
+    });
+  }
+
+  private forEachVisibleIndex(origin: GridPoint, visitor: (index: number) => void): void {
+    const canonicalOrigin = this.world.topology.normalizeTile(origin.x, origin.y);
+    const candidates = new Set<number>();
+    const radiusSquared = this.offsetRadius * this.offsetRadius;
+    for (const offset of this.offsets) {
+      const target = this.world.topology.canonicalizeTile(origin.x + offset.dx, origin.y + offset.dy);
+      if (!target) continue;
+      const index = this.world.index(target.x, target.y);
+      if (candidates.has(index)) continue;
+      candidates.add(index);
+
+      const displacement = this.world.topology.minimumImageTileDisplacement(canonicalOrigin, target);
+      if (displacement.x * displacement.x + displacement.y * displacement.y > radiusSquared) continue;
+      if (this.hasLineOfSight(
+        origin.x,
+        origin.y,
+        origin.x + displacement.x,
+        origin.y + displacement.y,
+      )) visitor(index);
     }
   }
 
@@ -203,15 +226,20 @@ export class VisibilitySystem {
 
       // A blocking target is visible itself, but hides every tile behind it.
       if (x === toX && y === toY) return true;
-      if (this.world.isSightBlocked(x, y)) return false;
+      const canonical = this.world.topology.canonicalizeTile(x, y);
+      if (!canonical) return false;
+      if (this.world.isSightBlocked(canonical.x, canonical.y)) return false;
     }
 
     return true;
   }
 
-  private assertTile(point: GridPoint, label: string): void {
-    if (!this.world.inBounds(point.x, point.y)) {
-      throw new RangeError(`${label} (${point.x}, ${point.y}) is outside the world`);
+  private assertLiftedTile(point: GridPoint, label: string): void {
+    if (!Number.isSafeInteger(point.x) || !Number.isSafeInteger(point.y)) {
+      throw new RangeError(`${label} must use safe-integer tile coordinates`);
+    }
+    if (!this.world.topology.canonicalizeTile(point.x, point.y)) {
+      throw new RangeError(`${label} (${point.x}, ${point.y}) is outside the bounded world`);
     }
   }
 }

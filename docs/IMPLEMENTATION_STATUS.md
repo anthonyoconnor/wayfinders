@@ -3,7 +3,7 @@
 Status: current development handoff, verified 2026-07-17.
 
 The asset workflow through GR-4.4, the graphical Great Hall through GR-5.3,
-and gameplay through GP-5.2 are implemented. GP-5.1 replaces the filled return
+and gameplay through GP-6.6 are implemented. GP-5.1 replaces the filled return
 corridor with the chunk-indexed Voyage Sense thread. GP-5.2 carries its four
 risk colours into a graphics-only cargo partition for exact fractional return
 cost, depleted supply, and prompt-bound survey cost. Focused contracts cover
@@ -11,6 +11,16 @@ fractional partitions, shortfalls, safe and unknown returns, and projected
 post-survey risk. Browser acceptance at normal gameplay zoom verified the
 unlabelled rack, fractional return allocation, two-bundle survey glow, hidden
 exact status, and no warning or error output.
+
+GP-6 focused topology, manifest, periodic generation, navigation, visibility,
+knowledge, feature, full-lap simulation, activation, water, overlay, cloud,
+marker, and lifted-view contracts pass. Source and test typechecks, architecture
+validation, quick, contract, integration, repository-I/O, focused performance,
+and presentation verification pass. The read-only asset gate and production
+bundle also pass. A clean serial closeout sample met every approved GP-6 budget;
+the archive owns its durable measurements. Live game and Water-workspace
+acceptance covered all four seams and corners, responsive layout, Great Hall,
+sound enable/mute wiring, and a clean browser console.
 
 The audio layer is implemented through `AUD-5`. Game and asset-library modes
 share one validated stored-audio catalog; game mode has explicit enable, mute,
@@ -38,14 +48,15 @@ presentation state, crossfades two stable loops, and ducks them behind return,
 wreck, succession, and completion. Mixer, controller, ambience, cue and music
 policies/controllers, controls, preview, workspace, and composition checks
 pass. Live keyboard activation, stored-media playback, repeated ambience loops,
-crossfades, and ducking acceptance remain pending
-because the in-app browser connection did not initialize during this handoff;
-the rebuilt ambience also awaits product-owner audition.
+crossfades, and ducking acceptance remain pending. This handoff confirmed the
+live sound-panel enable and mute/unmute controls without browser warnings or
+errors; the rebuilt ambience still awaits product-owner audition.
 
 WTR-2.0 through WTR-2.6 are implemented. The world manifest carries stable water
-regions and generation resolves a deterministic chunk-addressable water layout
-without changing gameplay terrain. The active-chunk `WaterRenderer` owns cached
-base and surface textures, visible-only discrete animation, directional
+regions and generation resolves a deterministic canonical chunk-addressable,
+periodic water layout without changing gameplay terrain. The active-chunk
+`WaterRenderer` owns cached canonical base/surface textures, shared periodic
+image aliases, visible-owner discrete animation, directional
 deep-to-coastal transitions, coastal underpainting beneath transparent island
 edges, current/rough accents, reduced motion, and the aligned home-shore
 overlay. Fishing grounds use neutral hidden-quality presentation and lean,
@@ -120,6 +131,28 @@ Exact test counts are intentionally not recorded here because project and file
 assignment change frequently. `vitest.config.ts` is the source of truth for lane
 membership; `tests/README.md` explains lane selection.
 
+The final GP-6 live pass sailed and teleported through the west/east,
+north/south, and corner joins; exercised the game, Great Hall, and Water
+workspace at normal and `900 x 650` responsive viewports; and found no browser
+warning or error output. That pass exposed an opaque base-water sampling cross
+where four world images met. The renderer now presents an exact inner frame
+from a one-pixel extruded gutter, and the same corner/zoom retest removed the
+cross without adding canonical textures or alias redraws.
+
+Two later full serial reruns on the currently loaded development machine showed
+system-wide timing variance after the clean acceptance sample. The latest
+world-generation p95 values were `441.1298 ms`, `667.4999 ms`, and
+`2304.6252 ms` for `P0`, `P1`, and `P2`; the first two exceed their approved
+`350 ms` and `600 ms` limits while `P2`, tile entry, cooperative guidance,
+active-image ownership, and resource bounds still pass. The generation code is
+identical to the clean accepted sample, so this is retained as an operational
+trend check rather than a gameplay blocker.
+
+One aggregate all-project rerun hit the fixed five-second timeout in
+`collision-save-api.test.mjs` and `production-asset-promotion.test.mjs` while
+CPU-heavy integration work ran concurrently. Both files passed immediately in
+the serial I/O project, consistent with the earlier complete I/O-lane pass.
+
 ## Open operational gaps
 
 - Complete live audio browser acceptance for keyboard focus, stored-file media
@@ -129,3 +162,5 @@ membership; `tests/README.md` explains lane selection.
 - End-to-end browser departure responsiveness has not been remeasured after the
   current guidance and active-chunk architecture settled. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.
+- Repeat the serial generation trend on a quiet machine before using the latest
+  loaded-machine `P0`/`P1` p95 samples as a performance baseline.

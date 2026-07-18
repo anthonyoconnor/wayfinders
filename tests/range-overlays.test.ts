@@ -4,6 +4,7 @@ import { ReturnPathSystem, ReturnRiskLevel } from "../src/wayfinders/exploration
 import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology.ts";
 import { makeConfig, makeShip } from "./helpers.ts";
 
 function countMask(mask: Uint8Array): number {
@@ -33,7 +34,7 @@ function shipAt(x: number, y: number, provisions = 5, provisionAccumulator = 0) 
 describe("ForwardRangeSystem", () => {
 it("displays only reachable Unknown cells and shrinks after provision use", () => {
   const config = makeConfig({ provisions: { unknownCost: 1 } });
-  const world = new WorldGrid(6, 1, 3);
+  const world = new WorldGrid(6, 1, 3, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   world.setMovementBlocked(2, 0, true); // Hidden: it must not leak into the estimate.
@@ -63,7 +64,7 @@ it("displays only reachable Unknown cells and shrinks after provision use", () =
 
 it("matches fresh masks across incremental budget decreases and increases", () => {
   const config = makeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } });
-  const world = new WorldGrid(10, 1, 5);
+  const world = new WorldGrid(10, 1, 5, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   world.setKnowledge(1, 0, KnowledgeState.Personal, 1);
@@ -109,7 +110,7 @@ it("matches fresh masks across incremental budget decreases and increases", () =
 });
 
 it("reports a presentation-only change when expansion moves the frontier beyond the world", () => {
-  const world = new WorldGrid(3, 1, 3);
+  const world = new WorldGrid(3, 1, 3, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   const ship = shipAt(0, 0, 2);
@@ -126,7 +127,7 @@ it("reports a presentation-only change when expansion moves the frontier beyond 
 });
 
 it("clears stale Unknown cells when an expanded search sees a changed knowledge graph", () => {
-  const world = new WorldGrid(7, 1, 4);
+  const world = new WorldGrid(7, 1, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   const ship = shipAt(0, 0, 2);
@@ -148,7 +149,7 @@ it("clears stale Unknown cells when an expanded search sees a changed knowledge 
 
 it("stops at known blockers without leaking hidden terrain into Unknown cost", () => {
   const config = makeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } });
-  const world = new WorldGrid(5, 1, 3);
+  const world = new WorldGrid(5, 1, 3, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   world.setMovementBlocked(2, 0, true);
@@ -167,7 +168,7 @@ it("stops at known blockers without leaking hidden terrain into Unknown cost", (
 });
 
 it("post-processes only settled forward candidates instead of scanning the world", () => {
-  const world = new WorldGrid(40, 40, 8);
+  const world = new WorldGrid(40, 40, 8, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const system = new ForwardRangeSystem(world, makeConfig({ provisions: { unknownCost: 1 } }));
   const ship = makeShip(2, 0);
@@ -189,7 +190,7 @@ it("presents only reachable Unknown cells in the outermost provision-cost band",
   const config = makeConfig({
     provisions: { personalCost: 0.5, unknownCost: 1 },
   });
-  const world = new WorldGrid(8, 1, 4);
+  const world = new WorldGrid(8, 1, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   world.setKnowledge(1, 0, KnowledgeState.Personal, 1);
@@ -207,7 +208,7 @@ it("presents only reachable Unknown cells in the outermost provision-cost band",
 
 it("keeps the forward frontier anchored in world space as travel consumes its budget", () => {
   const config = makeConfig({ provisions: { unknownCost: 1 } });
-  const world = new WorldGrid(8, 1, 4);
+  const world = new WorldGrid(8, 1, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   const ship = shipAt(0, 0, 5);
@@ -237,7 +238,7 @@ it("clips the terminal band to the configured cone ahead of the ship", () => {
     provisions: { unknownCost: 1 },
     overlays: { forwardConeHalfAngleDegrees: 60 },
   });
-  const world = new WorldGrid(11, 11, 6);
+  const world = new WorldGrid(11, 11, 6, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const ship = shipAt(5, 5, 3);
   ship.heading = 0;
@@ -253,7 +254,7 @@ it("clips the terminal band to the configured cone ahead of the ship", () => {
 });
 
 it("preserves cone boundaries at right, obtuse, and full-circle half angles", () => {
-  const world = new WorldGrid(11, 11, 6);
+  const world = new WorldGrid(11, 11, 6, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const ship = shipAt(5, 5, 3);
   ship.heading = 0;
@@ -284,7 +285,7 @@ it("rotates only the sparse presentation cone when heading changes", () => {
     provisions: { unknownCost: 1 },
     overlays: { forwardConeHalfAngleDegrees: 60 },
   });
-  const world = new WorldGrid(11, 11, 6);
+  const world = new WorldGrid(11, 11, 6, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const ship = shipAt(5, 5, 3);
   const system = new ForwardRangeSystem(world, config);
@@ -305,7 +306,7 @@ it("rotates only the sparse presentation cone when heading changes", () => {
 });
 
 it("allows zero-cost Unknown travel and omits the nonexistent finite frontier", () => {
-  const world = new WorldGrid(4, 1, 2);
+  const world = new WorldGrid(4, 1, 2, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const system = new ForwardRangeSystem(world, makeConfig({ provisions: { unknownCost: 0 } }));
 
@@ -318,7 +319,7 @@ it("allows zero-cost Unknown travel and omits the nonexistent finite frontier", 
 describe("fine collision route knowledge boundary", () => {
 it("blocks an exact return edge without leaking hidden collision into forward range", () => {
   const config = makeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } });
-  const world = new WorldGrid(5, 1, 3);
+  const world = new WorldGrid(5, 1, 3, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   world.setKnowledge(1, 0, KnowledgeState.Personal, 1);
@@ -349,7 +350,7 @@ it("blocks an exact return edge without leaking hidden collision into forward ra
 
 it("finds a Supported root beside a passable fine-overridden coarse-solid Personal cell", () => {
   const config = makeConfig({ movement: { shipCollisionHalfExtent: 1 } });
-  const world = new WorldGrid(3, 1, 3);
+  const world = new WorldGrid(3, 1, 3, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   world.setTerrain(1, 0, TerrainType.Land);
@@ -372,7 +373,7 @@ it("finds a Supported root beside a passable fine-overridden coarse-solid Person
 describe("ReturnPathSystem", () => {
 it("chooses one cheapest known route and leaves other Personal branches uncoloured", () => {
   const config = makeConfig({ provisions: { personalCost: 0.5 } });
-  const world = new WorldGrid(7, 3, 4);
+  const world = new WorldGrid(7, 3, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 1, KnowledgeState.Supported);
   world.setKnowledge(6, 1, KnowledgeState.Supported);
@@ -403,7 +404,7 @@ it("chooses one cheapest known route and leaves other Personal branches uncolour
 });
 
 it("connects the ship through currently visible Unknown without opening unseen shortcuts", () => {
-  const world = new WorldGrid(8, 5, 4);
+  const world = new WorldGrid(8, 5, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 2, KnowledgeState.Supported);
   for (let x = 1; x <= 3; x++) world.setKnowledge(x, 2, KnowledgeState.Personal, 1);
@@ -426,7 +427,7 @@ it("connects the ship through currently visible Unknown without opening unseen s
 });
 
 it("pads only through adjacent passable Personal water and supports a zero-width route", () => {
-  const world = new WorldGrid(7, 5, 4);
+  const world = new WorldGrid(7, 5, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 2, KnowledgeState.Supported);
   for (let x = 1; x <= 5; x++) world.setKnowledge(x, 2, KnowledgeState.Personal, 1);
@@ -454,7 +455,7 @@ it("pads only through adjacent passable Personal water and supports a zero-width
 });
 
 it("reclassifies every corridor tile together as provisions cross risk thresholds", () => {
-  const world = new WorldGrid(8, 1, 4);
+  const world = new WorldGrid(8, 1, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   for (let x = 1; x <= 6; x++) world.setKnowledge(x, 0, KnowledgeState.Personal, 1);
@@ -488,7 +489,7 @@ it("reclassifies every corridor tile together as provisions cross risk threshold
 });
 
 it("returns no coloured corridor when already safe or when no known route exists", () => {
-  const world = new WorldGrid(5, 1, 3);
+  const world = new WorldGrid(5, 1, 3, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   world.setKnowledge(3, 0, KnowledgeState.Personal, 1);
@@ -510,7 +511,7 @@ it("returns no coloured corridor when already safe or when no known route exists
 });
 
 it("reuses its world-sized risk mask when recalculating after a tile crossing", () => {
-  const world = new WorldGrid(8, 1, 4);
+  const world = new WorldGrid(8, 1, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   for (let x = 1; x <= 6; x++) world.setKnowledge(x, 0, KnowledgeState.Personal, 1);
@@ -531,7 +532,7 @@ it("reuses its world-sized risk mask when recalculating after a tile crossing", 
 });
 
 it("uses sparse knowledge candidates and stops once the ship's shortest path is settled", () => {
-  const world = new WorldGrid(40, 40, 8);
+  const world = new WorldGrid(40, 40, 8, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(0, 0, KnowledgeState.Supported);
   for (let x = 1; x <= 10; x++) world.setKnowledge(x, 0, KnowledgeState.Personal, 1);

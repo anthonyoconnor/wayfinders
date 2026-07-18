@@ -28,7 +28,7 @@ import { FrameTimingMonitor } from "../core/FrameTimingMonitor";
 import { PresentationWorkMonitor, type PresentationWorkCounters } from "../core/PresentationWorkCounters";
 import { SimulationClock } from "../core/SimulationClock";
 import { SimulationDiagnosticsAdapter } from "../core/SimulationDiagnosticsReadModel";
-import type { GridPoint, MovementInput } from "../core/types";
+import type { GridPoint, MovementInput, WorldPoint } from "../core/types";
 import {
   type FishingShoalInteractionResultV1,
 } from "../exploration/FishingShoalContracts";
@@ -71,10 +71,15 @@ import {
   CLOUD_FREQUENCY_MINIMUM,
   CloudLayerRenderer,
 } from "./CloudLayerRenderer";
-import { collectDebugEntityBounds, type DebugEntityBoundsRole } from "./DebugEntityBounds";
+import {
+  collectDebugEntityBounds,
+  projectDebugEntityBoundsToActiveImages,
+  type DebugEntityBoundsRole,
+} from "./DebugEntityBounds";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { IslandDossierRenderer } from "./IslandDossierRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
+import { LiftedViewAnchor } from "./LiftedViewAnchor";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
 import { canVisitGreatHall } from "./GreatHallAccess";
 import { GreatHallView } from "./GreatHallView";
@@ -109,8 +114,9 @@ import {
   ActiveChunkSet,
   DEFAULT_ACTIVE_CHUNK_BUDGET,
   DEFAULT_ACTIVE_CHUNK_PREFETCH_RING,
-  viewportChunkRegion,
+  viewportTileBounds,
   type ActiveChunkDelta,
+  type ActiveChunkEntry,
 } from "./activation";
 
 interface MovementKeys {
@@ -235,6 +241,7 @@ export class WayfindersScene extends Phaser.Scene {
   private shipRenderer!: ShipRenderer;
   private wreckRenderer!: WreckRenderer;
   private activeChunkSet!: ActiveChunkSet;
+  private activeChunkEntries: readonly Readonly<ActiveChunkEntry>[] = Object.freeze([]);
   private lastActiveChunkRevision = -1;
   private gridGraphics!: Phaser.GameObjects.Graphics;
   private debugGraphics!: Phaser.GameObjects.Graphics;
@@ -303,6 +310,8 @@ export class WayfindersScene extends Phaser.Scene {
   private pendingCompletionNavigatorId?: NavigatorId;
   private previousShipPose!: ShipRenderPose;
   private currentShipPose!: ShipRenderPose;
+  private liftedViewAnchor!: LiftedViewAnchor;
+  private pendingTeleportViewPoint?: Readonly<WorldPoint>;
   private pilotAssets!: PilotAssetRuntime;
   private authoredIslandPresentations!: Readonly<AuthoredIslandPresentationRuntime>;
   private audioController?: GameAudioController;
@@ -373,8 +382,12 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveySiteRenderer = new SurveySiteRenderer(this);
     this.fishingShoalRenderer = new FishingShoalRenderer(this, this.pilotAssets);
     this.shipRenderer = new ShipRenderer(this, this.pilotAssets);
+    this.liftedViewAnchor = new LiftedViewAnchor(this.simulation.world.topology, {
+      x: this.simulation.ship.worldX,
+      y: this.simulation.ship.worldY,
+    });
     this.resetActiveChunkSet();
-    this.resetShipPresentation(true);
+    this.resetShipPresentation(true, true);
     this.gridGraphics = this.add.graphics().setDepth(70);
     this.debugGraphics = this.add.graphics().setDepth(71);
     this.entityDebugGraphics = this.add.graphics().setDepth(72);
@@ -414,9 +427,11 @@ export class WayfindersScene extends Phaser.Scene {
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.on(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
     // Fractional zoom and pixel rounding create visible one-pixel steps. A
-    // stronger bounded lerp keeps the first camera response below one frame.
+    // stronger damped follow keeps the first camera response below one frame.
     this.cameras.main.startFollow(this.shipRenderer.container, false, 0.18, 0.18);
     this.configureCamera();
+    this.shipRenderer.sync(this.currentShipPose);
+    this.cameras.main.centerOn(this.currentShipPose.worldX, this.currentShipPose.worldY);
     this.renderWorld();
     this.eventUnsubscribers.push(onPrototypeConfigChanged((sections) => {
       if (sections.has("overlays")) this.simulation.refreshRiskOverlays();
@@ -463,12 +478,17 @@ export class WayfindersScene extends Phaser.Scene {
     this.clock.advance(delta, (deltaSeconds) => {
       const lifecycleRevision = this.simulation.lifecycleResolutionRevision;
       this.previousShipPose = this.currentShipPose;
-      this.simulation.update(movementInput, deltaSeconds);
+      const movement = this.simulation.update(movementInput, deltaSeconds);
+      this.liftedViewAnchor.advance({
+        x: this.simulation.ship.worldX,
+        y: this.simulation.ship.worldY,
+      }, movement);
       this.currentShipPose = this.captureShipPose();
       keepAdvancing = lifecycleRevision === this.simulation.lifecycleResolutionRevision;
       if (!keepAdvancing) this.previousShipPose = this.currentShipPose;
       return keepAdvancing;
     });
+    this.rebaseLiftedPresentation();
     this.updateSailingAmbience(delta / 1000);
     this.updateGameMusic(delta / 1000);
     this.frameTiming.record(delta, this.clock.lastDroppedMs, document.visibilityState === "visible");
@@ -528,15 +548,13 @@ export class WayfindersScene extends Phaser.Scene {
 
   private configureCamera(): void {
     const tileSize = prototypeConfig.navigation.tileSize;
-    const worldWidth = this.simulation.world.width * tileSize;
-    const worldHeight = this.simulation.world.height * tileSize;
-    this.cameras.main.setBounds(0, 0, worldWidth, worldHeight);
+    this.cameras.main.removeBounds();
     this.cameras.main.setZoom(Math.max(0.7, Math.min(1.15, this.scale.height / (tileSize * 26))));
   }
 
   private renderWorld(): void {
     this.resetActiveChunkSet();
-    const delta = this.activeChunkSet.update(this.currentViewportChunkRegion());
+    const delta = this.activeChunkSet.update(this.currentViewportTileBounds());
     this.worldRenderer.render(this.simulation.generated, delta.active);
     this.waterRenderer.render(this.simulation.generated, delta.active);
     this.applyActiveChunkDelta(delta, true);
@@ -545,19 +563,14 @@ export class WayfindersScene extends Phaser.Scene {
   private resetActiveChunkSet(): void {
     const world = this.simulation.world;
     this.activeChunkSet = new ActiveChunkSet({
-      worldBounds: {
-        minX: 0,
-        minY: 0,
-        maxX: Math.ceil(world.width / world.chunkSize) - 1,
-        maxY: Math.ceil(world.height / world.chunkSize) - 1,
-      },
+      topology: world.topology,
       prefetchRing: DEFAULT_ACTIVE_CHUNK_PREFETCH_RING,
       maxActiveChunks: DEFAULT_ACTIVE_CHUNK_BUDGET,
     });
     this.lastActiveChunkRevision = -1;
   }
 
-  private currentViewportChunkRegion() {
+  private currentViewportTileBounds() {
     const camera = this.cameras.main;
     const current = camera.worldView;
     const width = current.width > 0 ? current.width : this.scale.width / Math.max(camera.zoom, 0.01);
@@ -565,27 +578,24 @@ export class WayfindersScene extends Phaser.Scene {
     const viewport = current.width > 0 && current.height > 0
       ? current
       : {
-          x: this.simulation.ship.worldX - width / 2,
-          y: this.simulation.ship.worldY - height / 2,
+          x: this.liftedViewAnchor.point.x - width / 2,
+          y: this.liftedViewAnchor.point.y - height / 2,
           width,
           height,
         };
-    return viewportChunkRegion(viewport, {
-      worldWidthTiles: this.simulation.world.width,
-      worldHeightTiles: this.simulation.world.height,
-      chunkSizeTiles: this.simulation.world.chunkSize,
-      tileSizePixels: this.simulation.config.navigation.tileSize,
-    });
+    return viewportTileBounds(viewport, this.simulation.config.navigation.tileSize);
   }
 
   private syncActiveChunks(force = false): void {
-    const delta = this.activeChunkSet.update(this.currentViewportChunkRegion());
+    const delta = this.activeChunkSet.update(this.currentViewportTileBounds());
     if (!force && delta.revision === this.lastActiveChunkRevision) return;
     this.applyActiveChunkDelta(delta);
   }
 
   private applyActiveChunkDelta(delta: Readonly<ActiveChunkDelta>, worldAlreadyBound = false): void {
-    if (!worldAlreadyBound) this.worldRenderer.applyActiveChunks(delta);
+    // Even the initial bind reapplies the cheap entry delta so the deferred-gap
+    // ocean covers exact visible demand, including budget-deferred images.
+    this.worldRenderer.applyActiveChunks(delta);
     if (!worldAlreadyBound) this.waterRenderer.applyActiveChunks(delta);
     this.knowledgeOverlay.applyActiveChunkDelta(this.simulation.world, delta);
     this.cloudLayer.applyActiveChunkDelta(
@@ -602,6 +612,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.islandDossierRenderer.applyActiveChunks(delta.active);
     this.surveySiteRenderer.applyActiveChunks(delta.active);
     this.fishingShoalRenderer.applyActiveChunks(delta.active);
+    this.activeChunkEntries = delta.active;
+    this.lastDebugRevision = -1;
     this.lastActiveChunkRevision = delta.revision;
   }
 
@@ -613,21 +625,39 @@ export class WayfindersScene extends Phaser.Scene {
 
     if (this.simulation.debug.navigationGrid) {
       this.gridGraphics.lineStyle(1, PALETTE.grid, 0.18);
-      for (let x = 0; x <= world.width; x++) this.gridGraphics.lineBetween(x * size, 0, x * size, world.height * size);
-      for (let y = 0; y <= world.height; y++) this.gridGraphics.lineBetween(0, y * size, world.width * size, y * size);
+      for (const entry of this.activeChunkEntries) {
+        const startX = entry.canonicalChunk.x * world.chunkSize;
+        const startY = entry.canonicalChunk.y * world.chunkSize;
+        const endX = Math.min(world.width, startX + world.chunkSize);
+        const endY = Math.min(world.height, startY + world.chunkSize);
+        const left = startX * size + entry.imageOffset.x;
+        const top = startY * size + entry.imageOffset.y;
+        const right = endX * size + entry.imageOffset.x;
+        const bottom = endY * size + entry.imageOffset.y;
+        for (let x = startX; x <= endX; x++) {
+          const liftedX = x * size + entry.imageOffset.x;
+          this.gridGraphics.lineBetween(liftedX, top, liftedX, bottom);
+        }
+        for (let y = startY; y <= endY; y++) {
+          const liftedY = y * size + entry.imageOffset.y;
+          this.gridGraphics.lineBetween(left, liftedY, right, liftedY);
+        }
+      }
     }
 
     if (this.simulation.debug.collisionBoxes) {
       this.debugGraphics.fillStyle(PALETTE.collision, 0.2);
       this.debugGraphics.lineStyle(1.5, PALETTE.collision, 0.9);
-      world.forEachTile((x, y) => {
+      this.forEachActiveChunkTile((entry, x, y) => {
+        const imageX = entry.imageOffset.x;
+        const imageY = entry.imageOffset.y;
         const fineMask = world.getFineCollisionMask(x, y);
         if (fineMask !== undefined) {
           for (let subY = 0; subY < COLLISION_SUBCELLS_PER_TILE; subY++) {
             for (let subX = 0; subX < COLLISION_SUBCELLS_PER_TILE; subX++) {
               if (!isCollisionSubcellSolid(fineMask, subX, subY)) continue;
-              const left = x * size + subX * COLLISION_SUBCELL_SIZE;
-              const top = y * size + subY * COLLISION_SUBCELL_SIZE;
+              const left = x * size + subX * COLLISION_SUBCELL_SIZE + imageX;
+              const top = y * size + subY * COLLISION_SUBCELL_SIZE + imageY;
               this.debugGraphics.fillRect(left + 0.5, top + 0.5, COLLISION_SUBCELL_SIZE - 1, COLLISION_SUBCELL_SIZE - 1);
               this.debugGraphics.strokeRect(left + 0.5, top + 0.5, COLLISION_SUBCELL_SIZE - 1, COLLISION_SUBCELL_SIZE - 1);
             }
@@ -635,8 +665,8 @@ export class WayfindersScene extends Phaser.Scene {
           return;
         }
         if (world.isMovementBlocked(x, y)) {
-          this.debugGraphics.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-          this.debugGraphics.strokeRect(x * size + 0.5, y * size + 0.5, size - 1, size - 1);
+          this.debugGraphics.fillRect(x * size + imageX + 1, y * size + imageY + 1, size - 2, size - 2);
+          this.debugGraphics.strokeRect(x * size + imageX + 0.5, y * size + imageY + 0.5, size - 1, size - 1);
         }
       });
     }
@@ -644,14 +674,30 @@ export class WayfindersScene extends Phaser.Scene {
     if (this.simulation.debug.currentSight) {
       this.debugGraphics.fillStyle(PALETTE.sight, 0.12);
       this.debugGraphics.lineStyle(1, PALETTE.sight, 0.38);
-      for (const index of world.getVisibleIndices()) {
-        const x = index % world.width;
-        const y = Math.floor(index / world.width);
-        this.debugGraphics.fillRect(x * size, y * size, size, size);
-        this.debugGraphics.strokeRect(x * size, y * size, size, size);
-      }
+      this.forEachActiveChunkTile((entry, x, y) => {
+        if (!world.isVisibleNow(x, y)) return;
+        const liftedX = x * size + entry.imageOffset.x;
+        const liftedY = y * size + entry.imageOffset.y;
+        this.debugGraphics.fillRect(liftedX, liftedY, size, size);
+        this.debugGraphics.strokeRect(liftedX, liftedY, size, size);
+      });
     }
 
+  }
+
+  private forEachActiveChunkTile(
+    visitor: (entry: Readonly<ActiveChunkEntry>, x: number, y: number) => void,
+  ): void {
+    const world = this.simulation.world;
+    for (const entry of this.activeChunkEntries) {
+      const startX = entry.canonicalChunk.x * world.chunkSize;
+      const startY = entry.canonicalChunk.y * world.chunkSize;
+      const endX = Math.min(world.width, startX + world.chunkSize);
+      const endY = Math.min(world.height, startY + world.chunkSize);
+      for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) visitor(entry, x, y);
+      }
+    }
   }
 
   private renderEntityDebug(): void {
@@ -672,7 +718,17 @@ export class WayfindersScene extends Phaser.Scene {
       homeDock: this.simulation.generated.landmarks.dock,
     }, size, this.simulation.config.movement.shipCollisionHalfExtent);
 
-    for (const bound of bounds) {
+    const shipBounds = bounds.filter(({ kind }) => kind === "player-ship");
+    const liftedBounds = [
+      ...shipBounds,
+      ...projectDebugEntityBoundsToActiveImages(
+        bounds.filter(({ kind }) => kind !== "player-ship"),
+        this.activeChunkEntries,
+        this.simulation.world.chunkSize * size,
+      ),
+    ];
+
+    for (const bound of liftedBounds) {
       const color = this.debugEntityColor(bound.role);
       const x = bound.centerX - bound.halfWidth;
       const y = bound.centerY - bound.halfHeight;
@@ -983,8 +1039,15 @@ export class WayfindersScene extends Phaser.Scene {
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
     if (!this.teleportOnClick) return;
-    const tile = worldToGrid(pointer.worldX, pointer.worldY);
-    if (this.teleportForDeveloper(tile, `Teleported to ${tile.x}, ${tile.y}.`)) {
+    const canonicalPointer = this.simulation.world.topology.normalizeWorld(pointer.worldX, pointer.worldY);
+    const tileSize = this.simulation.config.navigation.tileSize;
+    const tile = worldToGrid(canonicalPointer.x, canonicalPointer.y, tileSize);
+    const canonicalCenter = gridToWorld(tile, tileSize);
+    const liftedCenter = {
+      x: canonicalCenter.x + pointer.worldX - canonicalPointer.x,
+      y: canonicalCenter.y + pointer.worldY - canonicalPointer.y,
+    };
+    if (this.teleportForDeveloper(tile, `Teleported to ${tile.x}, ${tile.y}.`, liftedCenter)) {
       this.teleportOnClick = false;
       this.updateTeleportButton();
     }
@@ -1660,15 +1723,25 @@ export class WayfindersScene extends Phaser.Scene {
     return undefined;
   }
 
-  private teleportForDeveloper(tile: GridPoint, successMessage: string): boolean {
+  private teleportForDeveloper(
+    tile: GridPoint,
+    successMessage: string,
+    liftedViewPoint?: Readonly<WorldPoint>,
+  ): boolean {
     const lockReason = this.developerActionLockReason();
     if (lockReason) {
       this.log(lockReason);
       return false;
     }
-    if (!this.simulation.teleport(tile)) {
-      this.log(`Tile ${tile.x}, ${tile.y} is blocked or outside the world.`);
-      return false;
+    const previousTarget = this.pendingTeleportViewPoint;
+    this.pendingTeleportViewPoint = liftedViewPoint;
+    try {
+      if (!this.simulation.teleport(tile)) {
+        this.log(`Tile ${tile.x}, ${tile.y} is blocked or outside the world.`);
+        return false;
+      }
+    } finally {
+      this.pendingTeleportViewPoint = previousTarget;
     }
     this.log(successMessage);
     return true;
@@ -1993,9 +2066,13 @@ export class WayfindersScene extends Phaser.Scene {
       "#scene-tools-slot [data-field='seed']",
     );
     if (seedField) seedField.value = String(this.simulation.generated.seed);
-    this.resetShipPresentation(true);
+    this.liftedViewAnchor = new LiftedViewAnchor(this.simulation.world.topology, {
+      x: this.simulation.ship.worldX,
+      y: this.simulation.ship.worldY,
+    });
+    this.resetShipPresentation(true, true);
     this.configureCamera();
-    this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
+    this.cameras.main.centerOn(this.currentShipPose.worldX, this.currentShipPose.worldY);
     this.renderWorld();
     this.lastDebugRevision = -1;
     this.lastDebugOverlayRevision = -1;
@@ -2102,7 +2179,10 @@ export class WayfindersScene extends Phaser.Scene {
   private installBrowserDebugApi(): void {
     const api: BrowserDebugApi = {
       snapshot: () => this.simulation.snapshot(),
-      teleport: (x, y) => this.simulation.teleport({ x: Math.trunc(x), y: Math.trunc(y) }),
+      teleport: (x, y) => this.teleportForDeveloper(
+        { x: Math.trunc(x), y: Math.trunc(y) },
+        `Teleported to ${Math.trunc(x)}, ${Math.trunc(y)}.`,
+      ),
       addProvisions: (delta) => {
         this.simulation.addProvisions(delta);
         this.updateProvisionOutput();
@@ -2284,7 +2364,6 @@ export class WayfindersScene extends Phaser.Scene {
         supportedTileCount,
         closedUnknownTileCount,
       }) => {
-        this.worldRenderer.refreshKnowledge(this.simulation.generated);
         const entry = this.greatHallChronicle().navigators.find(({ navigatorId: id }) => id === navigatorId);
         const voyage = entry?.voyages.find((record) => (
           record.voyageNumber === voyageNumber && record.outcome === "returned"
@@ -2343,7 +2422,7 @@ export class WayfindersScene extends Phaser.Scene {
       }),
       this.simulation.events.on("expeditionFailed", ({ generation, nextGeneration, forgottenTiles }) => {
         this.resetShipPresentation(false);
-        this.cameras.main.centerOn(this.simulation.ship.worldX, this.simulation.ship.worldY);
+        this.cameras.main.centerOn(this.currentShipPose.worldX, this.currentShipPose.worldY);
         this.showPendingGenerationHandover();
         this.log(
           `Generation ${generation} lost ${forgottenTiles} unreturned tiles; `
@@ -2543,7 +2622,9 @@ export class WayfindersScene extends Phaser.Scene {
       this.simulation.events.on("worldRegenerated", () => {
       }),
       this.simulation.events.on("shipTeleported", () => {
-        this.resetShipPresentation(true);
+        this.resetShipPresentation(true, false, this.pendingTeleportViewPoint);
+        this.shipRenderer.sync(this.currentShipPose);
+        this.cameras.main.centerOn(this.currentShipPose.worldX, this.currentShipPose.worldY);
       }),
     );
   }
@@ -2629,15 +2710,40 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private captureShipPose(): ShipRenderPose {
-    const { worldX, worldY, heading, speed } = this.simulation.ship;
-    return { worldX, worldY, heading, speed };
+    const { heading, speed } = this.simulation.ship;
+    const lifted = this.liftedViewAnchor.point;
+    return { worldX: lifted.x, worldY: lifted.y, heading, speed };
   }
 
-  private resetShipPresentation(resetClock: boolean): void {
+  private resetShipPresentation(
+    resetClock: boolean,
+    resetToCanonicalImage = false,
+    near?: Readonly<WorldPoint>,
+  ): void {
+    const canonical = { x: this.simulation.ship.worldX, y: this.simulation.ship.worldY };
+    if (resetToCanonicalImage) this.liftedViewAnchor.reset(canonical);
+    else this.liftedViewAnchor.relocate(canonical, near);
     const pose = this.captureShipPose();
     this.previousShipPose = pose;
     this.currentShipPose = { ...pose };
     if (resetClock) this.clock.reset();
+  }
+
+  private rebaseLiftedPresentation(): void {
+    const shift = this.liftedViewAnchor.rebaseIfNeeded();
+    if (shift.x === 0 && shift.y === 0) return;
+    this.previousShipPose = {
+      ...this.previousShipPose,
+      worldX: this.previousShipPose.worldX - shift.x,
+      worldY: this.previousShipPose.worldY - shift.y,
+    };
+    this.currentShipPose = this.captureShipPose();
+    this.shipRenderer.container.x -= shift.x;
+    this.shipRenderer.container.y -= shift.y;
+    this.cameras.main.scrollX -= shift.x;
+    this.cameras.main.scrollY -= shift.y;
+    this.lastViewportX = Number.NaN;
+    this.lastViewportY = Number.NaN;
   }
 
   private destroyBindings(): void {
@@ -2670,6 +2776,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.greatHallView?.destroy();
     this.greatHallView = undefined;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
+    this.waterRenderer.destroy();
+    this.worldRenderer.destroy();
     this.knowledgeOverlay.destroy();
     this.cloudLayer.destroy();
     this.riskOverlay.destroy();

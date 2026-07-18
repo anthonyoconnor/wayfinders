@@ -3,6 +3,13 @@ export interface PresentationChunkCoordinate {
   readonly y: number;
 }
 
+/** One lifted presentation image of a canonical chunk. */
+export interface PresentationChunkImage {
+  readonly viewKey: string;
+  readonly canonicalChunk: Readonly<PresentationChunkCoordinate>;
+  readonly imageOffset: Readonly<PresentationChunkCoordinate>;
+}
+
 export interface ChunkActivatedViewPoolOptions<
   TId extends string | number,
   TRecord,
@@ -10,9 +17,20 @@ export interface ChunkActivatedViewPoolOptions<
 > {
   readonly idOf: (record: Readonly<TRecord>) => TId;
   readonly chunkOf: (record: Readonly<TRecord>) => Readonly<PresentationChunkCoordinate>;
-  readonly create: (record: Readonly<TRecord>) => TView;
-  readonly update: (view: TView, record: Readonly<TRecord>) => void;
-  readonly activate: (view: TView, record: Readonly<TRecord>) => void;
+  readonly create: (
+    record: Readonly<TRecord>,
+    image: Readonly<PresentationChunkImage>,
+  ) => TView;
+  readonly update: (
+    view: TView,
+    record: Readonly<TRecord>,
+    image: Readonly<PresentationChunkImage>,
+  ) => void;
+  readonly activate: (
+    view: TView,
+    record: Readonly<TRecord>,
+    image: Readonly<PresentationChunkImage>,
+  ) => void;
   readonly deactivate: (view: TView) => void;
   readonly destroy: (view: TView) => void;
   /** Cheap inactive views retained for reuse. Defaults to 32. */
@@ -21,7 +39,9 @@ export interface ChunkActivatedViewPoolOptions<
 
 export interface ChunkActivatedViewTelemetry {
   readonly records: number;
+  /** Periodic image entries, not distinct canonical chunks. */
   readonly activeChunks: number;
+  /** One record may own one view in each active image of its canonical chunk. */
   readonly activeViews: number;
   readonly pooledViews: number;
   readonly retainedViews: number;
@@ -35,13 +55,15 @@ export interface ChunkActivatedViewTelemetry {
   readonly poolEvictions: number;
 }
 
+interface ActiveView<TView> {
+  readonly view: TView;
+  readonly image: Readonly<PresentationChunkImage>;
+}
+
 /**
- * Keeps renderer-owned views proportional to a caller-selected chunk set.
- *
- * The controller is intentionally unaware of Phaser and authoritative world
- * storage. Records may cover the whole known world while only records in the
- * active presentation chunks own views. Identity is exact, so activation churn
- * cannot create duplicate views for one record.
+ * Keeps renderer-owned views proportional to a caller-selected periodic image
+ * set. Records and state remain canonical while each active image receives an
+ * independent, offset view. A pooled view never retains record authority.
  */
 export class ChunkActivatedViewPool<
   TId extends string | number,
@@ -52,11 +74,11 @@ export class ChunkActivatedViewPool<
   private readonly maxPooledViews: number;
 
   private recordsById = new Map<TId, Readonly<TRecord>>();
-  private recordIdsByChunk = new Map<string, TId[]>();
-  private activeChunkKeys: readonly string[] = Object.freeze([]);
-  private activeChunkKeySet = new Set<string>();
-  private readonly viewsById = new Map<TId, TView>();
+  private recordIdsByCanonicalChunk = new Map<string, TId[]>();
+  private activeImages: readonly Readonly<PresentationChunkImage>[] = Object.freeze([]);
+  private readonly viewsById = new Map<TId, Map<string, ActiveView<TView>>>();
   private readonly pooledViews: TView[] = [];
+  private activeViewCount = 0;
 
   private peakActiveViews = 0;
   private peakRetainedViews = 0;
@@ -76,10 +98,10 @@ export class ChunkActivatedViewPool<
     this.maxPooledViews = maxPooledViews;
   }
 
-  /** Replaces the record snapshot without changing active chunk membership. */
+  /** Replaces the canonical record snapshot without changing image membership. */
   sync(records: readonly Readonly<TRecord>[]): void {
     const nextRecordsById = new Map<TId, Readonly<TRecord>>();
-    const nextRecordIdsByChunk = new Map<string, TId[]>();
+    const nextRecordIdsByCanonicalChunk = new Map<string, TId[]>();
 
     for (const record of records) {
       const id = this.options.idOf(record);
@@ -88,17 +110,21 @@ export class ChunkActivatedViewPool<
       assertChunkCoordinate(coordinate);
       const chunkKey = presentationChunkKey(coordinate.x, coordinate.y);
       nextRecordsById.set(id, record);
-      const ids = nextRecordIdsByChunk.get(chunkKey) ?? [];
+      const ids = nextRecordIdsByCanonicalChunk.get(chunkKey) ?? [];
       ids.push(id);
-      nextRecordIdsByChunk.set(chunkKey, ids);
+      nextRecordIdsByCanonicalChunk.set(chunkKey, ids);
     }
 
     this.recordsById = nextRecordsById;
-    this.recordIdsByChunk = nextRecordIdsByChunk;
+    this.recordIdsByCanonicalChunk = nextRecordIdsByCanonicalChunk;
 
-    for (const [id] of this.viewsById) {
+    for (const [id, views] of [...this.viewsById]) {
       const record = nextRecordsById.get(id);
-      if (!record || !this.recordIsActive(record)) this.releaseView(id);
+      for (const [viewKey, activeView] of [...views]) {
+        if (!record || !this.recordBelongsToImage(record, activeView.image)) {
+          this.releaseView(id, viewKey);
+        }
+      }
     }
 
     this.materializeActiveRecords();
@@ -106,27 +132,35 @@ export class ChunkActivatedViewPool<
   }
 
   /**
-   * Applies exact active presentation chunks. Input order is the deterministic
+   * Applies exact active periodic images. Input order is deterministic
    * materialization priority (normally ActiveChunkSet load priority).
    */
-  setActiveChunks(chunks: Iterable<Readonly<PresentationChunkCoordinate>>): void {
-    const nextKeys: string[] = [];
-    const nextKeySet = new Set<string>();
-    for (const coordinate of chunks) {
-      assertChunkCoordinate(coordinate);
-      const key = presentationChunkKey(coordinate.x, coordinate.y);
-      if (nextKeySet.has(key)) continue;
-      nextKeySet.add(key);
-      nextKeys.push(key);
+  setActiveChunkImages(images: Iterable<Readonly<PresentationChunkImage>>): void {
+    const nextImages: Readonly<PresentationChunkImage>[] = [];
+    const nextByKey = new Map<string, Readonly<PresentationChunkImage>>();
+    for (const image of images) {
+      assertChunkImage(image);
+      if (nextByKey.has(image.viewKey)) {
+        throw new RangeError(`Duplicate presentation image key: ${image.viewKey}`);
+      }
+      const frozen = freezeImage(image);
+      nextByKey.set(frozen.viewKey, frozen);
+      nextImages.push(frozen);
     }
 
-    if (sameOrderedKeys(this.activeChunkKeys, nextKeys)) return;
-    this.activeChunkKeys = Object.freeze(nextKeys);
-    this.activeChunkKeySet = nextKeySet;
+    if (sameOrderedImages(this.activeImages, nextImages)) return;
+    this.activeImages = Object.freeze(nextImages);
 
-    for (const [id] of this.viewsById) {
+    for (const [id, views] of [...this.viewsById]) {
       const record = this.recordsById.get(id);
-      if (!record || !this.recordIsActive(record)) this.releaseView(id);
+      for (const [viewKey, activeView] of [...views]) {
+        const nextImage = nextByKey.get(viewKey);
+        if (!record || !nextImage || !this.recordBelongsToImage(record, nextImage)) {
+          this.releaseView(id, viewKey);
+        } else if (!sameImage(activeView.image, nextImage)) {
+          this.releaseView(id, viewKey);
+        }
+      }
     }
     this.materializeActiveRecords();
     this.updatePeaks();
@@ -135,10 +169,10 @@ export class ChunkActivatedViewPool<
   getTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
     return Object.freeze({
       records: this.recordsById.size,
-      activeChunks: this.activeChunkKeys.length,
-      activeViews: this.viewsById.size,
+      activeChunks: this.activeImages.length,
+      activeViews: this.activeViewCount,
       pooledViews: this.pooledViews.length,
-      retainedViews: this.viewsById.size + this.pooledViews.length,
+      retainedViews: this.activeViewCount + this.pooledViews.length,
       peakActiveViews: this.peakActiveViews,
       peakRetainedViews: this.peakRetainedViews,
       createdViews: this.createdViews,
@@ -150,84 +184,105 @@ export class ChunkActivatedViewPool<
     });
   }
 
-  /** Visits only currently materialized views; never scans inactive world records. */
-  forEachActive(visitor: (view: TView, record: Readonly<TRecord>) => void): void {
-    for (const [id, view] of this.viewsById) {
+  /** Visits only materialized image views; never scans inactive world records. */
+  forEachActive(
+    visitor: (
+      view: TView,
+      record: Readonly<TRecord>,
+      image: Readonly<PresentationChunkImage>,
+    ) => void,
+  ): void {
+    for (const [id, views] of this.viewsById) {
       const record = this.recordsById.get(id);
-      if (record) visitor(view, record);
+      if (!record) continue;
+      for (const { view, image } of views.values()) visitor(view, record, image);
     }
   }
 
   destroy(): void {
-    for (const view of this.viewsById.values()) {
-      this.options.destroy(view);
-      this.destroyedViews++;
+    for (const views of this.viewsById.values()) {
+      for (const { view } of views.values()) {
+        this.options.destroy(view);
+        this.destroyedViews++;
+      }
     }
     for (const view of this.pooledViews) {
       this.options.destroy(view);
       this.destroyedViews++;
     }
     this.viewsById.clear();
+    this.activeViewCount = 0;
     this.pooledViews.length = 0;
     this.recordsById.clear();
-    this.recordIdsByChunk.clear();
-    this.activeChunkKeys = Object.freeze([]);
-    this.activeChunkKeySet.clear();
+    this.recordIdsByCanonicalChunk.clear();
+    this.activeImages = Object.freeze([]);
   }
 
   private materializeActiveRecords(): void {
-    for (const chunkKey of this.activeChunkKeys) {
-      for (const id of this.recordIdsByChunk.get(chunkKey) ?? []) {
+    for (const image of this.activeImages) {
+      const chunkKey = presentationChunkKey(image.canonicalChunk.x, image.canonicalChunk.y);
+      for (const id of this.recordIdsByCanonicalChunk.get(chunkKey) ?? []) {
         const record = this.recordsById.get(id);
         if (!record) continue;
-        const existing = this.viewsById.get(id);
+        const views = this.viewsById.get(id) ?? new Map<string, ActiveView<TView>>();
+        const existing = views.get(image.viewKey);
         if (existing) {
-          this.options.update(existing, record);
+          this.options.update(existing.view, record, image);
           continue;
         }
 
         const reused = this.pooledViews.length > 0;
-        const view = reused ? this.pooledViews.pop() as TView : this.createView(record);
+        const view = reused
+          ? this.pooledViews.pop() as TView
+          : this.createView(record, image);
         if (reused) this.reusedViews++;
-        this.options.activate(view, record);
-        this.options.update(view, record);
-        this.viewsById.set(id, view);
+        this.options.activate(view, record, image);
+        this.options.update(view, record, image);
+        views.set(image.viewKey, { view, image });
+        this.viewsById.set(id, views);
+        this.activeViewCount++;
         this.activations++;
       }
     }
   }
 
-  private createView(record: Readonly<TRecord>): TView {
-    const view = this.options.create(record);
+  private createView(record: Readonly<TRecord>, image: Readonly<PresentationChunkImage>): TView {
+    const view = this.options.create(record, image);
     this.createdViews++;
     return view;
   }
 
-  private releaseView(id: TId): void {
-    const view = this.viewsById.get(id);
-    if (!view) return;
-    this.viewsById.delete(id);
-    this.options.deactivate(view);
+  private releaseView(id: TId, viewKey: string): void {
+    const views = this.viewsById.get(id);
+    const activeView = views?.get(viewKey);
+    if (!views || !activeView) return;
+    views.delete(viewKey);
+    if (views.size === 0) this.viewsById.delete(id);
+    this.activeViewCount--;
+    this.options.deactivate(activeView.view);
     this.deactivations++;
     if (this.pooledViews.length < this.maxPooledViews) {
-      this.pooledViews.push(view);
+      this.pooledViews.push(activeView.view);
     } else {
-      this.options.destroy(view);
+      this.options.destroy(activeView.view);
       this.destroyedViews++;
       this.poolEvictions++;
     }
   }
 
-  private recordIsActive(record: Readonly<TRecord>): boolean {
+  private recordBelongsToImage(
+    record: Readonly<TRecord>,
+    image: Readonly<PresentationChunkImage>,
+  ): boolean {
     const coordinate = this.options.chunkOf(record);
-    return this.activeChunkKeySet.has(presentationChunkKey(coordinate.x, coordinate.y));
+    return coordinate.x === image.canonicalChunk.x && coordinate.y === image.canonicalChunk.y;
   }
 
   private updatePeaks(): void {
-    this.peakActiveViews = Math.max(this.peakActiveViews, this.viewsById.size);
+    this.peakActiveViews = Math.max(this.peakActiveViews, this.activeViewCount);
     this.peakRetainedViews = Math.max(
       this.peakRetainedViews,
-      this.viewsById.size + this.pooledViews.length,
+      this.activeViewCount + this.pooledViews.length,
     );
   }
 }
@@ -242,6 +297,39 @@ function assertChunkCoordinate(coordinate: Readonly<PresentationChunkCoordinate>
   }
 }
 
-function sameOrderedKeys(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((key, index) => key === right[index]);
+function assertChunkImage(image: Readonly<PresentationChunkImage>): void {
+  if (image.viewKey.length === 0) throw new RangeError("presentation image key cannot be empty");
+  assertChunkCoordinate(image.canonicalChunk);
+  if (!Number.isFinite(image.imageOffset.x) || !Number.isFinite(image.imageOffset.y)) {
+    throw new RangeError("presentation image offsets must be finite");
+  }
+}
+
+function freezeImage(image: Readonly<PresentationChunkImage>): Readonly<PresentationChunkImage> {
+  return Object.freeze({
+    viewKey: image.viewKey,
+    canonicalChunk: Object.freeze({ ...image.canonicalChunk }),
+    imageOffset: Object.freeze({ ...image.imageOffset }),
+  });
+}
+
+function sameImage(
+  left: Readonly<PresentationChunkImage>,
+  right: Readonly<PresentationChunkImage>,
+): boolean {
+  return left.viewKey === right.viewKey
+    && left.canonicalChunk.x === right.canonicalChunk.x
+    && left.canonicalChunk.y === right.canonicalChunk.y
+    && left.imageOffset.x === right.imageOffset.x
+    && left.imageOffset.y === right.imageOffset.y;
+}
+
+function sameOrderedImages(
+  left: readonly Readonly<PresentationChunkImage>[],
+  right: readonly Readonly<PresentationChunkImage>[],
+): boolean {
+  return left.length === right.length && left.every((image, index) => {
+    const other = right[index];
+    return other !== undefined && sameImage(image, other);
+  });
 }

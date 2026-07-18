@@ -5,6 +5,7 @@ import { solidRowsToCollisionMask } from "../world/CollisionMask";
 import { KnowledgeState, TerrainType } from "../world/TileData";
 import type { WorldLandmarks } from "../world/WorldGenerator";
 import { WorldGrid } from "../world/WorldGrid";
+import { BOUNDED_WORLD_TOPOLOGY } from "../world/WorldTopology";
 import {
   authoredTerrainToTerrainType,
   validateAuthoredAssetMetadata,
@@ -64,6 +65,8 @@ export function validateAuthoredHomeIslandCollision(
     metadata.grid.width,
     metadata.grid.height,
     config.navigation.chunkSize,
+    BOUNDED_WORLD_TOPOLOGY,
+    config.navigation.tileSize,
   );
   localGrid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   stampAuthoredHomeIsland(localGrid, metadata.grid.placementOrigin, metadata, config);
@@ -143,7 +146,7 @@ function assertRequiredWaterConnectivity(
       || localX === metadata.grid.width - 1
       || localY === metadata.grid.height - 1
     ) return;
-    graph.forEachTraversableCardinalNeighbor(index, (neighbor, x, y) => {
+    graph.forEachTraversableCardinalEdge(index, (neighbor, x, y) => {
       if (
         visited.has(neighbor)
         || x < topLeft.x

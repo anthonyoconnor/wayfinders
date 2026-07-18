@@ -64,12 +64,13 @@ interface ForwardResultBuffers {
 }
 
 type IncrementalForwardStage =
+  | "refresh-travel-cost-index"
   | "clear-mask"
   | "clear-presentation"
   | "clear-costs"
   | "search"
   | "collect"
-  | "compare-previous"
+  | "prepare-frontier"
   | "frontier"
   | "complete";
 
@@ -81,14 +82,15 @@ interface IncrementalForwardState {
   readonly presentationHeading: number;
   readonly groupCosts: number[];
   readonly groupEnds: number[];
+  readonly knowledgeRevision: number;
   stage: IncrementalForwardStage;
   cancelled: boolean;
   bufferReleased: boolean;
+  knowledgeRefreshPosition: number;
   maskClearPosition: number;
   presentationClearPosition: number;
   costClearPosition: number;
   collectPosition: number;
-  comparePosition: number;
   frontierPosition: number;
   frontierEnd: number;
   previousCost?: number;
@@ -106,6 +108,9 @@ export class ForwardRangeSystem implements ForwardGuidance {
   private incrementalSearchWorkspace = new BucketedCostSearchWorkspace();
   private integerCostScale = 1;
   private readonly integerTravelCosts = new Int32Array(3);
+  private integerTravelCostByIndex = new Int32Array(0);
+  private knowledgeByIndex = new Uint8Array(0);
+  private indexedKnowledgeRevision = -1;
   private readonly startNodes = [0];
   private activeIncrementalTask?: IncrementalForwardState;
   private readonly incrementalBufferPool: ForwardResultBuffers[] = [];
@@ -123,19 +128,18 @@ export class ForwardRangeSystem implements ForwardGuidance {
     visit: (neighbor: number, traversalCost: number) => void,
   ): void => {
     this.relaxNeighbor = visit;
-    this.graph.forEachKnownTraversableCardinalNeighbor(node, this.visitGraphNeighbor);
+    this.graph.forEachKnownTraversableCardinalEdge(node, this.visitGraphNeighbor);
   };
   private relaxIntegerNeighbor: (neighbor: number, traversalCostUnits: number) => void = () => undefined;
   private readonly visitIntegerGraphNeighbor = (neighbor: number): void => {
-    const knowledge = this.world.getKnowledgeAtIndex(neighbor);
-    this.relaxIntegerNeighbor(neighbor, this.integerTravelCosts[knowledge]);
+    this.relaxIntegerNeighbor(neighbor, this.integerTravelCostByIndex[neighbor]);
   };
   private readonly forEachIntegerSearchNeighbor = (
     node: number,
     visit: (neighbor: number, traversalCostUnits: number) => void,
   ): void => {
     this.relaxIntegerNeighbor = visit;
-    this.graph.forEachKnownTraversableCardinalNeighbor(node, this.visitIntegerGraphNeighbor);
+    this.graph.forEachKnownTraversableCardinalEdge(node, this.visitIntegerGraphNeighbor);
   };
 
   constructor(
@@ -143,6 +147,8 @@ export class ForwardRangeSystem implements ForwardGuidance {
     private readonly config: PrototypeConfig = prototypeConfig,
   ) {
     this.graph = new GridGraph(world, config);
+    this.integerTravelCostByIndex = new Int32Array(world.tileCount);
+    this.knowledgeByIndex = new Uint8Array(world.tileCount);
     this.refreshIntegerTravelCosts();
     this.prewarmIncrementalResources();
   }
@@ -151,6 +157,9 @@ export class ForwardRangeSystem implements ForwardGuidance {
     this.cancelActiveIncrementalTask();
     this.world = world;
     this.graph = new GridGraph(world, this.config);
+    this.integerTravelCostByIndex = new Int32Array(world.tileCount);
+    this.knowledgeByIndex = new Uint8Array(world.tileCount);
+    this.indexedKnowledgeRevision = -1;
     this.budgetCaches = new WeakMap();
     this.incrementalSearchWorkspace = new BucketedCostSearchWorkspace();
     this.incrementalBufferPool.length = 0;
@@ -196,14 +205,17 @@ export class ForwardRangeSystem implements ForwardGuidance {
       presentationHeading: this.normalizeHeading(snapshot.heading),
       groupCosts: [],
       groupEnds: [],
-      stage: "clear-mask",
+      knowledgeRevision: this.world.knowledgeVersion,
+      stage: this.indexedKnowledgeRevision === this.world.knowledgeVersion
+        ? "clear-mask"
+        : "refresh-travel-cost-index",
       cancelled: false,
       bufferReleased: false,
+      knowledgeRefreshPosition: 0,
       maskClearPosition: 0,
       presentationClearPosition: 0,
       costClearPosition: 0,
       collectPosition: 0,
-      comparePosition: 0,
       frontierPosition: 0,
       frontierEnd: 0,
       logicalChanged: false,
@@ -496,8 +508,17 @@ export class ForwardRangeSystem implements ForwardGuidance {
   private isInsidePresentationCone(index: number, cache: ForwardBudgetCache): boolean {
     const x = index % this.world.width;
     const y = Math.floor(index / this.world.width);
-    const dx = x - cache.originX;
-    const dy = y - cache.originY;
+    let dx = x - cache.originX;
+    let dy = y - cache.originY;
+    // Both points are canonical, so the raw deltas are already within one
+    // period. Keep this frontier hot path allocation-free while preserving the
+    // topology authority's exact half-span tie rule.
+    if (this.world.topology.wrapsX && Math.abs(dx) > this.world.width / 2) {
+      dx += dx > 0 ? -this.world.width : this.world.width;
+    }
+    if (this.world.topology.wrapsY && Math.abs(dy) > this.world.height / 2) {
+      dy += dy > 0 ? -this.world.height : this.world.height;
+    }
     const distanceSquared = dx * dx + dy * dy;
     if (distanceSquared === 0) return true;
     const forwardDot = dx * cache.headingCosine + dy * cache.headingSine;
@@ -550,6 +571,24 @@ export class ForwardRangeSystem implements ForwardGuidance {
     );
 
     while (!shouldStop()) {
+      if (state.stage === "refresh-travel-cost-index") {
+        if (this.world.knowledgeVersion !== state.knowledgeRevision) {
+          this.cancelIncrementalTask(state);
+          return { status: "cancelled", workUnits: 0 };
+        }
+        if (state.knowledgeRefreshPosition < this.world.tileCount) {
+          const index = state.knowledgeRefreshPosition++;
+          const knowledge = this.world.getKnowledgeAtIndex(index);
+          this.knowledgeByIndex[index] = knowledge;
+          this.integerTravelCostByIndex[index] = this.integerTravelCosts[knowledge];
+          workUnits++;
+          continue;
+        }
+        this.indexedKnowledgeRevision = state.knowledgeRevision;
+        state.stage = "clear-mask";
+        continue;
+      }
+
       if (state.stage === "clear-mask") {
         if (state.maskClearPosition < state.buffer.candidateIndices.length) {
           state.buffer.mask[state.buffer.candidateIndices[state.maskClearPosition++]] = 0;
@@ -613,7 +652,7 @@ export class ForwardRangeSystem implements ForwardGuidance {
           const cost = search.costs[index];
           state.buffer.costs[index] = cost;
           state.buffer.finiteCostIndices.push(index);
-          if (this.world.getKnowledgeAtIndex(index) === KnowledgeState.Unknown) {
+          if (this.knowledgeByIndex[index] === KnowledgeState.Unknown) {
             if (state.previousCost !== undefined && cost !== state.previousCost) {
               state.groupEnds.push(state.buffer.candidateIndices.length);
             }
@@ -634,17 +673,15 @@ export class ForwardRangeSystem implements ForwardGuidance {
         if (state.published.reachableCount !== state.buffer.candidateIndices.length) {
           state.logicalChanged = true;
         }
-        state.stage = "compare-previous";
+        // During collection, every new candidate is checked against the
+        // published mask and the final cardinality is compared. Those two
+        // facts prove set equality, so a second scan of all old candidates
+        // would be redundant.
+        state.stage = "prepare-frontier";
         continue;
       }
 
-      if (state.stage === "compare-previous") {
-        if (state.comparePosition < state.published.candidateIndices.length) {
-          const index = state.published.candidateIndices[state.comparePosition++];
-          if (state.buffer.mask[index] === 0) state.logicalChanged = true;
-          workUnits++;
-          continue;
-        }
+      if (state.stage === "prepare-frontier") {
         const radians = state.presentationHeading * Math.PI / 180;
         const cache: ForwardBudgetCache = {
           groupCosts: state.groupCosts,
@@ -777,6 +814,7 @@ export class ForwardRangeSystem implements ForwardGuidance {
     BucketedCostSearchResult,
     "costs" | "settledIndices" | "settledCount"
   > {
+    this.ensureIntegerTravelCostIndex();
     const maxCostUnits = Math.floor(budget * this.integerCostScale + 1e-9);
     // Protect developer tuning from constructing an unexpectedly giant
     // bucket array. The generic heap remains the synchronous exact oracle for
@@ -800,16 +838,45 @@ export class ForwardRangeSystem implements ForwardGuidance {
   }
 
   private refreshIntegerTravelCosts(): void {
-    this.integerCostScale = this.resolveIntegerCostScale();
-    this.integerTravelCosts[KnowledgeState.Unknown] = Math.round(
-      knowledgeTravelCost(KnowledgeState.Unknown, this.config) * this.integerCostScale,
+    const nextScale = this.resolveIntegerCostScale();
+    const nextUnknown = Math.round(
+      knowledgeTravelCost(KnowledgeState.Unknown, this.config) * nextScale,
     );
-    this.integerTravelCosts[KnowledgeState.Personal] = Math.round(
-      knowledgeTravelCost(KnowledgeState.Personal, this.config) * this.integerCostScale,
+    const nextPersonal = Math.round(
+      knowledgeTravelCost(KnowledgeState.Personal, this.config) * nextScale,
     );
-    this.integerTravelCosts[KnowledgeState.Supported] = Math.round(
-      knowledgeTravelCost(KnowledgeState.Supported, this.config) * this.integerCostScale,
+    const nextSupported = Math.round(
+      knowledgeTravelCost(KnowledgeState.Supported, this.config) * nextScale,
     );
+    if (
+      nextScale !== this.integerCostScale
+      || nextUnknown !== this.integerTravelCosts[KnowledgeState.Unknown]
+      || nextPersonal !== this.integerTravelCosts[KnowledgeState.Personal]
+      || nextSupported !== this.integerTravelCosts[KnowledgeState.Supported]
+    ) this.indexedKnowledgeRevision = -1;
+    this.integerCostScale = nextScale;
+    this.integerTravelCosts[KnowledgeState.Unknown] = nextUnknown;
+    this.integerTravelCosts[KnowledgeState.Personal] = nextPersonal;
+    this.integerTravelCosts[KnowledgeState.Supported] = nextSupported;
+  }
+
+  /** Rebuilds the synchronous oracle's revision-keyed derived cost view. */
+  private ensureIntegerTravelCostIndex(): void {
+    if (
+      this.integerTravelCostByIndex.length !== this.world.tileCount
+      || this.knowledgeByIndex.length !== this.world.tileCount
+    ) {
+      this.integerTravelCostByIndex = new Int32Array(this.world.tileCount);
+      this.knowledgeByIndex = new Uint8Array(this.world.tileCount);
+      this.indexedKnowledgeRevision = -1;
+    }
+    if (this.indexedKnowledgeRevision === this.world.knowledgeVersion) return;
+    for (let index = 0; index < this.world.tileCount; index++) {
+      const knowledge = this.world.getKnowledgeAtIndex(index);
+      this.knowledgeByIndex[index] = knowledge;
+      this.integerTravelCostByIndex[index] = this.integerTravelCosts[knowledge];
+    }
+    this.indexedKnowledgeRevision = this.world.knowledgeVersion;
   }
 
   private resolveIntegerCostScale(): number {

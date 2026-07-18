@@ -5,16 +5,27 @@ descriptors. It is renderer-free and does not own descriptor gameplay state.
 
 ## Contract
 
-- Coordinates are logical world units. Bounds are closed: both minimum and
-  maximum edges participate in point and intersection queries.
+- Construction requires one explicit `WorldTopology`; its tile dimensions,
+  chunk size, and per-axis bounded/wrapped policy define the complete index.
+- Coordinates are logical tile coordinates. Descriptor bounds are closed,
+  integer, lifted rectangles. A wrapped descriptor must be strictly smaller
+  than each wrapped world span and becomes one to four canonical pieces under
+  one stable ID. Bounded descriptor bounds remain wholly canonical.
 - Every descriptor has a non-empty string ID or safe-integer numeric ID. IDs
   never change; replace an identity with `remove` plus `add`.
 - Descriptor bounds are copied into private index records. Descriptor objects
   are returned by reference and must otherwise be treated as immutable.
-- An entity is indexed into every intersected chunk. Its `homeChunk` contains
-  the centre of its bounds. Membership and query output are deterministic.
-- Point, bounds, radius, nearby, and chunk queries only inspect intersecting
-  buckets. Nearby output is distance-then-ID; other query output is ID order.
+- An entity is indexed into every canonical chunk intersected by any footprint
+  piece. Its `homeChunk` contains the canonicalized centre of its lifted source
+  bounds. Membership exposes the canonical centre and pieces; membership and
+  query output are deterministic.
+- Point, bounds, radius, nearby, and chunk queries split at wrapped seams and
+  corners, inspect each canonical bucket once, and deduplicate descriptor IDs
+  before exact filtering. Nearby uses periodic minimum-image distance and
+  distance-then-ID ordering; other output is ID order. Chunk aliases wrap only
+  on wrapped axes, so bounded asset contexts retain bounded behavior.
+- Queries wider than one image and worlds with one- or two-cell axes return
+  each authoritative descriptor once. Chunk membership remains row-major.
 - Every query returns counters for buckets, raw bucket entries, unique entities
   tested, and matches. `getQueryTotals` exposes aggregate diagnostic counters;
   `resetQueryTotals` starts a new sampling interval.

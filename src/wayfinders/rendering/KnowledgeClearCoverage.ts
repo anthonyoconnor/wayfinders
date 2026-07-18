@@ -16,10 +16,14 @@ export function isKnowledgeOverlayFullyClearAtTile(
   y: number,
   revealedIslandIds: ReadonlySet<number>,
 ): boolean {
-  if (!world.inBounds(x, y)) return false;
-  return world.isVisibleNow(x, y)
-    || world.getKnowledge(x, y) === KnowledgeState.Supported
-    || isExactIslandTileRevealed(world.getIslandId(x, y), revealedIslandIds);
+  const canonical = world.topology.canonicalizeTile(x, y);
+  if (!canonical) return false;
+  return world.isVisibleNow(canonical.x, canonical.y)
+    || world.getKnowledge(canonical.x, canonical.y) === KnowledgeState.Supported
+    || isExactIslandTileRevealed(
+      world.getIslandId(canonical.x, canonical.y),
+      revealedIslandIds,
+    );
 }
 
 /**
@@ -32,9 +36,13 @@ export function isKnowledgeOverlayDurablyClearAtTile(
   y: number,
   revealedIslandIds: ReadonlySet<number>,
 ): boolean {
-  if (!world.inBounds(x, y)) return false;
-  return world.getKnowledge(x, y) === KnowledgeState.Supported
-    || isExactIslandTileRevealed(world.getIslandId(x, y), revealedIslandIds);
+  const canonical = world.topology.canonicalizeTile(x, y);
+  if (!canonical) return false;
+  return world.getKnowledge(canonical.x, canonical.y) === KnowledgeState.Supported
+    || isExactIslandTileRevealed(
+      world.getIslandId(canonical.x, canonical.y),
+      revealedIslandIds,
+    );
 }
 
 function isKnowledgeOverlayClearInBounds(

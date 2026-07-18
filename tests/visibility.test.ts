@@ -5,11 +5,12 @@ import { traceGridCenters, VisibilitySystem } from "../src/wayfinders/exploratio
 import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { BOUNDED_WORLD_TOPOLOGY, WRAPPING_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology.ts";
 import { makeConfig, makeShip } from "./helpers.ts";
 
 describe("VisibilitySystem and KnowledgeSystem", () => {
 it("maintains O(1) world knowledge and visibility counts across indexed updates", () => {
-  const world = new WorldGrid(5, 3, 4);
+  const world = new WorldGrid(5, 3, 4, BOUNDED_WORLD_TOPOLOGY);
   expect(world.getKnowledgeCount(KnowledgeState.Unknown)).toBe(15);
   expect(world.getKnowledgeCount(KnowledgeState.Personal)).toBe(0);
   expect(world.getKnowledgeCount(KnowledgeState.Supported)).toBe(0);
@@ -46,7 +47,7 @@ it("maintains O(1) world knowledge and visibility counts across indexed updates"
 
 it("reveals the circular radius and stamps newly observed cells", () => {
   const config = makeConfig({ navigation: { sightRadius: 2 } });
-  const world = new WorldGrid(9, 9, 4);
+  const world = new WorldGrid(9, 9, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(4, 4, KnowledgeState.Supported);
 
@@ -64,7 +65,7 @@ it("reveals the circular radius and stamps newly observed cells", () => {
 
 it("reuses observation bookkeeping without mutating prior updates or retaining stale visibility", () => {
   const config = makeConfig({ navigation: { sightRadius: 2 } });
-  const world = new WorldGrid(64, 64, 8);
+  const world = new WorldGrid(64, 64, 8, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const visibility = new VisibilitySystem(world, config);
 
@@ -85,7 +86,7 @@ it("reuses observation bookkeeping without mutating prior updates or retaining s
 
 it("keeps a sight blocker visible while hiding cells behind it", () => {
   const config = makeConfig({ navigation: { sightRadius: 4 } });
-  const world = new WorldGrid(9, 9, 4);
+  const world = new WorldGrid(9, 9, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setSightBlocked(3, 4, true);
 
@@ -95,13 +96,43 @@ it("keeps a sight blocker visible while hiding cells behind it", () => {
   expect(world.isVisibleNow(5, 4)).toBe(false);
 });
 
+it("wraps sight through both axes and returns each canonical tile exactly once", () => {
+  const config = makeConfig({ navigation: { sightRadius: 3 } });
+  const world = new WorldGrid(3, 3, 3, WRAPPING_WORLD_TOPOLOGY);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+
+  const update = new VisibilitySystem(world, config).updateAt({ x: 0, y: 0 });
+
+  expect(update.currentVisibleIndices).toHaveLength(world.tileCount);
+  expect(new Set(update.currentVisibleIndices).size).toBe(world.tileCount);
+  expect(update.observedIndices).toEqual([...Array(world.tileCount).keys()]);
+  expect(world.isVisibleNow(2, 0)).toBe(true);
+  expect(world.isVisibleNow(0, 2)).toBe(true);
+  expect(world.isVisibleNow(2, 2)).toBe(true);
+});
+
+it("keeps opposite-edge blockers visible while hiding tiles behind them across seams and corners", () => {
+  const config = makeConfig({ navigation: { sightRadius: 4 } });
+  const world = new WorldGrid(9, 9, 3, WRAPPING_WORLD_TOPOLOGY);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  world.setSightBlocked(8, 0, true);
+  world.setSightBlocked(8, 8, true);
+
+  new VisibilitySystem(world, config).updateAt({ x: 0, y: 0 });
+
+  expect(world.isVisibleNow(8, 0)).toBe(true);
+  expect(world.isVisibleNow(7, 0)).toBe(false);
+  expect(world.isVisibleNow(8, 8)).toBe(true);
+  expect(world.isVisibleNow(7, 7)).toBe(false);
+});
+
 it("observes every crossed navigation-tile centre without extending current LOS", () => {
   const config = makeConfig({ navigation: { sightRadius: 1 } });
-  const world = new WorldGrid(10, 7, 4);
+  const world = new WorldGrid(10, 7, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const visibility = new VisibilitySystem(world, config);
 
-  const update = visibility.updateForMovement({ x: 1, y: 3 }, { x: 7, y: 3 });
+  const update = visibility.updateForLiftedMovement({ x: 1, y: 3 }, { x: 7, y: 3 });
   new KnowledgeSystem(world).applyVisibility(update, 9);
 
   expect(update.crossedCenters).toEqual([
@@ -128,12 +159,56 @@ it("fills diagonal crossed-centre traversal deterministically", () => {
   ]);
 });
 
+it("preserves explicit lifted seam traversal without observing a world-wide strip", () => {
+  const config = makeConfig({ navigation: { sightRadius: 1 } });
+  const world = new WorldGrid(10, 5, 5, WRAPPING_WORLD_TOPOLOGY);
+  world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  const visibility = new VisibilitySystem(world, config);
+
+  const update = visibility.updateForCrossedCenters([{ x: 9, y: 2 }, { x: 10, y: 2 }]);
+  new KnowledgeSystem(world).applyTrailingVisibility(update, 12);
+
+  expect(update.crossedCenters).toEqual([{ x: 9, y: 2 }, { x: 10, y: 2 }]);
+  expect(new Set(update.observedIndices).size).toBe(update.observedIndices.length);
+  expect(world.getKnowledge(9, 2)).toBe(KnowledgeState.Personal);
+  expect(world.getKnowledge(0, 2)).toBe(KnowledgeState.Unknown);
+  expect(world.getKnowledge(5, 2)).toBe(KnowledgeState.Unknown);
+  expect(world.isVisibleNow(9, 2)).toBe(true);
+  expect(world.isVisibleNow(0, 2)).toBe(true);
+  expect(world.isVisibleNow(1, 2)).toBe(true);
+});
+
+it("retains explicit width-two direction through both seam images and immediate reversal", () => {
+  const config = makeConfig({ navigation: { sightRadius: 2 } });
+  const eastWorld = new WorldGrid(2, 5, 2, WRAPPING_WORLD_TOPOLOGY);
+  const westWorld = new WorldGrid(2, 5, 2, WRAPPING_WORLD_TOPOLOGY);
+  eastWorld.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  westWorld.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+  const eastVisibility = new VisibilitySystem(eastWorld, config);
+  const westVisibility = new VisibilitySystem(westWorld, config);
+
+  const east = eastVisibility.updateForCrossedCenters([{ x: 0, y: 2 }, { x: 1, y: 3 }]);
+  const west = westVisibility.updateForCrossedCenters([{ x: 0, y: 2 }, { x: -1, y: 3 }]);
+  new KnowledgeSystem(eastWorld).applyTrailingVisibility(east, 15);
+  new KnowledgeSystem(westWorld).applyTrailingVisibility(west, 16);
+
+  expect(east.crossedCenters).toEqual([{ x: 0, y: 2 }, { x: 1, y: 3 }]);
+  expect(west.crossedCenters).toEqual([{ x: 0, y: 2 }, { x: -1, y: 3 }]);
+  expect(eastWorld.getKnowledge(1, 2)).toBe(KnowledgeState.Personal);
+  expect(westWorld.getKnowledge(1, 2)).toBe(KnowledgeState.Personal);
+  expect(eastWorld.getKnowledge(1, 3)).toBe(KnowledgeState.Unknown);
+  expect(westWorld.getKnowledge(1, 3)).toBe(KnowledgeState.Unknown);
+
+  const reversed = westVisibility.updateForCrossedCenters([{ x: -1, y: 3 }, { x: 0, y: 2 }]);
+  expect(reversed.crossedCenters).toEqual([{ x: -1, y: 3 }, { x: 0, y: 2 }]);
+});
+
 it("keeps visible water ahead Unknown while committing a broad Personal trail behind", () => {
   const config = makeConfig({ navigation: { sightRadius: 2 } });
-  const world = new WorldGrid(10, 9, 4);
+  const world = new WorldGrid(10, 9, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(4, 4, KnowledgeState.Supported);
-  const visibility = new VisibilitySystem(world, config).updateForMovement({ x: 4, y: 4 }, { x: 5, y: 4 });
+  const visibility = new VisibilitySystem(world, config).updateForLiftedMovement({ x: 4, y: 4 }, { x: 5, y: 4 });
 
   new KnowledgeSystem(world).applyTrailingVisibility(visibility, 3);
 
@@ -146,13 +221,13 @@ it("keeps visible water ahead Unknown while committing a broad Personal trail be
 
 it("does not pre-chart untouched water when the ship reverses direction", () => {
   const config = makeConfig({ navigation: { sightRadius: 2 } });
-  const world = new WorldGrid(12, 9, 4);
+  const world = new WorldGrid(12, 9, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   const visibility = new VisibilitySystem(world, config);
   const knowledge = new KnowledgeSystem(world);
 
-  knowledge.applyTrailingVisibility(visibility.updateForMovement({ x: 4, y: 4 }, { x: 5, y: 4 }), 4);
-  knowledge.applyTrailingVisibility(visibility.updateForMovement({ x: 5, y: 4 }, { x: 4, y: 4 }), 4);
+  knowledge.applyTrailingVisibility(visibility.updateForLiftedMovement({ x: 4, y: 4 }, { x: 5, y: 4 }), 4);
+  knowledge.applyTrailingVisibility(visibility.updateForLiftedMovement({ x: 5, y: 4 }, { x: 4, y: 4 }), 4);
 
   expect(world.getKnowledge(4, 4)).toBe(KnowledgeState.Personal);
   expect(world.getKnowledge(5, 4)).toBe(KnowledgeState.Personal);
@@ -162,10 +237,10 @@ it("does not pre-chart untouched water when the ship reverses direction", () => 
 
 it("remembers a visible blocking landmark ahead without discounting the water around it", () => {
   const config = makeConfig({ navigation: { sightRadius: 3 } });
-  const world = new WorldGrid(12, 9, 4);
+  const world = new WorldGrid(12, 9, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setTerrain(7, 4, TerrainType.Land);
-  const visibility = new VisibilitySystem(world, config).updateForMovement({ x: 4, y: 4 }, { x: 5, y: 4 });
+  const visibility = new VisibilitySystem(world, config).updateForLiftedMovement({ x: 4, y: 4 }, { x: 5, y: 4 });
 
   new KnowledgeSystem(world).applyTrailingVisibility(visibility, 6);
 
@@ -174,7 +249,7 @@ it("remembers a visible blocking landmark ahead without discounting the water ar
 });
 
 it("does not pre-chart a mixed fine-collision cell merely because its coarse terrain is solid", () => {
-  const world = new WorldGrid(4, 1, 4);
+  const world = new WorldGrid(4, 1, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setTerrain(2, 0, TerrainType.Land);
   world.setFineCollisionMask(2, 0, solidRowsToCollisionMask([
@@ -196,13 +271,13 @@ it("does not pre-chart a mixed fine-collision cell merely because its coarse ter
 
 it("keeps diagonal Personal strips cardinally connected to Supported water", () => {
   const config = makeConfig({ navigation: { sightRadius: 2 } });
-  const world = new WorldGrid(12, 12, 4);
+  const world = new WorldGrid(12, 12, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   world.setKnowledge(3, 3, KnowledgeState.Supported);
   const visibility = new VisibilitySystem(world, config);
   const knowledge = new KnowledgeSystem(world);
-  knowledge.applyTrailingVisibility(visibility.updateForMovement({ x: 3, y: 3 }, { x: 4, y: 4 }), 5);
-  knowledge.applyTrailingVisibility(visibility.updateForMovement({ x: 4, y: 4 }, { x: 5, y: 5 }), 5);
+  knowledge.applyTrailingVisibility(visibility.updateForLiftedMovement({ x: 3, y: 3 }, { x: 4, y: 4 }), 5);
+  knowledge.applyTrailingVisibility(visibility.updateForLiftedMovement({ x: 4, y: 4 }, { x: 5, y: 5 }), 5);
 
   expect(world.getKnowledge(4, 4)).toBe(KnowledgeState.Personal);
   const returnPathing = new ReturnPathSystem(world, config);

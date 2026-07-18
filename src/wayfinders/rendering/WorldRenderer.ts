@@ -4,35 +4,30 @@ import {
   type AuthoredHomeIslandMetadata,
 } from "../assets/AuthoredAssetContracts";
 import { createAuthoredHomeIslandVisual, type AuthoredHomeIslandVisual } from "../assets/AuthoredAssetPresentation";
+import { PILOT_HOME_ISLAND_METADATA } from "../assets/AuthoredHomeIsland";
 import type { AuthoredAssetRuntime } from "../assets/PilotAssetRuntime";
 import type {
   AuthoredIslandPresentationEntry,
   AuthoredIslandPresentationRuntime,
 } from "../assets/AuthoredIslandPresentation";
 import { prototypeConfig } from "../config/prototypeConfig";
+import type { GridPoint, WorldPoint } from "../core/types";
 import { gridToWorld } from "../world/CoordinateSystem";
 import { IslandKind, type GeneratedIsland } from "../world/IslandGenerator";
 import { seededValue } from "../world/SeededRandom";
 import { TerrainType } from "../world/TileData";
 import type { GeneratedWorld } from "../world/WorldGenerator";
-import type { WorldChunk } from "../world/WorldChunk";
-import { activeChunkKey } from "./activation/ActiveChunkSet";
+import type { CanonicalTileBounds, WorldTopology } from "../world/WorldTopology";
+import { activeChunkViewKey } from "./activation/ActiveChunkSet";
 import type {
   ActiveChunkDelta,
   ActiveChunkEntry,
+  LiftedTileBounds,
 } from "./activation/ActiveChunkContracts";
 
 const COLORS = {
   ocean: 0x082f40,
-  supported: 0x12536a,
-  shallow: 0x2d858b,
-  shallowSupported: 0x3b9696,
-  wave: 0x8bd0cf,
   sand: 0xd2bb7f,
-  land: 0x779459,
-  landDark: 0x49683e,
-  reef: 0x91b59b,
-  rock: 0x626e6e,
   timber: 0x6f442a,
   timberLight: 0xb17c45,
   roof: 0x9b4f32,
@@ -40,8 +35,6 @@ const COLORS = {
 } as const;
 
 interface IslandPalette {
-  shallow: number;
-  shallowSupported: number;
   land: number;
   landDark: number;
   rock: number;
@@ -51,8 +44,6 @@ interface IslandPalette {
 
 const ISLAND_PALETTES: Record<IslandKind, IslandPalette> = {
   [IslandKind.HighIsland]: {
-    shallow: 0x2d858b,
-    shallowSupported: 0x3b9696,
     land: 0x779459,
     landDark: 0x49683e,
     rock: 0x65706d,
@@ -60,8 +51,6 @@ const ISLAND_PALETTES: Record<IslandKind, IslandPalette> = {
     coast: 0xd2bb7f,
   },
   [IslandKind.LowCay]: {
-    shallow: 0x4aa1a0,
-    shallowSupported: 0x63b8b0,
     land: 0xd4bd78,
     landDark: 0xb89a5c,
     rock: 0x837a68,
@@ -69,8 +58,6 @@ const ISLAND_PALETTES: Record<IslandKind, IslandPalette> = {
     coast: 0xf0d691,
   },
   [IslandKind.Atoll]: {
-    shallow: 0x3ca9a5,
-    shallowSupported: 0x57c0b5,
     land: 0xe0c77f,
     landDark: 0xc6a867,
     rock: 0x7a8580,
@@ -78,8 +65,6 @@ const ISLAND_PALETTES: Record<IslandKind, IslandPalette> = {
     coast: 0xf3dda0,
   },
   [IslandKind.RockySkerry]: {
-    shallow: 0x346f7a,
-    shallowSupported: 0x4b8790,
     land: 0x68745d,
     landDark: 0x4b5549,
     rock: 0x515d60,
@@ -124,10 +109,6 @@ interface ChunkView {
   originY: number;
   bounds: Phaser.Geom.Rectangle;
   layers: Partial<Record<ChunkLayerName, CameraCulledGraphics>>;
-  homeStructures?: Phaser.GameObjects.Graphics;
-  homeVisual?: AuthoredHomeIslandVisual;
-  authoredIslandImages?: Phaser.GameObjects.Image[];
-  label?: Phaser.GameObjects.Text;
 }
 
 interface AuthoredIslandPresentationRecord {
@@ -135,11 +116,25 @@ interface AuthoredIslandPresentationRecord {
   readonly presentation: Readonly<AuthoredIslandPresentationEntry>;
 }
 
+interface HomeAliasView {
+  readonly imageOffset: Readonly<WorldPoint>;
+  homeStructures?: Phaser.GameObjects.Graphics;
+  homeVisual?: AuthoredHomeIslandVisual;
+  label?: Phaser.GameObjects.Text;
+}
+
+interface AuthoredIslandAliasView {
+  readonly islandId: number;
+  readonly imageOffset: Readonly<WorldPoint>;
+  readonly images: readonly Phaser.GameObjects.Image[];
+}
+
 /** Bounded counters suitable for the runtime performance HUD and regression tests. */
 export interface WorldRendererTelemetry {
   readonly updateCount: number;
-  readonly activeChunks: number;
-  readonly activeChunkKeys: readonly string[];
+  readonly activeImageEntries: number;
+  readonly activeCanonicalChunks: number;
+  readonly activeViewKeys: readonly string[];
   readonly activeGraphicsObjects: number;
   readonly activeTextObjects: number;
   readonly activeAuthoredImageObjects: number;
@@ -169,11 +164,15 @@ export class WorldRenderer {
   private readonly ocean: Phaser.GameObjects.Rectangle;
   private readonly authoredHomeMetadata?: Readonly<AuthoredHomeIslandMetadata>;
   private readonly chunks = new Map<string, ChunkView>();
+  private readonly homeAliases = new Map<string, HomeAliasView>();
+  private readonly authoredIslandAliases = new Map<string, AuthoredIslandAliasView>();
   private generated?: GeneratedWorld;
   private islandsById: ReadonlyMap<number, GeneratedIsland> = new Map();
   private authoredIslandPresentationsByIslandId: ReadonlyMap<number, AuthoredIslandPresentationRecord> = new Map();
-  private authoredIslandPresentationsByOwnerChunk: ReadonlyMap<string, readonly AuthoredIslandPresentationRecord[]> = new Map();
-  private observedKnowledgeRevisions = new WeakMap<WorldChunk, number>();
+  private authoredIslandPresentationsByFootprintChunk: ReadonlyMap<
+    string,
+    readonly Readonly<AuthoredIslandPresentationRecord>[]
+  > = new Map();
   private updateCount = 0;
   private totalChunkActivations = 0;
   private totalChunkDeactivations = 0;
@@ -210,22 +209,19 @@ export class WorldRenderer {
   ): Readonly<WorldRendererActivationResult> {
     if (this.destroyed) return this.activationResult(0, 0, 0);
     this.clearWorld();
-    const { grid } = generated;
-    const size = prototypeConfig.navigation.tileSize;
     this.generated = generated;
     this.islandsById = new Map(generated.islands.map((island) => [island.id, island]));
     this.indexAuthoredIslandPresentations(generated);
 
-    this.ocean
-      .setSize(grid.width * size, grid.height * size)
-      .setPosition(0, 0)
-      .setVisible(false);
+    this.ocean.setVisible(false);
     return this.syncActiveChunks(activeChunks);
   }
 
-  /** Applies the bounded ActiveChunkSet result without scanning non-active world tiles. */
+  /** Applies the capacity-bounded ActiveChunkSet result without scanning inactive world tiles. */
   applyActiveChunks(delta: Readonly<ActiveChunkDelta>): Readonly<WorldRendererActivationResult> {
-    return this.syncActiveChunks(delta.active);
+    const result = this.syncActiveChunks(delta.active, false);
+    this.updateOceanCoverage(delta.visibleTileBounds, delta.active);
+    return result;
   }
 
   /**
@@ -234,6 +230,7 @@ export class WorldRenderer {
    */
   syncActiveChunks(
     entries: readonly Readonly<ActiveChunkEntry>[],
+    updateOcean = true,
   ): Readonly<WorldRendererActivationResult> {
     if (this.destroyed || !this.generated) return this.activationResult(0, 0, 0);
     this.updateCount++;
@@ -242,8 +239,8 @@ export class WorldRenderer {
     const desired = new Map<string, Readonly<ActiveChunkEntry>>();
     for (const entry of entries) {
       this.assertValidChunkEntry(entry);
-      if (desired.has(entry.key)) throw new RangeError(`Duplicate active chunk ${entry.key}`);
-      desired.set(entry.key, entry);
+      if (desired.has(entry.viewKey)) throw new RangeError(`Duplicate active chunk image ${entry.viewKey}`);
+      desired.set(entry.viewKey, entry);
     }
 
     let deactivated = 0;
@@ -257,7 +254,7 @@ export class WorldRenderer {
     let retained = 0;
     const ordered = [...desired.values()].sort(compareActiveChunkEntry);
     for (const entry of ordered) {
-      const existing = this.chunks.get(entry.key);
+      const existing = this.chunks.get(entry.viewKey);
       if (existing) {
         existing.entry = entry;
         retained++;
@@ -267,38 +264,15 @@ export class WorldRenderer {
       activated++;
     }
 
+    this.syncPeriodicArtwork(ordered);
+
     this.totalChunkActivations += activated;
     this.totalChunkDeactivations += deactivated;
     this.peakActiveChunks = Math.max(this.peakActiveChunks, this.chunks.size);
     const activeResources = this.countActiveResources();
     this.peakResourceObjects = Math.max(this.peakResourceObjects, activeResources);
-    this.ocean.setVisible(this.chunks.size > 0);
+    if (updateOcean) this.updateOceanCoverage(null, ordered);
     return this.activationResult(activated, deactivated, retained);
-  }
-
-  /** Repaints only water layers whose authoritative knowledge changed since the last world render. */
-  refreshKnowledge(generated: GeneratedWorld): number {
-    if (this.destroyed) return 0;
-    if (this.generated?.grid !== generated.grid) {
-      this.render(generated);
-      return 0;
-    }
-
-    this.generated = generated;
-    let refreshed = 0;
-    for (const view of this.chunks.values()) {
-      const worldChunk = generated.grid.getChunk(view.chunkX, view.chunkY);
-      if (!worldChunk) continue;
-      if (this.observedKnowledgeRevisions.get(worldChunk) === worldChunk.knowledgeRevision) continue;
-      const resourcesBefore = this.chunkResourceCount(view);
-      this.redrawWaterLayer(generated, view, this.islandsById);
-      const resourcesCreated = this.chunkResourceCount(view) - resourcesBefore;
-      this.totalResourceObjectsCreated += resourcesCreated;
-      this.observedKnowledgeRevisions.set(worldChunk, worldChunk.knowledgeRevision);
-      refreshed++;
-    }
-    this.peakResourceObjects = Math.max(this.peakResourceObjects, this.countActiveResources());
-    return refreshed;
   }
 
   destroy(): void {
@@ -311,13 +285,17 @@ export class WorldRenderer {
 
   getTelemetry(): Readonly<WorldRendererTelemetry> {
     const counts = this.objectCounts();
-    const activeChunkKeys = [...this.chunks.values()]
+    const activeViewKeys = [...this.chunks.values()]
       .sort((left, right) => compareActiveChunkEntry(left.entry, right.entry))
-      .map(({ entry }) => entry.key);
+      .map(({ entry }) => entry.viewKey);
+    const canonicalChunkKeys = new Set(
+      [...this.chunks.values()].map(({ entry }) => canonicalChunkKey(entry.canonicalChunk)),
+    );
     return Object.freeze({
       updateCount: this.updateCount,
-      activeChunks: this.chunks.size,
-      activeChunkKeys: Object.freeze(activeChunkKeys),
+      activeImageEntries: this.chunks.size,
+      activeCanonicalChunks: canonicalChunkKeys.size,
+      activeViewKeys: Object.freeze(activeViewKeys),
       activeGraphicsObjects: counts.graphics,
       activeTextObjects: counts.text,
       activeAuthoredImageObjects: counts.authoredImages,
@@ -339,12 +317,8 @@ export class WorldRenderer {
     const generated = this.generated;
     if (!generated) throw new Error("A world must be bound before chunks can be activated");
     const chunk = this.createChunkView(generated, entry);
-    this.chunks.set(entry.key, chunk);
+    this.chunks.set(entry.viewKey, chunk);
     this.renderChunk(generated, chunk);
-    if (this.isHomeOwnerChunk(generated, chunk)) this.drawHome(generated, chunk);
-    this.drawAuthoredIslands(chunk);
-    const worldChunk = generated.grid.getChunk(chunk.chunkX, chunk.chunkY);
-    if (worldChunk) this.observedKnowledgeRevisions.set(worldChunk, worldChunk.knowledgeRevision);
     const created = this.chunkResourceCount(chunk);
     this.totalResourceObjectsCreated += created;
   }
@@ -354,12 +328,6 @@ export class WorldRenderer {
     if (!chunk) return;
     const destroyed = this.chunkResourceCount(chunk);
     for (const layer of Object.values(chunk.layers)) layer?.destroy();
-    chunk.homeStructures?.destroy();
-    chunk.homeVisual?.destroy();
-    for (const image of chunk.authoredIslandImages ?? []) image.destroy();
-    chunk.label?.destroy();
-    const worldChunk = this.generated?.grid.getChunk(chunk.chunkX, chunk.chunkY);
-    if (worldChunk) this.observedKnowledgeRevisions.delete(worldChunk);
     this.chunks.delete(key);
     this.totalResourceObjectsDestroyed += destroyed;
   }
@@ -371,12 +339,12 @@ export class WorldRenderer {
     const { grid } = generated;
     const tileSize = prototypeConfig.navigation.tileSize;
     const padding = Math.max(2, tileSize * 0.12);
-    const chunkX = entry.coordinate.x;
-    const chunkY = entry.coordinate.y;
+    const chunkX = entry.canonicalChunk.x;
+    const chunkY = entry.canonicalChunk.y;
     const startX = chunkX * grid.chunkSize;
     const startY = chunkY * grid.chunkSize;
-    const originX = startX * tileSize;
-    const originY = startY * tileSize;
+    const originX = startX * tileSize + entry.imageOffset.x;
+    const originY = startY * tileSize + entry.imageOffset.y;
     const width = Math.min(grid.chunkSize, grid.width - startX) * tileSize;
     const height = Math.min(grid.chunkSize, grid.height - startY) * tileSize;
     return {
@@ -460,14 +428,6 @@ export class WorldRenderer {
     }
   }
 
-  private redrawWaterLayer(
-    generated: GeneratedWorld,
-    _chunk: ChunkView,
-    _islandsById: ReadonlyMap<number, GeneratedIsland>,
-  ): void {
-    this.generated = generated;
-  }
-
   private drawCoastTile(
     generated: GeneratedWorld,
     chunk: ChunkView,
@@ -479,10 +439,10 @@ export class WorldRenderer {
     size: number,
   ): void {
     const { grid } = generated;
-    const top = y === 0 || grid.getTerrain(x, y - 1) !== TerrainType.Land;
-    const right = x + 1 >= grid.width || grid.getTerrain(x + 1, y) !== TerrainType.Land;
-    const bottom = y + 1 >= grid.height || grid.getTerrain(x, y + 1) !== TerrainType.Land;
-    const left = x === 0 || grid.getTerrain(x - 1, y) !== TerrainType.Land;
+    const top = terrainAtImageNeighbor(grid, x, y - 1) !== TerrainType.Land;
+    const right = terrainAtImageNeighbor(grid, x + 1, y) !== TerrainType.Land;
+    const bottom = terrainAtImageNeighbor(grid, x, y + 1) !== TerrainType.Land;
+    const left = terrainAtImageNeighbor(grid, x - 1, y) !== TerrainType.Land;
     if (!top && !right && !bottom && !left) return;
 
     const coast = this.getLayer(chunk, "coast");
@@ -531,26 +491,27 @@ export class WorldRenderer {
     }
   }
 
-  private drawHome(generated: GeneratedWorld, chunk: ChunkView): void {
+  private drawHome(generated: GeneratedWorld, imageOffset: Readonly<WorldPoint>): HomeAliasView {
     const { homeCenter, harbour, dock } = generated.landmarks;
     const size = prototypeConfig.navigation.tileSize;
+    const alias: HomeAliasView = { imageOffset: Object.freeze({ ...imageOffset }) };
     if (this.pilotAssets && this.authoredHomeMetadata) {
       const visual = createAuthoredHomeIslandVisual(this.scene, this.pilotAssets);
       if (visual) {
         const topLeftX = homeCenter.x - visual.metadata.anchors.homeCenter.x;
         const topLeftY = homeCenter.y - visual.metadata.anchors.homeCenter.y;
-        visual.setPosition(topLeftX * size, topLeftY * size);
+        visual.setPosition(topLeftX * size + imageOffset.x, topLeftY * size + imageOffset.y);
         visual.setVisible(true);
-        chunk.homeVisual = visual;
+        alias.homeVisual = visual;
       }
     }
 
-    if (!chunk.homeVisual) {
+    if (!alias.homeVisual) {
       const homeStructures = this.scene.add.graphics().setDepth(5.5);
-      chunk.homeStructures = homeStructures;
-      const center = gridToWorld(homeCenter);
-      const harbourWorld = gridToWorld(harbour);
-      const dockWorld = gridToWorld(dock);
+      alias.homeStructures = homeStructures;
+      const center = offsetWorldPoint(gridToWorld(homeCenter), imageOffset);
+      const harbourWorld = offsetWorldPoint(gridToWorld(harbour), imageOffset);
+      const dockWorld = offsetWorldPoint(gridToWorld(dock), imageOffset);
 
       // A flag and simple huts make the home readable without production art.
       homeStructures.lineStyle(3, COLORS.timber, 1);
@@ -586,25 +547,31 @@ export class WorldRenderer {
       x: homeCenter.x,
       y: homeCenter.y - prototypeConfig.world.homeIslandRadius - 2,
     });
-    chunk.label = this.scene.add.text(labelAt.x, labelAt.y, "HOME ISLAND", {
+    alias.label = this.scene.add.text(
+      labelAt.x + imageOffset.x,
+      labelAt.y + imageOffset.y,
+      "HOME ISLAND",
+      {
       color: "#f5e4b3",
       fontFamily: "ui-monospace, monospace",
       fontSize: "14px",
       fontStyle: "bold",
       stroke: "#10242a",
       strokeThickness: 4,
-    }).setOrigin(0.5).setDepth(10);
+      },
+    ).setOrigin(0.5).setDepth(10);
+    return alias;
   }
 
   private indexAuthoredIslandPresentations(generated: Readonly<GeneratedWorld>): void {
     const byIslandId = new Map<number, AuthoredIslandPresentationRecord>();
-    const byOwnerChunk = new Map<string, AuthoredIslandPresentationRecord[]>();
+    const byFootprintChunk = new Map<string, AuthoredIslandPresentationRecord[]>();
     if (
       this.authoredIslandPresentations
       && generated.manifest.authoredIslandCatalogRevision !== this.authoredIslandPresentations.revision
     ) {
       this.authoredIslandPresentationsByIslandId = byIslandId;
-      this.authoredIslandPresentationsByOwnerChunk = byOwnerChunk;
+      this.authoredIslandPresentationsByFootprintChunk = byFootprintChunk;
       return;
     }
     for (const island of generated.islands) {
@@ -619,73 +586,143 @@ export class WorldRenderer {
       }
       const record = Object.freeze({ island, presentation });
       byIslandId.set(island.id, record);
-      const key = activeChunkKey(
-        Math.floor(island.center.x / generated.grid.chunkSize),
-        Math.floor(island.center.y / generated.grid.chunkSize),
-      );
-      const records = byOwnerChunk.get(key) ?? [];
-      records.push(record);
-      byOwnerChunk.set(key, records);
-    }
-    this.authoredIslandPresentationsByIslandId = byIslandId;
-    this.authoredIslandPresentationsByOwnerChunk = byOwnerChunk;
-  }
-
-  private drawAuthoredIslands(chunk: ChunkView): void {
-    const records = this.authoredIslandPresentationsByOwnerChunk.get(chunk.entry.key);
-    if (!records || records.length === 0) return;
-    const size = prototypeConfig.navigation.tileSize;
-    const images: Phaser.GameObjects.Image[] = [];
-    for (const { island, presentation } of records) {
-      for (const [index, layer] of presentation.layers.entries()) {
-        const image = this.scene.add.image(
-          island.bounds.minX * size,
-          island.bounds.minY * size,
-          layer.textureKey,
-        )
-          .setOrigin(0)
-          .setDisplaySize(presentation.gridWidth * size, presentation.gridHeight * size)
-          .setAlpha(layer.opacity)
-          .setBlendMode(authoredIslandBlendMode(layer.blendMode))
-          .setDepth(4 + index * 0.01);
-        images.push(image);
+      const chunkKeys = new Set<string>();
+      for (const piece of generated.grid.topology.decomposeTileBounds(island.bounds)) {
+        const minimumChunkX = Math.floor(piece.minX / generated.grid.chunkSize);
+        const maximumChunkX = Math.floor(piece.maxX / generated.grid.chunkSize);
+        const minimumChunkY = Math.floor(piece.minY / generated.grid.chunkSize);
+        const maximumChunkY = Math.floor(piece.maxY / generated.grid.chunkSize);
+        for (let chunkY = minimumChunkY; chunkY <= maximumChunkY; chunkY++) {
+          for (let chunkX = minimumChunkX; chunkX <= maximumChunkX; chunkX++) {
+            chunkKeys.add(canonicalChunkKey({ x: chunkX, y: chunkY }));
+          }
+        }
+      }
+      for (const key of chunkKeys) {
+        const bucket = byFootprintChunk.get(key) ?? [];
+        bucket.push(record);
+        byFootprintChunk.set(key, bucket);
       }
     }
-    chunk.authoredIslandImages = images;
+    this.authoredIslandPresentationsByIslandId = byIslandId;
+    this.authoredIslandPresentationsByFootprintChunk = new Map(
+      [...byFootprintChunk].map(([key, bucket]) => [
+        key,
+        Object.freeze(bucket.sort((left, right) => left.island.id - right.island.id)),
+      ]),
+    );
+  }
+
+  private drawAuthoredIslandAlias(
+    record: Readonly<AuthoredIslandPresentationRecord>,
+    imageOffset: Readonly<WorldPoint>,
+  ): AuthoredIslandAliasView {
+    const { island, presentation } = record;
+    const size = prototypeConfig.navigation.tileSize;
+    const images: Phaser.GameObjects.Image[] = [];
+    for (const [index, layer] of presentation.layers.entries()) {
+      const image = this.scene.add.image(
+        island.bounds.minX * size + imageOffset.x,
+        island.bounds.minY * size + imageOffset.y,
+        layer.textureKey,
+      )
+        .setOrigin(0)
+        .setDisplaySize(presentation.gridWidth * size, presentation.gridHeight * size)
+        .setAlpha(layer.opacity)
+        .setBlendMode(authoredIslandBlendMode(layer.blendMode))
+        .setDepth(4 + index * 0.01);
+      images.push(image);
+    }
+    return {
+      islandId: island.id,
+      imageOffset: Object.freeze({ ...imageOffset }),
+      images: Object.freeze(images),
+    };
+  }
+
+  private syncPeriodicArtwork(entries: readonly Readonly<ActiveChunkEntry>[]): void {
+    const generated = this.generated!;
+    const topology = generated.grid.topology;
+    const homeMetadata = this.authoredHomeMetadata ?? PILOT_HOME_ISLAND_METADATA;
+    const homeBounds = homeFootprintBounds(generated, homeMetadata);
+    const desiredHome = new Map<string, WorldPoint>();
+    const desiredIslands = new Map<
+      string,
+      { record: Readonly<AuthoredIslandPresentationRecord>; imageOffset: WorldPoint }
+    >();
+    for (const entry of entries) {
+      const viewBounds = liftedChunkBounds(entry, topology);
+      for (const imageOffset of periodicOffsetsIntersecting(homeBounds, viewBounds, topology)) {
+        desiredHome.set(imageOffsetKey(imageOffset), imageOffset);
+      }
+      const records = this.authoredIslandPresentationsByFootprintChunk.get(
+        canonicalChunkKey(entry.canonicalChunk),
+      ) ?? [];
+      for (const record of records) {
+        for (const imageOffset of periodicOffsetsIntersecting(record.island.bounds, viewBounds, topology)) {
+          desiredIslands.set(authoredIslandAliasKey(record.island.id, imageOffset), { record, imageOffset });
+        }
+      }
+    }
+
+    for (const [key, alias] of this.homeAliases) {
+      if (desiredHome.has(key)) continue;
+      const destroyed = homeAliasResourceCount(alias);
+      destroyHomeAlias(alias);
+      this.homeAliases.delete(key);
+      this.totalResourceObjectsDestroyed += destroyed;
+    }
+    for (const [key, imageOffset] of desiredHome) {
+      if (this.homeAliases.has(key)) continue;
+      const alias = this.drawHome(generated, imageOffset);
+      this.homeAliases.set(key, alias);
+      this.totalResourceObjectsCreated += homeAliasResourceCount(alias);
+    }
+
+    for (const [key, alias] of this.authoredIslandAliases) {
+      if (desiredIslands.has(key)) continue;
+      for (const image of alias.images) image.destroy();
+      this.authoredIslandAliases.delete(key);
+      this.totalResourceObjectsDestroyed += alias.images.length;
+    }
+    for (const [key, desired] of desiredIslands) {
+      if (this.authoredIslandAliases.has(key)) continue;
+      const alias = this.drawAuthoredIslandAlias(desired.record, desired.imageOffset);
+      this.authoredIslandAliases.set(key, alias);
+      this.totalResourceObjectsCreated += alias.images.length;
+    }
   }
 
   private isAuthoredHomeFootprint(generated: GeneratedWorld, x: number, y: number): boolean {
     const metadata = this.authoredHomeMetadata;
     if (!metadata) return false;
-    const topLeftX = generated.landmarks.homeCenter.x - metadata.anchors.homeCenter.x;
-    const topLeftY = generated.landmarks.homeCenter.y - metadata.anchors.homeCenter.y;
-    return x >= topLeftX
-      && y >= topLeftY
-      && x < topLeftX + metadata.grid.width
-      && y < topLeftY + metadata.grid.height;
-  }
-
-  private isHomeOwnerChunk(generated: GeneratedWorld, chunk: ChunkView): boolean {
-    const { grid, landmarks } = generated;
-    return chunk.chunkX === Math.floor(landmarks.homeCenter.x / grid.chunkSize)
-      && chunk.chunkY === Math.floor(landmarks.homeCenter.y / grid.chunkSize);
+    return generated.grid.topology.decomposeTileBounds(homeFootprintBounds(generated, metadata))
+      .some((piece) => x >= piece.minX && x <= piece.maxX && y >= piece.minY && y <= piece.maxY);
   }
 
   private assertValidChunkEntry(entry: Readonly<ActiveChunkEntry>): void {
     const generated = this.generated;
     if (!generated) throw new Error("A world must be bound before chunks can be validated");
-    const { x, y } = entry.coordinate;
+    const { x, y } = entry.canonicalChunk;
     if (!Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
-      throw new RangeError(`Active chunk coordinates must be safe integers: ${entry.key}`);
+      throw new RangeError(`Canonical chunk coordinates must be safe integers: ${entry.viewKey}`);
     }
-    if (entry.key !== activeChunkKey(x, y)) {
-      throw new RangeError(`Active chunk key ${entry.key} does not match coordinate ${x},${y}`);
+    const topology = generated.grid.topology;
+    const expectedKey = activeChunkViewKey(x, y, entry.imageOffset.x, entry.imageOffset.y);
+    if (entry.viewKey !== expectedKey) {
+      throw new RangeError(`Active chunk image key ${entry.viewKey} does not match ${expectedKey}`);
     }
-    const columns = Math.ceil(generated.grid.width / generated.grid.chunkSize);
-    const rows = Math.ceil(generated.grid.height / generated.grid.chunkSize);
-    if (x < 0 || y < 0 || x >= columns || y >= rows) {
-      throw new RangeError(`Active chunk ${entry.key} is outside ${columns}x${rows} presentation bounds`);
+    if (x < 0 || y < 0 || x >= topology.chunkColumns || y >= topology.chunkRows) {
+      throw new RangeError(`Active chunk image ${entry.viewKey} has an out-of-range canonical chunk`);
     }
+    if (
+      !Number.isSafeInteger(entry.imageOffset.x)
+      || !Number.isSafeInteger(entry.imageOffset.y)
+      || (entry.imageOffset.x !== 0 && entry.imageOffset.x % topology.pixelWidth !== 0)
+      || (entry.imageOffset.y !== 0 && entry.imageOffset.y % topology.pixelHeight !== 0)
+      || (!topology.wrapsX && entry.imageOffset.x !== 0)
+      || (!topology.wrapsY && entry.imageOffset.y !== 0)
+    ) throw new RangeError(`Active chunk image ${entry.viewKey} has an invalid whole-world offset`);
   }
 
   private objectCounts(): {
@@ -699,26 +736,67 @@ export class WorldRenderer {
     let authoredImages = 0;
     for (const chunk of this.chunks.values()) {
       graphics += Object.values(chunk.layers).filter(Boolean).length;
-      if (chunk.homeStructures) graphics++;
-      if (chunk.label) text++;
-      if (chunk.homeVisual) authoredImages += chunk.homeVisual.metadata.render.slices.length;
-      authoredImages += chunk.authoredIslandImages?.length ?? 0;
     }
+    for (const alias of this.homeAliases.values()) {
+      if (alias.homeStructures) graphics++;
+      if (alias.label) text++;
+      if (alias.homeVisual) authoredImages += alias.homeVisual.metadata.render.slices.length;
+    }
+    for (const alias of this.authoredIslandAliases.values()) authoredImages += alias.images.length;
     return { graphics, text, authoredImages, resources: graphics + text + authoredImages };
   }
 
   private chunkResourceCount(chunk: ChunkView): number {
-    return Object.values(chunk.layers).filter(Boolean).length
-      + (chunk.homeStructures ? 1 : 0)
-      + (chunk.label ? 1 : 0)
-      + (chunk.homeVisual ? chunk.homeVisual.metadata.render.slices.length : 0)
-      + (chunk.authoredIslandImages?.length ?? 0);
+    return Object.values(chunk.layers).filter(Boolean).length;
   }
 
   private countActiveResources(): number {
-    let count = 0;
+    let count = this.homeAliasResourceCount() + this.authoredIslandAliasResourceCount();
     for (const chunk of this.chunks.values()) count += this.chunkResourceCount(chunk);
     return count;
+  }
+
+  private homeAliasResourceCount(): number {
+    let count = 0;
+    for (const alias of this.homeAliases.values()) count += homeAliasResourceCount(alias);
+    return count;
+  }
+
+  private authoredIslandAliasResourceCount(): number {
+    let count = 0;
+    for (const alias of this.authoredIslandAliases.values()) count += alias.images.length;
+    return count;
+  }
+
+  private updateOceanCoverage(
+    visibleBounds: Readonly<LiftedTileBounds> | null,
+    entries: readonly Readonly<ActiveChunkEntry>[],
+  ): void {
+    const generated = this.generated;
+    if (!generated) {
+      this.ocean.setVisible(false);
+      return;
+    }
+    let bounds = visibleBounds;
+    if (!bounds && entries.length > 0) {
+      const topology = generated.grid.topology;
+      const lifted = entries.map((entry) => liftedChunkBounds(entry, topology));
+      bounds = {
+        minX: Math.min(...lifted.map(({ minX }) => minX)),
+        minY: Math.min(...lifted.map(({ minY }) => minY)),
+        maxX: Math.max(...lifted.map(({ maxX }) => maxX)),
+        maxY: Math.max(...lifted.map(({ maxY }) => maxY)),
+      };
+    }
+    if (!bounds) {
+      this.ocean.setVisible(false);
+      return;
+    }
+    const size = prototypeConfig.navigation.tileSize;
+    this.ocean
+      .setSize((bounds.maxX - bounds.minX + 1) * size, (bounds.maxY - bounds.minY + 1) * size)
+      .setPosition(bounds.minX * size, bounds.minY * size)
+      .setVisible(true);
   }
 
   private activationResult(
@@ -738,12 +816,22 @@ export class WorldRenderer {
     this.ocean.setVisible(false);
     const activeCount = this.chunks.size;
     for (const key of [...this.chunks.keys()]) this.deactivateChunk(key);
+    for (const alias of this.homeAliases.values()) {
+      const destroyed = homeAliasResourceCount(alias);
+      destroyHomeAlias(alias);
+      this.totalResourceObjectsDestroyed += destroyed;
+    }
+    this.homeAliases.clear();
+    for (const alias of this.authoredIslandAliases.values()) {
+      for (const image of alias.images) image.destroy();
+      this.totalResourceObjectsDestroyed += alias.images.length;
+    }
+    this.authoredIslandAliases.clear();
     this.totalChunkDeactivations += activeCount;
     this.generated = undefined;
     this.islandsById = new Map();
     this.authoredIslandPresentationsByIslandId = new Map();
-    this.authoredIslandPresentationsByOwnerChunk = new Map();
-    this.observedKnowledgeRevisions = new WeakMap();
+    this.authoredIslandPresentationsByFootprintChunk = new Map();
   }
 }
 
@@ -761,6 +849,123 @@ function compareActiveChunkEntry(
   right: Readonly<ActiveChunkEntry>,
 ): number {
   return left.loadPriority - right.loadPriority
-    || left.coordinate.y - right.coordinate.y
-    || left.coordinate.x - right.coordinate.x;
+    || left.imageOffset.y - right.imageOffset.y
+    || left.imageOffset.x - right.imageOffset.x
+    || left.canonicalChunk.y - right.canonicalChunk.y
+    || left.canonicalChunk.x - right.canonicalChunk.x;
+}
+
+function canonicalChunkKey(coordinate: Readonly<GridPoint>): string {
+  return `${coordinate.x},${coordinate.y}`;
+}
+
+function offsetWorldPoint(point: Readonly<WorldPoint>, offset: Readonly<WorldPoint>): WorldPoint {
+  return { x: point.x + offset.x, y: point.y + offset.y };
+}
+
+function imageOffsetKey(offset: Readonly<WorldPoint>): string {
+  return `${offset.x},${offset.y}`;
+}
+
+function authoredIslandAliasKey(islandId: number, offset: Readonly<WorldPoint>): string {
+  return `${islandId}@${imageOffsetKey(offset)}`;
+}
+
+function homeFootprintBounds(
+  generated: Readonly<GeneratedWorld>,
+  metadata: Readonly<AuthoredHomeIslandMetadata>,
+): CanonicalTileBounds {
+  const minX = generated.landmarks.homeCenter.x - metadata.anchors.homeCenter.x;
+  const minY = generated.landmarks.homeCenter.y - metadata.anchors.homeCenter.y;
+  return {
+    minX,
+    minY,
+    maxX: minX + metadata.grid.width - 1,
+    maxY: minY + metadata.grid.height - 1,
+  };
+}
+
+function liftedChunkBounds(
+  entry: Readonly<ActiveChunkEntry>,
+  topology: Readonly<WorldTopology>,
+): CanonicalTileBounds {
+  const offsetX = entry.imageOffset.x / topology.tileSize;
+  const offsetY = entry.imageOffset.y / topology.tileSize;
+  const minX = entry.canonicalChunk.x * topology.chunkSize + offsetX;
+  const minY = entry.canonicalChunk.y * topology.chunkSize + offsetY;
+  return {
+    minX,
+    minY,
+    maxX: Math.min(topology.tileWidth, (entry.canonicalChunk.x + 1) * topology.chunkSize) - 1 + offsetX,
+    maxY: Math.min(topology.tileHeight, (entry.canonicalChunk.y + 1) * topology.chunkSize) - 1 + offsetY,
+  };
+}
+
+function periodicOffsetsIntersecting(
+  footprint: Readonly<CanonicalTileBounds>,
+  view: Readonly<CanonicalTileBounds>,
+  topology: Readonly<WorldTopology>,
+): WorldPoint[] {
+  const xOffsets = intersectingAxisOffsets(
+    footprint.minX,
+    footprint.maxX,
+    view.minX,
+    view.maxX,
+    topology.tileWidth,
+    topology.wrapsX,
+  );
+  const yOffsets = intersectingAxisOffsets(
+    footprint.minY,
+    footprint.maxY,
+    view.minY,
+    view.maxY,
+    topology.tileHeight,
+    topology.wrapsY,
+  );
+  const result: WorldPoint[] = [];
+  for (const offsetY of yOffsets) {
+    for (const offsetX of xOffsets) {
+      result.push({ x: offsetX * topology.tileSize, y: offsetY * topology.tileSize });
+    }
+  }
+  return result;
+}
+
+function intersectingAxisOffsets(
+  footprintMinimum: number,
+  footprintMaximum: number,
+  viewMinimum: number,
+  viewMaximum: number,
+  span: number,
+  wraps: boolean,
+): number[] {
+  if (!wraps) {
+    return footprintMaximum >= viewMinimum && footprintMinimum <= viewMaximum ? [0] : [];
+  }
+  const firstImage = Math.ceil((viewMinimum - footprintMaximum) / span);
+  const lastImage = Math.floor((viewMaximum - footprintMinimum) / span);
+  const offsets: number[] = [];
+  for (let image = firstImage; image <= lastImage; image++) offsets.push(image * span);
+  return offsets;
+}
+
+function homeAliasResourceCount(alias: Readonly<HomeAliasView>): number {
+  return (alias.homeStructures ? 1 : 0)
+    + (alias.label ? 1 : 0)
+    + (alias.homeVisual ? alias.homeVisual.metadata.render.slices.length : 0);
+}
+
+function destroyHomeAlias(alias: Readonly<HomeAliasView>): void {
+  alias.homeStructures?.destroy();
+  alias.homeVisual?.destroy();
+  alias.label?.destroy();
+}
+
+function terrainAtImageNeighbor(
+  grid: Readonly<GeneratedWorld["grid"]>,
+  x: number,
+  y: number,
+): TerrainType | undefined {
+  const canonical = grid.topology.canonicalizeTile(x, y);
+  return canonical ? grid.getTerrain(canonical.x, canonical.y) : undefined;
 }

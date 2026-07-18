@@ -7,6 +7,7 @@ import {
 import type { ForwardGuidanceTask } from "../src/wayfinders/exploration/ForwardGuidance";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology";
 import { makeConfig, makeShip } from "./helpers";
 
 function deterministicRandom(seed: number): () => number {
@@ -19,7 +20,7 @@ function deterministicRandom(seed: number): () => number {
 
 function makeWorld(seed: number): WorldGrid {
   const random = deterministicRandom(seed);
-  const world = new WorldGrid(11, 9, 4);
+  const world = new WorldGrid(11, 9, 4, BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   for (let index = 0; index < world.tileCount; index++) {
     const point = world.pointFromIndex(index);
@@ -125,6 +126,43 @@ describe("cooperative ForwardGuidance task", () => {
     expect(obsolete.step({ maxWorkUnits: 5 }).status).toBe("cancelled");
     const actual = drainTask(newest, 11);
     const expected = new ForwardRangeSystem(world, config).calculate(newestShip);
+    expectEquivalent(actual, expected);
+  });
+
+  it("cancels a partial derived-cost rebuild when knowledge changes", () => {
+    const world = makeWorld(57);
+    const config = makeConfig({ movement: { shipCollisionHalfExtent: 1 } });
+    const system = new ForwardRangeSystem(world, config);
+    const published = system.calculate(shipAt(1, 1));
+    const maskBefore = published.mask.slice();
+    const costsBefore = published.costs.slice();
+    world.setKnowledge(
+      0,
+      0,
+      world.getKnowledge(0, 0) === KnowledgeState.Supported
+        ? KnowledgeState.Unknown
+        : KnowledgeState.Supported,
+    );
+
+    const obsolete = system.beginTask(published, shipAt(7, 5));
+    expect(obsolete.step({ maxWorkUnits: 5 }).status).toBe("pending");
+    world.setKnowledge(
+      2,
+      2,
+      world.getKnowledge(2, 2) === KnowledgeState.Supported
+        ? KnowledgeState.Unknown
+        : KnowledgeState.Supported,
+    );
+    expect(obsolete.step({ maxWorkUnits: 5 })).toEqual({
+      status: "cancelled",
+      workUnits: 0,
+    });
+    expect([...published.mask]).toEqual([...maskBefore]);
+    expect([...published.costs]).toEqual([...costsBefore]);
+
+    const ship = shipAt(7, 5);
+    const actual = drainTask(system.beginTask(published, ship), 11);
+    const expected = new ForwardRangeSystem(world, config).calculate(ship);
     expectEquivalent(actual, expected);
   });
 

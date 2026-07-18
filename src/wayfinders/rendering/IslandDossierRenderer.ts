@@ -2,10 +2,11 @@ import Phaser from "phaser";
 import { prototypeConfig } from "../config/prototypeConfig";
 import type { IslandDossierReadModelV1 } from "../exploration/IslandDossierContracts";
 import { gridToChunk, gridToWorld } from "../world/CoordinateSystem";
+import type { ActiveChunkEntry } from "./activation";
 import {
   ChunkActivatedViewPool,
   type ChunkActivatedViewTelemetry,
-  type PresentationChunkCoordinate,
+  type PresentationChunkImage,
 } from "./lifetime";
 
 type IslandDossierState = IslandDossierReadModelV1["state"];
@@ -45,9 +46,10 @@ export class IslandDossierRenderer {
       idOf: ({ islandId }) => islandId,
       chunkOf: ({ canonicalApproach }) => gridToChunk(canonicalApproach),
       create: () => this.createView(),
-      update: (view, record) => this.updateView(view, record),
-      activate: (view, { islandId }) => {
-        view.container.setActive(true).setVisible(true).setName(`island-dossier:${islandId}`);
+      update: (view, record, image) => this.updateView(view, record, image),
+      activate: (view, { islandId }, image) => {
+        view.container.setActive(true).setVisible(true)
+          .setName(`island-dossier:${islandId}@${image.viewKey}`);
         view.renderedState = undefined;
       },
       deactivate: (view) => {
@@ -64,9 +66,9 @@ export class IslandDossierRenderer {
 
   /** Uses the shared ActiveChunkSet ordering without importing its owner. */
   applyActiveChunks(
-    chunks: readonly Readonly<{ coordinate: Readonly<PresentationChunkCoordinate> }>[],
+    chunks: readonly Readonly<ActiveChunkEntry>[],
   ): void {
-    this.views.setActiveChunks(chunks.map(({ coordinate }) => coordinate));
+    this.views.setActiveChunkImages(chunks);
   }
 
   getLifetimeTelemetry(): Readonly<ChunkActivatedViewTelemetry> {
@@ -80,9 +82,13 @@ export class IslandDossierRenderer {
   private updateView(
     view: IslandDossierView,
     record: Readonly<IslandDossierReadModelV1>,
+    image: Readonly<PresentationChunkImage>,
   ): void {
     const position = gridToWorld(record.canonicalApproach, prototypeConfig.navigation.tileSize);
-    view.container.setPosition(position.x, position.y);
+    view.container.setPosition(
+      position.x + image.imageOffset.x,
+      position.y + image.imageOffset.y,
+    );
     if (view.renderedState !== record.state) this.redraw(view, record.state);
     view.label.setText(this.labelFor(record));
   }

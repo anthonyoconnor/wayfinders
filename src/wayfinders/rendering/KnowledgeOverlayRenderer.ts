@@ -14,10 +14,16 @@ import type { ActiveChunkDelta, ActiveChunkEntry } from "./activation";
 
 export { isExactIslandTileRevealed } from "./KnowledgeClearCoverage";
 
-interface MaskChunkView {
-  image: Phaser.GameObjects.Image;
+interface MaskChunkResource {
   texture: Phaser.Textures.CanvasTexture;
   textureKey: string;
+  readonly widthTiles: number;
+  readonly heightTiles: number;
+}
+
+interface MaskChunkView {
+  readonly image: Phaser.GameObjects.Image;
+  readonly canonicalKey: string;
 }
 
 /** Lightweight counters for the renderer-owned decoded presentation resources. */
@@ -44,8 +50,9 @@ const NO_REVEALED_ISLANDS: ReadonlySet<number> = new Set<number>();
  */
 export class KnowledgeOverlayRenderer {
   private readonly views = new Map<string, MaskChunkView>();
+  private readonly resources = new Map<string, MaskChunkResource>();
   private readonly activeEntries = new Map<string, Readonly<ActiveChunkEntry>>();
-  private readonly pendingActivationKeys = new Set<string>();
+  private readonly pendingResourceKeys = new Set<string>();
   private readonly scratch: HTMLCanvasElement;
   private readonly filtered: HTMLCanvasElement;
   private readonly textureKeyPrefix: string;
@@ -84,34 +91,41 @@ export class KnowledgeOverlayRenderer {
       );
     }
 
-    const desiredKeys = new Set(delta.active.map(({ key }) => key));
-    for (const { key } of delta.deactivated) this.destroyView(key);
+    const desiredKeys = new Set(delta.active.map(({ viewKey }) => viewKey));
+    const desiredResourceKeys = new Set(delta.active.map(({ canonicalChunk }) => (
+      `${canonicalChunk.x},${canonicalChunk.y}`
+    )));
+    for (const { viewKey } of delta.deactivated) this.destroyView(viewKey);
     for (const key of [...this.views.keys()]) {
       if (!desiredKeys.has(key)) this.destroyView(key);
     }
+    // An image-offset transaction can replace every view key while retaining
+    // the same canonical chunks. Reconcile resources against the complete
+    // destination before creating aliases so those canonical textures survive
+    // rebases without allocation or redraw churn.
+    this.releaseResourcesNotIn(desiredResourceKeys);
 
     this.activeEntries.clear();
     for (const entry of delta.active) {
-      this.activeEntries.set(entry.key, entry);
-      const chunk = world.getChunk(entry.coordinate.x, entry.coordinate.y);
+      this.activeEntries.set(entry.viewKey, entry);
+      const chunk = world.getChunk(entry.canonicalChunk.x, entry.canonicalChunk.y);
       if (!chunk) continue;
-      if (!this.views.has(entry.key)) {
-        this.getOrCreateChunkView(chunk);
-        this.pendingActivationKeys.add(entry.key);
-      }
+      const resource = this.getOrCreateChunkResource(world, chunk);
+      if (!this.views.has(entry.viewKey)) this.createImageView(chunk, entry, resource);
     }
+    this.releaseUnreferencedResources();
     this.assertResourceCap();
   }
 
   getResourceTelemetry(): Readonly<KnowledgeOverlayResourceTelemetry> {
     let estimatedTextureBytes = 0;
-    for (const { texture } of this.views.values()) {
+    for (const { texture } of this.resources.values()) {
       estimatedTextureBytes += texture.width * texture.height * 4;
     }
     return Object.freeze({
       chunkCapacity: this.chunkCapacity,
-      activeChunks: this.views.size,
-      activeTextures: this.views.size,
+      activeChunks: this.activeEntries.size,
+      activeTextures: this.resources.size,
       activeSprites: this.views.size,
       estimatedTextureBytes,
       peakActiveTextures: this.peakActiveTextures,
@@ -144,14 +158,14 @@ export class KnowledgeOverlayRenderer {
     const knowledgeChanged = world.knowledgeVersion !== this.lastKnowledgeVersion;
     const visibilityChanged = world.visibilityVersion !== this.lastVisibilityVersion;
     const revealedIslandsChanged = revealedIslandsRevision !== this.lastRevealedIslandsRevision;
-    const chunksChanged = chunks.length !== this.views.size || this.pendingActivationKeys.size > 0;
+    const chunksChanged = this.pendingResourceKeys.size > 0;
     if (!redrawAll && !knowledgeChanged && !visibilityChanged && !revealedIslandsChanged && !chunksChanged) return;
 
     const dirtyChunks = new Set<WorldChunk>();
 
     for (const chunk of chunks) {
-      this.getOrCreateChunkView(chunk);
-      if (redrawAll || revealedIslandsChanged || this.pendingActivationKeys.has(this.chunkKey(chunk))) {
+      this.getOrCreateChunkResource(world, chunk);
+      if (redrawAll || revealedIslandsChanged || this.pendingResourceKeys.has(this.chunkKey(chunk))) {
         dirtyChunks.add(chunk);
       }
     }
@@ -168,64 +182,86 @@ export class KnowledgeOverlayRenderer {
     }
 
     for (const chunk of dirtyChunks) {
-      const view = this.views.get(this.chunkKey(chunk));
-      if (!view) continue;
-      this.renderChunk(world, chunk, seed, revealedIslandIds, view.texture);
-      view.texture.refresh();
+      const resource = this.resources.get(this.chunkKey(chunk));
+      if (!resource) continue;
+      this.renderChunk(world, chunk, seed, revealedIslandIds, resource);
+      resource.texture.refresh();
     }
 
     this.lastKnowledgeVersion = world.knowledgeVersion;
     this.lastVisibilityVersion = world.visibilityVersion;
     this.lastRevealedIslandsRevision = revealedIslandsRevision;
-    this.pendingActivationKeys.clear();
+    this.pendingResourceKeys.clear();
   }
 
   destroy(): void {
     this.destroyViews();
+    this.releaseUnreferencedResources();
     this.lastWorld = undefined;
     this.lastKnowledgeVersion = -1;
     this.lastVisibilityVersion = -1;
     this.lastRevealedIslandsRevision = -1;
     this.activeEntries.clear();
-    this.pendingActivationKeys.clear();
+    this.pendingResourceKeys.clear();
     this.chunkCapacity = 0;
   }
 
-  private getOrCreateChunkView(chunk: WorldChunk): MaskChunkView {
+  private getOrCreateChunkResource(world: WorldGrid, chunk: WorldChunk): MaskChunkResource {
     const key = `${chunk.chunkX},${chunk.chunkY}`;
-    const existing = this.views.get(key);
+    const existing = this.resources.get(key);
     if (existing) return existing;
 
     const textureKey = `${this.textureKeyPrefix}-${chunk.chunkX}-${chunk.chunkY}`;
     const paddingPixels = MASK_PADDING_TILES * MASK_SCALE;
-    const chunkPixels = chunk.size * MASK_SCALE;
-    const texturePixels = chunkPixels + paddingPixels * 2;
-    const texture = this.scene.textures.createCanvas(textureKey, texturePixels, texturePixels);
+    const widthTiles = Math.min(chunk.size, world.width - chunk.chunkX * chunk.size);
+    const heightTiles = Math.min(chunk.size, world.height - chunk.chunkY * chunk.size);
+    const widthPixels = widthTiles * MASK_SCALE;
+    const heightPixels = heightTiles * MASK_SCALE;
+    const texture = this.scene.textures.createCanvas(
+      textureKey,
+      widthPixels + paddingPixels * 2,
+      heightPixels + paddingPixels * 2,
+    );
     if (!texture) throw new Error(`Could not create knowledge mask texture ${textureKey}`);
     texture.setFilter(Phaser.Textures.FilterMode.LINEAR);
-    texture.add("chunk", 0, paddingPixels, paddingPixels, chunkPixels, chunkPixels);
-    const displayPixels = chunk.size * prototypeConfig.navigation.tileSize;
+    texture.add("chunk", 0, paddingPixels, paddingPixels, widthPixels, heightPixels);
+    const resource = { texture, textureKey, widthTiles, heightTiles };
+    this.resources.set(key, resource);
+    this.pendingResourceKeys.add(key);
+    this.totalTextureAllocations++;
+    this.peakActiveTextures = Math.max(this.peakActiveTextures, this.resources.size);
+    return resource;
+  }
+
+  private createImageView(
+    chunk: WorldChunk,
+    entry: Readonly<ActiveChunkEntry>,
+    resource: Readonly<MaskChunkResource>,
+  ): MaskChunkView {
+    const tileSize = prototypeConfig.navigation.tileSize;
+    const worldX = chunk.chunkX * chunk.size * tileSize + entry.imageOffset.x;
+    const worldY = chunk.chunkY * chunk.size * tileSize + entry.imageOffset.y;
+    const displayWidth = resource.widthTiles * tileSize;
+    const displayHeight = resource.heightTiles * tileSize;
     const image = createCameraCulledImage(
       this.scene,
-      chunk.chunkX * displayPixels,
-      chunk.chunkY * displayPixels,
-      textureKey,
+      worldX,
+      worldY,
+      resource.textureKey,
       "chunk",
       {
-        left: chunk.chunkX * displayPixels,
-        right: (chunk.chunkX + 1) * displayPixels + 1,
-        top: chunk.chunkY * displayPixels,
-        bottom: (chunk.chunkY + 1) * displayPixels + 1,
+        left: worldX,
+        right: worldX + displayWidth,
+        top: worldY,
+        bottom: worldY + displayHeight,
       },
     ).setOrigin(0)
-      // A one-world-pixel overlap prevents sub-pixel camera scaling from
-      // exposing the boundary between independently filtered chunk quads.
-      .setDisplaySize(displayPixels + 1, displayPixels + 1)
+      // The texture frame is surrounded by sampled neighbour padding, so
+      // linear filtering can meet adjacent quads without an overlap stripe.
+      .setDisplaySize(displayWidth, displayHeight)
       .setDepth(35);
-    const view = { image, texture, textureKey };
-    this.views.set(key, view);
-    this.totalTextureAllocations++;
-    this.peakActiveTextures = Math.max(this.peakActiveTextures, this.views.size);
+    const view = { image, canonicalKey: this.chunkKey(chunk) };
+    this.views.set(entry.viewKey, view);
     this.assertResourceCap();
     return view;
   }
@@ -238,15 +274,28 @@ export class KnowledgeOverlayRenderer {
     const view = this.views.get(key);
     if (!view) return;
     view.image.destroy();
-    if (this.scene.textures.exists(view.textureKey)) this.scene.textures.remove(view.textureKey);
     this.views.delete(key);
-    this.pendingActivationKeys.delete(key);
-    this.totalTextureReleases++;
+  }
+
+  private releaseUnreferencedResources(): void {
+    const referenced = new Set([...this.views.values()].map(({ canonicalKey }) => canonicalKey));
+    this.releaseResourcesNotIn(referenced);
+  }
+
+  private releaseResourcesNotIn(referenced: ReadonlySet<string>): void {
+    for (const [key, resource] of [...this.resources]) {
+      if (referenced.has(key)) continue;
+      if (this.scene.textures.exists(resource.textureKey)) this.scene.textures.remove(resource.textureKey);
+      this.resources.delete(key);
+      this.pendingResourceKeys.delete(key);
+      this.totalTextureReleases++;
+    }
   }
 
   private prepareWorld(world: WorldGrid): boolean {
     if (this.lastWorld === world) return false;
     this.destroyViews();
+    this.releaseUnreferencedResources();
     this.observedRevisions = new WeakMap();
     this.lastKnowledgeVersion = -1;
     this.lastVisibilityVersion = -1;
@@ -258,29 +307,25 @@ export class KnowledgeOverlayRenderer {
   private presentationChunks(world: WorldGrid): readonly WorldChunk[] {
     const chunks: WorldChunk[] = [];
     for (const entry of this.activeEntries.values()) {
-      const chunk = world.getChunk(entry.coordinate.x, entry.coordinate.y);
-      if (chunk) chunks.push(chunk);
+      const chunk = world.getChunk(entry.canonicalChunk.x, entry.canonicalChunk.y);
+      if (chunk && !chunks.includes(chunk)) chunks.push(chunk);
     }
     return chunks;
   }
 
   private sampledChunks(world: WorldGrid, activeChunks: readonly WorldChunk[]): readonly WorldChunk[] {
-    const sampled = new Map<string, WorldChunk>();
-    const chunkRadius = Math.ceil(MASK_PADDING_TILES / world.chunkSize);
+    const sampled = new Set<WorldChunk>();
     for (const active of activeChunks) {
-      for (let dy = -chunkRadius; dy <= chunkRadius; dy++) {
-        for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
-          const chunk = world.getChunk(active.chunkX + dx, active.chunkY + dy);
-          if (chunk) sampled.set(this.chunkKey(chunk), chunk);
-        }
-      }
+      addPaddedChunkNeighbours(world, active, MASK_PADDING_TILES, sampled);
     }
-    return [...sampled.values()];
+    return [...sampled];
   }
 
   private assertResourceCap(): void {
-    if (this.views.size > this.chunkCapacity) {
-      throw new Error(`Knowledge overlay texture cap exceeded: ${this.views.size}/${this.chunkCapacity}`);
+    if (this.views.size > this.chunkCapacity || this.resources.size > this.chunkCapacity) {
+      throw new Error(
+        `Knowledge overlay resource cap exceeded: ${this.views.size} views, ${this.resources.size} textures/${this.chunkCapacity}`,
+      );
     }
   }
 
@@ -293,8 +338,9 @@ export class KnowledgeOverlayRenderer {
     chunk: WorldChunk,
     seed: number,
     revealedIslandIds: ReadonlySet<number>,
-    texture: Phaser.Textures.CanvasTexture,
+    resource: Readonly<MaskChunkResource>,
   ): void {
+    const { texture } = resource;
     const scratchContext = this.scratch.getContext("2d");
     const filteredContext = this.filtered.getContext("2d");
     const targetContext = texture.getContext();
@@ -302,22 +348,24 @@ export class KnowledgeOverlayRenderer {
 
     scratchContext.clearRect(0, 0, this.scratch.width, this.scratch.height);
     const padding = MASK_PADDING_TILES;
-    for (let localY = -padding; localY < chunk.size + padding; localY++) {
-      for (let localX = -padding; localX < chunk.size + padding; localX++) {
+    for (let localY = -padding; localY < resource.heightTiles + padding; localY++) {
+      for (let localX = -padding; localX < resource.widthTiles + padding; localX++) {
         const worldX = chunk.chunkX * chunk.size + localX;
         const worldY = chunk.chunkY * chunk.size + localY;
         const pixelX = (localX + padding) * MASK_SCALE;
         const pixelY = (localY + padding) * MASK_SCALE;
 
-        if (!world.inBounds(worldX, worldY)) {
+        const canonical = world.topology.canonicalizeTile(worldX, worldY);
+        if (!canonical) {
           scratchContext.fillStyle = "rgba(1, 7, 10, 1)";
           scratchContext.fillRect(pixelX, pixelY, MASK_SCALE, MASK_SCALE);
           continue;
         }
-        if (isKnowledgeOverlayFullyClearAtTile(world, worldX, worldY, revealedIslandIds)) continue;
+        if (isKnowledgeOverlayFullyClearAtTile(world, canonical.x, canonical.y, revealedIslandIds)) continue;
 
-        const noise = (seededValue(seed + 809, worldX, worldY) - 0.5) * prototypeConfig.overlays.fogNoise;
-        if (world.getKnowledge(worldX, worldY) === KnowledgeState.Unknown) {
+        const noise = (seededValue(seed + 809, canonical.x, canonical.y) - 0.5)
+          * prototypeConfig.overlays.fogNoise;
+        if (world.getKnowledge(canonical.x, canonical.y) === KnowledgeState.Unknown) {
           const shade = Math.round(5 + noise * 22);
           // Unknown interiors are fully opaque so high-contrast terrain cannot
           // silhouette through fog; smoothing applies only at knowledge edges.
@@ -340,13 +388,17 @@ export class KnowledgeOverlayRenderer {
     // Filtering softens ordinary fog boundaries, but a completed island
     // dossier owns an exact generated footprint. Clear those pixels after
     // the blur so fog from adjacent water cannot bleed back over the island.
-    for (let localY = -padding; localY < chunk.size + padding; localY++) {
-      for (let localX = -padding; localX < chunk.size + padding; localX++) {
+    for (let localY = -padding; localY < resource.heightTiles + padding; localY++) {
+      for (let localX = -padding; localX < resource.widthTiles + padding; localX++) {
         const worldX = chunk.chunkX * chunk.size + localX;
         const worldY = chunk.chunkY * chunk.size + localY;
+        const canonical = world.topology.canonicalizeTile(worldX, worldY);
         if (
-          !world.inBounds(worldX, worldY)
-          || !isExactIslandTileRevealed(world.getIslandId(worldX, worldY), revealedIslandIds)
+          !canonical
+          || !isExactIslandTileRevealed(
+            world.getIslandId(canonical.x, canonical.y),
+            revealedIslandIds,
+          )
         ) continue;
         filteredContext.clearRect(
           (localX + padding) * MASK_SCALE,

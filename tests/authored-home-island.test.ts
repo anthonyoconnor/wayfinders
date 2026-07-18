@@ -13,10 +13,11 @@ import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask.
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology.ts";
 
 describe("GR-1.3 authored home-island placement", () => {
   it("stamps the complete fixed layout and translates every gameplay anchor", () => {
-    const grid = new WorldGrid(31, 31, 16);
+    const grid = new WorldGrid(31, 31, 16, BOUNDED_WORLD_TOPOLOGY);
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     grid.setKnowledge(15, 15, KnowledgeState.Supported);
 
@@ -66,7 +67,7 @@ describe("GR-1.3 authored home-island placement", () => {
   });
 
   it("blocks the illustrated shoreline while preserving the east harbour lane", () => {
-    const grid = new WorldGrid(31, 31, 16);
+    const grid = new WorldGrid(31, 31, 16, BOUNDED_WORLD_TOPOLOGY);
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const placement = stampAuthoredHomeIsland(grid, { x: 15, y: 15 });
 
@@ -91,7 +92,7 @@ describe("GR-1.3 authored home-island placement", () => {
   });
 
   it("translates authored fine collision cells from package-local to world coordinates", () => {
-    const grid = new WorldGrid(31, 31, 16);
+    const grid = new WorldGrid(31, 31, 16, BOUNDED_WORLD_TOPOLOGY);
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const solidRows = ["1000", "0000", "0000", "0000"] as const;
     const metadata = {
@@ -113,7 +114,7 @@ describe("GR-1.3 authored home-island placement", () => {
   });
 
   it("rejects an authored fine mask that removes required dock clearance", () => {
-    const grid = new WorldGrid(31, 31, 16);
+    const grid = new WorldGrid(31, 31, 16, BOUNDED_WORLD_TOPOLOGY);
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const dock = PILOT_HOME_ISLAND_METADATA.anchors.dock;
     const metadata = {
@@ -156,7 +157,7 @@ describe("GR-1.3 authored home-island placement", () => {
   });
 
   it("rejects a procedural anchor that cannot contain the authored footprint", () => {
-    const grid = new WorldGrid(15, 15, 8);
+    const grid = new WorldGrid(15, 15, 8, BOUNDED_WORLD_TOPOLOGY);
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     expect(() => stampAuthoredHomeIsland(grid, { x: 2, y: 2 })).toThrow(/does not fit/);
   });

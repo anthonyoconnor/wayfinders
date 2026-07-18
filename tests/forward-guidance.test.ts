@@ -6,6 +6,7 @@ import { dijkstra } from "../src/wayfinders/navigation/Dijkstra.ts";
 import { GridGraph } from "../src/wayfinders/navigation/GridGraph.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology.ts";
 import { drainForwardGuidance, makeConfig, makeShip } from "./helpers.ts";
 
 function deterministicRandom(seed: number): () => number {
@@ -176,7 +177,7 @@ describe("bucketed forward-guidance equivalence", () => {
 
     for (let seed = 1; seed <= 24; seed++) {
       const random = deterministicRandom(seed);
-      const world = new WorldGrid(9, 7, 4);
+      const world = new WorldGrid(9, 7, 4, BOUNDED_WORLD_TOPOLOGY);
       world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
       for (let y = 0; y < world.height; y++) {
         for (let x = 0; x < world.width; x++) {
@@ -210,7 +211,7 @@ describe("bucketed forward-guidance equivalence", () => {
         starts: [world.index(4, 3)],
         maxCost: budget,
         forEachNeighbor: (node, visit) => {
-          graph.forEachKnownTraversableCardinalNeighbor(node, (neighbor) => {
+          graph.forEachKnownTraversableCardinalEdge(node, (neighbor) => {
             visit(neighbor, knowledgeTravelCost(world.getKnowledgeAtIndex(neighbor), config));
           });
         },

@@ -15,10 +15,11 @@ import {
 } from "./WorldGenerationProfiles";
 import { WorldAnalysisIndex } from "./analysis";
 import {
-  createManifestFromPlannedWorldV1,
-  type WorldManifestV1,
+  createManifestFromPlannedWorldV2,
+  type WorldManifestV2,
 } from "./manifest";
 import { WorldGrid } from "./WorldGrid";
+import { WRAPPING_WORLD_TOPOLOGY } from "./WorldTopology";
 import {
   GeneratedWaterLayout,
   WaterLayoutPlanner,
@@ -41,13 +42,13 @@ export interface WorldLandmarks {
   hiddenResource: GridPoint;
 }
 
-export const WORLD_GENERATOR_VERSION = "wayfinders-world-v4";
+export const WORLD_GENERATOR_VERSION = "wayfinders-world-v5";
 
 export interface PlannedWorld {
   seed: number;
   landmarks: WorldLandmarks;
   islands: readonly GeneratedIsland[];
-  manifest: WorldManifestV1;
+  manifest: WorldManifestV2;
 }
 
 export interface RasterizedWorld extends PlannedWorld {
@@ -104,6 +105,8 @@ export class WorldGenerator {
       this.config.world.width,
       this.config.world.height,
       this.config.navigation.chunkSize,
+      WRAPPING_WORLD_TOPOLOGY,
+      this.config.navigation.tileSize,
     );
     const homePlacement = {
       x: Math.floor(planningGrid.width / 2),
@@ -130,17 +133,18 @@ export class WorldGenerator {
         hiddenObstacle,
       ),
     };
-    const manifest = createManifestFromPlannedWorldV1({
+    const manifest = createManifestFromPlannedWorldV2({
       seed: normalizedSeed,
       width: planningGrid.width,
       height: planningGrid.height,
       chunkSize: planningGrid.chunkSize,
+      topology: WRAPPING_WORLD_TOPOLOGY,
       landmarks,
       islands,
     }, {
       generatorVersion: WORLD_GENERATOR_VERSION,
-      settingsProfileId: worldGenerationProfileIdForConfig(this.config),
-      settingsFingerprint: worldGenerationSettingsFingerprint(this.config),
+      settingsProfileId: worldGenerationProfileIdForConfig(this.config, WRAPPING_WORLD_TOPOLOGY),
+      settingsFingerprint: worldGenerationSettingsFingerprint(this.config, WRAPPING_WORLD_TOPOLOGY),
       authoredIslandCatalogRevision: this.authoredIslandCatalog.revision,
       waterLayout: createManifestWaterLayout(normalizedSeed, planningGrid.width, planningGrid.height),
     });
@@ -158,6 +162,8 @@ export class WorldGenerator {
       this.config.world.width,
       this.config.world.height,
       this.config.navigation.chunkSize,
+      WRAPPING_WORLD_TOPOLOGY,
+      this.config.navigation.tileSize,
     );
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
 
@@ -216,20 +222,21 @@ export class WorldGenerator {
     const noiseScale = this.config.world.supportedNoiseScale;
     const maximumRadius = baseRadius + noiseAmplitude;
     const extent = Math.ceil(maximumRadius);
-    const minX = Math.max(0, center.x - extent);
-    const maxX = Math.min(grid.width - 1, center.x + extent);
-    const minY = Math.max(0, center.y - extent);
-    const maxY = Math.min(grid.height - 1, center.y + extent);
-
-    for (let y = minY; y <= maxY; y++) {
-      for (let x = minX; x <= maxX; x++) {
-        const dx = x - center.x;
-        const dy = y - center.y;
+    const written = new Set<number>();
+    for (let liftedY = center.y - extent; liftedY <= center.y + extent; liftedY++) {
+      for (let liftedX = center.x - extent; liftedX <= center.x + extent; liftedX++) {
+        const point = grid.topology.canonicalizeTile(liftedX, liftedY);
+        if (!point) continue;
+        const index = grid.index(point.x, point.y);
+        if (written.has(index)) continue;
+        written.add(index);
+        const dx = liftedX - center.x;
+        const dy = liftedY - center.y;
         const distance = Math.hypot(dx, dy);
         if (distance > maximumRadius) continue;
-        const noise = valueNoise(seed, x, y, noiseScale) * 2 - 1;
+        const noise = valueNoise(seed, dx, dy, noiseScale) * 2 - 1;
         if (distance <= baseRadius + noise * noiseAmplitude) {
-          grid.setKnowledge(x, y, KnowledgeState.Supported, 0);
+          grid.setKnowledge(point.x, point.y, KnowledgeState.Supported, 0);
         }
       }
     }
@@ -246,12 +253,13 @@ export class WorldGenerator {
       x: obstacle.center.x + offsetSign * (Math.ceil(obstacle.outerRadius) + 3),
       y: obstacle.center.y + offsetSign * 2,
     };
-    if (grid.inBounds(candidate.x, candidate.y)) return candidate;
+    const canonicalCandidate = grid.topology.canonicalizeTile(candidate.x, candidate.y);
+    if (canonicalCandidate) return canonicalCandidate;
 
-    return {
-      x: Math.max(0, Math.min(grid.width - 1, home.x - this.config.world.hiddenObstacleDistance)),
-      y: home.y,
-    };
+    return grid.topology.normalizeTile(
+      home.x - this.config.world.hiddenObstacleDistance,
+      home.y,
+    );
   }
 
   private assertHomePlacementFits(grid: WorldGrid, topLeft: Readonly<GridPoint>): void {

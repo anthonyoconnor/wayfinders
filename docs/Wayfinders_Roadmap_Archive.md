@@ -1420,9 +1420,99 @@ contracts, a production bundle, and live game/Water-workspace browser checks.
 The I/O lane's older clean-repository fixtures were updated to match the current
 six imported-island source/candidate records.
 
+## Continuous global world
+
+### GP-6.1 through GP-6.6 — Periodic world and circumnavigation
+
+Status: implemented and accepted on 2026-07-17.
+
+Generated gameplay now uses one explicit finite topology that wraps west/east
+and north/south. Canonical tiles, entity state, revisions, manifests, generated
+water arrays, and texture ownership remain singular; lifted coordinates carry
+physical traversals and visible periodic images. Authored collision canvases,
+isolated sea trials, and other named asset contexts remain explicitly bounded.
+Schema-2 world manifests record topology, exact lifted/canonical island
+footprints, and explicit water-ribbon image offsets.
+
+Movement publishes canonical final state together with accepted lifted
+displacement, whole-world image offset, ordered tile entries, and short physical
+travel segments. Coarse/fine collision, direction-preserving graph edges,
+Supported connectivity, forward range, and return routes use the same periodic
+topology. Return routes retain edge winding provenance, so presentation never
+infers a seam direction from canonical endpoints.
+
+Island centres use the complete canonical domain. Periodic clearance,
+island-local rasterization, canonical write deduplication, independent
+horizontal/vertical global-ocean winding cycles, periodic analysis, generated
+water masks/regions, and split spatial queries remove coordinate-edge
+privilege without adding a compatibility mode. Sight, knowledge trails, tiny
+pocket cleanup, provision charging, feature placement/interactions, docking,
+wrecks, lineage, and completion use the same minimum-image and canonical
+contracts.
+
+Presentation follows a scene-owned lifted view anchor and one periodic
+`ActiveChunkSet`. Every image entry retains a canonical owner plus whole-world
+offset and counts against the existing hard cap. Terrain, knowledge, risk,
+Voyage Sense, clouds, markers, diagnostics, authored art, pointer conversion,
+and the deferred ocean backdrop use that image contract. Water retains one base
+and one surface canvas texture per canonical owner; aliases share textures and
+do not multiply redraw. Authored-art views activate by periodic footprint
+intersection rather than canonical-centre visibility.
+
+The pre-change serial architecture baseline was:
+
+| Profile | Construction p95 | World generation p95 | Tile entry p95 | Guidance slice p95 | Guidance drain p95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `P0` | `254.7996 ms` | `158.0338 ms` | `1.173 ms` | `3.1635 ms` | `2` slices |
+| `P1` | `387.5333 ms` | `277.6821 ms` | `0.8712 ms` | `3.112 ms` | `2` slices |
+| `P2` | `2291.8122 ms` | `1608.2908 ms` | `1.1751 ms` | `3.12 ms` | `3` slices |
+
+The pre-change `P2-500` single stress run completed in `2.455 s`; a subsequent
+warm run completed in `0.938 s`. The approved closeout limits were:
+
+- complete generation p95 of `350 ms`, `600 ms`, and `3,500 ms` for `P0`,
+  `P1`, and `P2` respectively;
+- `P2-500` completion within `7.5 s` and the declared finite placement attempts;
+- a local sub-chunk seam-radius query examining no more than four buckets and a
+  bounded candidate set;
+- no more than `25` active periodic image entries;
+- two water canvas textures per canonical owner, no more than one visible-owner
+  surface redraw per frame, and no alias redraw; and
+- authoritative, query, resource, texture, and redraw work that plateaus per
+  step independently of repeated-lap count, while retaining the existing
+  tile-entry and cooperative-guidance limits.
+
+The clean post-change serial closeout sample, with the final periodic generation
+implementation, was:
+
+| Profile | World generation p95 | Tile entry p95 | Guidance slice p95 | Guidance drain p95 | Active images |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `P0` | `319.6526 ms` | `1.6516 ms` | `3.8094 ms` | `6` slices | `9` |
+| `P1` | `486.6539 ms` | `1.3723 ms` | `3.6668 ms` | `5` slices | `25` |
+| `P2` | `1716.6781 ms` | `1.3484 ms` | `3.6713 ms` | `5` slices | `25` |
+
+The `P2-500` post-change stress completed in `2.045 s`. After the final
+revision-keyed guidance-index optimization, an isolated `P2` closeout measured
+`3.4034 ms` slice p95, `20` slices per request p95, and `65.6648 ms` request-CPU
+p95 with no stale or cancelled publication. Periodic spatial queries retained
+the four-bucket/sixteen-candidate reference bound, repeated laps plateaued, and
+water retained two canonical textures with no alias redraw. Browser acceptance
+then found and closed one visible four-image water join by adding an opaque
+one-pixel extruded gutter around the exact base-water frame; the same
+corner/zoom retest was seamless and console-clean.
+
+Acceptance coverage includes stable topology primitives and tiny-axis rules;
+axis/corner island, coastline, water-region, spatial-query, collision, sight,
+knowledge, feature, and renderer fixtures; deterministic cardinal full laps and
+diagonal corner journeys across fixed-step partitions; same-seed regeneration;
+and serial generation, navigation, guidance, periodic-query, water-resource,
+and repeated-presentation traversal checks. Current runtime behavior and numeric
+contracts are owned by `Wayfinders_Technical_Design.md`; volatile gate and
+browser state is recorded in `IMPLEMENTATION_STATUS.md`.
+
 ## Archive boundary
 
-This archive includes completed gameplay through `GP-5.2`, graphics and asset
+This archive includes completed gameplay through `GP-6.6`, graphics and asset
 work through `GR-5.3`, cloud atmosphere through `CLD-1`, water presentation
 through `WTR-2.6`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.

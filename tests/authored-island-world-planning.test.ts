@@ -5,7 +5,7 @@ import {
   type AuthoredIslandCatalogEntry,
 } from "../src/wayfinders/world/AuthoredIslandCatalog";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
-import { serializeWorldManifestV1 } from "../src/wayfinders/world/manifest";
+import { serializeWorldManifestV2 } from "../src/wayfinders/world/manifest";
 import { TerrainType } from "../src/wayfinders/world/TileData";
 import { createWorldProfileConfig } from "./fixtures/worldProfiles";
 
@@ -65,7 +65,7 @@ describe("GR-4.3 authored-island world planning", () => {
 
     expect(first.manifest.islands.every(({ sourceKind }) => sourceKind === "authored")).toBe(true);
     expect(new Set(selected).size).toBe(config.islands.count);
-    expect(serializeWorldManifestV1(reordered.manifest)).toBe(serializeWorldManifestV1(first.manifest));
+    expect(serializeWorldManifestV2(reordered.manifest)).toBe(serializeWorldManifestV2(first.manifest));
   });
 
   it("rasterizes the saved 32/8 mask as authoritative collision", () => {

@@ -2,8 +2,9 @@ import type { GeneratedIsland } from "../IslandGenerator";
 import { seededValue } from "../SeededRandom";
 import { TerrainType } from "../TileData";
 import type { WorldGrid } from "../WorldGrid";
+import type { WorldTopology } from "../WorldTopology";
 import type { WorldAnalysisIndex } from "../analysis";
-import type { WorldManifestWaterLayoutV1, WorldManifestWaterRegionV1 } from "../manifest";
+import type { WorldManifestWaterLayoutV2, WorldManifestWaterRegionV2 } from "../manifest";
 import {
   DEFAULT_WATER_TYPE_CATALOG,
   WATER_TYPE_IDS,
@@ -97,7 +98,7 @@ export class WaterLayoutPlanner {
     grid: Readonly<WorldGrid>,
     analysis: Readonly<WorldAnalysisIndex>,
     islands: readonly Readonly<GeneratedIsland>[],
-    manifest: Readonly<{ waterLayout: Readonly<WorldManifestWaterLayoutV1> }>,
+    manifest: Readonly<{ waterLayout: Readonly<WorldManifestWaterLayoutV2> }>,
     seed: number,
   ): GeneratedWaterLayout {
     if (manifest.waterLayout.catalogFingerprint !== this.catalog.fingerprint) {
@@ -142,8 +143,7 @@ export class WaterLayoutPlanner {
     reserveDeepCoastalTransitionCollar(
       baseTypes,
       analysis,
-      grid.width,
-      grid.height,
+      grid.topology,
       deep,
       coastal,
     );
@@ -153,8 +153,7 @@ export class WaterLayoutPlanner {
         const index = y * grid.width + x;
         transitions[index] = transitionMask(
           baseTypes,
-          grid.width,
-          grid.height,
+          grid.topology,
           x,
           y,
           deep,
@@ -185,23 +184,21 @@ export class WaterLayoutPlanner {
 function reserveDeepCoastalTransitionCollar(
   base: Uint8Array,
   analysis: Readonly<WorldAnalysisIndex>,
-  width: number,
-  height: number,
+  topology: Readonly<WorldTopology>,
   deepIndex: number,
   coastalIndex: number,
 ): void {
   const replace = new Uint8Array(base.length);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const index = y * width + x;
+  for (let y = 0; y < topology.tileHeight; y++) {
+    for (let x = 0; x < topology.tileWidth; x++) {
+      const index = y * topology.tileWidth + x;
       if (analysis.terrainAt(index) !== TerrainType.DeepOcean || base[index] === coastalIndex) continue;
       for (let dy = -1; dy <= 1 && replace[index] === 0; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-          if (base[ny * width + nx] === coastalIndex) {
+          const neighbor = topology.canonicalizeTile(x + dx, y + dy);
+          if (!neighbor || (neighbor.x === x && neighbor.y === y)) continue;
+          if (base[neighbor.y * topology.tileWidth + neighbor.x] === coastalIndex) {
             replace[index] = 1;
             break;
           }
@@ -216,7 +213,7 @@ function placementMatches(
   strategy: WaterTypeCatalogV1["types"][number]["placementStrategy"],
   typeId: WaterTypeId,
   grid: Readonly<WorldGrid>,
-  regions: readonly Readonly<WorldManifestWaterRegionV1>[],
+  regions: readonly Readonly<WorldManifestWaterRegionV2>[],
   island: Readonly<GeneratedIsland> | undefined,
   x: number,
   y: number,
@@ -230,7 +227,7 @@ function placementMatches(
       return island?.kind === "atoll" || protectedShallow(grid, x, y);
     case "coherent-ellipse":
     case "coherent-ribbon":
-      return regionContains(regions, typeId, x, y);
+      return regionContains(regions, typeId, grid.topology, x, y);
     case "context-required":
       return false;
   }
@@ -241,7 +238,7 @@ export function createManifestWaterLayout(
   width: number,
   height: number,
   catalog: Readonly<WaterTypeCatalogV1> = DEFAULT_WATER_TYPE_CATALOG,
-): WorldManifestWaterLayoutV1 {
+): WorldManifestWaterLayoutV2 {
   const ellipse = (
     id: string,
     typeId: "abyss" | "rough",
@@ -250,7 +247,7 @@ export function createManifestWaterLayout(
     radiusX: number,
     radiusY: number,
     regionSeed: number,
-  ): WorldManifestWaterRegionV1 => ({
+  ): WorldManifestWaterRegionV2 => ({
     id: id as `water:${string}`,
     typeId,
     strategy: "ellipse",
@@ -273,6 +270,7 @@ export function createManifestWaterLayout(
         seed: seed + 3_001,
         start: { x: width * 0.04, y: height * 0.4 },
         end: { x: width * 0.96, y: height * 0.58 },
+        imageOffset: { x: 0, y: 0 },
         width: Math.max(2, height * 0.045),
       },
       ellipse("water:rough:000", "rough", width * 0.8 - jitterX, height * 0.2 - jitterY, width * 0.2, height * 0.13, seed + 4_009),
@@ -283,35 +281,108 @@ export function createManifestWaterLayout(
 function protectedShallow(grid: Readonly<WorldGrid>, x: number, y: number): boolean {
   let blocked = 0;
   for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as const) {
-    const nx = x + dx;
-    const ny = y + dy;
-    if (!grid.inBounds(nx, ny) || grid.getTerrain(nx, ny) === TerrainType.Land || grid.getTerrain(nx, ny) === TerrainType.Rock) blocked++;
+    const neighbor = grid.topology.canonicalizeTile(x + dx, y + dy);
+    if (!neighbor) {
+      blocked++;
+      continue;
+    }
+    // A collapsed wrapped axis is not a synthetic blocked side.
+    if (neighbor.x === x && neighbor.y === y) continue;
+    const terrain = grid.getTerrain(neighbor.x, neighbor.y);
+    if (terrain === TerrainType.Land || terrain === TerrainType.Rock) blocked++;
   }
   return blocked >= 2;
 }
 
 function regionContains(
-  regions: readonly Readonly<WorldManifestWaterRegionV1>[],
+  regions: readonly Readonly<WorldManifestWaterRegionV2>[],
   typeId: WaterTypeId,
+  topology: Readonly<WorldTopology>,
   x: number,
   y: number,
 ): boolean {
   return regions.some((region) => {
     if (region.typeId !== typeId) return false;
     if (region.strategy === "ellipse") {
-      const dx = (x - region.center.x) / region.radiusX;
-      const dy = (y - region.center.y) / region.radiusY;
-      const wobble = (seededValue(region.seed, Math.floor(x / 4), Math.floor(y / 4)) - 0.5) * 0.24;
+      const displacement = topology.minimumImageTileDisplacement(region.center, { x, y });
+      const dx = displacement.x / region.radiusX;
+      const dy = displacement.y / region.radiusY;
+      // Keep coherent variation in region-local lifted coordinates so the
+      // canonical seam cannot introduce a second, unrelated noise sample.
+      const wobble = (seededValue(
+        region.seed,
+        Math.floor(displacement.x / 4),
+        Math.floor(displacement.y / 4),
+      ) - 0.5) * 0.24;
       return dx * dx + dy * dy <= 1 + wobble;
     }
-    const vx = region.end.x - region.start.x;
-    const vy = region.end.y - region.start.y;
-    const lengthSquared = vx * vx + vy * vy;
-    const t = Math.max(0, Math.min(1, ((x - region.start.x) * vx + (y - region.start.y) * vy) / lengthSquared));
-    const px = region.start.x + vx * t;
-    const py = region.start.y + vy * t + Math.sin(t * Math.PI * 4 + region.seed) * region.width * 0.8;
-    return Math.hypot(x - px, y - py) <= region.width;
+    return ribbonContains(region, topology, x, y);
   });
+}
+
+function ribbonContains(
+  region: Readonly<Extract<WorldManifestWaterRegionV2, { strategy: "ribbon" }>>,
+  topology: Readonly<WorldTopology>,
+  canonicalX: number,
+  canonicalY: number,
+): boolean {
+  const endX = region.end.x + region.imageOffset.x;
+  const endY = region.end.y + region.imageOffset.y;
+  const vx = endX - region.start.x;
+  const vy = endY - region.start.y;
+  const lengthSquared = vx * vx + vy * vy;
+  if (lengthSquared === 0) return false;
+
+  // A region's imageOffset is authoritative. Test canonical point images
+  // against that declared lifted segment instead of shortening the segment to
+  // the minimum image: offset zero therefore preserves the long interior
+  // ribbon, while an explicit whole-world offset produces the declared seam
+  // winding.
+  const imageXs = periodicPointImages(
+    canonicalX,
+    Math.min(region.start.x, endX),
+    Math.max(region.start.x, endX),
+    region.width,
+    topology.tileWidth,
+    topology.wrapsX,
+  );
+  const imageYs = periodicPointImages(
+    canonicalY,
+    Math.min(region.start.y, endY),
+    Math.max(region.start.y, endY),
+    region.width * 1.8,
+    topology.tileHeight,
+    topology.wrapsY,
+  );
+  for (const x of imageXs) {
+    for (const y of imageYs) {
+      const t = Math.max(0, Math.min(
+        1,
+        ((x - region.start.x) * vx + (y - region.start.y) * vy) / lengthSquared,
+      ));
+      const px = region.start.x + vx * t;
+      const py = region.start.y + vy * t
+        + Math.sin(t * Math.PI * 4 + region.seed) * region.width * 0.8;
+      if (Math.hypot(x - px, y - py) <= region.width) return true;
+    }
+  }
+  return false;
+}
+
+function periodicPointImages(
+  canonical: number,
+  minimum: number,
+  maximum: number,
+  padding: number,
+  span: number,
+  wraps: boolean,
+): number[] {
+  if (!wraps) return [canonical];
+  const firstImage = Math.ceil((minimum - padding - canonical) / span);
+  const lastImage = Math.floor((maximum + padding - canonical) / span);
+  const images: number[] = [];
+  for (let image = firstImage; image <= lastImage; image++) images.push(canonical + image * span);
+  return images;
 }
 
 /**
@@ -322,14 +393,13 @@ function regionContains(
  */
 function transitionMask(
   base: Uint8Array,
-  width: number,
-  height: number,
+  topology: Readonly<WorldTopology>,
   x: number,
   y: number,
   deepIndex: number,
   coastalIndex: number,
 ): number {
-  const own = base[y * width + x]!;
+  const own = base[y * topology.tileWidth + x]!;
   if (own !== deepIndex) return 0;
   const neighbors = [
     [0, -1, 1], [1, 0, 2], [0, 1, 4], [-1, 0, 8],
@@ -337,10 +407,9 @@ function transitionMask(
   ] as const;
   let mask = 0;
   for (const [dx, dy, bit] of neighbors) {
-    const nx = x + dx;
-    const ny = y + dy;
-    if (nx >= 0 && ny >= 0 && nx < width && ny < height
-      && base[ny * width + nx] === coastalIndex) mask |= bit;
+    const neighbor = topology.canonicalizeTile(x + dx, y + dy);
+    if (!neighbor || (neighbor.x === x && neighbor.y === y)) continue;
+    if (base[neighbor.y * topology.tileWidth + neighbor.x] === coastalIndex) mask |= bit;
   }
   if ((mask & 3) !== 3) mask &= ~16;
   if ((mask & 6) !== 6) mask &= ~32;

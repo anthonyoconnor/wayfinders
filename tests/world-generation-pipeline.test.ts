@@ -4,7 +4,7 @@ import { generateFishingShoalCatalog } from "../src/wayfinders/exploration/Fishi
 import { generateIslandDossierCatalog } from "../src/wayfinders/exploration/IslandDossierCatalog";
 import { generateSurveySiteCatalog } from "../src/wayfinders/exploration/SurveySiteCatalog";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
-import { serializeWorldManifestV1 } from "../src/wayfinders/world/manifest";
+import { serializeWorldManifestV2 } from "../src/wayfinders/world/manifest";
 import { createWorldProfileConfig } from "./fixtures/worldProfiles";
 
 describe("world generation pipeline", () => {
@@ -15,7 +15,7 @@ describe("world generation pipeline", () => {
 
     expect(first.manifest.settingsProfileId).toBe("P2");
     expect(first.manifest.islands).toHaveLength(300);
-    expect(serializeWorldManifestV1(replay.manifest)).toBe(serializeWorldManifestV1(first.manifest));
+    expect(serializeWorldManifestV2(replay.manifest)).toBe(serializeWorldManifestV2(first.manifest));
   });
 
   it("shares one analysis build across all current feature seeders", () => {

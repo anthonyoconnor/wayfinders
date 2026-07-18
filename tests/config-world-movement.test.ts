@@ -15,6 +15,10 @@ import { gridToArt, gridToWorld, worldToGrid } from "../src/wayfinders/world/Coo
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+} from "../src/wayfinders/world/WorldTopology";
 import { makeConfig } from "./helpers";
 
 beforeEach(() => resetPrototypeConfig());
@@ -85,12 +89,12 @@ describe("prototype configuration", () => {
     );
     expect(prototypeConfig.islands.maxRadius).toBe(DEFAULT_PROTOTYPE_CONFIG.islands.maxRadius);
 
-    const legacyEnvelopeDoesNotFit = makeConfig({
-      world: { width: 30, height: 30, hiddenObstacleRadius: 10 },
+    const periodicFootprintOverlapsItsOwnImage = makeConfig({
+      world: { width: 27, height: 27, hiddenObstacleRadius: 10 },
       islands: { count: 1, minRadius: 2, maxRadius: 2 },
     });
-    expect(() => validatePrototypeConfig(legacyEnvelopeDoesNotFit)).toThrow(
-      "world dimensions are too small for the configured scattered islands",
+    expect(() => validatePrototypeConfig(periodicFootprintOverlapsItsOwnImage)).toThrow(
+      "world dimensions must exceed the largest configured island footprint",
     );
   });
 
@@ -226,7 +230,7 @@ describe("world foundations", () => {
   });
 
   it("keeps collision and sight flags synchronized with terrain", () => {
-    const world = new WorldGrid(4, 4, 2);
+    const world = new WorldGrid(4, 4, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
 
     world.setTerrain(1, 1, TerrainType.Land);
@@ -247,7 +251,7 @@ describe("world foundations", () => {
   });
 
   it("tracks per-chunk knowledge revisions independently from terrain changes", () => {
-    const world = new WorldGrid(4, 2, 2);
+    const world = new WorldGrid(4, 2, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const left = world.getChunk(0, 0)!;
     const right = world.getChunk(1, 0)!;
@@ -272,7 +276,7 @@ describe("world foundations", () => {
   });
 
   it("rejects inconsistent knowledge and expedition-stamp combinations", () => {
-    const world = new WorldGrid(2, 1, 2);
+    const world = new WorldGrid(2, 1, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
 
     expect(() => world.setKnowledge(0, 0, KnowledgeState.Personal)).toThrow(
@@ -286,7 +290,7 @@ describe("world foundations", () => {
   });
 
   it("maintains the sparse Supported-to-Personal boundary through knowledge and collision changes", () => {
-    const world = new WorldGrid(5, 1, 5);
+    const world = new WorldGrid(5, 1, 5, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     world.setKnowledge(0, 0, KnowledgeState.Supported);
     world.setKnowledge(1, 0, KnowledgeState.Personal, 3);
@@ -301,8 +305,33 @@ describe("world foundations", () => {
     expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([]);
   });
 
+  it("maintains the Supported-to-Personal boundary across wrapping seams while storage stays canonical", () => {
+    const world = new WorldGrid(4, 2, 4, WRAPPING_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    world.setKnowledge(0, 0, KnowledgeState.Supported);
+    world.setKnowledge(3, 0, KnowledgeState.Personal, 3);
+
+    expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([world.index(0, 0)]);
+    expect(world.topology.normalizeTile(-1, 0)).toEqual({ x: 3, y: 0 });
+    expect(world.inBounds(-1, 0)).toBe(false);
+    expect(() => world.getKnowledge(-1, 0)).toThrow("outside 4x2 world");
+
+    world.setMovementBlocked(3, 0, true);
+    expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([]);
+    world.setMovementBlocked(3, 0, false);
+    expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([world.index(0, 0)]);
+
+    const knowledge = new Uint8Array(world.tileCount);
+    const stamps = new Uint32Array(world.tileCount);
+    knowledge[world.index(0, 0)] = KnowledgeState.Supported;
+    knowledge[world.index(3, 0)] = KnowledgeState.Personal;
+    stamps[world.index(3, 0)] = 4;
+    expect(world.replaceKnowledge(knowledge, stamps)).toBe(true);
+    expect([...world.getSupportedPersonalBoundaryIndices()]).toEqual([world.index(0, 0)]);
+  });
+
   it("revisions only topology changes that can alter passable Supported connectivity", () => {
-    const world = new WorldGrid(4, 1, 4);
+    const world = new WorldGrid(4, 1, 4, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const baseline = world.supportedTopologyVersion;
 
@@ -368,7 +397,7 @@ describe("world foundations", () => {
 
 describe("navigation foundations", () => {
   it("stops the ship immediately before blocking terrain and clears its speed", () => {
-    const world = new WorldGrid(5, 3, 2);
+    const world = new WorldGrid(5, 3, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     world.setTerrain(2, 1, TerrainType.Land);
     const ship = createShipStateAtGrid({ x: 1, y: 1 }, 12, 0);
@@ -390,7 +419,7 @@ describe("navigation foundations", () => {
   });
 
   it("reuses the immutable idle result instead of allocating every fixed step", () => {
-    const world = new WorldGrid(3, 3, 2);
+    const world = new WorldGrid(3, 3, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const movement = new MovementSystem(world);
     const ship = createShipStateAtGrid({ x: 1, y: 1 });
@@ -400,12 +429,16 @@ describe("navigation foundations", () => {
 
     expect(second).toBe(first);
     expect(Object.isFrozen(first)).toBe(true);
+    expect(first.liftedDisplacement).toEqual({ x: 0, y: 0 });
+    expect(first.worldImageOffset).toEqual({ x: 0, y: 0 });
+    expect(Object.isFrozen(first.liftedDisplacement)).toBe(true);
+    expect(Object.isFrozen(first.worldImageOffset)).toBe(true);
     expect(Object.isFrozen(first.enteredTiles)).toBe(true);
     expect(Object.isFrozen(first.segments)).toBe(true);
   });
 
   it("rejects non-finite movement input before mutating ship state", () => {
-    const world = new WorldGrid(3, 3, 2);
+    const world = new WorldGrid(3, 3, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const movement = new MovementSystem(world);
     const ship = createShipStateAtGrid({ x: 1, y: 1 });

@@ -3,10 +3,11 @@ import { SupportedConnectivitySystem } from "../src/wayfinders/exploration/Suppo
 import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology.ts";
 import { makeConfig } from "./helpers.ts";
 
 function supportedWorld(width: number, height: number): WorldGrid {
-  const world = new WorldGrid(width, height, Math.max(width, height));
+  const world = new WorldGrid(width, height, Math.max(width, height), BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Supported);
   return world;
 }
@@ -50,7 +51,7 @@ describe("SupportedConnectivitySystem", () => {
   });
 
   it("does not connect diagonally adjacent Supported tiles", () => {
-    const world = new WorldGrid(2, 2, 2);
+    const world = new WorldGrid(2, 2, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     world.setKnowledge(0, 0, KnowledgeState.Supported);
     world.setKnowledge(1, 1, KnowledgeState.Supported);

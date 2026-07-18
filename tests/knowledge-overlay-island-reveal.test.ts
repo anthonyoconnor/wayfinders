@@ -6,6 +6,10 @@ import {
 import { ActiveChunkSet } from "../src/wayfinders/rendering/activation";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+} from "../src/wayfinders/world/WorldTopology";
 
 vi.mock("phaser", () => ({
   default: { Textures: { FilterMode: { LINEAR: 0 } } },
@@ -39,6 +43,7 @@ function makeContext(fillCalls?: FillCall[], clearCalls?: ClearCall[]): CanvasRe
 function makeHarness(key = "island-fog-test") {
   const scratchCalls: FillCall[] = [];
   const filteredClearCalls: ClearCall[] = [];
+  const displaySizes: Array<{ width: number; height: number }> = [];
   const canvasContexts = [makeContext(scratchCalls), makeContext(undefined, filteredClearCalls)];
   vi.stubGlobal("document", {
     createElement: () => {
@@ -76,7 +81,10 @@ function makeHarness(key = "island-fog-test") {
       image: () => {
         const image = {
           setOrigin: () => image,
-          setDisplaySize: () => image,
+          setDisplaySize: (width: number, height: number) => {
+            displaySizes.push({ width, height });
+            return image;
+          },
           setDepth: () => image,
           destroy: () => undefined,
         };
@@ -89,6 +97,7 @@ function makeHarness(key = "island-fog-test") {
     renderer: new KnowledgeOverlayRenderer(scene as never),
     scratchCalls,
     filteredClearCalls,
+    displaySizes,
     textureKeys: () => [...textures.keys()].sort(),
     texture: (chunkX = 0, chunkY = 0) => {
       const texture = textures.get(`${key}-knowledge-mask-${chunkX}-${chunkY}`);
@@ -102,24 +111,101 @@ function activateAllChunks(renderer: KnowledgeOverlayRenderer, world: WorldGrid)
   const maxX = Math.ceil(world.width / world.chunkSize) - 1;
   const maxY = Math.ceil(world.height / world.chunkSize) - 1;
   const activeChunks = new ActiveChunkSet({
-    worldBounds: { minX: 0, minY: 0, maxX, maxY },
+    topology: world.topology,
     prefetchRing: 0,
     maxActiveChunks: (maxX + 1) * (maxY + 1),
   });
   renderer.applyActiveChunkDelta(
     world,
-    activeChunks.update({ minX: 0, minY: 0, maxX, maxY }),
+    activeChunks.update({ minX: 0, minY: 0, maxX: world.width - 1, maxY: world.height - 1 }),
   );
 }
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("exact island dossier fog reveal", () => {
-  it("releases inactive mask textures and keeps the decoded set at its chunk cap", () => {
-    const world = new WorldGrid(8, 1, 4);
+  it("shares one canonical mask across seam aliases and sizes partial chunks exactly", () => {
+    const wrapping = new WorldGrid(4, 1, 4, WRAPPING_WORLD_TOPOLOGY);
+    wrapping.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const activeChunks = new ActiveChunkSet({
+      topology: wrapping.topology,
+      prefetchRing: 0,
+      maxActiveChunks: 2,
+    });
+    const { renderer, textureKeys, displaySizes } = makeHarness("fog-alias-test");
+    renderer.applyActiveChunkDelta(
+      wrapping,
+      activeChunks.update({ minX: -1, minY: 0, maxX: 0, maxY: 0 }),
+    );
+    renderer.sync(wrapping, 17);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 2,
+      activeTextures: 1,
+      activeSprites: 2,
+      totalTextureAllocations: 1,
+    });
+    expect(textureKeys()).toEqual(["fog-alias-test-knowledge-mask-0-0"]);
+    expect(displaySizes).toEqual([
+      { width: 128, height: 32 },
+      { width: 128, height: 32 },
+    ]);
+
+    const partial = new WorldGrid(5, 3, 4, BOUNDED_WORLD_TOPOLOGY);
+    partial.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const partialSet = new ActiveChunkSet({
+      topology: partial.topology,
+      prefetchRing: 0,
+      maxActiveChunks: 1,
+    });
+    const partialHarness = makeHarness("fog-partial-test");
+    partialHarness.renderer.applyActiveChunkDelta(
+      partial,
+      partialSet.update({ minX: 4, minY: 0, maxX: 4, maxY: 2 }),
+    );
+    partialHarness.renderer.sync(partial, 17);
+    expect(partialHarness.texture(1, 0)).toMatchObject({ width: 12, height: 20 });
+    expect(partialHarness.displaySizes).toEqual([{ width: 32, height: 96 }]);
+    expect(partialHarness.renderer.getResourceTelemetry().estimatedTextureBytes).toBe(960);
+  });
+
+  it("retains canonical masks when a rebase replaces every periodic image alias", () => {
+    const world = new WorldGrid(8, 1, 4, WRAPPING_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const activeChunks = new ActiveChunkSet({
-      worldBounds: { minX: 0, minY: 0, maxX: 1, maxY: 0 },
+      topology: world.topology,
+      prefetchRing: 0,
+      maxActiveChunks: 2,
+    });
+    const { renderer, texture } = makeHarness("fog-rebase-test");
+    const first = activeChunks.update({ minX: 0, minY: 0, maxX: 7, maxY: 0 });
+    renderer.applyActiveChunkDelta(world, first);
+    renderer.sync(world, 17);
+    const refreshes = [texture(0, 0).refreshCount, texture(1, 0).refreshCount];
+
+    const rebased = activeChunks.update({ minX: 8, minY: 0, maxX: 15, maxY: 0 });
+    expect(rebased.activated).toHaveLength(2);
+    expect(rebased.deactivated).toHaveLength(2);
+    expect(new Set(rebased.active.map(({ canonicalChunk }) => (
+      `${canonicalChunk.x},${canonicalChunk.y}`
+    )))).toEqual(new Set(["0,0", "1,0"]));
+    renderer.applyActiveChunkDelta(world, rebased);
+    expect(renderer.getResourceTelemetry()).toMatchObject({
+      activeChunks: 2,
+      activeTextures: 2,
+      activeSprites: 2,
+      totalTextureAllocations: 2,
+      totalTextureReleases: 0,
+    });
+
+    renderer.sync(world, 17);
+    expect([texture(0, 0).refreshCount, texture(1, 0).refreshCount]).toEqual(refreshes);
+  });
+
+  it("releases inactive mask textures and keeps the decoded set at its chunk cap", () => {
+    const world = new WorldGrid(8, 1, 4, BOUNDED_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const activeChunks = new ActiveChunkSet({
+      topology: world.topology,
       prefetchRing: 0,
       maxActiveChunks: 1,
     });
@@ -127,7 +213,7 @@ describe("exact island dossier fog reveal", () => {
 
     renderer.applyActiveChunkDelta(
       world,
-      activeChunks.update({ minX: 0, minY: 0, maxX: 0, maxY: 0 }),
+      activeChunks.update({ minX: 0, minY: 0, maxX: 3, maxY: 0 }),
     );
     renderer.sync(world, 17);
     expect(textureKeys()).toEqual(["active-fog-test-knowledge-mask-0-0"]);
@@ -136,7 +222,7 @@ describe("exact island dossier fog reveal", () => {
       activeChunks: 1,
       activeTextures: 1,
       activeSprites: 1,
-      estimatedTextureBytes: 2_304,
+      estimatedTextureBytes: 1_152,
       peakActiveTextures: 1,
     });
 
@@ -148,7 +234,7 @@ describe("exact island dossier fog reveal", () => {
 
     renderer.applyActiveChunkDelta(
       world,
-      activeChunks.update({ minX: 1, minY: 0, maxX: 1, maxY: 0 }),
+      activeChunks.update({ minX: 4, minY: 0, maxX: 7, maxY: 0 }),
     );
     renderer.sync(world, 17);
     expect(textureKeys()).toEqual(["active-fog-test-knowledge-mask-1-0"]);
@@ -170,7 +256,7 @@ describe("exact island dossier fog reveal", () => {
   });
 
   it("redraws on reveal and rollback tokens without changing world knowledge or visibility", () => {
-    const world = new WorldGrid(4, 1, 4);
+    const world = new WorldGrid(4, 1, 4, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     world.setIslandId(1, 0, 1);
     world.setIslandId(2, 0, 1);

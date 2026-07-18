@@ -3,7 +3,12 @@ import { describe, expect, it } from "vitest";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+} from "../src/wayfinders/world/WorldTopology";
 import { WorldAnalysisIndex } from "../src/wayfinders/world/analysis";
+import type { WorldManifestWaterRegionV2 } from "../src/wayfinders/world/manifest";
 import {
   DEFAULT_WATER_TYPE_CATALOG,
   WATER_LAYOUT_VERSION,
@@ -12,6 +17,26 @@ import {
   WaterLayoutPlanner,
   validateWaterTypeCatalog,
 } from "../src/wayfinders/world/water";
+
+function plannedLayout(
+  grid: WorldGrid,
+  regions: readonly Readonly<WorldManifestWaterRegionV2>[],
+  seed = 17,
+) {
+  return new WaterLayoutPlanner().plan(
+    grid,
+    WorldAnalysisIndex.build(grid),
+    [],
+    {
+      waterLayout: {
+        version: WATER_LAYOUT_VERSION,
+        catalogFingerprint: DEFAULT_WATER_TYPE_CATALOG.fingerprint,
+        regions,
+      },
+    },
+    seed,
+  );
+}
 
 function waterFacts(seed: number): string[] {
   const generated = new WorldGenerator().generate(seed);
@@ -60,7 +85,7 @@ describe("generated water layout", () => {
   });
 
   it("uses the opaque transition atlas only from deep water toward coastal water", () => {
-    const grid = new WorldGrid(5, 3, 5);
+    const grid = new WorldGrid(5, 3, 5, BOUNDED_WORLD_TOPOLOGY);
     grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     grid.setTerrain(2, 1, TerrainType.ShallowOcean);
     grid.setTerrain(4, 1, TerrainType.Land);
@@ -96,6 +121,93 @@ describe("generated water layout", () => {
     expect(layout.transitionMaskAt(4, 1)).toBe(0);
     expect(layout.transitionMaskAt(1, 1)).toBe(2);
     expect(layout.transitionMaskAt(3, 1)).toBe(10);
+  });
+
+  it("derives protected shallows, transition collars, and masks through periodic seams", () => {
+    const shallows = new WorldGrid(5, 3, 5, WRAPPING_WORLD_TOPOLOGY);
+    shallows.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    shallows.setTerrain(0, 1, TerrainType.ShallowOcean);
+    shallows.setTerrain(0, 0, TerrainType.Land);
+
+    expect(plannedLayout(shallows, []).baseTypeAt(0, 1)).toBe(WATER_TYPE_IDS.coastal);
+
+    shallows.setTerrain(4, 1, TerrainType.Land);
+    expect(plannedLayout(shallows, []).baseTypeAt(0, 1)).toBe(WATER_TYPE_IDS.lagoon);
+
+    const transitions = new WorldGrid(5, 3, 5, WRAPPING_WORLD_TOPOLOGY);
+    transitions.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    transitions.setTerrain(0, 1, TerrainType.ShallowOcean);
+    const layout = plannedLayout(transitions, [{
+      id: "water:abyss:seam" as const,
+      typeId: WATER_TYPE_IDS.abyss,
+      strategy: "ellipse",
+      seed: 91,
+      center: { x: 2, y: 1 },
+      radiusX: 100,
+      radiusY: 100,
+    }]);
+
+    expect(layout.baseTypeAt(0, 1)).toBe(WATER_TYPE_IDS.coastal);
+    expect(layout.baseTypeAt(4, 1)).toBe(WATER_TYPE_IDS.deep);
+    expect(layout.transitionMaskAt(4, 1)).toBe(2);
+  });
+
+  it("contains ellipses through axis and corner images without duplicating layout facts", () => {
+    const grid = new WorldGrid(7, 6, 4, WRAPPING_WORLD_TOPOLOGY);
+    grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const layout = plannedLayout(grid, [{
+      id: "water:rough:corner" as const,
+      typeId: WATER_TYPE_IDS.rough,
+      strategy: "ellipse",
+      seed: 0,
+      center: { x: 0, y: 0 },
+      radiusX: 2,
+      radiusY: 2,
+    }]);
+
+    expect(layout.hasOverlay(6, 0, WATER_TYPE_IDS.rough)).toBe(true);
+    expect(layout.hasOverlay(0, 5, WATER_TYPE_IDS.rough)).toBe(true);
+    expect(layout.hasOverlay(6, 5, WATER_TYPE_IDS.rough)).toBe(true);
+    expect(layout.hasOverlay(3, 3, WATER_TYPE_IDS.rough)).toBe(false);
+    expect(layout.chunk(1, 1)).toEqual({
+      chunkX: 1,
+      chunkY: 1,
+      startX: 4,
+      startY: 4,
+      width: 3,
+      height: 2,
+    });
+    expect(() => layout.baseTypeAt(7, 0)).toThrow("outside 7x6");
+  });
+
+  it("honors the exact ribbon lift instead of shortening an offset-zero interior ribbon", () => {
+    const grid = new WorldGrid(20, 11, 6, WRAPPING_WORLD_TOPOLOGY);
+    grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const longInterior = plannedLayout(grid, [{
+      id: "water:current:long" as const,
+      typeId: WATER_TYPE_IDS.current,
+      strategy: "ribbon",
+      seed: 0,
+      start: { x: 2, y: 5 },
+      end: { x: 18, y: 5 },
+      imageOffset: { x: 0, y: 0 },
+      width: 0.7,
+    }]);
+    const liftedSeam = plannedLayout(grid, [{
+      id: "water:current:lifted" as const,
+      typeId: WATER_TYPE_IDS.current,
+      strategy: "ribbon",
+      seed: 0,
+      start: { x: 18, y: 5 },
+      end: { x: 2, y: 5 },
+      imageOffset: { x: 20, y: 0 },
+      width: 0.7,
+    }]);
+
+    expect(longInterior.hasOverlay(10, 5, WATER_TYPE_IDS.current)).toBe(true);
+    expect(longInterior.hasOverlay(0, 5, WATER_TYPE_IDS.current)).toBe(false);
+    expect(liftedSeam.hasOverlay(0, 5, WATER_TYPE_IDS.current)).toBe(true);
+    expect(liftedSeam.hasOverlay(10, 5, WATER_TYPE_IDS.current)).toBe(false);
   });
 
   it("accepts a new catalog type through an existing placement strategy", () => {

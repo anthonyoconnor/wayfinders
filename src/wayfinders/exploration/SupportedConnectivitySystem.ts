@@ -3,9 +3,11 @@ import type { GridPoint } from "../core/types";
 import { GridGraph } from "../navigation/GridGraph";
 import { KnowledgeState } from "../world/TileData";
 import { WorldGrid } from "../world/WorldGrid";
+import type { CardinalDirection } from "../world/WorldTopology";
 
 const UNREACHED = -2;
 const ROOT = -1;
+const CONNECTIVITY_TIE_DIRECTIONS = [2, 1, 3, 0] as const satisfies readonly CardinalDirection[];
 
 export interface SupportedConnectivityResult {
   readonly topologyRevision: number;
@@ -98,22 +100,24 @@ export class SupportedConnectivitySystem {
 
     while (head < tail) {
       const current = this.queue[head++];
-      const x = current % this.world.width;
-      const y = Math.floor(current / this.world.width);
-
       // Fixed north, east, south, west order is the path tie-break contract.
-      if (y > 0) tail = this.tryEnqueue(current - this.world.width, current, tail);
-      if (x + 1 < this.world.width) tail = this.tryEnqueue(current + 1, current, tail);
-      if (y + 1 < this.world.height) tail = this.tryEnqueue(current + this.world.width, current, tail);
-      if (x > 0) tail = this.tryEnqueue(current - 1, current, tail);
+      for (const direction of CONNECTIVITY_TIE_DIRECTIONS) {
+        const edge = this.graph.cardinalEdge(current, direction);
+        if (edge) tail = this.tryEnqueue(edge.neighborIndex, current, direction, tail);
+      }
     }
   }
 
-  private tryEnqueue(index: number, parent: number, tail: number): number {
+  private tryEnqueue(
+    index: number,
+    parent: number,
+    direction: CardinalDirection,
+    tail: number,
+  ): number {
     if (
       this.parents[index] !== UNREACHED
       || !this.isPassableSupported(index)
-      || !this.graph.canTraverseCardinalEdge(parent, index)
+      || !this.graph.canTraverseCardinalDirection(parent, direction)
     ) return tail;
     this.parents[index] = parent;
     this.queue[tail] = index;

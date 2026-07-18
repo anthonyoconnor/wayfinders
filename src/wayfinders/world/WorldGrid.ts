@@ -9,6 +9,7 @@ import {
 } from "./TileData";
 import { isCollisionSubcellMask, type CollisionSubcellMask } from "./CollisionMask";
 import { WorldChunk } from "./WorldChunk";
+import { WorldTopology, type WorldTopologyDefinition } from "./WorldTopology";
 
 export class WorldGrid {
   private readonly chunks = new Map<string, WorldChunk>();
@@ -32,16 +33,20 @@ export class WorldGrid {
   visibilityVersion = 0;
   /** Advances only when passable Supported-water connectivity can change. */
   supportedTopologyVersion = 0;
+  readonly topology: WorldTopology;
 
   constructor(
-    readonly width = prototypeConfig.world.width,
-    readonly height = prototypeConfig.world.height,
-    readonly chunkSize = prototypeConfig.navigation.chunkSize,
+    readonly width: number,
+    readonly height: number,
+    readonly chunkSize: number,
+    topologyDefinition: Readonly<WorldTopologyDefinition>,
+    readonly tileSize = prototypeConfig.navigation.tileSize,
   ) {
     if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
       throw new RangeError("World dimensions must be positive integers");
     }
     if (!Number.isInteger(chunkSize) || chunkSize <= 0) throw new RangeError("Chunk size must be a positive integer");
+    this.topology = new WorldTopology(width, height, tileSize, chunkSize, topologyDefinition);
     this.chunkColumns = Math.ceil(width / chunkSize);
     this.chunkRows = Math.ceil(height / chunkSize);
     this.chunksByIndex = new Array<WorldChunk | undefined>(this.chunkColumns * this.chunkRows);
@@ -581,12 +586,9 @@ export class WorldGrid {
 
   private refreshSupportedPersonalBoundaryNear(worldIndex: number): void {
     this.refreshSupportedPersonalBoundary(worldIndex);
-    const x = worldIndex % this.width;
-    const y = Math.floor(worldIndex / this.width);
-    if (x > 0) this.refreshSupportedPersonalBoundary(worldIndex - 1);
-    if (x + 1 < this.width) this.refreshSupportedPersonalBoundary(worldIndex + 1);
-    if (y > 0) this.refreshSupportedPersonalBoundary(worldIndex - this.width);
-    if (y + 1 < this.height) this.refreshSupportedPersonalBoundary(worldIndex + this.width);
+    for (const neighbor of this.topology.uniqueCardinalNeighbors(this.pointFromIndex(worldIndex))) {
+      this.refreshSupportedPersonalBoundary(neighbor.y * this.width + neighbor.x);
+    }
   }
 
   private refreshSupportedPersonalBoundary(index: number): void {
@@ -598,12 +600,9 @@ export class WorldGrid {
       return;
     }
 
-    const x = index % this.width;
-    const y = Math.floor(index / this.width);
-    const adjacent = (x > 0 && this.isPassablePersonalIndex(index - 1))
-      || (x + 1 < this.width && this.isPassablePersonalIndex(index + 1))
-      || (y > 0 && this.isPassablePersonalIndex(index - this.width))
-      || (y + 1 < this.height && this.isPassablePersonalIndex(index + this.width));
+    const adjacent = this.topology.uniqueCardinalNeighbors(this.pointFromIndex(index)).some((neighbor) => (
+      this.isPassablePersonalIndex(neighbor.y * this.width + neighbor.x)
+    ));
     if (adjacent) this.supportedPersonalBoundaryIndices.add(index);
     else this.supportedPersonalBoundaryIndices.delete(index);
   }
@@ -619,10 +618,9 @@ export class WorldGrid {
   }
 
   private collisionCanAffectSupportedTopology(x: number, y: number): boolean {
-    for (let neighborY = Math.max(0, y - 1); neighborY <= Math.min(this.height - 1, y + 1); neighborY++) {
-      for (let neighborX = Math.max(0, x - 1); neighborX <= Math.min(this.width - 1, x + 1); neighborX++) {
-        if (this.getKnowledge(neighborX, neighborY) === KnowledgeState.Supported) return true;
-      }
+    if (this.getKnowledge(x, y) === KnowledgeState.Supported) return true;
+    for (const neighbor of this.topology.uniqueEightNeighbors({ x, y })) {
+      if (this.getKnowledge(neighbor.x, neighbor.y) === KnowledgeState.Supported) return true;
     }
     return false;
   }

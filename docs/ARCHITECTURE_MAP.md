@@ -10,8 +10,9 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
    mode and supplies validated prototype configuration. Game and asset-library
    modes also load the shared audio catalog once; a catalog failure is retained
    as an explicit silent/unavailable result rather than blocking startup.
-2. In game mode, `GameSimulation` plans a `WorldManifest`, rasterizes
-   `WorldGrid`, builds one `WorldAnalysisIndex`, resolves the presentation-only
+2. In game mode, `GameSimulation` plans a two-axis-wrapping `WorldManifestV2`,
+   rasterizes the canonical `WorldGrid`, builds one topology-aware
+   `WorldAnalysisIndex`, resolves the presentation-only
    `GeneratedWaterLayout`, and composes gameplay features.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
@@ -20,8 +21,8 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
    without gameplay simulation. The Water workspace starts `WaterPreviewScene`
    over the validated water package
    and real seeded generated-water facts, without creating gameplay simulation.
-   The trial mode starts `AssetTrialScene` with one isolated open-water
-   `WorldGrid`, movement authority, and selected candidate.
+   The trial mode starts `AssetTrialScene` with one explicitly bounded
+   open-water `WorldGrid`, movement authority, and selected candidate.
 5. Presentation controllers and renderers consume read models, revisions, and
    the shared active-chunk delta where applicable.
 6. Diagnostics and development tools consume bounded read models and counters;
@@ -32,12 +33,12 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 | Area | Owns | Must not own |
 | --- | --- | --- |
 | `config` | validated prototype tuning values and change notification | live gameplay state |
-| `world` | named scale profiles, manifests, generation, logical tiles, analysis, and spatial indexes | Phaser objects |
+| `world` | explicit topology, canonical/lifted coordinate primitives, named scale profiles, manifests, generation, logical tiles, analysis, and spatial indexes | Phaser objects |
 | `navigation` | collision topology, movement authority, and route/range mechanics | feature rewards or UI |
 | `exploration` / `features` | feature state, commands, selectors, and mutation results | scene lifecycle |
 | `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering | feature-specific presentation rules |
 | `audio` | validated stored-audio catalog contracts, renderer-neutral gain and sailing-ambience state, and bounded voice-accounting policy | Phaser objects, gameplay authority, decoded media, hidden-world queries, or repository writes |
-| `rendering` | Phaser lifecycle, resource activation, and read-model adaptation | authoritative gameplay decisions |
+| `rendering` | Phaser lifecycle, lifted view placement, periodic image activation, resource ownership, and read-model adaptation | authoritative gameplay decisions |
 | `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, isolated trials, and play-only stored-audio preview | navigation authority outside declared collision metadata, gameplay-session state, or browser audio creation/editing/mixing/writes |
 
 ## Dependency direction
@@ -71,39 +72,62 @@ adapter may own Phaser sound instances.
 - `prototypeConfig` is the validated live tuning store. Test helpers supply
   isolated values, while named world-profile helpers supply benchmarks and
   scale fixtures. World-shape changes take effect only by explicit regeneration.
-- `WorldGenerator` owns plan, rasterize, and analyze stages. `WorldManifest` is
-  durable generated identity; `WorldGrid` is runtime tile authority;
+- `WorldTopology` owns per-axis boundary behavior, canonicalization,
+  minimum-image displacement, direction-preserving cardinal steps, wrapped
+  bounds decomposition, and periodic chunk-image enumeration. Generated game
+  worlds use `WRAPPING_WORLD_TOPOLOGY`; authored collision canvases, isolated
+  sea trials, and other named asset contexts use `BOUNDED_WORLD_TOPOLOGY`.
+- `WorldGenerator` owns plan, rasterize, and analyze stages. `WorldManifestV2`
+  is durable generated identity and records topology, exact wrapped island
+  footprints, and explicit water-ribbon image offsets; `WorldGrid` is canonical
+  runtime tile authority;
   `WorldAnalysisIndex` is the shared source for connectivity and coastline
   analysis; `WaterTypeCatalogV1`, `WaterLayoutPlanner`, and
   `GeneratedWaterLayout` own renderer-neutral water presentation facts after
-  analysis without changing terrain authority. Its transition masks are
+  periodic analysis without changing terrain authority. Generated arrays and
+  chunk snapshots stay canonical. Transition masks are
   directional and currently governed by the deep-to-coastal atlas contract,
   rather than treating every different neighbour as a compatible blend pair.
-- `WorldSpatialIndex` owns deterministic chunk buckets.
+- `WorldSpatialIndex` owns deterministic canonical chunk buckets, periodic
+  footprint decomposition, split seam queries, deduplication, and minimum-image
+  nearby ordering.
   `WorldDescriptorRegistry` adapts heterogeneous descriptors at composition;
   feature systems remain responsible for exact range, state, and approach
   checks.
-- `MovementAuthority` and return queries remain synchronous authority.
+- `MovementAuthority` publishes canonical final state plus the accepted lifted
+  displacement, whole-world image offset, ordered canonical tile entries, and
+  short lifted travel segments. Collision and `GridGraph` consume the same
+  direction-preserving topology edges. Return paths retain edge image offsets
+  for presentation while return queries remain synchronous authority.
   `ForwardRangeSystem` owns exact forward-range mechanics; `GameSimulation`
   owns cooperative scheduling and publication of derived guidance.
-- `WayfindersScene` owns Phaser lifecycle and one `ActiveChunkSet`. Its deltas
-  bound chunk-local terrain, overlay textures, markers, and authored home-island
-  objects. Its independent `CloudLayerRenderer` consumes the same delta and the
+- `WayfindersScene` owns Phaser lifecycle, one `LiftedViewAnchor`, and one
+  `ActiveChunkSet`. The view anchor consumes accepted movement displacement;
+  canonical endpoints never infer wrap direction. Each active entry has a
+  view identity, a canonical chunk owner, and a whole-world pixel offset. The
+  hard `25`-entry cap applies to periodic images, including multiple images of
+  one canonical chunk. Its deltas bound terrain aliases, canonical overlay and
+  water textures, feature views, and periodic authored-art images. Its
+  independent `CloudLayerRenderer` consumes the same delta and the
   knowledge overlay's pure current-clear predicate and owns bounded
   cloud/shadow sprite pairs whose creation and motion are independent of fog.
   Fog affects only whether a pair's current padded footprint is presented; live
   sight can uncover a moving pair without rebuilding it. The renderer owns a
-  bounded live frequency of zero through twelve pairs per active chunk and
-  deterministically rebuilds only its resources when that debug value changes.
+  bounded live frequency of zero through twelve descriptors per referenced
+  canonical chunk and deterministically rebuilds only its resources when that
+  debug value changes.
   The scene supplies
   only the home landmark's presentation position so the home-centre chunk can
   replace its ordinary candidates with three opening routes; fog and simulation
   rules never depend on clouds. Shared package textures, the
   player-boat visual, and the four-frame cloud sheet remain a small scene-owned
   set. Feature-specific presentation belongs in controllers and renderers.
-  `WaterRenderer` consumes that same delta and owns two cached canvas-texture
-  planes per active chunk plus the active home-shore overlay. Only visible
-  surface planes advance; `WorldRenderer` no longer draws water or waves.
+  `WaterRenderer` consumes that same delta and owns exactly one base and one
+  surface canvas texture per referenced canonical chunk. Periodic image aliases
+  share those textures, aliases add no redraw work, and a visible canonical
+  surface redraws at most once per presentation frame. The aligned home-shore
+  overlay follows periodic footprint visibility. `WorldRenderer` owns the
+  lifted deferred-gap ocean backdrop and no longer draws water or waves.
 - `src/wayfinders/audio/index.ts` is the public stored-audio and mixer seam. It
   validates the canonical catalog, resolves catalog-relative runtime URLs, and
   owns in-memory master/category gain, bounded deterministic voice decisions,
@@ -164,7 +188,10 @@ adapter may own Phaser sound instances.
 - `availableAuthoredIslandPresentationCatalog` is the presentation-only sibling
   snapshot of prepared visible layers. `WayfindersScene` preloads it and
   `WorldRenderer` resolves manifest-recorded asset IDs, aligns layers to planned
-  collision bounds, and owns them with the island centre's active chunk.
+  collision bounds, and activates each visible periodic image by footprint
+  intersection. One canonical descriptor and prepared texture set back every
+  image view, even when the descriptor's canonical centre is outside the
+  viewport.
   Missing or revision-mismatched presentation falls back coherently to developer
   graphics; it never changes world or navigation authority.
 

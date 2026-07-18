@@ -18,7 +18,6 @@ import {
 const CATALOG_NAMESPACE = 904_321;
 const DEFAULT_SHOAL_COUNT = 4;
 const HOME_EXCLUSION_TILES = 18;
-const EDGE_MARGIN_TILES = 4;
 const MINIMUM_SEPARATION_TILES = 14;
 
 interface RankedCandidate {
@@ -39,20 +38,41 @@ function candidateIsEligible(
   index: number,
   home: GridPoint,
   analysis: WorldAnalysisIndex | undefined,
+  isDockReachable: (index: number) => boolean,
 ): GridPoint | undefined {
   if (!(analysis?.isPassable(index) ?? graph?.isNavigationNodePassable(index))) return undefined;
+  if (!isDockReachable(index)) return undefined;
   if (world.getIslandIdAtIndex(index) >= 0 || world.getResourceIdAtIndex(index) >= 0) return undefined;
   const tile = world.pointFromIndex(index);
   if (
-    tile.x < EDGE_MARGIN_TILES
-    || tile.y < EDGE_MARGIN_TILES
-    || tile.x >= world.width - EDGE_MARGIN_TILES
-    || tile.y >= world.height - EDGE_MARGIN_TILES
+    world.topology.minimumImageTileDistanceSquared(tile, home)
+    < HOME_EXCLUSION_TILES * HOME_EXCLUSION_TILES
   ) return undefined;
-  if (Math.hypot(tile.x - home.x, tile.y - home.y) < HOME_EXCLUSION_TILES) return undefined;
   const terrain = world.getTerrain(tile.x, tile.y);
   if (terrain !== TerrainType.DeepOcean && terrain !== TerrainType.ShallowOcean) return undefined;
   return tile;
+}
+
+function dockReachableMask(
+  world: WorldGrid,
+  home: Readonly<GridPoint>,
+  graph: GridGraph,
+): Uint8Array {
+  const reachable = new Uint8Array(world.tileCount);
+  const queue = new Int32Array(world.tileCount);
+  let head = 0;
+  let tail = 0;
+  const start = world.index(home.x, home.y);
+  reachable[start] = 1;
+  queue[tail++] = start;
+  while (head < tail) {
+    graph.forEachTraversableCardinalEdge(queue[head++], (neighbor) => {
+      if (reachable[neighbor]) return;
+      reachable[neighbor] = 1;
+      queue[tail++] = neighbor;
+    });
+  }
+  return reachable;
 }
 
 function clueFor(seed: number, candidateIndex: number): FishingShoalClue {
@@ -86,12 +106,24 @@ export function generateFishingShoalCatalog(
 
   if (analysis && !analysis.isCurrentFor(world)) throw new RangeError("Fishing-shoal analysis index is stale");
   const graph = analysis ? undefined : new GridGraph(world, config);
+  if (!world.inBounds(home.x, home.y)) {
+    throw new RangeError("Fishing-shoal home return tile is outside the world");
+  }
+  const homeIndex = world.index(home.x, home.y);
+  if (!(analysis?.isPassable(homeIndex) ?? graph?.isNavigationNodePassable(homeIndex))) {
+    throw new RangeError("Fishing-shoal home return tile is blocked");
+  }
+  const homeComponent = analysis?.componentIdAt(homeIndex);
+  const reachable = graph === undefined ? undefined : dockReachableMask(world, home, graph);
+  const isDockReachable = (index: number): boolean => analysis
+    ? analysis.componentIdAt(index) === homeComponent
+    : reachable?.[index] === 1;
   const candidates: RankedCandidate[] = [];
   const candidateIndices = analysis?.getPassableIndices();
   const totalCandidates = candidateIndices?.length ?? world.tileCount;
   for (let ordinal = 0; ordinal < totalCandidates; ordinal++) {
     const index = candidateIndices?.[ordinal] ?? ordinal;
-    const tile = candidateIsEligible(world, graph, index, home, analysis);
+    const tile = candidateIsEligible(world, graph, index, home, analysis, isDockReachable);
     if (!tile) continue;
     candidates.push({
       index,
@@ -103,7 +135,10 @@ export function generateFishingShoalCatalog(
 
   const selected: RankedCandidate[] = [];
   for (const candidate of candidates) {
-    if (selected.some(({ tile }) => Math.hypot(candidate.tile.x - tile.x, candidate.tile.y - tile.y) < MINIMUM_SEPARATION_TILES)) {
+    if (selected.some(({ tile }) => (
+      world.topology.minimumImageTileDistanceSquared(candidate.tile, tile)
+      < MINIMUM_SEPARATION_TILES * MINIMUM_SEPARATION_TILES
+    ))) {
       continue;
     }
     selected.push(candidate);

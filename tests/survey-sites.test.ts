@@ -44,13 +44,8 @@ function dockReachable(world: WorldGrid, home: Readonly<{ x: number; y: number }
   queue[tail++] = start;
   while (head < tail) {
     const tile = world.pointFromIndex(queue[head++]);
-    for (const neighbor of [
-      { x: tile.x - 1, y: tile.y },
-      { x: tile.x + 1, y: tile.y },
-      { x: tile.x, y: tile.y - 1 },
-      { x: tile.x, y: tile.y + 1 },
-    ]) {
-      if (!world.inBounds(neighbor.x, neighbor.y) || world.isMovementBlocked(neighbor.x, neighbor.y)) continue;
+    for (const neighbor of world.topology.uniqueCardinalNeighbors(tile)) {
+      if (world.isMovementBlocked(neighbor.x, neighbor.y)) continue;
       const index = world.index(neighbor.x, neighbor.y);
       if (visited[index]) continue;
       visited[index] = 1;
@@ -137,10 +132,10 @@ describe("survey-site identifiers and deterministic catalog", () => {
       expect(generated.grid.getIslandId(definition.tile.x, definition.tile.y)).toBe(definition.islandId);
       expect(generated.grid.isMovementBlocked(definition.serviceAnchor.x, definition.serviceAnchor.y)).toBe(false);
       expect(reachable[generated.grid.index(definition.serviceAnchor.x, definition.serviceAnchor.y)]).toBe(1);
-      expect(Math.hypot(
-        definition.tile.x - definition.serviceAnchor.x,
-        definition.tile.y - definition.serviceAnchor.y,
-      )).toBeLessThanOrEqual(1.5);
+      expect(Math.sqrt(generated.grid.topology.minimumImageTileDistanceSquared(
+        definition.tile,
+        definition.serviceAnchor,
+      ))).toBeLessThanOrEqual(1.5);
       expect(visibility.getVisibleIndices(definition.serviceAnchor)).toContain(
         generated.grid.index(definition.tile.x, definition.tile.y),
       );

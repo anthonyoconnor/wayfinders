@@ -47,6 +47,8 @@ interface HomeAtmosphereAnchor {
 
 interface CloudView {
   readonly descriptor: Readonly<CloudDescriptor>;
+  readonly ownerViewKey: string;
+  readonly imageOffset: Readonly<{ x: number; y: number }>;
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly shadow: Phaser.GameObjects.Sprite;
   coverageRevision: string;
@@ -109,7 +111,7 @@ export function resolveCloudDescriptor(
   cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
   slot = 0,
 ): Readonly<CloudDescriptor> | undefined {
-  const { x: chunkX, y: chunkY } = entry.coordinate;
+  const { x: chunkX, y: chunkY } = entry.canonicalChunk;
   const slotSeed = seed + CLOUD_NAMESPACE + slot * 7_919;
   if (seededValue(slotSeed, chunkX, chunkY) >= cloudPackage.presentation.chunkDensity) return undefined;
   const sample = (sampleSlot: number) => seededValue(slotSeed + sampleSlot * 977, chunkX, chunkY);
@@ -133,7 +135,7 @@ export function resolveCloudDescriptor(
   );
   return Object.freeze({
     id: `cloud:${chunkX},${chunkY}:${slot}`,
-    ownerChunkKey: entry.key,
+    ownerChunkKey: `${chunkX},${chunkY}`,
     frame: (frameOffset + slot) % cloudPackage.image.frameCount,
     baseX: (chunkX + positionX) * chunkSizePixels,
     baseY: (chunkY + positionY) * chunkSizePixels,
@@ -444,13 +446,13 @@ export class CloudLayerRenderer {
     this.chunkSizePixels = chunkSizePixels;
     this.homeAnchor = nextHomeAnchor;
 
-    const desiredKeys = new Set(delta.active.map(({ key }) => key));
-    for (const { key } of delta.deactivated) this.destroyChunkViews(key);
+    const desiredKeys = new Set(delta.active.map(({ viewKey }) => viewKey));
+    for (const { viewKey } of delta.deactivated) this.destroyImageViews(viewKey);
     for (const [key, view] of [...this.views.entries()]) {
-      if (!desiredKeys.has(view.descriptor.ownerChunkKey)) this.destroyView(key);
+      if (!desiredKeys.has(view.ownerViewKey)) this.destroyView(key);
     }
     this.activeEntries.clear();
-    for (const entry of delta.active) this.activeEntries.set(entry.key, entry);
+    for (const entry of delta.active) this.activeEntries.set(entry.viewKey, entry);
     if (this.enabled) this.createActiveViews();
     this.assertResourceCap();
   }
@@ -477,7 +479,11 @@ export class CloudLayerRenderer {
       }
       const descriptor = view.descriptor;
       const motion = resolveCloudMotion(descriptor, motionTimeMs, this.reducedMotion, this.cloudPackage);
-      const currentEnvelope = resolveCloudEnvelopeAtPosition(descriptor, motion, this.cloudPackage);
+      const imageMotion = {
+        x: motion.x + view.imageOffset.x,
+        y: motion.y + view.imageOffset.y,
+      };
+      const currentEnvelope = resolveCloudEnvelopeAtPosition(descriptor, imageMotion, this.cloudPackage);
       const coverageRevision = cloudCoverageRevision(
         world,
         revealedIslandsRevision,
@@ -497,7 +503,7 @@ export class CloudLayerRenderer {
         if (!view.clearOfFog) view.visibilityStartedAt = undefined;
       }
 
-      const { x, y } = motion;
+      const { x, y } = imageMotion;
       view.sprite.setPosition(x, y);
       view.shadow.setPosition(
         x + presentation.shadow.offsetPixels.x,
@@ -571,35 +577,42 @@ export class CloudLayerRenderer {
   private createActiveViews(): void {
     if (!this.scene.textures.exists(this.cloudPackage.image.textureKey)) return;
     for (const entry of this.activeEntries.values()) {
-      if (entry.key === this.homeAnchor?.ownerChunkKey) {
+      const canonicalChunkKey = `${entry.canonicalChunk.x},${entry.canonicalChunk.y}`;
+      if (canonicalChunkKey === this.homeAnchor?.ownerChunkKey) {
         const openingDescriptors = resolveOpeningCloudDescriptors(
           this.seed,
-          entry.key,
+          canonicalChunkKey,
           this.homeAnchor.position,
           this.cloudPackage,
         );
-        for (const descriptor of openingDescriptors.slice(0, this.frequency)) this.createView(descriptor);
+        for (const descriptor of openingDescriptors.slice(0, this.frequency)) {
+          this.createView(descriptor, entry);
+        }
         const ordinarySlots = Math.max(0, this.frequency - openingDescriptors.length);
         for (let slot = 0; slot < ordinarySlots; slot++) {
           const descriptor = resolveCloudDescriptor(this.seed, entry, this.chunkSizePixels, this.cloudPackage, slot);
-          if (descriptor) this.createView(descriptor);
+          if (descriptor) this.createView(descriptor, entry);
         }
         continue;
       }
       for (let slot = 0; slot < this.frequency; slot++) {
         const descriptor = resolveCloudDescriptor(this.seed, entry, this.chunkSizePixels, this.cloudPackage, slot);
-        if (descriptor) this.createView(descriptor);
+        if (descriptor) this.createView(descriptor, entry);
       }
     }
     this.assertResourceCap();
   }
 
-  private createView(descriptor: Readonly<CloudDescriptor>): void {
-    if (this.views.has(descriptor.id)) return;
+  private createView(
+    descriptor: Readonly<CloudDescriptor>,
+    entry: Readonly<ActiveChunkEntry>,
+  ): void {
+    const viewKey = `${descriptor.id}@${entry.viewKey}`;
+    if (this.views.has(viewKey)) return;
     const { image, presentation } = this.cloudPackage;
     const shadow = this.scene.add.sprite(
-      descriptor.baseX + presentation.shadow.offsetPixels.x,
-      descriptor.baseY + presentation.shadow.offsetPixels.y,
+      descriptor.baseX + entry.imageOffset.x + presentation.shadow.offsetPixels.x,
+      descriptor.baseY + entry.imageOffset.y + presentation.shadow.offsetPixels.y,
       image.textureKey,
       descriptor.frame,
     ).setOrigin(0.5)
@@ -611,11 +624,11 @@ export class CloudLayerRenderer {
       .setFlipX(descriptor.flipX)
       .setTint(rgbTint(presentation.shadow.tintRgb))
       .setDepth(presentation.shadow.depth)
-      .setName(`${descriptor.id}:shadow`)
+      .setName(`${viewKey}:shadow`)
       .setVisible(false);
     const sprite = this.scene.add.sprite(
-      descriptor.baseX,
-      descriptor.baseY,
+      descriptor.baseX + entry.imageOffset.x,
+      descriptor.baseY + entry.imageOffset.y,
       image.textureKey,
       descriptor.frame,
     ).setOrigin(0.5)
@@ -624,10 +637,12 @@ export class CloudLayerRenderer {
       .setFlipX(descriptor.flipX)
       .setTint(descriptor.tint)
       .setDepth(presentation.depth)
-      .setName(descriptor.id)
+      .setName(viewKey)
       .setVisible(false);
-    this.views.set(descriptor.id, {
+    this.views.set(viewKey, {
       descriptor,
+      ownerViewKey: entry.viewKey,
+      imageOffset: Object.freeze({ ...entry.imageOffset }),
       sprite,
       shadow,
       coverageRevision: "",
@@ -644,9 +659,9 @@ export class CloudLayerRenderer {
     for (const key of [...this.views.keys()]) this.destroyView(key);
   }
 
-  private destroyChunkViews(ownerChunkKey: string): void {
+  private destroyImageViews(ownerViewKey: string): void {
     for (const [key, view] of [...this.views.entries()]) {
-      if (view.descriptor.ownerChunkKey === ownerChunkKey) this.destroyView(key);
+      if (view.ownerViewKey === ownerViewKey) this.destroyView(key);
     }
   }
 

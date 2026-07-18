@@ -345,7 +345,10 @@ export class IslandDossierSystem {
       let withinRange = false;
       for (const footprintIndex of footprint) {
         const tile = this.world.pointFromIndex(footprintIndex);
-        if (Math.hypot(approach.x - tile.x, approach.y - tile.y) <= ISLAND_DOSSIER_INTERACTION_RANGE_TILES) {
+        if (
+          this.world.topology.minimumImageTileDistanceSquared(approach, tile)
+          <= ISLAND_DOSSIER_INTERACTION_RANGE_TILES * ISLAND_DOSSIER_INTERACTION_RANGE_TILES
+        ) {
           withinRange = true;
           break;
         }
@@ -372,7 +375,10 @@ export class IslandDossierSystem {
       yield* this.definitions;
       return;
     }
+    const seen = new Set<number>();
     for (const islandId of candidateIslandIds) {
+      if (seen.has(islandId)) continue;
+      seen.add(islandId);
       const definition = this.definitionByIslandId.get(islandId);
       if (definition) yield definition;
     }

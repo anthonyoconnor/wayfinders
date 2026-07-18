@@ -5,15 +5,19 @@ system. The technical design owns current runtime truth and the roadmap archive
 owns milestone completion evidence.
 
 WTR-1 established the **Water** workspace visual direction. WTR-2 carried that
-direction into generated-world layout, validated runtime assets, chunk-bounded
-rendering, island handoffs, animation, and fishing-ground presentation.
+direction into generated-world layout, validated runtime assets, bounded
+periodic-image rendering, island handoffs, animation, and fishing-ground
+presentation.
 
 ## Outcome
 
 WTR-1 used the branch Water workspace to establish visual direction. WTR-2
-carried the reviewed result into a generated and chunk-bounded production water
-system. Both tracks are implemented; the technical design owns current behavior
-and the roadmap archive owns completion evidence. The combined design:
+carried the reviewed result into a generated and canonical-chunk-addressable
+production water system. Gameplay layout facts now join on the two-axis
+wrapping topology while the Water workspace retains a deliberately bounded
+inspection viewport. Both tracks are implemented; the technical design owns
+current behavior and the roadmap archive owns completion evidence. The combined
+design:
 
 - visually belongs beside the current home island and island reference set;
 - distinguishes deep, shallow, reef, lagoon, current, rough, and biome-specific
@@ -58,23 +62,28 @@ The design uses these current repository contracts and art references:
   blocking `Reef`. Currents, rough patches, lagoon calm, and glints are
   presentation variants, not new terrain. Brackish art remains prepared but
   unplaced because the current world has no matching biome context.
-- `WaterRenderer` now consumes the scene-owned `ActiveChunkDelta`; prefetched
-  chunks remain static and only visible surface textures advance. `WorldRenderer`
-  no longer draws water or waves.
+- `WaterRenderer` consumes the scene-owned periodic `ActiveChunkDelta`.
+  Canonical chunks own one base and one surface canvas texture; periodic image
+  aliases share them. Prefetched canonical owners remain static, each visible
+  owner advances at most once per presentation frame, and aliases add no redraw.
+  `WorldRenderer` no longer draws water or waves.
 - Water is drawn beneath authored home and imported-island art. Coastal
   underpainting and mask-derived shelves prevent transparent shoreline pixels
   from exposing rectangular backdrop artifacts.
 - WTR-1 used a workspace-local animation lifecycle. WTR-2 now uses
   presentation-time snapshots, discrete visible-only updates, pause, background
   recovery, and reduced-motion fallback without introducing simulation time.
-- `WorldManifest` now owns durable generated identity and `WorldAnalysisIndex`
-  owns shared coastline and water-component facts. Water may derive its exact
-  eight-neighbor visual mask from a bounded `WorldGrid` apron, but it must reuse
-  those public facts where they apply and must not add another full-world
-  coastline or connectivity pass.
+- `WorldManifestV2` owns durable generated identity, including world topology,
+  wrapped island footprints, and explicit water-ribbon image offsets.
+  `WorldAnalysisIndex` owns shared periodic coastline and water-component facts.
+  Water derives its exact local eight-neighbour visual mask through
+  `WorldTopology`, reuses public analysis facts where they apply, and never adds
+  another full-world coastline or connectivity pass.
 - The asset library exposes Islands, Ships, Fishing shoals, Water, Great Hall,
-  and Audio. Water uses the validated runtime package and the real generated
-  layout while owning no gameplay or repository mutation authority.
+  and Audio. Water uses the validated runtime package and real canonical
+  generated layout while owning no gameplay or repository mutation authority.
+  Its bounded fit/1:1 viewport derives shore and distance facts periodically so
+  both sides of each seam remain inspectable.
 
 ## Visual language
 
@@ -140,8 +149,8 @@ biome that the current manifest and terrain contracts do not describe.
 
 ### Classification priority
 
-1. Use `WorldGrid` terrain as authority and `WorldManifest` for stable world and
-   island identity.
+1. Use `WorldGrid` terrain as authority and `WorldManifestV2` for stable world
+   and island identity.
 2. For `Reef`, always choose the reef-readable base before contextual styling.
 3. For `ShallowOcean`, select coastal or lagoon from island kind,
    enclosure/harbor context, and a namespaced deterministic value. Brackish
@@ -167,8 +176,9 @@ biome that the current manifest and terrain contracts do not describe.
   naturally instead of forming a second arbitrary grid. This is an art review
   rule, not a new logical coordinate system.
 - Do not align water decoration to the `8 px` collision subgrid.
-- Use integer source rectangles and stable sprite origins. Render placement is
-  always `tileX * 32`, `tileY * 32` before camera transformation.
+- Use integer source rectangles and stable sprite origins. Canonical texture
+  placement is `tileX * 32`, `tileY * 32`; each active presentation image then
+  adds its whole-world pixel offset before camera transformation.
 - Runtime sheets use a `2 px` duplicated-edge margin and `4 px` spacing between
   frames. The loader must be extended to pass both values. This prevents adjacent
   frame bleed with antialiasing and fractional zoom.
@@ -196,12 +206,13 @@ keep SW only when S and W are set
 keep NW only when N and W are set
 ```
 
-Classification needs a one-cell neighbor apron beyond each activated chunk.
-Build exact masks from authoritative neighboring terrain, including neighbors
-owned by another chunk, then cache the mask with the chunk view. Use existing
+Classification needs a one-cell neighbour apron beyond each canonical chunk.
+Build exact masks from authoritative terrain by canonicalizing every neighbour
+through `WorldTopology`, including neighbours owned by another chunk or across
+a world seam, then cache the mask with the canonical owner. Use existing
 `WorldAnalysisIndex` facts to select coastline/component candidates; do not
-recompute global coastline or connectivity. Knowledge changes must not
-recalculate topology or deterministic variants.
+recompute global coastline or connectivity. Knowledge changes and periodic
+image activation must not recalculate topology or deterministic variants.
 
 Depth transitions are a presentation plane between the deep and shallow bases.
 Variants may alter interior water texture, but a given mask has fixed edge
@@ -222,6 +233,9 @@ Changing a visual namespace must change pixels only; a serialized comparison of
 terrain, island IDs, resources, collision, and navigation must remain identical.
 Island- or region-phased effects use stable manifest island IDs or explicitly
 derived presentation-region IDs, never array positions or activation order.
+Coordinate hashes use canonical tiles. Ellipse regions measure minimum-image
+distance; ribbon regions apply their manifest-recorded whole-world tile offset
+before containment so an intentional winding replays exactly.
 
 ## Island blending contract
 
@@ -260,6 +274,10 @@ Adopt the same contract for future packages:
 
 Generated land, rock, and reef continue to use `WorldGrid` topology. The water
 renderer supplies depth masks and generic foam below the terrain/coast plane.
+Seam-crossing footprints, protected shallows, transition collars, and authored
+shore overlays use the same periodic footprint pieces. Every visible image may
+receive an aligned view, while canonical layout arrays, texture ownership, and
+island identity remain singular.
 Island kind may choose a contextual palette (high island, cay, atoll, skerry,
 using only kinds present in the current manifest), but it cannot change
 passability. Mangrove, marsh, and river-mouth styling is deferred until those
@@ -274,55 +292,61 @@ of WTR-1.1 through WTR-1.5.
 
 ```mermaid
 flowchart LR
-    Manifest["WorldManifest seed + stable island facts"] --> Classifier["Water surface classifier"]
-    Grid["WorldGrid terrain + bounded neighbor apron"] --> Classifier
-    Analysis["WorldAnalysisIndex coastline + components"] --> Classifier
-    Classifier --> Cache["Chunk-local profile, mask, variant, phase cache"]
-    Active["WayfindersScene ActiveChunkSet delta"] --> Cache
-    Cache --> Base["Static base + depth transition batches"]
-    Cache --> Details["Sparse detail/overlay batches"]
+    Manifest["WorldManifestV2 topology + stable region facts"] --> Classifier["Periodic water classifier"]
+    Grid["Canonical WorldGrid + topology neighbours"] --> Classifier
+    Analysis["Periodic coastline + components"] --> Classifier
+    Classifier --> Owners["Canonical chunk layout and textures"]
+    Active["Periodic ActiveChunkSet delta"] --> Aliases["Lifted image aliases"]
+    Owners --> Base["Static base + depth transition plane"]
+    Owners --> Details["Sparse surface plane"]
     Clock["Presentation-only water clock"] --> Sampler["Pure clip sampler"]
     Sampler --> Details
-    Base --> Composite["Water composition"]
-    Details --> Composite
+    Base --> Aliases
+    Details --> Aliases
+    Aliases --> Composite["Water composition"]
     Composite --> Islands["Generated/authored island planes"]
     Islands --> Knowledge["Knowledge, risk, route, fog, diagnostics"]
 ```
 
-Create a dedicated `WaterRenderer` rather than adding more branches to the
-existing developer-art loop. A practical initial chunk record is:
+`WaterRenderer` is the dedicated production owner rather than a branch in the
+developer-art loop. Its canonical resource and lifted view records are:
 
 ```ts
-interface WaterChunkView {
+interface WaterCanonicalChunk {
+  readonly coordinate: Readonly<GridPoint>;
+  readonly baseTextureKey: string;
+  readonly surfaceTextureKey: string;
+  lastFrame: number;
+  visible: boolean;
+}
+
+interface WaterImageView {
   readonly entry: Readonly<ActiveChunkEntry>;
-  readonly chunkX: number;
-  readonly chunkY: number;
-  readonly baseLayer: BatchedWaterLayer;
-  readonly transitionLayer: BatchedWaterLayer;
-  readonly underwaterLayer: BatchedWaterLayer;
-  readonly surfaceLayer: BatchedWaterLayer;
-  readonly instances: readonly WaterVisualInstance[];
-  knowledgeRevision: number;
+  readonly canonicalKey: string;
+  readonly base: Phaser.GameObjects.Image;
+  readonly surface: Phaser.GameObjects.Image;
 }
 ```
 
-The exact Phaser primitive can be selected during any later authorized runtime
-integration, but it must batch by
-plane and texture and activate through `ActiveChunkSet` deltas. Do not create
-one tween, Phaser animation, or standalone game object per ocean tile.
+Canonical resources are Phaser canvas textures; each active alias uses two
+Phaser image objects. Texture composition remains batched by plane and activates
+through `ActiveChunkSet` deltas. The renderer creates no tween, animation, or
+standalone game object per ocean tile.
 `WayfindersScene` remains the only owner of chunk membership: water processes
 deactivations first, activations in the supplied load-priority order, and band
-updates for retained chunks. It does not compute a second viewport region.
-Prefetch entries may retain static resources, but only `visible` entries
-advance animation. The existing constant ocean backdrop remains the bounded
-low-detail presentation for deferred visible chunks and activation gaps.
+updates for retained image entries. It does not compute a second viewport
+region. Multiple entries may share one canonical owner. Prefetch entries retain
+static resources; a canonical surface advances once only when at least one of
+its images is `visible`. The constant ocean backdrop follows the lifted
+viewport as the low-detail presentation for deferred visible images and
+activation gaps.
 
 ### Layer order
 
 | Relative order | Plane | Notes |
 | ---: | --- | --- |
-| 0 | Constant ocean backdrop | Covers the world as the deferred/activation fallback |
-| 0 | Detailed deep/static water base | Covers active chunks only |
+| 0 | Constant ocean backdrop | Covers lifted visible demand as the deferred/activation fallback |
+| 0 | Detailed deep/static water base | Canonical texture with active periodic image views |
 | 0.25 | Shallow/depth transitions | Cached topology |
 | 0.5 | Reef/seagrass underwater detail | Terrain-readable; below foam |
 | 1 | Generic ripple/current/whitecap overlays | Sparse and animation-capable |
@@ -351,8 +375,9 @@ workspace and may be replaced during runtime integration.
   `GameSimulation`, or `SimulationClock`.
 - A pure function resolves frame state from metadata, time, and a deterministic
   phase. This follows the same separation used by ship animation.
-- Update a layer only when its discrete frame advances and only while its chunk
-  has the shared active-chunk band `visible`.
+- Update a canonical surface only when its discrete frame advances and at least
+  one of its image entries has the shared active-chunk band `visible`. Aliases
+  never multiply redraw work.
 - Pause, scene sleep, tab backgrounding, and resume cannot create gameplay work
   or an animation catch-up loop.
 - The system must respond to live `prefers-reduced-motion` changes.
@@ -772,15 +797,16 @@ Tasks:
   addressable resolved layout data;
 - derive reef only from authoritative `TerrainType.Reef`, derive coastal and
   lagoon bases from `ShallowOcean`, island kind, harbor/enclosure facts, and
-  bounded coastline queries, and use deep as the default `DeepOcean` base;
+  local periodic coastline queries, and use deep as the default `DeepOcean`
+  base;
 - generate coherent abyss, current, and rough regions through catalog-selected
   deterministic strategies. Do not scatter isolated per-cell noise or place
   brackish water without an approved contextual world fact;
 - give every generated region a stable ID and seed derived from the world seed,
   catalog type ID, strategy namespace, and stable island or region facts, never
   traversal order, activation order, or array position;
-- resolve cross-chunk classification from a bounded neighbor apron so region and
-  transition topology is identical on both sides of a chunk boundary;
+- resolve cross-chunk and cross-world-seam classification through canonical
+  topology neighbours so region and transition facts join on every boundary;
 - keep the layout presentation-only: it must not mutate `WorldGrid`, terrain,
   island IDs, resources, collision, sight, path costs, provisions, or generated
   island placement;
@@ -797,8 +823,9 @@ Exit gate:
 - a fixed seed, settings profile, catalog fingerprint, and layout version produce
   identical base profiles, overlays, stable region IDs, variants, and phases
   independent of chunk traversal and query order;
-- P0, P1, and P2 generation produce bounded chunk-addressable water layouts with
-  no seam disagreement and no runtime full-world classification requirement;
+- P0, P1, and P2 generation produce canonical chunk-addressable water layouts
+  with no chunk or world-seam disagreement and no runtime full-world
+  classification requirement;
 - serialized terrain, collision, islands, resources, navigation, and feature
   definitions are unchanged except for the intentional versioned water-layout
   manifest addition;
@@ -820,10 +847,12 @@ Tasks:
   existing repository transaction and generated runtime catalog;
 - add a dedicated `WaterRenderer` that consumes the generated water layout and
   the `ActiveChunkDelta` owned by `WayfindersScene`;
-- build chunk-local batched base, transition, underwater-detail, and static
-  surface layers from catalog descriptors and compact type indexes;
-- resolve the declared canonical transition masks across the chunk apron and
-  retain the constant ocean backdrop for deferred chunks and activation gaps;
+- build exactly one base and one surface canvas texture per referenced
+  canonical chunk from catalog descriptors and compact type indexes, with
+  periodic image views sharing those textures;
+- resolve the declared canonical transition masks across chunk and world seams
+  and retain the lifted constant-ocean backdrop for deferred images and
+  activation gaps;
 - cache topology, profile, variant, and phase independently of knowledge
   presentation and rebuild static resources only for world, terrain, layout,
   package, or catalog revision changes;
@@ -839,8 +868,9 @@ Exit gate:
 
 - deep, coastal, lagoon, and blocking reef are readable at normal game zoom and
   in grayscale across representative generated seeds;
-- active-chunk traversal creates and destroys only bounded water resources, with
-  no object or texture allocation per tile per frame;
+- active-image traversal creates and destroys only bounded water resources,
+  reuses two textures per canonical owner, and performs no object or texture
+  allocation per tile per frame;
 - retained, prefetched, deferred, and deactivated chunk behavior follows the
   shared scene delta exactly and owns no second viewport policy;
 - adding a catalog type that uses existing planes and strategies does not require
@@ -868,7 +898,7 @@ Tasks:
   enclosure, local coastline, and exposure facts without closing passable
   channels or inventing biomes;
 - cover home harbor, high island, low cay, atoll, rocky skerry, imported island,
-  narrow channel, nearby-island, and world-edge cases; and
+  narrow channel, nearby-island, axis-seam, and corner-seam cases; and
 - add focused Water-workspace selection for those real generated and authored
   island cases, using their production catalog entries, transforms, collision
   metadata, generated layout, and water renderer rather than copied preview
@@ -899,8 +929,9 @@ Tasks:
 - animate wind, ripples, glints, currents, rough-water details, caustics, and
   broken shoreline waves through catalog clip metadata and generated region
   facts rather than per-type renderer branches;
-- advance animation only when a discrete clip frame changes and only for water
-  chunks in the shared `visible` band; prefetched chunks retain static resources;
+- advance animation only when a discrete clip frame changes and only once per
+  canonical owner with a shared `visible` image; prefetched owners retain static
+  resources and aliases add no redraw;
 - preserve region-coherent phases across chunk boundaries and use coastline
   exposure to vary shoreline presence, timing, length, and intensity;
 - implement pause, scene sleep, background-tab recovery, and live reduced-motion
@@ -995,8 +1026,9 @@ Exit gate:
   replay outcomes remain unchanged except for the authorized visual water-layout
   manifest fields;
 - the production asset lineage and generated catalog are current and reproducible;
-- the game uses the promoted chunk-bounded water path by default with the
-  constant ocean fallback retained for deferred presentation and rollback; and
+- the game uses the promoted canonical-owner/periodic-image water path by
+  default with the lifted constant-ocean fallback retained for deferred
+  presentation and rollback; and
 - the Water workspace contains no second water classifier, island-handoff
   resolver, animation scheduler, shoal renderer, or runtime asset mapping.
 
@@ -1108,6 +1140,9 @@ behavior; this list is not a second status authority.
 - A given generated layout, package/catalog revision, read model, and
       presentation-time snapshot produce matching output in the workspace and
       game.
+- The workspace keeps its bounded inspection camera while periodic shore and
+      distance derivation makes both sides of every axis/corner seam inspectable
+      at fit and 1:1 scale.
 - The WTR-1 fixed fixture may remain only as a clearly labelled visual
       reference and cannot become a production asset, layout, or behavior source.
 
@@ -1142,6 +1177,9 @@ behavior; this list is not a second status authority.
 
 - A fixed world seed produces identical profile, mask, variant, direction,
       and phase data independent of chunk traversal and knowledge redraw order.
+- Ellipse containment, protected shallows, transition collars, and masks use
+      minimum-image/periodic neighbours; a ribbon's explicit manifest image
+      offset preserves its declared winding.
 - Stable manifest island IDs and presentation-region IDs, never array or
       activation order, determine region-phased effects.
 - A visual namespace change alters no terrain, island ID, resource, collision,
@@ -1170,16 +1208,19 @@ behavior; this list is not a second status authority.
 - Static topology rebuilds only on world/terrain/package changes.
 - Knowledge changes retain dirty-chunk-local updates.
 - Water consumes the shared `ActiveChunkDelta`; it owns no resources outside
-      `delta.active`, creates no second viewport policy, and retains the constant
-      ocean backdrop for visible deferred chunks.
-- Animation updates only when a clip advances and only for active entries in
-      the `visible` band; prefetched entries remain static.
-- Water uses no more than four normal plane/texture batches per active chunk,
-      excluding the one authored-home overlay when its owner chunk is active.
+      `delta.active`, creates no second viewport policy, and retains the lifted
+      constant-ocean backdrop for visible deferred images.
+- Every referenced canonical chunk owns exactly two canvas textures. Periodic
+      base/surface image objects share them; aliases create zero redraws.
+- Animation updates only when a clip advances, at most once per visible
+      canonical owner per presentation frame; prefetched owners remain static.
+- The aligned authored-home overlay may have one view per intersecting periodic
+      image, shares package frames, and follows the active-image lifetime.
 - Shipped water textures remain below `12 MiB` decoded RGBA and `2 MiB`
       compressed payload unless a later reviewed budget replaces these limits.
-- Repeated camera traversal plateaus at the approved active-chunk resource,
-      texture-byte, and object counts with no activation/deactivation leak.
+- Repeated camera traversal and circumnavigation plateau at the `25` active
+      image-entry cap and approved canonical texture, object, and redraw counts
+      with no activation/deactivation leak.
 - Named-profile sailing and camera-movement measurements meet separately
       reviewed absolute and water-attributable p95/p99 regression budgets.
 
@@ -1208,11 +1249,12 @@ frame-time value from this design must not replace that measured contract.
 Default quality path:
 
 - the existing constant ocean fallback for deferred presentation;
-- static base water;
+- one static base and one surface texture per referenced canonical chunk;
+- translated periodic image views that share those textures;
 - cached 47-mask transitions;
 - sparse animated overlays;
-- one aligned home overlay owned by the home active chunk and animated only when
-  its shared band is `visible`; and
+- aligned home-overlay aliases for active footprint images, animated only when
+  their shared band is `visible`; and
 - discrete 3–7 FPS clip updates rather than continuous per-frame deformation.
 
 Fallback order when profiling exceeds budget:
@@ -1237,12 +1279,12 @@ deferred-placeholder behavior.
 | Attractive decorative water implies mechanics | Map mechanics only from `TerrainType`; label visual-only profiles explicitly |
 | Checkerboard/boiling motion | Use coherent regions, sparse density, low FPS, and limited phase buckets |
 | A second presentation-lifetime policy | Consume only the scene-owned `ActiveChunkDelta`; retain the shared cap, priority, and deferred placeholder |
-| Chunk seams or duplicate coastline work | Reuse analysis facts, derive only the bounded eight-neighbor apron, and test chunk edges directly |
+| Chunk/world seams or duplicate coastline work | Reuse periodic analysis facts, derive only the local topology-neighbour apron, and test chunk, axis, and corner seams directly |
 | Atlas bleed at fractional zoom | Ship duplicated 2 px gutters and extend loader margin/spacing support |
 | Knowledge redraw rerolls visuals | Cache topology/variant/phase independently of knowledge revisions |
 | Animation affects simulation | Keep a pure presentation resolver and prohibit imports into simulation systems |
 | Reef becomes hard to read under overlays | Give authoritative reef classification priority and enforce grayscale tests |
-| Authored overlay texture exceeds budget | Own it through the home active chunk, animate only in its visible band, and retain a static representative frame fallback |
+| Authored overlay aliases exceed budget | Activate only footprint-intersecting images, share package frames, animate visible aliases only, and retain a static representative frame fallback |
 | Water tooling forks production authority | Extend the recipe/review/promotion gate narrowly; do not promote from the standalone candidate builder |
 | World generation starts depending on asset/runtime code | Keep `WaterTypeCatalogV1` renderer-neutral; join it to `WaterAssetContractV1` only at composition |
 | New visual types accumulate renderer branches | Resolve stable type IDs through catalog plane, priority, asset, clip, and fallback mappings |
@@ -1274,5 +1316,7 @@ handoffs, shoreline waves, and fishing-ground cues without runtime integration.
 
 WTR-2's definition of done was promoted assets, deterministic extensible layout,
 shared active-chunk rendering, correct island handoffs, knowledge-safe fishing
-grounds, and production handoff. Both tracks are implemented; completion
-evidence is recorded in the roadmap archive.
+grounds, and production handoff. The resulting layout is canonical and
+periodic, renderer resources have canonical owners plus bounded image aliases,
+and the bounded Water workspace inspects the same facts. Both tracks are
+implemented; completion evidence is recorded in the roadmap archive.

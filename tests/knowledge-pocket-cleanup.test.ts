@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { KnowledgeSystem } from "../src/wayfinders/exploration/KnowledgeSystem.ts";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import { BOUNDED_WORLD_TOPOLOGY, WRAPPING_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology.ts";
 import { makeConfig } from "./helpers.ts";
 
 function supportedWorld(width = 7, height = 7): WorldGrid {
-  const world = new WorldGrid(width, height, Math.min(width, height));
+  const world = new WorldGrid(width, height, Math.min(width, height), BOUNDED_WORLD_TOPOLOGY);
   world.fill(TerrainType.DeepOcean, KnowledgeState.Supported);
   return world;
 }
@@ -47,12 +48,38 @@ describe("successful-return Unknown pocket cleanup", () => {
     for (const [x, y] of unknown) expect(world.getKnowledge(x, y)).toBe(KnowledgeState.Unknown);
   });
 
-  it("preserves a diagonally connected component which reaches the world edge", () => {
+  it("preserves a diagonally connected component larger than the configured limit", () => {
     const world = supportedWorld();
     const unknown = [[3, 3], [2, 2], [1, 1], [0, 0]] as [number, number][];
     const knowledge = prepareReturn(world, unknown, [4, 3]);
 
     expect(knowledge.commitExpedition(7).changedCount).toBe(1);
+    for (const [x, y] of unknown) expect(world.getKnowledge(x, y)).toBe(KnowledgeState.Unknown);
+  });
+
+  it("treats coordinate zero as an enclosed neighbor in a periodic world", () => {
+    const world = new WorldGrid(5, 5, 5, WRAPPING_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Supported);
+    const unknown = [[4, 2], [0, 2]] as [number, number][];
+    const knowledge = prepareReturn(world, unknown, [1, 2]);
+
+    const update = knowledge.commitExpedition(7);
+
+    expect(update.closedUnknownIndices).toEqual([world.index(0, 2), world.index(4, 2)]);
+    expect(update.changedCount).toBe(3);
+    for (const [x, y] of unknown) expect(world.getKnowledge(x, y)).toBe(KnowledgeState.Supported);
+  });
+
+  it("collects a seam-spanning periodic component once before applying the size bound", () => {
+    const world = new WorldGrid(5, 5, 5, WRAPPING_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Supported);
+    const unknown = [[4, 2], [0, 2], [1, 2]] as [number, number][];
+    const knowledge = prepareReturn(world, unknown, [2, 2]);
+
+    const update = knowledge.commitExpedition(7);
+
+    expect(update.changedCount).toBe(1);
+    expect(update.closedUnknownCount).toBe(0);
     for (const [x, y] of unknown) expect(world.getKnowledge(x, y)).toBe(KnowledgeState.Unknown);
   });
 

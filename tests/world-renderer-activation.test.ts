@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
 import { PILOT_HOME_ISLAND_METADATA } from "../src/wayfinders/assets/AuthoredHomeIsland";
 import type { ActiveChunkEntry } from "../src/wayfinders/rendering/activation/ActiveChunkContracts";
+import { activeChunkViewKey } from "../src/wayfinders/rendering/activation/ActiveChunkSet";
 import { WorldRenderer } from "../src/wayfinders/rendering/WorldRenderer";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import type { GeneratedWorld } from "../src/wayfinders/world/WorldGenerator";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+  type WorldTopologyDefinition,
+} from "../src/wayfinders/world/WorldTopology";
 
 const { graphicsFills } = vi.hoisted(() => ({
   graphicsFills: [] as Array<{ color: number; x: number; y: number; width: number; height: number }>,
@@ -71,10 +77,11 @@ interface FakeObject {
   displayHeight?: number;
   alpha?: number;
   blendMode?: number;
+  visible?: boolean;
   setOrigin(...args: unknown[]): FakeObject;
   setDepth(...args: unknown[]): FakeObject;
-  setVisible(...args: unknown[]): FakeObject;
-  setSize(...args: unknown[]): FakeObject;
+  setVisible(value: boolean): FakeObject;
+  setSize(width: number, height: number): FakeObject;
   setPosition(x: number, y: number): FakeObject;
   setDisplaySize(...args: unknown[]): FakeObject;
   setAlpha(value: number): FakeObject;
@@ -89,8 +96,12 @@ function fakeObject(x = 0, y = 0): FakeObject {
     destroyed: false,
     setOrigin() { return this; },
     setDepth() { return this; },
-    setVisible() { return this; },
-    setSize() { return this; },
+    setVisible(value: boolean) { this.visible = value; return this; },
+    setSize(width: number, height: number) {
+      this.displayWidth = width;
+      this.displayHeight = height;
+      return this;
+    },
     setPosition(nextX: number, nextY: number) {
       this.x = nextX;
       this.y = nextY;
@@ -156,18 +167,30 @@ function makeScene() {
   return { scene, existing, images, texts };
 }
 
-function entry(x: number, y: number, loadPriority: number): Readonly<ActiveChunkEntry> {
+function entry(
+  x: number,
+  y: number,
+  loadPriority: number,
+  imageOffset = { x: 0, y: 0 },
+  band: ActiveChunkEntry["band"] = "visible",
+): Readonly<ActiveChunkEntry> {
   return Object.freeze({
-    key: `${x},${y}`,
-    coordinate: Object.freeze({ x, y }),
-    band: "visible" as const,
+    viewKey: activeChunkViewKey(x, y, imageOffset.x, imageOffset.y),
+    canonicalChunk: Object.freeze({ x, y }),
+    imageOffset: Object.freeze({ ...imageOffset }),
+    band,
     ringDistance: 0,
     loadPriority,
   });
 }
 
-function generatedWorld(width = 32, height = 16, chunkSize = 8): GeneratedWorld {
-  const grid = new WorldGrid(width, height, chunkSize);
+function generatedWorld(
+  width = 32,
+  height = 16,
+  chunkSize = 8,
+  topology: Readonly<WorldTopologyDefinition> = BOUNDED_WORLD_TOPOLOGY,
+): GeneratedWorld {
+  const grid = new WorldGrid(width, height, chunkSize, topology);
   grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
   return {
     seed: 44,
@@ -192,7 +215,7 @@ describe("WorldRenderer active chunk resources", () => {
     const result = renderer.render(generatedWorld());
 
     expect(result.telemetry).toMatchObject({
-      activeChunks: 0,
+      activeImageEntries: 0,
       activeResourceObjects: 0,
       totalObjects: 1,
       tilesVisitedLastUpdate: 0,
@@ -206,7 +229,7 @@ describe("WorldRenderer active chunk resources", () => {
 
     const first = renderer.syncActiveChunks([entry(1, 0, 1), entry(0, 0, 0)]);
     expect(first).toMatchObject({ activated: 2, deactivated: 0, retained: 0 });
-    expect(first.telemetry.activeChunkKeys).toEqual(["0,0", "1,0"]);
+    expect(first.telemetry.activeViewKeys).toEqual(["0,0@0,0", "1,0@0,0"]);
     expect(first.telemetry.tilesVisitedLastUpdate).toBe(2 * 8 * 8);
     const plateau = first.telemetry.activeResourceObjects;
     expect(plateau).toBe(0);
@@ -215,30 +238,15 @@ describe("WorldRenderer active chunk resources", () => {
     expect(stationary).toMatchObject({ activated: 0, deactivated: 0, retained: 2 });
     expect(stationary.telemetry.tilesVisitedLastUpdate).toBe(0);
 
-    const moved = renderer.syncActiveChunks([entry(1, 0, 0), entry(2, 0, 1)]);
+    const moved = renderer.syncActiveChunks([entry(1, 0, 0), entry(0, 1, 1)]);
     expect(moved).toMatchObject({ activated: 1, deactivated: 1, retained: 1 });
-    expect(moved.telemetry.activeChunks).toBe(2);
+    expect(moved.telemetry.activeImageEntries).toBe(2);
     expect(moved.telemetry.activeResourceObjects).toBe(plateau);
     expect(moved.telemetry.tilesVisitedLastUpdate).toBe(8 * 8);
     expect(moved.telemetry.totalResourceObjectsDestroyed).toBe(0);
   });
 
-  it("checks knowledge revisions only for active chunk views", () => {
-    const { scene } = makeScene();
-    const renderer = new WorldRenderer(scene as never);
-    const generated = generatedWorld();
-    renderer.render(generated, [entry(0, 0, 0)]);
-    const loadedScan = vi.spyOn(generated.grid, "getLoadedChunks");
-
-    generated.grid.setKnowledge(1, 1, KnowledgeState.Supported);
-    generated.grid.setKnowledge(17, 1, KnowledgeState.Supported);
-    const refreshed = renderer.refreshKnowledge(generated);
-
-    expect(refreshed).toBe(1);
-    expect(loadedScan).not.toHaveBeenCalled();
-  });
-
-  it("creates and destroys authored home art with its owning active chunk", () => {
+  it("creates and destroys one authored home image when any footprint chunk is active", () => {
     const { scene, images, texts } = makeScene();
     const assets = {
       metadata: () => PILOT_HOME_ISLAND_METADATA,
@@ -262,20 +270,20 @@ describe("WorldRenderer active chunk resources", () => {
     expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(0);
   });
 
-  it("aligns authored island layers to manifest bounds and owns them with the active center chunk", () => {
+  it("activates authored island art by footprint when its center chunk is outside the view", () => {
     const { scene, images } = makeScene();
     const generated = generatedWorld(32, 16, 8);
     const island = {
       id: 7,
       kind: "low-cay",
       size: "small",
-      center: { x: 12, y: 4 },
+      center: { x: 10, y: 4 },
       radiusX: 2,
       radiusY: 1,
       outerRadius: 4,
       rotation: 0,
       shapeSeed: 5,
-      bounds: { minX: 10, minY: 3, maxX: 13, maxY: 4 },
+      bounds: { minX: 7, minY: 3, maxX: 10, maxY: 4 },
       sourceKind: "authored",
       authoredAssetId: "production.island.test-cay",
       authoredCollision: { gridWidth: 4, gridHeight: 2, solidSubcells: [{ x: 1, y: 1 }] },
@@ -304,26 +312,109 @@ describe("WorldRenderer active chunk resources", () => {
     const renderer = new WorldRenderer(scene as never, undefined, presentations);
     graphicsFills.length = 0;
 
-    renderer.render(generated, [entry(0, 0, 0)]);
-    expect(images).toHaveLength(0);
-
-    const activated = renderer.syncActiveChunks([entry(1, 0, 0)]);
+    const activated = renderer.render(generated, [entry(0, 0, 0)]);
     expect(activated.telemetry.activeAuthoredImageObjects).toBe(2);
     expect(images).toMatchObject([
-      { x: 320, y: 96, textureKey: "base", displayWidth: 128, displayHeight: 64, alpha: 1, blendMode: 0 },
-      { x: 320, y: 96, textureKey: "detail", displayWidth: 128, displayHeight: 64, alpha: 0.75, blendMode: 2 },
+      { x: 224, y: 96, textureKey: "base", displayWidth: 128, displayHeight: 64, alpha: 1, blendMode: 0 },
+      { x: 224, y: 96, textureKey: "detail", displayWidth: 128, displayHeight: 64, alpha: 0.75, blendMode: 2 },
     ]);
     const retained = renderer.syncActiveChunks([entry(1, 0, 0)]);
-    expect(retained).toMatchObject({ activated: 0, deactivated: 0, retained: 1 });
+    expect(retained).toMatchObject({ activated: 1, deactivated: 1, retained: 0 });
     expect(images).toHaveLength(2);
+    expect(images.every(({ destroyed }) => !destroyed)).toBe(true);
 
-    renderer.syncActiveChunks([entry(0, 0, 0)]);
+    renderer.syncActiveChunks([entry(2, 0, 0)]);
     expect(images.every(({ destroyed }) => destroyed)).toBe(true);
     expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(0);
 
-    renderer.syncActiveChunks([entry(1, 0, 0)]);
+    renderer.syncActiveChunks([entry(0, 0, 0)]);
     expect(images).toHaveLength(4);
     expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(2);
     expect(renderer.getTelemetry().peakResourceObjects).toBeLessThanOrEqual(7);
+  });
+
+  it("keeps one authored island alias stable while adjacent chunk images cross a seam", () => {
+    const { scene, images } = makeScene();
+    const generated = generatedWorld(32, 16, 8, WRAPPING_WORLD_TOPOLOGY);
+    const island = {
+      id: 9,
+      kind: "low-cay",
+      size: "small",
+      center: { x: 0, y: 4 },
+      radiusX: 2,
+      radiusY: 1,
+      outerRadius: 4,
+      rotation: 0,
+      shapeSeed: 5,
+      bounds: { minX: -2, minY: 3, maxX: 1, maxY: 4 },
+      sourceKind: "authored",
+      authoredAssetId: "production.island.seam-cay",
+      authoredCollision: { gridWidth: 4, gridHeight: 2, solidSubcells: [{ x: 0, y: 0 }] },
+    } as const;
+    (generated as { islands: readonly unknown[] }).islands = [island];
+    generated.grid.setTerrain(30, 3, TerrainType.Land);
+    generated.grid.setIslandId(30, 3, island.id);
+    (generated as unknown as { manifest: { authoredIslandCatalogRevision: string } }).manifest = {
+      authoredIslandCatalogRevision: "catalog-seam",
+    };
+    const presentations = {
+      revision: "catalog-seam",
+      diagnostics: [],
+      entry: (assetId: string) => assetId === island.authoredAssetId ? {
+        assetId,
+        name: "Seam Cay",
+        revision: "revision-1",
+        gridWidth: 4,
+        gridHeight: 2,
+        layers: [
+          { id: "base", url: "/base.png", textureKey: "base", pixelWidth: 128, pixelHeight: 64, opacity: 1, blendMode: "normal" },
+        ],
+      } as const : undefined,
+    };
+    const renderer = new WorldRenderer(scene as never, undefined, presentations);
+
+    renderer.render(generated, [entry(3, 0, 0)]);
+    expect(images).toMatchObject([{ x: 960, y: 96, textureKey: "base" }]);
+
+    renderer.syncActiveChunks([entry(0, 0, 0, { x: 1_024, y: 0 })]);
+    expect(images).toHaveLength(1);
+    expect(images[0].destroyed).toBe(false);
+    expect(renderer.getTelemetry()).toMatchObject({
+      activeImageEntries: 1,
+      activeCanonicalChunks: 1,
+      activeAuthoredImageObjects: 1,
+    });
+
+    renderer.destroy();
+    expect(images[0].destroyed).toBe(true);
+    expect(renderer.getTelemetry().activeResourceObjects).toBe(0);
+  });
+
+  it("sizes the ocean fallback to lifted visible demand even when entries are deferred", () => {
+    const { scene, existing } = makeScene();
+    const renderer = new WorldRenderer(scene as never);
+    const generated = generatedWorld(32, 16, 8, WRAPPING_WORLD_TOPOLOGY);
+    renderer.render(generated);
+    const active = [entry(0, 0, 0, { x: 2_048, y: 0 })];
+
+    renderer.applyActiveChunks({
+      revision: 1,
+      membershipRevision: 1,
+      visibleTileBounds: { minX: 64, minY: -4, maxX: 75, maxY: 7 },
+      activated: active,
+      deactivated: [],
+      updated: [],
+      active,
+      deferred: [entry(1, 0, 1, { x: 2_048, y: 0 })],
+      telemetry: {} as never,
+    });
+
+    expect(existing[0]).toMatchObject({
+      x: 2_048,
+      y: -128,
+      displayWidth: 384,
+      displayHeight: 384,
+      visible: true,
+    });
   });
 });

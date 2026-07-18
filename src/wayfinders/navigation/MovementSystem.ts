@@ -1,5 +1,5 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
-import type { GridPoint, MovementInput, MovementResult, ShipState, TravelSegment } from "../core/types";
+import type { GridPoint, MovementInput, MovementResult, ShipState, TravelSegment, WorldPoint } from "../core/types";
 import { gridToWorld, worldToGrid } from "../world/CoordinateSystem";
 import { WorldGrid } from "../world/WorldGrid";
 import { firstShipCollisionTime } from "./CollisionGeometry";
@@ -17,8 +17,12 @@ function wrapDegrees(value: number): number {
   return ((value % 360) + 360) % 360;
 }
 
+const ZERO_WORLD_POINT: Readonly<WorldPoint> = Object.freeze({ x: 0, y: 0 });
+
 const NO_MOVEMENT_RESULT: MovementResult = Object.freeze({
   movedDistancePixels: 0,
+  liftedDisplacement: ZERO_WORLD_POINT,
+  worldImageOffset: ZERO_WORLD_POINT,
   collided: false,
   enteredTiles: Object.freeze([]) as unknown as GridPoint[],
   segments: Object.freeze([]) as unknown as TravelSegment[],
@@ -120,8 +124,6 @@ export class MovementSystem implements MovementAuthority {
     const fromY = ship.worldY;
     const proposedX = fromX + Math.cos(headingRadians) * proposedDistance;
     const proposedY = fromY + Math.sin(headingRadians) * proposedDistance;
-    const originalTile = { x: ship.currentTileX, y: ship.currentTileY };
-
     if (proposedDistance === 0) {
       return NO_MOVEMENT_RESULT;
     }
@@ -149,24 +151,45 @@ export class MovementSystem implements MovementAuthority {
     const actualY = fromY + (proposedY - fromY) * actualT;
     const actualDistance = absoluteDistance * actualT;
     const segments = this.buildSegments(traversal, actualT, fromX, fromY, proposedX, proposedY, absoluteDistance);
-    const finalTile = worldToGrid(actualX, actualY, this.config.navigation.tileSize);
-    const enteredTiles = traversal
-      .slice(1)
-      .filter((entry) => entry.tEnter <= actualT && this.world.inBounds(entry.x, entry.y))
-      .map(({ x, y }) => ({ x, y }));
+    const canonicalFinal = this.world.topology.canonicalizeWorld(actualX, actualY);
+    if (!canonicalFinal) {
+      throw new RangeError("Bounded movement escaped the synthetic world collision boundary");
+    }
+    const finalTile = worldToGrid(canonicalFinal.x, canonicalFinal.y, this.config.navigation.tileSize);
+    const enteredTiles: GridPoint[] = [];
+    for (let index = 1; index < traversal.length; index++) {
+      const entry = traversal[index];
+      if (entry.tEnter > actualT) break;
+      const canonical = this.world.topology.canonicalizeTile(entry.x, entry.y);
+      if (canonical) enteredTiles.push(canonical);
+    }
+    const liftedDisplacement = {
+      x: actualX - fromX,
+      y: actualY - fromY,
+    };
+    const worldImageOffset = {
+      x: this.world.topology.wrapsX
+        ? Math.round((actualX - canonicalFinal.x) / this.world.topology.pixelWidth) * this.world.topology.pixelWidth
+        : 0,
+      y: this.world.topology.wrapsY
+        ? Math.round((actualY - canonicalFinal.y) / this.world.topology.pixelHeight) * this.world.topology.pixelHeight
+        : 0,
+    };
 
-    ship.worldX = actualX;
-    ship.worldY = actualY;
+    ship.worldX = canonicalFinal.x;
+    ship.worldY = canonicalFinal.y;
     ship.currentTileX = finalTile.x;
     ship.currentTileY = finalTile.y;
     if (collided) ship.speed = 0;
 
     return {
       movedDistancePixels: actualDistance,
+      liftedDisplacement,
+      worldImageOffset,
       collided,
       enteredTiles,
       segments,
-      tileChanged: originalTile.x !== finalTile.x || originalTile.y !== finalTile.y,
+      tileChanged: enteredTiles.length > 0,
     };
   }
 
@@ -195,14 +218,18 @@ export class MovementSystem implements MovementAuthority {
       if (startT >= actualT) break;
       const endT = Math.min(actualT, traversal[index + 1]?.tEnter ?? 1);
       if (endT <= startT) continue;
+      const tile = this.world.topology.canonicalizeTile(traversal[index].x, traversal[index].y);
+      if (!tile) {
+        throw new RangeError("Bounded movement produced a segment outside the world");
+      }
       segments.push({
         fromWorldX: fromX + (toX - fromX) * startT,
         fromWorldY: fromY + (toY - fromY) * startT,
         toWorldX: fromX + (toX - fromX) * endT,
         toWorldY: fromY + (toY - fromY) * endT,
         distancePixels: distance * (endT - startT),
-        tileX: traversal[index].x,
-        tileY: traversal[index].y,
+        tileX: tile.x,
+        tileY: tile.y,
       });
     }
     return segments;

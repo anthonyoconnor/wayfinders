@@ -1,6 +1,5 @@
 import { prototypeConfig, type PrototypeConfig } from "../config/prototypeConfig";
 import type { ShipState, TravelSegment } from "../core/types";
-import { worldToGrid } from "../world/CoordinateSystem";
 import { KnowledgeState } from "../world/TileData";
 import { WorldGrid } from "../world/WorldGrid";
 
@@ -77,16 +76,11 @@ export class ProvisionSystem {
       if (!Number.isFinite(segment.distancePixels) || segment.distancePixels < 0) {
         throw new RangeError("Movement segment distances must be finite and non-negative");
       }
-      const midpoint = worldToGrid(
-        (segment.fromWorldX + segment.toWorldX) / 2,
-        (segment.fromWorldY + segment.toWorldY) / 2,
-        tileSize,
-      );
-      if (!this.world.inBounds(midpoint.x, midpoint.y)) {
-        throw new RangeError(`Movement segment midpoint (${midpoint.x}, ${midpoint.y}) is outside the world`);
+      if (!this.world.inBounds(segment.tileX, segment.tileY)) {
+        throw new RangeError(`Movement segment tile (${segment.tileX}, ${segment.tileY}) is outside the world`);
       }
 
-      const knowledge = this.world.getKnowledge(midpoint.x, midpoint.y);
+      const knowledge = this.world.getKnowledge(segment.tileX, segment.tileY);
       const tileDistance = segment.distancePixels / tileSize;
       segmentKnowledge[index] = knowledge;
       distanceByKnowledge[knowledge] += tileDistance;

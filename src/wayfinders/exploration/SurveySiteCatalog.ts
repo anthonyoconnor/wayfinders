@@ -11,6 +11,7 @@ import type { WorldGrid } from "../world/WorldGrid";
 import type { WorldAnalysisIndex } from "../world/analysis";
 import {
   SURVEY_SITE_CONTENT_VERSION,
+  SURVEY_SITE_INTERACTION_RANGE_TILES,
   compareSurveySiteIds,
   createSurveySiteId,
   type SurveySiteClue,
@@ -325,16 +326,12 @@ function findServiceAnchor(
   reachable: Uint8Array,
 ): GridPoint | undefined {
   const candidates: Array<{ tile: GridPoint; distance: number; index: number }> = [];
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const candidate = { x: tile.x + dx, y: tile.y + dy };
-      if (!world.inBounds(candidate.x, candidate.y)) continue;
-      const index = world.index(candidate.x, candidate.y);
-      if (reachable[index] === 0) continue;
-      const distance = Math.hypot(dx, dy);
-      if (distance > 1.5) continue;
-      candidates.push({ tile: candidate, distance, index });
-    }
+  for (const candidate of [tile, ...world.topology.uniqueEightNeighbors(tile)]) {
+    const index = world.index(candidate.x, candidate.y);
+    if (reachable[index] === 0) continue;
+    const distance = Math.sqrt(world.topology.minimumImageTileDistanceSquared(tile, candidate));
+    if (distance > SURVEY_SITE_INTERACTION_RANGE_TILES) continue;
+    candidates.push({ tile: candidate, distance, index });
   }
   candidates.sort((left, right) => left.distance - right.distance || left.index - right.index);
   return candidates[0]?.tile;
@@ -355,7 +352,7 @@ function dockReachableMask(
 
   while (head < tail) {
     const index = queue[head++];
-    graph.forEachTraversableCardinalNeighbor(index, (neighborIndex) => {
+    graph.forEachTraversableCardinalEdge(index, (neighborIndex) => {
       if (visited[neighborIndex]) return;
       visited[neighborIndex] = 1;
       queue[tail++] = neighborIndex;

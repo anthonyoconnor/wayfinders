@@ -6,6 +6,7 @@ import {
   type SpatialQueryResult,
   type SpatialQueryTotals,
 } from "../world/spatial";
+import type { WorldTopology } from "../world/WorldTopology";
 
 export type WorldDescriptorKind =
   | "fishing-shoal"
@@ -41,8 +42,8 @@ const EMPTY_CANDIDATES: WorldDescriptorCandidates = Object.freeze({
 export class WorldDescriptorRegistry {
   private readonly index: WorldSpatialIndex<WorldDescriptorEntry>;
 
-  constructor(chunkSize: number) {
-    this.index = new WorldSpatialIndex({ chunkSize });
+  constructor(topology: WorldTopology) {
+    this.index = new WorldSpatialIndex({ topology });
   }
 
   get revision(): number {
@@ -113,23 +114,49 @@ export function createBoundsDescriptor(
 
 export function boundsForWorldIndices(
   indices: readonly number[],
-  worldWidth: number,
+  topology: WorldTopology,
 ): Readonly<SpatialBounds> {
   if (indices.length === 0) throw new RangeError("Descriptor bounds require at least one world index");
-  let minX = Number.POSITIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
+  const points: SpatialPoint[] = [];
   for (const index of indices) {
-    if (!Number.isSafeInteger(index) || index < 0) throw new RangeError(`Invalid world index ${index}`);
-    const x = index % worldWidth;
-    const y = Math.floor(index / worldWidth);
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
+    if (!Number.isSafeInteger(index) || index < 0 || index >= topology.tileWidth * topology.tileHeight) {
+      throw new RangeError(`Invalid world index ${index}`);
+    }
+    points.push({
+      x: index % topology.tileWidth,
+      y: Math.floor(index / topology.tileWidth),
+    });
   }
-  return Object.freeze({ minX, minY, maxX, maxY });
+  return boundsForWorldPoints(points, topology);
+}
+
+/**
+ * Returns the deterministic minimum lifted rectangle covering canonical tile
+ * points. Wrapped axes remove the largest circular gap, preventing a local
+ * seam set from becoming an almost-world-sized planar query.
+ */
+export function boundsForWorldPoints(
+  points: readonly Readonly<SpatialPoint>[],
+  topology: WorldTopology,
+): Readonly<SpatialBounds> {
+  if (points.length === 0) throw new RangeError("Descriptor bounds require at least one world point");
+  const xValues: number[] = [];
+  const yValues: number[] = [];
+  for (const point of points) {
+    if (!topology.isCanonicalTile(point.x, point.y)) {
+      throw new RangeError(`World point (${point.x}, ${point.y}) must be a canonical tile`);
+    }
+    xValues.push(point.x);
+    yValues.push(point.y);
+  }
+  const xBounds = minimumLiftedAxisBounds(xValues, topology.tileWidth, topology.wrapsX);
+  const yBounds = minimumLiftedAxisBounds(yValues, topology.tileHeight, topology.wrapsY);
+  return Object.freeze({
+    minX: xBounds.minimum,
+    minY: yBounds.minimum,
+    maxX: xBounds.maximum,
+    maxY: yBounds.maximum,
+  });
 }
 
 export function groupWorldDescriptorCandidates(
@@ -161,4 +188,33 @@ export function groupWorldDescriptorCandidates(
     islandDossierIds: Object.freeze(islandDossierIds),
     wreckIds: Object.freeze(wreckIds),
   });
+}
+
+function minimumLiftedAxisBounds(
+  values: readonly number[],
+  span: number,
+  wraps: boolean,
+): { readonly minimum: number; readonly maximum: number } {
+  const sorted = [...new Set(values)].sort((left, right) => left - right);
+  if (!wraps) return { minimum: sorted[0], maximum: sorted[sorted.length - 1] };
+
+  let bestGap = -1;
+  let bestMinimum = 0;
+  let bestMaximum = 0;
+  for (let index = 0; index < sorted.length; index++) {
+    const current = sorted[index];
+    const next = index + 1 < sorted.length ? sorted[index + 1] : sorted[0] + span;
+    const gap = next - current;
+    const minimum = next % span;
+    const maximum = current < minimum ? current + span : current;
+    if (
+      gap > bestGap
+      || (gap === bestGap && (minimum < bestMinimum || (minimum === bestMinimum && maximum < bestMaximum)))
+    ) {
+      bestGap = gap;
+      bestMinimum = minimum;
+      bestMaximum = maximum;
+    }
+  }
+  return { minimum: bestMinimum, maximum: bestMaximum };
 }

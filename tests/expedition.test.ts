@@ -6,6 +6,7 @@ import { KnowledgeSystem } from "../src/wayfinders/exploration/KnowledgeSystem";
 import { GridGraph } from "../src/wayfinders/navigation/GridGraph";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology";
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
@@ -40,6 +41,33 @@ function findRemoteSupportedWater(simulation: GameSimulation): GridPoint {
   return result;
 }
 
+function findOpenHorizontalSeam(simulation: GameSimulation): {
+  readonly west: GridPoint;
+  readonly east: GridPoint;
+  readonly interior: GridPoint;
+} {
+  const navigation = new GridGraph(simulation.world, simulation.config);
+  const westX = 0;
+  const eastX = simulation.world.width - 1;
+  const interiorX = Math.floor(simulation.world.width / 2);
+  for (let y = 0; y < simulation.world.height; y++) {
+    const west = { x: westX, y };
+    const east = { x: eastX, y };
+    const interior = { x: interiorX, y };
+    if (
+      simulation.world.getKnowledge(west.x, west.y) !== KnowledgeState.Unknown
+      || simulation.world.getKnowledge(east.x, east.y) !== KnowledgeState.Unknown
+      || simulation.world.getKnowledge(interior.x, interior.y) !== KnowledgeState.Unknown
+    ) continue;
+    if (
+      !navigation.isNavigationNodePassable(simulation.world.index(west.x, west.y))
+      || !navigation.isNavigationNodePassable(simulation.world.index(east.x, east.y))
+    ) continue;
+    return { west, east, interior };
+  }
+  throw new Error("Expected an open Unknown-water horizontal seam");
+}
+
 function completeWreckPresentation(simulation: GameSimulation): void {
   simulation.update(
     { turn: 0, throttle: 0 },
@@ -49,7 +77,7 @@ function completeWreckPresentation(simulation: GameSimulation): void {
 
 describe("KnowledgeSystem expedition resolution", () => {
   it("commits or reverts only Personal tiles stamped by the resolved expedition", () => {
-    const world = new WorldGrid(5, 1, 5);
+    const world = new WorldGrid(5, 1, 5, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     world.setKnowledge(0, 0, KnowledgeState.Supported, 0);
     world.setKnowledge(1, 0, KnowledgeState.Personal, 7);
@@ -69,7 +97,7 @@ describe("KnowledgeSystem expedition resolution", () => {
   });
 
   it("resolves only the indices recorded for the expedition", () => {
-    const world = new WorldGrid(20, 20, 5);
+    const world = new WorldGrid(20, 20, 5, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const knowledge = new KnowledgeSystem(world);
     const changed = knowledge.revealIndices([1, 2, 21], 12);
@@ -86,7 +114,7 @@ describe("KnowledgeSystem expedition resolution", () => {
   });
 
   it("rejects expedition zero so revealed knowledge always has a resolvable stamp", () => {
-    const world = new WorldGrid(2, 1, 2);
+    const world = new WorldGrid(2, 1, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const knowledge = new KnowledgeSystem(world);
 
@@ -98,6 +126,38 @@ describe("KnowledgeSystem expedition resolution", () => {
 });
 
 describe("GameSimulation expedition lifecycle", () => {
+  it("charges and observes the short physical path when ordinary movement crosses a seam", () => {
+    const simulation = new GameSimulation();
+    const seam = findOpenHorizontalSeam(simulation);
+    expect(simulation.teleport(seam.east)).toBe(true);
+    simulation.world.setKnowledge(seam.east.x, seam.east.y, KnowledgeState.Unknown, 0);
+    simulation.world.setKnowledge(seam.west.x, seam.west.y, KnowledgeState.Unknown, 0);
+    simulation.ship.heading = 0;
+    simulation.ship.provisionAccumulator = 0;
+    const entered: GridPoint[] = [];
+    simulation.events.on("shipEnteredTile", (tile) => entered.push(tile));
+
+    const movement = simulation.update(
+      { turn: 0, throttle: 1 },
+      1 / simulation.config.movement.shipSpeed,
+    );
+
+    expect(movement.collided).toBe(false);
+    expect(movement.liftedDisplacement.x).toBeCloseTo(simulation.config.navigation.tileSize, 10);
+    expect(movement.worldImageOffset.x).toBe(simulation.world.topology.pixelWidth);
+    expect(simulation.ship.currentTileX).toBe(seam.west.x);
+    expect(simulation.ship.currentTileY).toBe(seam.west.y);
+    expect(entered).toEqual([seam.west]);
+    expect(simulation.ship.provisionAccumulator).toBeCloseTo(
+      simulation.config.provisions.unknownCost,
+      10,
+    );
+    expect(simulation.world.getKnowledge(seam.east.x, seam.east.y)).toBe(KnowledgeState.Personal);
+    expect(simulation.world.getKnowledge(seam.interior.x, seam.interior.y)).toBe(KnowledgeState.Unknown);
+    expect(simulation.world.isVisibleNow(seam.west.x, seam.west.y)).toBe(true);
+    expect(simulation.world.isVisibleNow(seam.east.x, seam.east.y)).toBe(true);
+  });
+
   it("replenishes fractional and whole supplies only at the designated dock", () => {
     const simulation = new GameSimulation();
     const remoteSupported = findRemoteSupportedWater(simulation);

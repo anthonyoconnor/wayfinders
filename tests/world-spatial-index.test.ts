@@ -4,6 +4,11 @@ import {
   type SpatialBounds,
   type SpatialEntityDescriptor,
 } from "../src/wayfinders/world/spatial";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+  WorldTopology,
+} from "../src/wayfinders/world/WorldTopology";
 
 interface TestDescriptor extends SpatialEntityDescriptor<string> {
   readonly label: string;
@@ -13,9 +18,17 @@ function descriptor(id: string, bounds: SpatialBounds, label = id): TestDescript
   return Object.freeze({ id, bounds: Object.freeze(bounds), label });
 }
 
+function boundedTopology(chunkSize: number, width = 64, height = 64): WorldTopology {
+  return new WorldTopology(width, height, 1, chunkSize, BOUNDED_WORLD_TOPOLOGY);
+}
+
+function wrappingTopology(chunkSize: number, width = 64, height = 64): WorldTopology {
+  return new WorldTopology(width, height, 1, chunkSize, WRAPPING_WORLD_TOPOLOGY);
+}
+
 describe("WorldSpatialIndex", () => {
   it("bulk-builds deterministic point, bounds, radius, and nearby queries", () => {
-    const index = new WorldSpatialIndex<TestDescriptor>({ chunkSize: 10 });
+    const index = new WorldSpatialIndex<TestDescriptor>({ topology: boundedTopology(10) });
     const built = index.build([
       descriptor("z-far", { minX: 18, minY: 0, maxX: 20, maxY: 2 }),
       descriptor("c-wide", { minX: 9, minY: 9, maxX: 11, maxY: 11 }),
@@ -46,11 +59,13 @@ describe("WorldSpatialIndex", () => {
   });
 
   it("publishes stable home and intersecting chunk membership", () => {
-    const index = new WorldSpatialIndex<TestDescriptor>({ chunkSize: 10 });
+    const index = new WorldSpatialIndex<TestDescriptor>({ topology: boundedTopology(10) });
     index.add(descriptor("crossing", { minX: 9, minY: 9, maxX: 11, maxY: 11 }));
 
     expect(index.getMembership("crossing")).toEqual({
       entityId: "crossing",
+      canonicalCentre: { x: 10, y: 10 },
+      footprint: [{ minX: 9, minY: 9, maxX: 11, maxY: 11 }],
       homeChunk: { x: 1, y: 1 },
       chunks: [
         { x: 0, y: 0 },
@@ -64,7 +79,7 @@ describe("WorldSpatialIndex", () => {
   });
 
   it("adds, updates, and removes with revisioned entity and chunk invalidation", () => {
-    const index = new WorldSpatialIndex<TestDescriptor>({ chunkSize: 10 });
+    const index = new WorldSpatialIndex<TestDescriptor>({ topology: boundedTopology(10) });
     const first = descriptor("site", { minX: 1, minY: 1, maxX: 1, maxY: 1 }, "first");
     const added = index.add(first);
     expect(added).toMatchObject({
@@ -109,7 +124,7 @@ describe("WorldSpatialIndex", () => {
   });
 
   it("validates bulk builds transactionally and keeps IDs stable", () => {
-    const index = new WorldSpatialIndex<TestDescriptor>({ chunkSize: 8 });
+    const index = new WorldSpatialIndex<TestDescriptor>({ topology: boundedTopology(8) });
     const retained = descriptor("retained", { minX: 2, minY: 2, maxX: 2, maxY: 2 });
     index.build([retained]);
 
@@ -129,7 +144,7 @@ describe("WorldSpatialIndex", () => {
   });
 
   it("reports per-query and resettable aggregate work counters", () => {
-    const index = new WorldSpatialIndex<TestDescriptor>({ chunkSize: 10 });
+    const index = new WorldSpatialIndex<TestDescriptor>({ topology: boundedTopology(10) });
     index.build([
       descriptor("wide", { minX: 5, minY: 5, maxX: 15, maxY: 15 }),
       descriptor("point", { minX: 7, minY: 7, maxX: 7, maxY: 7 }),
@@ -158,9 +173,112 @@ describe("WorldSpatialIndex", () => {
     });
   });
 
+  it("splits seam and corner footprints and queries while returning one stable identity", () => {
+    const index = new WorldSpatialIndex<TestDescriptor>({
+      topology: wrappingTopology(5, 20, 20),
+    });
+    index.build([
+      descriptor("corner", { minX: 18, minY: 18, maxX: 21, maxY: 21 }),
+      descriptor("east", { minX: 1, minY: 10, maxX: 1, maxY: 10 }),
+      descriptor("west", { minX: 19, minY: 10, maxX: 19, maxY: 10 }),
+    ]);
+
+    expect(index.getMembership("corner")).toEqual({
+      entityId: "corner",
+      canonicalCentre: { x: 19.5, y: 19.5 },
+      footprint: [
+        { minX: 0, minY: 0, maxX: 1, maxY: 1 },
+        { minX: 18, minY: 0, maxX: 19, maxY: 1 },
+        { minX: 0, minY: 18, maxX: 1, maxY: 19 },
+        { minX: 18, minY: 18, maxX: 19, maxY: 19 },
+      ],
+      homeChunk: { x: 3, y: 3 },
+      chunks: [
+        { x: 0, y: 0 },
+        { x: 3, y: 0 },
+        { x: 0, y: 3 },
+        { x: 3, y: 3 },
+      ],
+    });
+
+    expect(index.queryPoint({ x: 20, y: 20 }).entities.map(({ id }) => id)).toEqual(["corner"]);
+    const corner = index.queryBounds({ minX: -2, minY: -2, maxX: 1, maxY: 1 });
+    expect(corner.entities.map(({ id }) => id)).toEqual(["corner"]);
+    expect(corner.counters).toEqual({
+      bucketsExamined: 4,
+      bucketEntriesExamined: 4,
+      entitiesExamined: 1,
+      entitiesMatched: 1,
+    });
+    expect(index.queryRadius({ x: 0, y: 10 }, 1).entities.map(({ id }) => id))
+      .toEqual(["east", "west"]);
+    expect(index.queryNearby({ x: 0, y: 10 }, 1).entities.map(({ id }) => id))
+      .toEqual(["east", "west"]);
+    expect(index.queryChunk({ x: -1, y: -1 }).entities.map(({ id }) => id)).toEqual(["corner"]);
+    expect(index.queryChunk({ x: 4, y: 4 }).entities.map(({ id }) => id)).toEqual(["corner"]);
+  });
+
+  it("normalizes negative sub-ulp point queries to the half-open wrapped seam", () => {
+    const index = new WorldSpatialIndex<TestDescriptor>({
+      topology: wrappingTopology(5, 20, 20),
+    });
+    const seam = descriptor("seam", { minX: 0, minY: 7, maxX: 0, maxY: 7 });
+    index.add(seam);
+
+    expect(index.queryPoint({ x: -Number.EPSILON, y: 7 }).entities).toEqual([seam]);
+  });
+
+  it("deduplicates over-image queries and collapsed one- and two-cell axes", () => {
+    const oneByTwo = new WorldSpatialIndex<TestDescriptor>({
+      topology: wrappingTopology(1, 1, 2),
+    });
+    oneByTwo.build([
+      descriptor("a", { minX: 0, minY: 0, maxX: 0, maxY: 0 }),
+      descriptor("b", { minX: 0, minY: 1, maxX: 0, maxY: 1 }),
+    ]);
+    const overImage = oneByTwo.queryBounds({ minX: -10, minY: -10, maxX: 10, maxY: 10 });
+    expect(overImage.entities.map(({ id }) => id)).toEqual(["a", "b"]);
+    expect(overImage.counters).toEqual({
+      bucketsExamined: 2,
+      bucketEntriesExamined: 2,
+      entitiesExamined: 2,
+      entitiesMatched: 2,
+    });
+    expect(oneByTwo.queryChunk({ x: 12, y: -1 }).entities.map(({ id }) => id)).toEqual(["b"]);
+    expect(() => oneByTwo.add(
+      descriptor("oversized", { minX: 0, minY: 0, maxX: 1, maxY: 0 }),
+    )).toThrow("strictly smaller");
+
+    const twoByOne = new WorldSpatialIndex<TestDescriptor>({
+      topology: wrappingTopology(1, 2, 1),
+    });
+    twoByOne.build([
+      descriptor("left", { minX: 0, minY: 0, maxX: 0, maxY: 0 }),
+      descriptor("right", { minX: 1, minY: 0, maxX: 1, maxY: 0 }),
+    ]);
+    expect(twoByOne.queryNearby({ x: 0, y: 0 }, 1).entities.map(({ id }) => id))
+      .toEqual(["left", "right"]);
+  });
+
+  it("clips bounded regions without turning the asset context periodic", () => {
+    const index = new WorldSpatialIndex<TestDescriptor>({
+      topology: boundedTopology(5, 10, 10),
+    });
+    index.add(descriptor("edge", { minX: 0, minY: 0, maxX: 0, maxY: 0 }));
+
+    expect(index.queryPoint({ x: -1, y: 0 }).entities).toEqual([]);
+    expect(index.queryBounds({ minX: -2, minY: -2, maxX: 0, maxY: 0 }).entities)
+      .toEqual([index.get("edge")]);
+    expect(index.queryRadius({ x: -1, y: 0 }, 1).entities).toEqual([index.get("edge")]);
+    expect(index.queryChunk({ x: -1, y: 0 }).entities).toEqual([]);
+  });
+
   it("rejects invalid coordinates, IDs, bounds, and unsafe membership spans", () => {
-    expect(() => new WorldSpatialIndex<TestDescriptor>({ chunkSize: 0 })).toThrow("greater than zero");
-    const index = new WorldSpatialIndex<TestDescriptor>({ chunkSize: 10, maxChunksPerEntity: 4 });
+    expect(() => boundedTopology(0)).toThrow("positive");
+    const index = new WorldSpatialIndex<TestDescriptor>({
+      topology: boundedTopology(10),
+      maxChunksPerEntity: 4,
+    });
     expect(() => index.add(descriptor("", { minX: 0, minY: 0, maxX: 0, maxY: 0 })))
       .toThrow("cannot be empty");
     expect(() => index.add(descriptor("backward", { minX: 2, minY: 0, maxX: 1, maxY: 0 })))

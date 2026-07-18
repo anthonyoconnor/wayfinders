@@ -4,6 +4,7 @@ import type { GridPoint } from "../src/wayfinders/core/types.ts";
 import {
   WRECK_SURVEY_CONTRACT_VERSION,
 } from "../src/wayfinders/exploration/WreckSurveyContracts.ts";
+import { GridGraph } from "../src/wayfinders/navigation/GridGraph.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
 
 function findUnknownWater(simulation: GameSimulation, excluded: readonly GridPoint[] = []): GridPoint {
@@ -38,7 +39,81 @@ function surveyCurrentWreck(simulation: GameSimulation) {
   });
 }
 
+function findOpenHorizontalSeam(simulation: GameSimulation): {
+  readonly west: GridPoint;
+  readonly east: GridPoint;
+  readonly interior: GridPoint;
+} {
+  const graph = new GridGraph(simulation.world, simulation.config);
+  const westX = 0;
+  const eastX = simulation.world.width - 1;
+  const interiorX = Math.floor(simulation.world.width / 2);
+  for (let y = 0; y < simulation.world.height; y++) {
+    const points = [
+      { x: westX, y },
+      { x: eastX, y },
+      { x: interiorX, y },
+    ];
+    if (points.some(({ x, y: pointY }) => (
+      simulation.world.getKnowledge(x, pointY) !== KnowledgeState.Unknown
+    ))) continue;
+    if (!points.slice(0, 2).every(({ x, y: pointY }) => (
+      graph.isNavigationNodePassable(simulation.world.index(x, pointY))
+    ))) continue;
+    return { west: points[0], east: points[1], interior: points[2] };
+  }
+  throw new Error("Expected an open Unknown-water horizontal seam");
+}
+
 describe("lost navigator wreck surveys", () => {
+  it("discovers, surveys, and returns one canonical wreck through the opposite seam image", () => {
+    const simulation = new GameSimulation();
+    const seam = findOpenHorizontalSeam(simulation);
+    const discovered: number[] = [];
+    const surveyed: number[] = [];
+    const returned: number[][] = [];
+    simulation.events.on("wreckDiscovered", ({ wreckId }) => discovered.push(wreckId));
+    simulation.events.on("wreckSurveyed", ({ wreckId }) => surveyed.push(wreckId));
+    simulation.events.on("wreckSurveysReturned", ({ reports }) => {
+      returned.push(reports.map(({ wreckId }) => wreckId));
+    });
+
+    expect(simulation.teleport(seam.west)).toBe(true);
+    expect(simulation.forceWreck()).toBe(true);
+    expect(simulation.wrecks[0]).toMatchObject({
+      tileX: seam.west.x,
+      tileY: seam.west.y,
+      worldX: simulation.config.navigation.tileSize / 2,
+      discovered: false,
+    });
+    expect(simulation.wrecks[0].worldX).toBeGreaterThanOrEqual(0);
+    expect(simulation.wrecks[0].worldX).toBeLessThan(simulation.world.topology.pixelWidth);
+    simulation.update(
+      { turn: 0, throttle: 0 },
+      simulation.config.simulation.wreckPresentationSeconds,
+    );
+    expect(simulation.acknowledgeGenerationHandover()).toBe(true);
+
+    expect(simulation.teleport(seam.east)).toBe(true);
+    expect(simulation.world.getKnowledge(seam.interior.x, seam.interior.y)).toBe(KnowledgeState.Unknown);
+    expect(discovered).toEqual([1]);
+    expect(simulation.wreckSurveyInteraction).toMatchObject({ wreckId: 1, tile: seam.west });
+
+    expect(surveyCurrentWreck(simulation)).toMatchObject({ status: "surveyed", wreckId: 1 });
+    expect(simulation.interactWithWreck({
+      contractVersion: WRECK_SURVEY_CONTRACT_VERSION,
+      type: "survey",
+      wreckId: 1,
+    })).toMatchObject({ status: "rejected", reason: "already-surveyed" });
+    expect(surveyed).toEqual([1]);
+
+    expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
+    expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
+    expect(returned).toEqual([[1]]);
+    expect(simulation.wrecks[0].survey.state).toBe("returned");
+    expect(simulation.currentNavigator.successfulVoyages.at(-1)?.wreckIds).toEqual([1]);
+  });
+
   it("keeps a found wreck unidentified until a later navigator surveys it", () => {
     const simulation = new GameSimulation();
     const discovered: unknown[] = [];

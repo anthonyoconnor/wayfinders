@@ -118,7 +118,7 @@ function dockReachableMask(
       reachable[candidate] = 1;
       queue[tail++] = candidate;
     };
-    graph.forEachTraversableCardinalNeighbor(index, visit);
+    graph.forEachTraversableCardinalEdge(index, visit);
   }
 
   return reachable;
@@ -137,10 +137,9 @@ function deriveApproachIndices(
     for (let dy = -extent; dy <= extent; dy++) {
       for (let dx = -extent; dx <= extent; dx++) {
         if (Math.hypot(dx, dy) > ISLAND_DOSSIER_INTERACTION_RANGE_TILES) continue;
-        const x = footprintX + dx;
-        const y = footprintY + dy;
-        if (!world.inBounds(x, y)) continue;
-        const candidate = world.index(x, y);
+        const tile = world.topology.canonicalizeTile(footprintX + dx, footprintY + dy);
+        if (!tile) continue;
+        const candidate = world.index(tile.x, tile.y);
         if (!isReachable(candidate)) continue;
         approaches.add(candidate);
       }

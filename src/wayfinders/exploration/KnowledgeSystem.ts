@@ -34,8 +34,9 @@ export class KnowledgeSystem {
 
   /**
    * Commits broad perpendicular strips around navigation-tile centres the
-   * ship has actually left. Water at/ahead remains visible but Unknown, so its
-   * first traversal pays outward cost without turns pre-charting untouched sea.
+   * ship has actually left. Crossed centres remain lifted so seam traversal
+   * retains its physical direction. Water at/ahead remains visible but Unknown,
+   * so its first traversal pays outward cost without turns pre-charting untouched sea.
    */
   applyTrailingVisibility(
     update: Pick<VisibilityUpdate, "observedIndices" | "crossedCenters">,
@@ -53,18 +54,33 @@ export class KnowledgeSystem {
         trailingIndices.push(index);
         continue;
       }
-      const x = index % this.world.width;
-      const y = Math.floor(index / this.world.width);
       for (let segment = 0; segment + 1 < update.crossedCenters.length; segment++) {
         const center = update.crossedCenters[segment];
         const next = update.crossedCenters[segment + 1];
         const directionX = next.x - center.x;
         const directionY = next.y - center.y;
-        const along = (x - center.x) * directionX + (y - center.y) * directionY;
         const segmentLengthSquared = directionX * directionX + directionY * directionY;
-        if (along < 0 || along >= segmentLengthSquared) continue;
-        trailingIndices.push(index);
-        break;
+        if (segmentLengthSquared === 0) continue;
+        const canonicalCenter = this.world.topology.normalizeTile(center.x, center.y);
+        const candidate = { x: index % this.world.width, y: Math.floor(index / this.world.width) };
+        const displacement = this.world.topology.minimumImageTileDisplacement(canonicalCenter, candidate);
+        const displacementX = this.directionalTiedDisplacement(
+          displacement.x,
+          this.world.width,
+          this.world.topology.wrapsX,
+          directionX,
+        );
+        const displacementY = this.directionalTiedDisplacement(
+          displacement.y,
+          this.world.height,
+          this.world.topology.wrapsY,
+          directionY,
+        );
+        const along = displacementX * directionX + displacementY * directionY;
+        if (along >= 0 && along < segmentLengthSquared) {
+          trailingIndices.push(index);
+          break;
+        }
       }
     }
     return this.revealIndices(trailingIndices, expeditionId);
@@ -183,7 +199,10 @@ export class KnowledgeSystem {
 
       const x = index % this.world.width;
       const y = Math.floor(index / this.world.width);
-      if (x === 0 || y === 0 || x + 1 === this.world.width || y + 1 === this.world.height) {
+      if (
+        (!this.world.topology.wrapsX && (x === 0 || x + 1 === this.world.width))
+        || (!this.world.topology.wrapsY && (y === 0 || y + 1 === this.world.height))
+      ) {
         return undefined;
       }
 
@@ -208,15 +227,20 @@ export class KnowledgeSystem {
   private forEachEightNeighbor(index: number, visitor: (neighbor: number) => void): void {
     const originX = index % this.world.width;
     const originY = Math.floor(index / this.world.width);
-    for (let offsetY = -1; offsetY <= 1; offsetY++) {
-      const y = originY + offsetY;
-      if (y < 0 || y >= this.world.height) continue;
-      for (let offsetX = -1; offsetX <= 1; offsetX++) {
-        if (offsetX === 0 && offsetY === 0) continue;
-        const x = originX + offsetX;
-        if (x < 0 || x >= this.world.width) continue;
-        visitor(y * this.world.width + x);
-      }
+    for (const neighbor of this.world.topology.uniqueEightNeighbors({ x: originX, y: originY })) {
+      visitor(neighbor.y * this.world.width + neighbor.x);
     }
+  }
+
+  private directionalTiedDisplacement(
+    displacement: number,
+    span: number,
+    wraps: boolean,
+    direction: number,
+  ): number {
+    if (wraps && direction !== 0 && displacement !== 0 && Math.abs(displacement) * 2 === span) {
+      return Math.sign(direction) * Math.abs(displacement);
+    }
+    return displacement;
   }
 }

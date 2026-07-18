@@ -495,9 +495,13 @@ function buildWorldModel(seed: number): WaterWorldModel {
       if (land[index]) continue;
       let nearestSquared = Number.POSITIVE_INFINITY;
       for (const [landX, landY] of landCells) {
-        const dx = x - landX;
-        const dy = y - landY;
-        nearestSquared = Math.min(nearestSquared, dx * dx + dy * dy);
+        nearestSquared = Math.min(
+          nearestSquared,
+          generated.grid.topology.minimumImageTileDistanceSquared(
+            { x, y },
+            { x: landX, y: landY },
+          ),
+        );
       }
       distanceFromLand[index] = Math.sqrt(nearestSquared);
     }
@@ -506,14 +510,17 @@ function buildWorldModel(seed: number): WaterWorldModel {
   const shore: ShorePoint[] = [];
   const windX = 0.9;
   const windY = 0.42;
-  for (let y = 1; y < WORLD_GRID_SIZE - 1; y++) {
-    for (let x = 1; x < WORLD_GRID_SIZE - 1; x++) {
+  for (let y = 0; y < WORLD_GRID_SIZE; y++) {
+    for (let x = 0; x < WORLD_GRID_SIZE; x++) {
       if (land[y * WORLD_GRID_SIZE + x]) continue;
       let inwardX = 0;
       let inwardY = 0;
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
-          if ((dx === 0 && dy === 0) || !land[(y + dy) * WORLD_GRID_SIZE + x + dx]) continue;
+          if (dx === 0 && dy === 0) continue;
+          const neighbor = generated.grid.topology.canonicalizeTile(x + dx, y + dy);
+          if (!neighbor || (neighbor.x === x && neighbor.y === y)) continue;
+          if (!land[neighbor.y * WORLD_GRID_SIZE + neighbor.x]) continue;
           inwardX += dx;
           inwardY += dy;
         }

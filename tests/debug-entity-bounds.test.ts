@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { collectDebugEntityBounds } from "../src/wayfinders/rendering/DebugEntityBounds.ts";
+import {
+  collectDebugEntityBounds,
+  projectDebugEntityBoundsToActiveImages,
+} from "../src/wayfinders/rendering/DebugEntityBounds.ts";
 
 describe("developer collision and entity bounds", () => {
   it("collects the live ship, wrecks, shoals, sites, approaches, and home dock", () => {
@@ -44,5 +47,35 @@ describe("developer collision and entity bounds", () => {
     });
     expect(Object.isFrozen(bounds)).toBe(true);
     expect(bounds.every(Object.isFrozen)).toBe(true);
+  });
+
+  it("projects one canonical bound into every active periodic owner-chunk image", () => {
+    const projected = projectDebugEntityBoundsToActiveImages([{
+      kind: "wreck",
+      role: "item",
+      centerX: 20,
+      centerY: 30,
+      halfWidth: 8,
+      halfHeight: 8,
+    }], [{
+      viewKey: "0,0@0,0",
+      canonicalChunk: { x: 0, y: 0 },
+      imageOffset: { x: 0, y: 0 },
+      band: "visible",
+      ringDistance: 0,
+      loadPriority: 0,
+    }, {
+      viewKey: "0,0@128,-96",
+      canonicalChunk: { x: 0, y: 0 },
+      imageOffset: { x: 128, y: -96 },
+      band: "visible",
+      ringDistance: 0,
+      loadPriority: 1,
+    }], 64);
+
+    expect(projected.map(({ centerX, centerY }) => ({ centerX, centerY }))).toEqual([
+      { centerX: 20, centerY: 30 },
+      { centerX: 148, centerY: -66 },
+    ]);
   });
 });

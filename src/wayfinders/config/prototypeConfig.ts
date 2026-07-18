@@ -28,7 +28,6 @@ export interface PrototypeConfig {
     apronWidth: number;
     minimumChannelWidth: number;
     homeClearance: number;
-    edgeMargin: number;
     placementAttempts: number;
     /** Number of deterministic scatter centres; zero selects fully dispersed placement. */
     archipelagoClusters: number;
@@ -130,7 +129,6 @@ export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreez
     apronWidth: 1.25,
     minimumChannelWidth: 11,
     homeClearance: 2,
-    edgeMargin: 6,
     placementAttempts: 64,
     archipelagoClusters: 0,
     archipelagoRadius: 24,
@@ -326,7 +324,6 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
   positive(config.islands.apronWidth, "islands.apronWidth");
   nonNegative(config.islands.minimumChannelWidth, "islands.minimumChannelWidth");
   nonNegative(config.islands.homeClearance, "islands.homeClearance");
-  nonNegative(config.islands.edgeMargin, "islands.edgeMargin");
   positiveInteger(config.islands.placementAttempts, "islands.placementAttempts");
   nonNegativeInteger(config.islands.archipelagoClusters, "islands.archipelagoClusters");
   positive(config.islands.archipelagoRadius, "islands.archipelagoRadius");
@@ -416,12 +413,12 @@ export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfi
     config.islands.maxRadius + config.islands.apronWidth,
     config.islands.maxRadius * maximumPaintScale,
   );
-  const islandCenterMargin = Math.ceil(
-    Math.max(legacyIslandEnvelope, configuredIslandEnvelope) + config.islands.edgeMargin,
-  );
-  const scatteredIslandMinimumDimension = islandCenterMargin * 2 + 1;
+  const islandExtent = Math.ceil(Math.max(legacyIslandEnvelope, configuredIslandEnvelope));
+  // A periodic footprint must be strictly smaller than one canonical span so
+  // it cannot collide with another image of itself.
+  const scatteredIslandMinimumDimension = islandExtent * 2 + 2;
   if (config.world.width < scatteredIslandMinimumDimension || config.world.height < scatteredIslandMinimumDimension) {
-    throw new RangeError("world dimensions are too small for the configured scattered islands");
+    throw new RangeError("world dimensions must exceed the largest configured island footprint");
   }
   if (config.movement.collisionEpsilon >= config.navigation.tileSize) {
     throw new RangeError("movement.collisionEpsilon must be smaller than navigation.tileSize");

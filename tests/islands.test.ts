@@ -15,6 +15,10 @@ import {
 } from "../src/wayfinders/world/TileData.ts";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator.ts";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid.ts";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WRAPPING_WORLD_TOPOLOGY,
+} from "../src/wayfinders/world/WorldTopology.ts";
 import { makeConfig } from "./helpers.ts";
 
 function islandTiles(world: ReturnType<WorldGenerator["generate"]>, islandId: number) {
@@ -70,7 +74,13 @@ describe("scattered island generation", () => {
       expect(tiles.every(({ x, y }) => (
         generated.grid.getKnowledge(x, y) === KnowledgeState.Unknown
         && generated.grid.getExpeditionStamp(x, y) === 0
-        && Math.hypot(x - island.center.x, y - island.center.y) <= island.outerRadius
+        && (() => {
+          const displacement = generated.grid.topology.minimumImageTileDisplacement(
+            island.center,
+            { x, y },
+          );
+          return Math.hypot(displacement.x, displacement.y) <= island.outerRadius;
+        })()
       ))).toBe(true);
     }
   });
@@ -88,7 +98,12 @@ describe("scattered island generation", () => {
   it("can plan descriptors without mutating the logical grid", () => {
     const config = makeConfig();
     const generated = new WorldGenerator(config).generate(84_221);
-    const blank = new WorldGrid(config.world.width, config.world.height, config.navigation.chunkSize);
+    const blank = new WorldGrid(
+      config.world.width,
+      config.world.height,
+      config.navigation.chunkSize,
+      WRAPPING_WORLD_TOPOLOGY,
+    );
     blank.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const versionsBefore = {
       terrain: blank.terrainVersion,
@@ -113,21 +128,16 @@ describe("scattered island generation", () => {
     }).toEqual(versionsBefore);
   });
 
-  it("preserves margins, home clearance, wide channels, and the eastbound starter lane", () => {
+  it("preserves periodic home clearance, wide channels, and the finite eastbound starter lane", () => {
     const config = makeConfig();
     const generated = new WorldGenerator(config).generate(config.world.seed);
     const { dock, homeCenter } = generated.landmarks;
 
     for (const island of generated.islands) {
-      expect(island.center.x - island.outerRadius).toBeGreaterThanOrEqual(config.islands.edgeMargin);
-      expect(island.center.y - island.outerRadius).toBeGreaterThanOrEqual(config.islands.edgeMargin);
-      expect(island.center.x + island.outerRadius).toBeLessThanOrEqual(
-        generated.grid.width - 1 - config.islands.edgeMargin,
-      );
-      expect(island.center.y + island.outerRadius).toBeLessThanOrEqual(
-        generated.grid.height - 1 - config.islands.edgeMargin,
-      );
-      expect(Math.hypot(island.center.x - homeCenter.x, island.center.y - homeCenter.y)).toBeGreaterThanOrEqual(
+      expect(island.bounds.maxX - island.bounds.minX + 1).toBeLessThan(generated.grid.width);
+      expect(island.bounds.maxY - island.bounds.minY + 1).toBeLessThan(generated.grid.height);
+      const homeDisplacement = generated.grid.topology.minimumImageTileDisplacement(homeCenter, island.center);
+      expect(Math.hypot(homeDisplacement.x, homeDisplacement.y)).toBeGreaterThanOrEqual(
         config.world.supportedWaterRadius
           + config.world.supportedBoundaryNoise
           + config.islands.homeClearance
@@ -139,20 +149,22 @@ describe("scattered island generation", () => {
       for (let right = left + 1; right < generated.islands.length; right++) {
         const a = generated.islands[left];
         const b = generated.islands[right];
-        expect(Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)).toBeGreaterThanOrEqual(
+        const displacement = generated.grid.topology.minimumImageTileDisplacement(a.center, b.center);
+        expect(Math.hypot(displacement.x, displacement.y)).toBeGreaterThanOrEqual(
           a.outerRadius + b.outerRadius + config.islands.minimumChannelWidth,
         );
       }
     }
 
-    for (let x = dock.x; x < generated.grid.width; x++) {
+    for (let step = 0; step <= Math.floor(generated.grid.width / 2); step++) {
       for (
-        let y = dock.y - config.islands.safeCorridorHalfWidth;
-        y <= dock.y + config.islands.safeCorridorHalfWidth;
-        y++
+        let offsetY = -config.islands.safeCorridorHalfWidth;
+        offsetY <= config.islands.safeCorridorHalfWidth;
+        offsetY++
       ) {
-        expect(generated.grid.getTile(x, y).islandId).toBeLessThan(1);
-        expect(generated.grid.isMovementBlocked(x, y)).toBe(false);
+        const tile = generated.grid.topology.normalizeTile(dock.x + step, dock.y + offsetY);
+        expect(generated.grid.getTile(tile.x, tile.y).islandId).toBeLessThan(1);
+        expect(generated.grid.isMovementBlocked(tile.x, tile.y)).toBe(false);
       }
     }
   });
@@ -190,8 +202,8 @@ describe("scattered island generation", () => {
   it("does not let Unknown island blockers alter the forward-range estimate", () => {
     const config = makeConfig({ provisions: { startingBundles: 100 } });
     const generated = new WorldGenerator(config).generate(13_371);
-    const hiddenIslands = new WorldGrid(generated.grid.width, generated.grid.height, config.navigation.chunkSize);
-    const clearOcean = new WorldGrid(generated.grid.width, generated.grid.height, config.navigation.chunkSize);
+    const hiddenIslands = new WorldGrid(generated.grid.width, generated.grid.height, config.navigation.chunkSize, BOUNDED_WORLD_TOPOLOGY);
+    const clearOcean = new WorldGrid(generated.grid.width, generated.grid.height, config.navigation.chunkSize, BOUNDED_WORLD_TOPOLOGY);
     hiddenIslands.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     clearOcean.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
 

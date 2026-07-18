@@ -3,6 +3,10 @@ import {
   WorldSpatialIndex,
   type SpatialEntityDescriptor,
 } from "../../src/wayfinders/world/spatial";
+import {
+  BOUNDED_WORLD_TOPOLOGY,
+  WorldTopology,
+} from "../../src/wayfinders/world/WorldTopology";
 
 interface StressDescriptor extends SpatialEntityDescriptor<string> {
   readonly ordinal: number;
@@ -24,7 +28,9 @@ describe("WorldSpatialIndex bounded nearby work", () => {
       }
     }
 
-    const index = new WorldSpatialIndex<StressDescriptor>({ chunkSize: 16 });
+    const index = new WorldSpatialIndex<StressDescriptor>({
+      topology: new WorldTopology(800, 640, 1, 16, BOUNDED_WORLD_TOPOLOGY),
+    });
     index.build([...descriptors].reverse());
     expect(index.size).toBe(500);
     index.resetQueryTotals();

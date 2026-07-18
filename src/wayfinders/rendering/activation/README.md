@@ -1,34 +1,28 @@
-# Presentation chunk activation
+# Periodic presentation activation
 
-This directory owns the renderer-agnostic decision about which presentation chunks
-may hold expensive resources. `ActiveChunkSet` converts a closed visible chunk region
-into a deterministic, capacity-limited list containing visible chunks first and a
-configurable prefetch ring second.
+This directory owns the renderer-neutral decision about which lifted images of
+canonical world chunks may hold presentation resources. `viewportTileBounds`
+converts the scene camera's lifted pixel rectangle into exact inclusive tile
+bounds. `ActiveChunkSet` asks the authoritative `WorldTopology` for intersecting
+periodic chunk images, ranks visible images before a configurable prefetch ring,
+and applies one hard capacity to image entries.
 
-It does not own Phaser objects, authoritative `WorldGrid` storage, feature rules, or
-asset loading. `WayfindersScene` is the single adapter and uses a hard five-by-five
-(`25`) chunk budget with one prefetch ring. It:
+Each `ActiveChunkEntry` has two deliberately separate identities:
 
-1. Converts camera world bounds to an inclusive chunk region and calls `update` when
-   that region changes.
-2. Processes `deactivated` first, then `activated` in load-priority order, and finally
-   `updated` metadata.
-3. Uses non-creating world reads (`getChunk`, never `getOrCreateChunk`) while building
-   presentation resources.
-4. Shows low-detail placeholders for visible `deferred` entries when the hard budget
-   is smaller than the viewport.
-5. Keeps texture byte limits and object-pool caps in their owning renderers; their
-   counters are published beside this module's
-   telemetry through `window.__WAYFINDERS__.presentationResources()`.
+- `viewKey` and `imageOffset` identify one lifted presentation image. The offset
+  is a whole-world pixel displacement, so partial final chunks repeat at the
+  exact world span instead of a notional chunk lattice.
+- `canonicalChunk` identifies the logical chunk that owns revisions, textures,
+  dirty state, and read-model data. Multiple active images may share this owner.
 
-`revision` covers the effective target and priority ordering. `membershipRevision`
-changes only when a chunk enters or leaves the active set. Arrays are returned in a
-stable order so tests and loaders do not depend on `Map` insertion order.
+The module owns no Phaser objects, authoritative `WorldGrid` storage, feature
+rules, or asset loading. `WayfindersScene` is the adapter and uses a hard `25`
+image-entry budget with one prefetch ring. It processes `deactivated` first,
+then `activated` in load-priority order, and finally `updated` metadata. Visible
+`deferred` entries receive the existing low-detail placeholder.
 
-`WorldRenderer` uses the ocean backdrop as the deterministic low-detail
-placeholder, then creates terrain and authored home objects only for active
-chunks. Knowledge and risk overlays own at most one and two canvas textures per
-active chunk respectively. Marker renderers share the same active entries and
-retain only a small bounded pool. Current pilot textures remain a small
-scene-owned shared set. A future unique-asset cache should be added only with a
-real consumer and a measured decoded-resource budget.
+`revision` covers the lifted target and priority ordering.
+`membershipRevision` changes only when a view key enters or leaves the active
+set. Returned arrays and telemetry are deterministic. Telemetry fields named
+`*Chunks` count image entries; canonical texture and redraw plateaus remain the
+responsibility of their owning renderers.

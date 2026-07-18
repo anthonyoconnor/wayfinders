@@ -1,22 +1,24 @@
+import type { GridPoint, WorldPoint } from "../../core/types";
+import type { PeriodicChunkImage, WorldTopology } from "../../world/WorldTopology";
 import type {
   ActiveChunkDelta,
   ActiveChunkEntry,
   ActiveChunkSetOptions,
   ActiveChunkTelemetry,
-  ChunkRegion,
   DeactivatedChunkEntry,
+  LiftedTileBounds,
 } from "./ActiveChunkContracts";
 
 /**
- * Selects a bounded, deterministic set of presentation chunks around the viewport.
+ * Selects a deterministic, capacity-bounded set of periodic presentation images.
  * It owns no renderer objects and never reads or creates authoritative world chunks.
  */
 export class ActiveChunkSet {
-  private readonly worldBounds: Readonly<ChunkRegion>;
+  private readonly topology: WorldTopology;
   private readonly prefetchRing: number;
   private readonly maxActiveChunks: number;
 
-  private visibleRegion: Readonly<ChunkRegion> | null = null;
+  private visibleTileBounds: Readonly<LiftedTileBounds> | null = null;
   private active: readonly Readonly<ActiveChunkEntry>[] = Object.freeze([]);
   private deferred: readonly Readonly<ActiveChunkEntry>[] = Object.freeze([]);
   private revision = 0;
@@ -30,56 +32,53 @@ export class ActiveChunkSet {
   private peakBudgetDeferredChunks = 0;
 
   constructor(options: Readonly<ActiveChunkSetOptions>) {
-    assertRegion(options.worldBounds, "world bounds");
     assertNonNegativeInteger(options.prefetchRing, "prefetchRing");
     assertPositiveInteger(options.maxActiveChunks, "maxActiveChunks");
 
-    this.worldBounds = freezeRegion(options.worldBounds);
+    this.topology = options.topology;
     this.prefetchRing = options.prefetchRing;
     this.maxActiveChunks = options.maxActiveChunks;
   }
 
   /**
-   * Applies a closed visible chunk region. Pass null when no world viewport is active.
-   * Repeating an equivalent target is a no-op apart from the update counter.
+   * Applies closed, inclusive visible bounds in lifted tile coordinates. Pass
+   * null when no world viewport is active. Repeating an equivalent target is a
+   * no-op apart from the update counter.
    */
-  update(visibleRegion: Readonly<ChunkRegion> | null): Readonly<ActiveChunkDelta> {
+  update(visibleTileBounds: Readonly<LiftedTileBounds> | null): Readonly<ActiveChunkDelta> {
     this.updateCount++;
-    if (visibleRegion !== null) assertRegion(visibleRegion, "visible region");
+    if (visibleTileBounds !== null) assertBounds(visibleTileBounds, "visible tile bounds");
 
-    const clippedRegion = visibleRegion === null
-      ? null
-      : intersectRegions(visibleRegion, this.worldBounds);
-    const ranked = clippedRegion === null
+    const ranked = visibleTileBounds === null
       ? []
-      : rankCandidates(clippedRegion, this.worldBounds, this.prefetchRing);
+      : rankCandidates(visibleTileBounds, this.topology, this.prefetchRing);
     const nextActive = freezeEntries(ranked.slice(0, this.maxActiveChunks));
     const nextDeferred = freezeEntries(ranked.slice(this.maxActiveChunks));
-    const targetChanged = !regionsEqual(this.visibleRegion, clippedRegion)
+    const targetChanged = !boundsEqual(this.visibleTileBounds, visibleTileBounds)
       || !entryListsEqual(this.active, nextActive)
       || !entryListsEqual(this.deferred, nextDeferred);
 
-    const previousByKey = new Map(this.active.map((entry) => [entry.key, entry]));
-    const nextByKey = new Map(nextActive.map((entry) => [entry.key, entry]));
-    const desiredKeys = new Set(ranked.map(({ key }) => key));
+    const previousByKey = new Map(this.active.map((entry) => [entry.viewKey, entry]));
+    const nextByKey = new Map(nextActive.map((entry) => [entry.viewKey, entry]));
+    const desiredKeys = new Set(ranked.map(({ viewKey }) => viewKey));
 
-    const activated = Object.freeze(nextActive.filter(({ key }) => !previousByKey.has(key)));
+    const activated = Object.freeze(nextActive.filter(({ viewKey }) => !previousByKey.has(viewKey)));
     const updated = Object.freeze(nextActive.filter((entry) => {
-      const previous = previousByKey.get(entry.key);
+      const previous = previousByKey.get(entry.viewKey);
       return previous !== undefined && !entriesEqual(previous, entry);
     }));
     const deactivated = Object.freeze(this.active
-      .filter(({ key }) => !nextByKey.has(key))
+      .filter(({ viewKey }) => !nextByKey.has(viewKey))
       .map((entry): Readonly<DeactivatedChunkEntry> => Object.freeze({
         ...entry,
-        reason: desiredKeys.has(entry.key) ? "budget" : "outside-prefetch",
+        reason: desiredKeys.has(entry.viewKey) ? "budget" : "outside-prefetch",
       }))
       .sort(compareDeactivation));
 
     if (targetChanged) this.revision++;
     if (activated.length > 0 || deactivated.length > 0) this.membershipRevision++;
 
-    this.visibleRegion = clippedRegion === null ? null : freezeRegion(clippedRegion);
+    this.visibleTileBounds = visibleTileBounds === null ? null : freezeBounds(visibleTileBounds);
     this.active = nextActive;
     this.deferred = nextDeferred;
     this.totalActivations += activated.length;
@@ -92,7 +91,7 @@ export class ActiveChunkSet {
     return Object.freeze({
       revision: this.revision,
       membershipRevision: this.membershipRevision,
-      visibleRegion: this.visibleRegion,
+      visibleTileBounds: this.visibleTileBounds,
       activated,
       deactivated,
       updated,
@@ -127,44 +126,37 @@ export class ActiveChunkSet {
   }
 }
 
-export function activeChunkKey(chunkX: number, chunkY: number): string {
-  return `${chunkX},${chunkY}`;
+export function activeChunkViewKey(
+  canonicalChunkX: number,
+  canonicalChunkY: number,
+  imageOffsetX: number,
+  imageOffsetY: number,
+): string {
+  return `${canonicalChunkX},${canonicalChunkY}@${imageOffsetX},${imageOffsetY}`;
 }
 
 function rankCandidates(
-  visible: Readonly<ChunkRegion>,
-  worldBounds: Readonly<ChunkRegion>,
+  visible: Readonly<LiftedTileBounds>,
+  topology: WorldTopology,
   prefetchRing: number,
 ): ActiveChunkEntry[] {
-  const desired = intersectRegions({
-    minX: visible.minX - prefetchRing,
-    minY: visible.minY - prefetchRing,
-    maxX: visible.maxX + prefetchRing,
-    maxY: visible.maxY + prefetchRing,
-  }, worldBounds);
-  if (desired === null) return [];
-
-  const candidates: Candidate[] = [];
-  const centreX2 = visible.minX + visible.maxX;
-  const centreY2 = visible.minY + visible.maxY;
-  for (let y = desired.minY; y <= desired.maxY; y++) {
-    for (let x = desired.minX; x <= desired.maxX; x++) {
-      const ringDistance = distanceFromRegion(x, y, visible);
-      const centreDx2 = Math.abs(x * 2 - centreX2);
-      const centreDy2 = Math.abs(y * 2 - centreY2);
-      candidates.push({
-        x,
-        y,
-        ringDistance,
-        centreDistanceSquared4: centreDx2 * centreDx2 + centreDy2 * centreDy2,
-      });
-    }
-  }
+  const padding = prefetchRing * topology.chunkSize;
+  if (!Number.isSafeInteger(padding)) throw new RangeError("prefetch tile padding must be a safe integer");
+  const desired = expandedBounds(visible, padding);
+  const candidates = topology.periodicChunkImagesForBounds(desired).map((image) => (
+    candidateForImage(image, topology, visible)
+  ));
 
   candidates.sort(compareCandidate);
   return candidates.map((candidate, loadPriority) => Object.freeze({
-    key: activeChunkKey(candidate.x, candidate.y),
-    coordinate: Object.freeze({ x: candidate.x, y: candidate.y }),
+    viewKey: activeChunkViewKey(
+      candidate.canonicalChunk.x,
+      candidate.canonicalChunk.y,
+      candidate.imageOffset.x,
+      candidate.imageOffset.y,
+    ),
+    canonicalChunk: Object.freeze({ ...candidate.canonicalChunk }),
+    imageOffset: Object.freeze({ ...candidate.imageOffset }),
     band: candidate.ringDistance === 0 ? "visible" : "prefetch",
     ringDistance: candidate.ringDistance,
     loadPriority,
@@ -172,17 +164,52 @@ function rankCandidates(
 }
 
 interface Candidate {
-  readonly x: number;
-  readonly y: number;
+  readonly canonicalChunk: Readonly<GridPoint>;
+  readonly imageOffset: Readonly<WorldPoint>;
+  readonly liftedBounds: Readonly<LiftedTileBounds>;
   readonly ringDistance: number;
   readonly centreDistanceSquared4: number;
+}
+
+function candidateForImage(
+  image: Readonly<PeriodicChunkImage>,
+  topology: WorldTopology,
+  visible: Readonly<LiftedTileBounds>,
+): Candidate {
+  const canonicalMinX = image.canonicalChunk.x * topology.chunkSize;
+  const canonicalMinY = image.canonicalChunk.y * topology.chunkSize;
+  const imageTileOffsetX = image.imageOffset.x / topology.tileSize;
+  const imageTileOffsetY = image.imageOffset.y / topology.tileSize;
+  const liftedBounds = Object.freeze({
+    minX: canonicalMinX + imageTileOffsetX,
+    minY: canonicalMinY + imageTileOffsetY,
+    maxX: Math.min(topology.tileWidth, canonicalMinX + topology.chunkSize) - 1 + imageTileOffsetX,
+    maxY: Math.min(topology.tileHeight, canonicalMinY + topology.chunkSize) - 1 + imageTileOffsetY,
+  });
+  const gapX = axisGap(liftedBounds.minX, liftedBounds.maxX, visible.minX, visible.maxX);
+  const gapY = axisGap(liftedBounds.minY, liftedBounds.maxY, visible.minY, visible.maxY);
+  const ringDistance = Math.ceil(Math.max(gapX, gapY) / topology.chunkSize);
+  const centreDx2 = liftedBounds.minX + liftedBounds.maxX - visible.minX - visible.maxX;
+  const centreDy2 = liftedBounds.minY + liftedBounds.maxY - visible.minY - visible.maxY;
+
+  return {
+    canonicalChunk: image.canonicalChunk,
+    imageOffset: image.imageOffset,
+    liftedBounds,
+    ringDistance,
+    centreDistanceSquared4: centreDx2 * centreDx2 + centreDy2 * centreDy2,
+  };
 }
 
 function compareCandidate(left: Candidate, right: Candidate): number {
   return left.ringDistance - right.ringDistance
     || left.centreDistanceSquared4 - right.centreDistanceSquared4
-    || left.y - right.y
-    || left.x - right.x;
+    || left.liftedBounds.minY - right.liftedBounds.minY
+    || left.liftedBounds.minX - right.liftedBounds.minX
+    || left.canonicalChunk.y - right.canonicalChunk.y
+    || left.canonicalChunk.x - right.canonicalChunk.x
+    || left.imageOffset.y - right.imageOffset.y
+    || left.imageOffset.x - right.imageOffset.x;
 }
 
 function compareDeactivation(
@@ -190,30 +217,37 @@ function compareDeactivation(
   right: Readonly<DeactivatedChunkEntry>,
 ): number {
   return right.loadPriority - left.loadPriority
-    || left.coordinate.y - right.coordinate.y
-    || left.coordinate.x - right.coordinate.x;
+    || left.imageOffset.y - right.imageOffset.y
+    || left.imageOffset.x - right.imageOffset.x
+    || left.canonicalChunk.y - right.canonicalChunk.y
+    || left.canonicalChunk.x - right.canonicalChunk.x;
 }
 
-function distanceFromRegion(x: number, y: number, region: Readonly<ChunkRegion>): number {
-  const dx = x < region.minX ? region.minX - x : x > region.maxX ? x - region.maxX : 0;
-  const dy = y < region.minY ? region.minY - y : y > region.maxY ? y - region.maxY : 0;
-  return Math.max(dx, dy);
+function axisGap(
+  leftMinimum: number,
+  leftMaximum: number,
+  rightMinimum: number,
+  rightMaximum: number,
+): number {
+  if (leftMaximum < rightMinimum) return rightMinimum - leftMaximum;
+  if (leftMinimum > rightMaximum) return leftMinimum - rightMaximum;
+  return 0;
 }
 
-function intersectRegions(
-  left: Readonly<ChunkRegion>,
-  right: Readonly<ChunkRegion>,
-): ChunkRegion | null {
-  const minX = Math.max(left.minX, right.minX);
-  const minY = Math.max(left.minY, right.minY);
-  const maxX = Math.min(left.maxX, right.maxX);
-  const maxY = Math.min(left.maxY, right.maxY);
-  return minX > maxX || minY > maxY ? null : { minX, minY, maxX, maxY };
+function expandedBounds(bounds: Readonly<LiftedTileBounds>, amount: number): LiftedTileBounds {
+  const expanded = {
+    minX: bounds.minX - amount,
+    minY: bounds.minY - amount,
+    maxX: bounds.maxX + amount,
+    maxY: bounds.maxY + amount,
+  };
+  assertBounds(expanded, "expanded tile bounds");
+  return expanded;
 }
 
-function regionsEqual(
-  left: Readonly<ChunkRegion> | null,
-  right: Readonly<ChunkRegion> | null,
+function boundsEqual(
+  left: Readonly<LiftedTileBounds> | null,
+  right: Readonly<LiftedTileBounds> | null,
 ): boolean {
   if (left === null || right === null) return left === right;
   return left.minX === right.minX
@@ -226,7 +260,11 @@ function entriesEqual(
   left: Readonly<ActiveChunkEntry>,
   right: Readonly<ActiveChunkEntry>,
 ): boolean {
-  return left.key === right.key
+  return left.viewKey === right.viewKey
+    && left.canonicalChunk.x === right.canonicalChunk.x
+    && left.canonicalChunk.y === right.canonicalChunk.y
+    && left.imageOffset.x === right.imageOffset.x
+    && left.imageOffset.y === right.imageOffset.y
     && left.band === right.band
     && left.ringDistance === right.ringDistance
     && left.loadPriority === right.loadPriority;
@@ -246,16 +284,16 @@ function freezeEntries(entries: readonly ActiveChunkEntry[]): readonly Readonly<
   return Object.freeze(entries);
 }
 
-function freezeRegion(region: Readonly<ChunkRegion>): Readonly<ChunkRegion> {
-  return Object.freeze({ ...region });
+function freezeBounds(bounds: Readonly<LiftedTileBounds>): Readonly<LiftedTileBounds> {
+  return Object.freeze({ ...bounds });
 }
 
-function assertRegion(region: Readonly<ChunkRegion>, label: string): void {
-  assertSafeInteger(region.minX, `${label}.minX`);
-  assertSafeInteger(region.minY, `${label}.minY`);
-  assertSafeInteger(region.maxX, `${label}.maxX`);
-  assertSafeInteger(region.maxY, `${label}.maxY`);
-  if (region.minX > region.maxX || region.minY > region.maxY) {
+function assertBounds(bounds: Readonly<LiftedTileBounds>, label: string): void {
+  assertSafeInteger(bounds.minX, `${label}.minX`);
+  assertSafeInteger(bounds.minY, `${label}.minY`);
+  assertSafeInteger(bounds.maxX, `${label}.maxX`);
+  assertSafeInteger(bounds.maxY, `${label}.maxY`);
+  if (bounds.minX > bounds.maxX || bounds.minY > bounds.maxY) {
     throw new RangeError(`${label} minimums cannot exceed maximums`);
   }
 }

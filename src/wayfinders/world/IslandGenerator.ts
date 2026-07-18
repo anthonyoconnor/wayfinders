@@ -15,6 +15,7 @@ import {
 } from "./AuthoredIslandCatalog";
 import { collisionSubcellBit } from "./CollisionMask";
 import type { WorldGrid } from "./WorldGrid";
+import type { WorldTopology } from "./WorldTopology";
 
 export enum IslandKind {
   HighIsland = "high-island",
@@ -58,7 +59,7 @@ export interface GeneratedIsland {
 
 interface IslandProfile extends Omit<GeneratedIsland, "center" | "bounds"> {}
 
-export type IslandPlacementRejection = "edge" | "home-clearance" | "starter-lane" | "island-channel";
+export type IslandPlacementRejection = "home-clearance" | "starter-lane" | "island-channel";
 
 export interface IslandPlacementFailureDiagnostics {
   readonly seed: number;
@@ -90,9 +91,9 @@ export class IslandPlacementError extends RangeError {
       + `for seed ${diagnostics.seed} `
       + `after ${diagnostics.candidatesEvaluated} bounded candidates in `
       + `${diagnostics.worldWidth}x${diagnostics.worldHeight}; rejected `
-      + `edge=${rejected.edge}, home-clearance=${rejected["home-clearance"]}, `
+      + `home-clearance=${rejected["home-clearance"]}, `
       + `starter-lane=${rejected["starter-lane"]}, island-channel=${rejected["island-channel"]}. `
-      + `Reduce island count/radii, edge margin, home clearance, or minimum channel width.`,
+      + `Reduce island count/radii, home clearance, or minimum channel width.`,
     );
     this.name = "IslandPlacementError";
     this.diagnostics = diagnostics;
@@ -120,6 +121,32 @@ function angularDistance(a: number, b: number): number {
   return Math.abs(((a - b + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI);
 }
 
+/** Exact finite lifted opening corridor used by periodic island placement. */
+export function intersectsPeriodicStarterLane(
+  topology: Readonly<WorldTopology>,
+  dock: Readonly<GridPoint>,
+  center: Readonly<GridPoint>,
+  outerRadius: number,
+  corridorHalfWidth: number,
+): boolean {
+  const minimumX = dock.x;
+  const maximumX = dock.x + Math.floor(topology.tileWidth / 2);
+  const minimumY = dock.y - corridorHalfWidth;
+  const maximumY = dock.y + corridorHalfWidth;
+  const imageXs = topology.wrapsX ? [-topology.tileWidth, 0, topology.tileWidth] : [0];
+  const imageYs = topology.wrapsY ? [-topology.tileHeight, 0, topology.tileHeight] : [0];
+  for (const imageY of imageYs) {
+    for (const imageX of imageXs) {
+      const liftedX = center.x + imageX;
+      const liftedY = center.y + imageY;
+      const closestX = Math.max(minimumX, Math.min(maximumX, liftedX));
+      const closestY = Math.max(minimumY, Math.min(maximumY, liftedY));
+      if (Math.hypot(liftedX - closestX, liftedY - closestY) <= outerRadius) return true;
+    }
+  }
+  return false;
+}
+
 /** Deterministic, bounded scatter and terrain painter for non-home islands. */
 export class IslandGenerator {
   constructor(private readonly config: PrototypeConfig = prototypeConfig) {}
@@ -133,12 +160,22 @@ export class IslandGenerator {
     authoredCatalog: Readonly<AuthoredIslandCatalog> = EMPTY_AUTHORED_ISLAND_CATALOG,
   ): GeneratedIsland[] {
     const profiles = this.buildProfiles(seed, validateAuthoredIslandCatalog(authoredCatalog));
+    for (const profile of profiles) {
+      const extent = this.profileExtent(profile);
+      if (extent.width >= grid.width || extent.height >= grid.height) {
+        throw new RangeError(
+          `Island ${profile.id} footprint ${extent.width}x${extent.height} must be strictly smaller than `
+          + `${grid.width}x${grid.height} gameplay world`,
+        );
+      }
+    }
     const placed: GeneratedIsland[] = [];
     const maximumOuterRadius = profiles.reduce(
       (maximum, profile) => Math.max(maximum, profile.outerRadius),
       0,
     );
     const placementIndex = new IslandPlacementIndex(
+      grid.topology,
       maximumOuterRadius,
       this.config.islands.minimumChannelWidth,
     );
@@ -351,10 +388,12 @@ export class IslandGenerator {
     for (let attempt = 0; attempt < this.config.islands.placementAttempts; attempt++) {
       const angle = seededValue(seed + PLACEMENT_NAMESPACE, profile.id, attempt) * TWO_PI;
       const distanceJitter = (seededValue(seed + PLACEMENT_NAMESPACE + 17, profile.id, attempt) - 0.5) * 3;
-      const center = {
+      const rawCenter = {
         x: Math.round(home.x + Math.cos(angle) * (baseDistance + distanceJitter)),
         y: Math.round(home.y + Math.sin(angle) * (baseDistance + distanceJitter)),
       };
+      const center = grid.topology.canonicalizeTile(rawCenter.x, rawCenter.y);
+      if (!center) continue;
       if (this.isValidCenter(grid, home, dock, profile, center, placementIndex, diagnostics)) {
         return this.finishRecord(profile, center);
       }
@@ -371,15 +410,13 @@ export class IslandGenerator {
     placementIndex: IslandPlacementIndex,
   ): GeneratedIsland {
     const diagnostics = this.createAttemptDiagnostics();
-    const margin = Math.ceil(profile.outerRadius + this.config.islands.edgeMargin);
-    const spanX = grid.width - margin * 2;
-    const spanY = grid.height - margin * 2;
-    if (spanX < 0 || spanY < 0) {
+    const extent = this.profileExtent(profile);
+    if (extent.width >= grid.width || extent.height >= grid.height) {
       throw this.createPlacementError(grid, seed, profile, placementIndex, diagnostics);
     }
 
     for (let attempt = 0; attempt < this.config.islands.placementAttempts; attempt++) {
-      const center = this.samplePlacementCenter(seed, profile.id, attempt, margin, spanX, spanY);
+      const center = this.samplePlacementCenter(grid, seed, profile.id, attempt);
       if (this.isValidCenter(grid, home, dock, profile, center, placementIndex, diagnostics)) {
         return this.finishRecord(profile, center);
       }
@@ -388,20 +425,18 @@ export class IslandGenerator {
   }
 
   private samplePlacementCenter(
+    grid: WorldGrid,
     seed: number,
     islandId: number,
     attempt: number,
-    margin: number,
-    spanX: number,
-    spanY: number,
   ): GridPoint {
     const { archipelagoBias, archipelagoClusters, archipelagoRadius } = this.config.islands;
     const useArchipelago = archipelagoClusters > 0
       && seededValue(seed + PLACEMENT_NAMESPACE + 101, islandId, attempt) < archipelagoBias;
     if (!useArchipelago) {
       return {
-        x: margin + Math.floor(seededValue(seed + PLACEMENT_NAMESPACE, islandId, attempt * 2) * (spanX + 1)),
-        y: margin + Math.floor(seededValue(seed + PLACEMENT_NAMESPACE, islandId, attempt * 2 + 1) * (spanY + 1)),
+        x: Math.floor(seededValue(seed + PLACEMENT_NAMESPACE, islandId, attempt * 2) * grid.width),
+        y: Math.floor(seededValue(seed + PLACEMENT_NAMESPACE, islandId, attempt * 2 + 1) * grid.height),
       };
     }
 
@@ -409,18 +444,18 @@ export class IslandGenerator {
       archipelagoClusters - 1,
       Math.floor(seededValue(seed + PLACEMENT_NAMESPACE + 211, islandId, attempt) * archipelagoClusters),
     );
-    const clusterX = margin + seededValue(seed + PLACEMENT_NAMESPACE + 307, cluster, 0) * spanX;
-    const clusterY = margin + seededValue(seed + PLACEMENT_NAMESPACE + 307, cluster, 1) * spanY;
+    const clusterX = seededValue(seed + PLACEMENT_NAMESPACE + 307, cluster, 0) * grid.width;
+    const clusterY = seededValue(seed + PLACEMENT_NAMESPACE + 307, cluster, 1) * grid.height;
     const angle = seededValue(seed + PLACEMENT_NAMESPACE + 401, islandId, attempt) * TWO_PI;
     // Square root produces uniform area density rather than crowding every
     // candidate into the exact centre of an archipelago.
     const distance = Math.sqrt(
       seededValue(seed + PLACEMENT_NAMESPACE + 503, islandId, attempt),
     ) * archipelagoRadius;
-    return {
-      x: Math.max(margin, Math.min(margin + spanX, Math.round(clusterX + Math.cos(angle) * distance))),
-      y: Math.max(margin, Math.min(margin + spanY, Math.round(clusterY + Math.sin(angle) * distance))),
-    };
+    return grid.topology.normalizeTile(
+      Math.round(clusterX + Math.cos(angle) * distance),
+      Math.round(clusterY + Math.sin(angle) * distance),
+    );
   }
 
   private placeFallback(
@@ -454,23 +489,14 @@ export class IslandGenerator {
     diagnostics: PlacementAttemptDiagnostics,
   ): boolean {
     diagnostics.candidatesEvaluated++;
-    const edge = this.config.islands.edgeMargin;
-    if (
-      center.x - profile.outerRadius < edge
-      || center.y - profile.outerRadius < edge
-      || center.x + profile.outerRadius > grid.width - 1 - edge
-      || center.y + profile.outerRadius > grid.height - 1 - edge
-    ) return this.reject(diagnostics, "edge");
-    if (Math.hypot(center.x - home.x, center.y - home.y) < this.minimumHomeDistance(profile)) {
+    const homeDisplacement = grid.topology.minimumImageTileDisplacement(home, center);
+    if (Math.hypot(homeDisplacement.x, homeDisplacement.y) < this.minimumHomeDistance(profile)) {
       return this.reject(diagnostics, "home-clearance");
     }
 
-    const corridor = this.config.islands.safeCorridorHalfWidth;
-    if (
-      center.x + profile.outerRadius >= dock.x
-      && center.y - profile.outerRadius <= dock.y + corridor
-      && center.y + profile.outerRadius >= dock.y - corridor
-    ) return this.reject(diagnostics, "starter-lane");
+    if (this.intersectsStarterLane(grid, dock, center, profile.outerRadius)) {
+      return this.reject(diagnostics, "starter-lane");
+    }
 
     if (placementIndex.findConflict(center, profile.outerRadius)) {
       return this.reject(diagnostics, "island-channel");
@@ -482,7 +508,6 @@ export class IslandGenerator {
     return {
       candidatesEvaluated: 0,
       rejectionCounts: {
-        edge: 0,
         "home-clearance": 0,
         "starter-lane": 0,
         "island-channel": 0,
@@ -530,6 +555,32 @@ export class IslandGenerator {
       + profile.outerRadius;
   }
 
+  private profileExtent(profile: Readonly<IslandProfile>): Readonly<{ width: number; height: number }> {
+    if (profile.sourceKind === "authored" && profile.authoredCollision) {
+      return {
+        width: profile.authoredCollision.gridWidth,
+        height: profile.authoredCollision.gridHeight,
+      };
+    }
+    const extent = Math.ceil(profile.outerRadius);
+    return { width: extent * 2 + 1, height: extent * 2 + 1 };
+  }
+
+  private intersectsStarterLane(
+    grid: Readonly<WorldGrid>,
+    dock: Readonly<GridPoint>,
+    center: Readonly<GridPoint>,
+    outerRadius: number,
+  ): boolean {
+    return intersectsPeriodicStarterLane(
+      grid.topology,
+      dock,
+      center,
+      outerRadius,
+      this.config.islands.safeCorridorHalfWidth,
+    );
+  }
+
   private finishRecord(profile: IslandProfile, center: GridPoint): GeneratedIsland {
     if (profile.sourceKind === "authored" && profile.authoredCollision) {
       const minX = center.x - Math.floor(profile.authoredCollision.gridWidth / 2);
@@ -575,11 +626,13 @@ export class IslandGenerator {
       collision.gridWidth,
       collision.gridHeight,
     );
+    const written = new Set<number>();
     for (let cellY = 0; cellY < collision.gridHeight; cellY++) {
       for (let cellX = 0; cellX < collision.gridWidth; cellX++) {
-        const x = island.bounds.minX + cellX;
-        const y = island.bounds.minY + cellY;
-        if (!grid.inBounds(x, y)) throw new RangeError(`Authored island ${island.authoredAssetId} left world bounds`);
+        const liftedX = island.bounds.minX + cellX;
+        const liftedY = island.bounds.minY + cellY;
+        const point = grid.topology.canonicalizeTile(liftedX, liftedY);
+        if (!point) throw new RangeError(`Authored island ${island.authoredAssetId} left bounded world limits`);
         const index = cellY * collision.gridWidth + cellX;
         const mask = masks[index];
         if (mask === 0 && !authoredShelfContains(
@@ -591,10 +644,13 @@ export class IslandGenerator {
           cellY,
           island.shapeSeed,
         )) continue;
-        grid.setTerrain(x, y, mask === 0 ? TerrainType.ShallowOcean : TerrainType.Land);
-        grid.setFineCollisionMask(x, y, mask);
-        grid.setIslandId(x, y, island.id);
-        grid.setKnowledge(x, y, KnowledgeState.Unknown, 0);
+        const worldIndex = grid.index(point.x, point.y);
+        if (written.has(worldIndex)) continue;
+        written.add(worldIndex);
+        grid.setTerrain(point.x, point.y, mask === 0 ? TerrainType.ShallowOcean : TerrainType.Land);
+        grid.setFineCollisionMask(point.x, point.y, mask);
+        grid.setIslandId(point.x, point.y, island.id);
+        grid.setKnowledge(point.x, point.y, KnowledgeState.Unknown, 0);
       }
     }
     const shelfRadius = 2;
@@ -609,11 +665,13 @@ export class IslandGenerator {
           cellY,
           island.shapeSeed,
         )) continue;
-        const x = island.bounds.minX + cellX;
-        const y = island.bounds.minY + cellY;
-        if (!grid.inBounds(x, y) || grid.getIslandId(x, y) >= 0) continue;
-        if (grid.getTerrain(x, y) === TerrainType.DeepOcean) {
-          grid.setTerrain(x, y, TerrainType.ShallowOcean);
+        const point = grid.topology.canonicalizeTile(
+          island.bounds.minX + cellX,
+          island.bounds.minY + cellY,
+        );
+        if (!point || grid.getIslandId(point.x, point.y) >= 0) continue;
+        if (grid.getTerrain(point.x, point.y) === TerrainType.DeepOcean) {
+          grid.setTerrain(point.x, point.y, TerrainType.ShallowOcean);
         }
       }
     }
@@ -625,24 +683,29 @@ export class IslandGenerator {
     const passageAngle = seededValue(seed + TERRAIN_NAMESPACE, island.id, 0) * TWO_PI - Math.PI;
     const passageHalfWidth = Math.max(0.24, 1.25 / Math.max(island.radiusX, island.radiusY));
 
-    for (let y = island.bounds.minY; y <= island.bounds.maxY; y++) {
-      for (let x = island.bounds.minX; x <= island.bounds.maxX; x++) {
-        if (!grid.inBounds(x, y)) continue;
-        const dx = x - island.center.x;
-        const dy = y - island.center.y;
+    const written = new Set<number>();
+    for (let liftedY = island.bounds.minY; liftedY <= island.bounds.maxY; liftedY++) {
+      for (let liftedX = island.bounds.minX; liftedX <= island.bounds.maxX; liftedX++) {
+        const point = grid.topology.canonicalizeTile(liftedX, liftedY);
+        if (!point) throw new RangeError(`Procedural island ${island.id} left bounded world limits`);
+        const worldIndex = grid.index(point.x, point.y);
+        if (written.has(worldIndex)) continue;
+        written.add(worldIndex);
+        const dx = liftedX - island.center.x;
+        const dy = liftedY - island.center.y;
         const localX = cosine * dx + sine * dy;
         const localY = -sine * dx + cosine * dy;
         const normalized = Math.hypot(localX / island.radiusX, localY / island.radiusY);
-        const coarse = seededValue(island.shapeSeed, Math.floor(x / 2), Math.floor(y / 2)) - 0.5;
-        const fine = seededValue(island.shapeSeed + SHAPE_NAMESPACE, x, y) - 0.5;
+        const coarse = seededValue(island.shapeSeed, Math.floor(dx / 2), Math.floor(dy / 2)) - 0.5;
+        const fine = seededValue(island.shapeSeed + SHAPE_NAMESPACE, dx, dy) - 0.5;
         const shaped = normalized + (coarse * 0.72 + fine * 0.28) * this.config.islands.edgeNoise;
-        const detail = seededValue(seed + TERRAIN_NAMESPACE + island.id * 101, x, y);
+        const detail = seededValue(seed + TERRAIN_NAMESPACE + island.id * 101, dx, dy);
         const angle = Math.atan2(localY / island.radiusY, localX / island.radiusX);
         const terrain = this.chooseTerrain(island.kind, shaped, detail, angle, passageAngle, passageHalfWidth);
         if (terrain === undefined) continue;
-        grid.setTerrain(x, y, terrain);
-        grid.setIslandId(x, y, island.id);
-        grid.setKnowledge(x, y, KnowledgeState.Unknown, 0);
+        grid.setTerrain(point.x, point.y, terrain);
+        grid.setIslandId(point.x, point.y, island.id);
+        grid.setKnowledge(point.x, point.y, KnowledgeState.Unknown, 0);
       }
     }
   }
@@ -704,16 +767,17 @@ export class IslandGenerator {
   }
 
   private setPassageTile(grid: WorldGrid, island: GeneratedIsland, x: number, y: number): void {
-    if (!grid.inBounds(x, y)) throw new RangeError(`Atoll ${island.id} passage left the world bounds`);
-    const existingIslandId = grid.getTile(x, y).islandId;
+    const point = grid.topology.canonicalizeTile(x, y);
+    if (!point) throw new RangeError(`Atoll ${island.id} passage left bounded world limits`);
+    const existingIslandId = grid.getTile(point.x, point.y).islandId;
     if (existingIslandId > 0 && existingIslandId !== island.id) {
       throw new RangeError(`Atoll ${island.id} passage intersected island ${existingIslandId}`);
     }
-    grid.setTerrain(x, y, TerrainType.ShallowOcean);
+    grid.setTerrain(point.x, point.y, TerrainType.ShallowOcean);
     if (Math.hypot(x - island.center.x, y - island.center.y) <= island.outerRadius) {
-      grid.setIslandId(x, y, island.id);
+      grid.setIslandId(point.x, point.y, island.id);
     }
-    grid.setKnowledge(x, y, KnowledgeState.Unknown, 0);
+    grid.setKnowledge(point.x, point.y, KnowledgeState.Unknown, 0);
   }
 
   private assertOpenOcean(
@@ -725,45 +789,75 @@ export class IslandGenerator {
     const start = grid.index(dock.x, dock.y);
     if (!graph.isNavigationNodePassable(start)) throw new RangeError("Island generation blocked the home dock");
     const visited = new Uint8Array(grid.tileCount);
+    const imageOffsetX = new Int32Array(grid.tileCount);
+    const imageOffsetY = new Int32Array(grid.tileCount);
     const queue = new Int32Array(grid.tileCount);
-    const unreachedAtollCenters = new Set<number>();
-    for (const island of islands) {
-      if (island.kind === IslandKind.Atoll) {
-        unreachedAtollCenters.add(grid.index(island.center.x, island.center.y));
+    const componentByIndex = new Uint32Array(grid.tileCount);
+    const componentSizes: number[] = [0];
+    const componentWinding: Array<Readonly<{ horizontal: boolean; vertical: boolean }>> = [
+      { horizontal: false, vertical: false },
+    ];
+    let componentId = 0;
+
+    const traverse = (componentStart: number): void => {
+      componentId++;
+      let head = 0;
+      let tail = 0;
+      let horizontal = false;
+      let vertical = false;
+      visited[componentStart] = 1;
+      componentByIndex[componentStart] = componentId;
+      imageOffsetX[componentStart] = 0;
+      imageOffsetY[componentStart] = 0;
+      queue[tail++] = componentStart;
+      while (head < tail) {
+        const index = queue[head++];
+        graph.forEachTraversableCardinalEdge(
+          index,
+          (neighbor, _x, _y, _direction, _reverseDirection, edgeOffsetX, edgeOffsetY) => {
+            const proposedX = imageOffsetX[index] + edgeOffsetX;
+            const proposedY = imageOffsetY[index] + edgeOffsetY;
+            if (!visited[neighbor]) {
+              visited[neighbor] = 1;
+              componentByIndex[neighbor] = componentId;
+              imageOffsetX[neighbor] = proposedX;
+              imageOffsetY[neighbor] = proposedY;
+              queue[tail++] = neighbor;
+              return;
+            }
+            if (componentByIndex[neighbor] !== componentId) return;
+            const cycleX = proposedX - imageOffsetX[neighbor];
+            const cycleY = proposedY - imageOffsetY[neighbor];
+            horizontal ||= cycleX !== 0 && cycleX % grid.width === 0 && cycleY === 0;
+            vertical ||= cycleY !== 0 && cycleY % grid.height === 0 && cycleX === 0;
+          },
+        );
+      }
+      componentSizes[componentId] = tail;
+      componentWinding[componentId] = { horizontal, vertical };
+    };
+
+    traverse(start);
+    const dockComponentId = componentByIndex[start];
+    for (let index = 0; index < grid.tileCount; index++) {
+      if (visited[index] || !graph.isNavigationNodePassable(index)) continue;
+      traverse(index);
+    }
+
+    const dockSize = componentSizes[dockComponentId];
+    for (let id = 1; id < componentSizes.length; id++) {
+      if (id !== dockComponentId && componentSizes[id] >= dockSize) {
+        throw new RangeError("The home dock ocean component is not uniquely largest");
       }
     }
-    let head = 0;
-    let tail = 0;
-    visited[start] = 1;
-    queue[tail++] = start;
-    let reachedEdges = 0;
-    const allEdges = 0b1111;
-
-    while (head < tail) {
-      const index = queue[head++];
-      const x = index % grid.width;
-      const y = Math.floor(index / grid.width);
-      if (y === 0) reachedEdges |= 0b0001;
-      if (x === grid.width - 1) reachedEdges |= 0b0010;
-      if (y === grid.height - 1) reachedEdges |= 0b0100;
-      if (x === 0) reachedEdges |= 0b1000;
-      unreachedAtollCenters.delete(index);
-      if (reachedEdges === allEdges && unreachedAtollCenters.size === 0) return;
-
-      graph.forEachTraversableCardinalNeighbor(index, (neighbor) => {
-        if (visited[neighbor]) return;
-        visited[neighbor] = 1;
-        queue[tail++] = neighbor;
-      });
-    }
-
-    if (reachedEdges !== allEdges) {
-      throw new RangeError("Generated islands disconnected the home dock from the open ocean");
+    const winding = componentWinding[dockComponentId];
+    if (!winding.horizontal || !winding.vertical) {
+      throw new RangeError("The home dock ocean lacks independent horizontal and vertical circumnavigation cycles");
     }
     for (const island of islands) {
       if (island.kind !== IslandKind.Atoll) continue;
-      if (!visited[grid.index(island.center.x, island.center.y)]) {
-        throw new RangeError(`Atoll ${island.id} lagoon is disconnected from the open ocean`);
+      if (componentByIndex[grid.index(island.center.x, island.center.y)] !== dockComponentId) {
+        throw new RangeError(`Atoll ${island.id} lagoon is outside the global ocean component`);
       }
     }
   }

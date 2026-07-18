@@ -9,6 +9,7 @@ import {
 } from "../src/wayfinders/features/fishing";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
+import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology";
 import { makeConfig } from "./helpers";
 
 function definition(
@@ -33,7 +34,7 @@ function definition(
 
 describe("fishing feature vertical slice", () => {
   it("handles a survey through the command boundary and returns typed mutation effects", () => {
-    const world = new WorldGrid(5, 2, 5);
+    const world = new WorldGrid(5, 2, 5, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const definitions = Object.freeze([
       definition(0, 1, "rich"),

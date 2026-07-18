@@ -1,3 +1,5 @@
+import type { WorldTopology } from "../WorldTopology";
+
 export type SpatialEntityId = string | number;
 
 export interface SpatialPoint {
@@ -5,7 +7,7 @@ export interface SpatialPoint {
   readonly y: number;
 }
 
-/** Closed axis-aligned bounds in logical world coordinates. */
+/** Closed axis-aligned bounds in logical tile coordinates. */
 export interface SpatialBounds {
   readonly minX: number;
   readonly minY: number;
@@ -26,9 +28,13 @@ export interface SpatialEntityDescriptor<TId extends SpatialEntityId = SpatialEn
 
 export interface SpatialEntityMembership<TId extends SpatialEntityId = SpatialEntityId> {
   readonly entityId: TId;
-  /** The chunk containing the centre of the descriptor bounds. */
+  /** Canonical centre of the descriptor's lifted source bounds. */
+  readonly canonicalCentre: Readonly<SpatialPoint>;
+  /** One to four canonical pieces representing the complete periodic footprint. */
+  readonly footprint: readonly Readonly<SpatialBounds>[];
+  /** The canonical chunk containing `canonicalCentre`. */
   readonly homeChunk: Readonly<SpatialChunk>;
-  /** Every chunk intersected by the descriptor bounds, in row-major order. */
+  /** Every canonical chunk intersected by the footprint, in row-major order. */
   readonly chunks: readonly Readonly<SpatialChunk>[];
 }
 
@@ -63,8 +69,8 @@ export interface SpatialIndexMutation<TId extends SpatialEntityId = SpatialEntit
 }
 
 export interface WorldSpatialIndexOptions {
-  /** Logical coordinate width/height of one square bucket. */
-  readonly chunkSize: number;
+  /** Explicit dimensions, chunk geometry, and bounded/wrapped axis policy. */
+  readonly topology: WorldTopology;
   /** Guards accidental indexing of world-spanning descriptors. */
   readonly maxChunksPerEntity?: number;
 }

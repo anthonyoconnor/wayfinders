@@ -1,18 +1,17 @@
-export { ActiveChunkSet, activeChunkKey } from "./ActiveChunkSet";
+export { ActiveChunkSet, activeChunkViewKey } from "./ActiveChunkSet";
 export {
   DEFAULT_ACTIVE_CHUNK_BUDGET,
   DEFAULT_ACTIVE_CHUNK_PREFETCH_RING,
-  viewportChunkRegion,
-} from "./ViewportChunkRegion";
-export type { WorldChunkLayout, WorldPixelViewport } from "./ViewportChunkRegion";
+  viewportTileBounds,
+} from "./ViewportTileBounds";
+export type { WorldPixelViewport } from "./ViewportTileBounds";
 export type {
   ActiveChunkBand,
-  ActiveChunkCoordinate,
   ActiveChunkDelta,
   ActiveChunkEntry,
   ActiveChunkSetOptions,
   ActiveChunkTelemetry,
   ChunkDeactivationReason,
-  ChunkRegion,
   DeactivatedChunkEntry,
+  LiftedTileBounds,
 } from "./ActiveChunkContracts";

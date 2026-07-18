@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { resolveAuthoredHomeIslandPlacement } from "../../src/wayfinders/assets/AuthoredHomeIsland.ts";
 import { IslandGenerator } from "../../src/wayfinders/world/IslandGenerator.ts";
 import { WorldGrid } from "../../src/wayfinders/world/WorldGrid.ts";
+import { WRAPPING_WORLD_TOPOLOGY } from "../../src/wayfinders/world/WorldTopology.ts";
 import { createWorldProfileConfig } from "../fixtures/worldProfiles.ts";
 
 describe("large-world island placement", () => {
@@ -10,7 +11,13 @@ describe("large-world island placement", () => {
     "places and replays all 300 P2 islands for seed %i",
     (seed) => {
       const config = createWorldProfileConfig("P2");
-      const grid = new WorldGrid(config.world.width, config.world.height, config.navigation.chunkSize);
+      const grid = new WorldGrid(
+        config.world.width,
+        config.world.height,
+        config.navigation.chunkSize,
+        WRAPPING_WORLD_TOPOLOGY,
+        config.navigation.tileSize,
+      );
       const homePlacement = {
         x: Math.floor(grid.width / 2),
         y: Math.floor(grid.height / 2),
@@ -28,9 +35,10 @@ describe("large-world island placement", () => {
         for (let right = left + 1; right < islands.length; right++) {
           const a = islands[left];
           const b = islands[right];
+          const displacement = grid.topology.minimumImageTileDisplacement(a.center, b.center);
           narrowestChannelSurplus = Math.min(
             narrowestChannelSurplus,
-            Math.hypot(a.center.x - b.center.x, a.center.y - b.center.y)
+            Math.hypot(displacement.x, displacement.y)
               - a.outerRadius
               - b.outerRadius
               - config.islands.minimumChannelWidth,

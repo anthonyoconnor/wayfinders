@@ -53,17 +53,23 @@ export interface MovementInput {
 }
 
 export interface TravelSegment {
+  /** Lifted coordinates in the physical image traversed during this update. */
   fromWorldX: number;
   fromWorldY: number;
   toWorldX: number;
   toWorldY: number;
   distancePixels: number;
+  /** Canonical tile containing the positive-length interior of this segment. */
   tileX: number;
   tileY: number;
 }
 
 export interface MovementResult {
   movedDistancePixels: number;
+  /** Accepted signed physical displacement before canonicalizing the stored pose. */
+  liftedDisplacement: WorldPoint;
+  /** Whole-world pixel offset satisfying lifted final = canonical final + offset. */
+  worldImageOffset: WorldPoint;
   collided: boolean;
   enteredTiles: GridPoint[];
   segments: TravelSegment[];
