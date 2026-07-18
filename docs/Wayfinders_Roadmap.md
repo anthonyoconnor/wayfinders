@@ -1,8 +1,8 @@
 # Wayfinders current roadmap
 
-Status: forward plan. Gameplay is complete through `GP-5.1`; the Great Hall
+Status: forward plan. Gameplay is complete through `GP-5.2`; the Great Hall
 track is complete through `GR-5.3`; cloud atmosphere is complete through
-`CLD-1`.
+`CLD-1`; and water presentation is complete through `WTR-2.6`.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -23,7 +23,7 @@ authorized.
 - `GR-x.y` identifies graphics, asset-pipeline, and production-presentation
   milestones and acceptance gates.
 - `AUD-x` identifies game-audio milestones and their acceptance gates.
-- `WTR-x.y` identifies the proposed water-presentation track.
+- `WTR-x.y` identifies water-presentation milestones and acceptance gates.
 - `CLD-x.y` identifies cloud-atmosphere milestones and acceptance gates.
 - A milestone is complete only when its behavior, tests, maintainability,
   performance criteria, and acceptance evidence pass.
@@ -50,15 +50,15 @@ profiles. Its current contracts are documented in the technical design and
 architecture map; its delivery history is archived.
 
 The asset-workspace shell, focused island workshop, single island-availability
-lifecycle, deterministic authored-island world planning, and chunk-bounded
-authored runtime presentation and independent revealed-map cloud atmosphere are
-implemented. No further production-presentation milestone is currently
-proposed.
+lifecycle, deterministic authored-island world planning, chunk-bounded authored
+runtime presentation, independent revealed-map cloud atmosphere, and production
+water system are implemented. No further production-presentation milestone is
+currently proposed.
 
 The Voyage Sense thread and its supply commitments are implemented through
-`GP-5.2`. Remaining audio acceptance follow-up and the water-system proposal
-remain separate candidate tracks. Great Hall concept and planning work is
-complete. The product owner accepted the
+`GP-5.2`. Remaining audio acceptance follow-up requires no new runtime scope;
+the production water system is complete through `WTR-2.6`. Great Hall concept
+and planning work is complete. The product owner accepted the
 `GR-5.2` view-only approval workspace and recorded **Go** on 2026-07-16. The
 shared presentation contract, renderer, fixture, game adapter, and bounded era
 integration in `GR-5.3` are implemented.
@@ -124,9 +124,9 @@ numbers; exact quantities remain available to assistive technology.
 
 ### AUD — Game sound and music layer
 
-Status: implemented through `AUD-5` on 2026-07-17; product-owner audition plus
-keyboard/media, audible-loop, live cue, crossfade, and ducking browser
-acceptance remains to be recorded.
+Status: implemented through `AUD-5` on 2026-07-17; rebuilt-ambience product-owner
+audition plus the remaining keyboard/media, audible-loop, cue, crossfade, and
+ducking browser acceptance remains to be recorded.
 
 The implemented foundation loads one validated stored-audio catalog, exposes a
 play-only Audio asset workspace, and gives game mode an explicit enable flow,
@@ -184,10 +184,8 @@ archived in `Wayfinders_Roadmap_Archive.md`.
 
 ## Authorization boundary
 
-WTR-1.0 through WTR-1.5 are authorized only as the branch asset-viewer prototype
-described above. They may create branch-local preview assets and presentation
-code, but they must not register production packages or change the game runtime.
-WTR-2.0 through WTR-2.6 were explicitly authorized and are complete. Any later
-gameplay or production-asset milestone still requires explicit user authorization.
-Do not implement gameplay saving; it may return only through an explicitly
-authorized milestone designed for the game that exists at that time.
+WTR-1.0 through WTR-1.5 and WTR-2.0 through WTR-2.6 are complete. No later water
+milestone is authorized. Any later gameplay or production-asset milestone still
+requires explicit user authorization. Do not implement gameplay saving; it may
+return only through an explicitly authorized milestone designed for the game
+that exists at that time.

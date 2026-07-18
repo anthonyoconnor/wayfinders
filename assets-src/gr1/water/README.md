@@ -1,11 +1,12 @@
 # Wayfinders water milestone asset pack
 
-Status: proposal assets only. This directory is deliberately not registered in
-the live asset catalog and does not change the current renderer, terrain,
-collision, or milestone documents.
+Status: retained authoring source. This directory is deliberately not registered
+in the live asset catalog; WTR-2 materialized its validated runtime handoff under
+`public/assets/gr1/water` and its production contract under
+`src/wayfinders/assets/packages/water.json`.
 
 This pack turns four generated style masters into deterministic, grid-ready
-water sheets for the proposed water-system milestone. The runtime-sized art uses
+water source sheets. The runtime-sized art uses
 `32 x 32` frames and respects the internal `16 x 16` art subdivision. The 8 px
 shore collision lattice is not used as an art grid.
 
@@ -16,7 +17,7 @@ shore collision lattice is not used as an art grid.
 - `runtime/water-contact-sheet.png` is a 4-by-2 style board. Reading left to
   right, then top to bottom: abyss, deep, coastal, lagoon, reef, current, rough,
   and brackish.
-- `water-package.json` is the proposed loader/animation contract.
+- `water-package.json` is source-package metadata for preparation and review.
 - `SOURCE_PROVENANCE.md` records the built-in image-generation prompt set and
   reference roles.
 

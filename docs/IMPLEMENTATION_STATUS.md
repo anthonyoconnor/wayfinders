@@ -67,18 +67,13 @@ loading, exact collision-bounds alignment, coherent fallback, and active-chunk
 creation and destruction. Browser smoke acceptance covers the game, zoom input,
 and the simplified Islands workspace without warning or error output.
 The twenty-generation presentation-fixture baseline measured `0.193 ms` p95 over
-2,000 serial samples on 2026-07-16. The implemented regression contract is
-owned by the technical design. Architecture validation, source and test
-typechecks, the quick and integration lanes, focused GP-5.2 and audio contracts,
-audio repository-I/O checks, GP-5.2 browser acceptance, and the production
-bundle passed. The complete read-only asset gate also passes. Remaining audio
-browser acceptance is described above. The aggregate `npm.cmd run check` remains
-blocked in the contract lane by asset-only fixture drift that expects the former three-
-package empty-source baseline while the current workspace contains additional
-island sources, candidates, and recipes. A cross-process collision
-test that timed out under parallel lane contention passes in isolation. Those
-authored-asset artifacts and expectations are outside GP-5.2 and the audio
-layer, and remain untouched.
+2,000 serial samples on 2026-07-16. The implemented regression contract is owned
+by the technical design. Architecture validation, source and test typechecks,
+the quick, contract, integration, and repository-I/O lanes, focused GP-5.2,
+audio, and water contracts, audio repository-I/O checks, the water and complete
+read-only asset gates, and the production bundle pass. Remaining audio browser
+acceptance is described above. The former clean-repository fixture drift was
+corrected during WTR-2 and is no longer an open blocker.
 
 This file records only volatile operational facts. Implemented behavior belongs
 in `Wayfinders_Technical_Design.md`, ownership in `ARCHITECTURE_MAP.md`, future
@@ -92,7 +87,10 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
   Great Hall, and Audio workspaces. Islands use a focused import, properties,
   availability-status, sea-trial, collision-mask, and single-save workflow.
   Ships and Fishing shoals retain general asset inspection and production
-  controls. Great Hall is a view-only host for the validated V1 fixture and the
+  controls. Water is a read-only production inspection surface over the same
+  generated layouts and runtime assets as the game, with seed, profile, zoom,
+  overlay, pause, and comparison controls and no Production tooling sidebar.
+  Great Hall is a view-only host for the validated V1 fixture and the
   same bounded renderer used by the game, with a one-to-twenty navigator-count
   selector. Audio is a play-only stored-file browser with no edit or repository
   operation.
@@ -128,8 +126,6 @@ membership; `tests/README.md` explains lane selection.
   decode/audition, mute and level controls, silence at rest, smoothed wake,
   direction reversal, loop seams, cue coalescing, supplementary muted feedback,
   music crossfades and lifecycle ducking, console-clean teardown, and restart.
-- The WTR-1.0 Water feedback prototype is available only in the asset workspace;
-  layered water is not registered or loaded by the game.
 - End-to-end browser departure responsiveness has not been remeasured after the
   current guidance and active-chunk architecture settled. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.

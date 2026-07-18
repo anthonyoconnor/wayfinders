@@ -10,8 +10,10 @@ rendering, island handoffs, animation, and fishing-ground presentation.
 
 ## Outcome
 
-Use the branch Water workspace to establish visual direction, then carry the
-reviewed result into a generated and chunk-bounded production water system that:
+WTR-1 used the branch Water workspace to establish visual direction. WTR-2
+carried the reviewed result into a generated and chunk-bounded production water
+system. Both tracks are implemented; the technical design owns current behavior
+and the roadmap archive owns completion evidence. The combined design:
 
 - visually belongs beside the current home island and island reference set;
 - distinguishes deep, shallow, reef, lagoon, current, rough, and biome-specific
@@ -27,16 +29,9 @@ reviewed result into a generated and chunk-bounded production water system that:
   generation as the only gameplay authorities; and
 - keeps every preview decision visual-only and isolated from gameplay authority.
 
-WTR-1 is complete when the Water tab demonstrates convincing open-water motion,
-irregular island depth handoffs, varied animated shoreline waves, and
-player-scale fishing-ground strengths well enough to gather product feedback.
-WTR-2 is complete only when the reviewed direction is generated deterministically,
-loaded through promoted packages, rendered through the shared active-chunk
-lifecycle, and proven not to alter gameplay authority.
+## Design inputs and current constraints
 
-## Evidence and current constraints
-
-The proposal is based on the current repository and these art references:
+The design uses these current repository contracts and art references:
 
 - `public/assets/gr1/images/home-island.png` is a tracked `480 x 480` RGBA runtime image
   aligned to a `15 x 15` navigation-cell package. It already includes turquoise
@@ -63,29 +58,23 @@ The proposal is based on the current repository and these art references:
   blocking `Reef`. Currents, rough patches, lagoon calm, and glints are
   presentation variants, not new terrain. Brackish art remains prepared but
   unplaced because the current world has no matching biome context.
-- `WorldRenderer` draws a full-ocean backdrop, per-cell shallow or Supported
-  fills, and sparse wave strokes. `WayfindersScene` owns one `ActiveChunkSet`;
-  its bounded delta controls construction and destruction for terrain, overlays,
-  markers, textures, and authored assets. Water must consume that same boundary
-  and preserve dirty knowledge updates rather than invent a viewport policy.
-- The authored-home path currently omits water/waves for the entire rectangular
-  home footprint. That must be narrowed: water needs to continue behind
-  transparent island pixels so the organic alpha edge never exposes a flat
-  rectangle or empty background.
-- The project has metadata-timed ship/wake presentation, but no shared general
-  animation system. WTR-1.1 uses the smallest Water-workspace-local timing path
-  practical and does not create a game-wide clock. Any later runtime proposal
-  must keep presentation time outside simulation and avoid a second simulation
-  clock.
+- `WaterRenderer` now consumes the scene-owned `ActiveChunkDelta`; prefetched
+  chunks remain static and only visible surface textures advance. `WorldRenderer`
+  no longer draws water or waves.
+- Water is drawn beneath authored home and imported-island art. Coastal
+  underpainting and mask-derived shelves prevent transparent shoreline pixels
+  from exposing rectangular backdrop artifacts.
+- WTR-1 used a workspace-local animation lifecycle. WTR-2 now uses
+  presentation-time snapshots, discrete visible-only updates, pause, background
+  recovery, and reduced-motion fallback without introducing simulation time.
 - `WorldManifest` now owns durable generated identity and `WorldAnalysisIndex`
   owns shared coastline and water-component facts. Water may derive its exact
   eight-neighbor visual mask from a bounded `WorldGrid` apron, but it must reuse
   those public facts where they apply and must not add another full-world
   coastline or connectivity pass.
-- The asset library currently exposes Islands, Ships, Fishing shoals, and Great
-  Hall workspaces. WTR-1.0 adds a Water tab on its prototype branch. The tab is
-  a feedback surface, not a commitment that its code, route, or structure ships
-  unchanged in the production asset library.
+- The asset library exposes Islands, Ships, Fishing shoals, Water, Great Hall,
+  and Audio. Water uses the validated runtime package and the real generated
+  layout while owning no gameplay or repository mutation authority.
 
 ## Visual language
 
@@ -421,16 +410,16 @@ Reduced motion immediately selects each descriptor's representative static
 frame, retains terrain/profile contrast, and stops frame updates. It must not
 remove shallow/reef readability or alter simulation state.
 
-## Prepared candidate package
+## Retained water source package
 
-The candidate lives at `assets-src/gr1/water` and is intentionally outside the
-live gameplay catalog until a separately authorized production milestone
-establishes validation and promotion rules.
-WTR-1.0 may expose these candidate outputs through the smallest practical
-preview loader or branch-local copy. Preview availability is not review,
-promotion, or runtime registration.
+The authoring source lives at `assets-src/gr1/water` and remains source-only.
+WTR-2 materialized the validated production contract at
+`src/wayfinders/assets/packages/water.json` and the runtime sheets under
+`public/assets/gr1/water`; the game loads only that validated public handoff.
+The standalone builder remains a deterministic source-preparation tool, not a
+second production authority.
 
-| Candidate file | Dimensions | Contents |
+| Source file | Dimensions | Contents |
 | --- | ---: | --- |
 | `runtime/water-tiles.png` | 288 x 1152 | Eight profiles, four variants, eight frames, with gutters |
 | `runtime/water-static.png` | 144 x 288 | Reduced-motion/static profile variants |
@@ -439,26 +428,23 @@ promotion, or runtime registration.
 | `runtime/water-home-shore-overlay.png` | 3872 x 484 | Eight guttered `480 x 480` home-aligned frames |
 | `runtime/water-contact-sheet.png` | 512 x 256 | Profile review board |
 | `runtime/water-home-island-preview.png` | 640 x 640 | Home/depth-handoff review composite |
-| `water-package.json` | n/a | Proposed profile, sheet, mask, animation, and handoff metadata |
+| `water-package.json` | n/a | Source profile, sheet, mask, animation, and handoff metadata |
 | `runtime/build-report.json` | n/a | Output dimensions and SHA-256 hashes |
 | `validate-water-package.mjs` | n/a | Header, hash, frame geometry, mask, seam/loop-report validation |
 
 The five runtime sheets occupy roughly `0.55 MiB` compressed and `9.6 MiB`
 decoded RGBA. Source masters and previews are authoring/review files and must not
-ship. `build-water-package.mjs` deterministically rebuilds the candidate without
-changing `public`, `dist`, or current source files.
+ship. `build-water-package.mjs` deterministically rebuilds the retained source
+outputs without changing `public`, `dist`, or current source files.
 
-The builder and current `runtime` directory are candidate preparation evidence,
-not an alternate production authority. Any later production milestone must
-either integrate the deterministic build into the repository's production-recipe
-preparation path or materialize equivalent current outputs through that path
-before promotion.
+The builder and retained `runtime` directory are source-preparation evidence,
+not alternate production authority. Current runtime ownership belongs to the
+validated public package and its repository check.
 
-The candidate is an art/contract starting point, not automatic approval. The
-product owner authorized WTR-1.1 through WTR-1.5 as extensions of the WTR-1.0
-feedback loop; none of the sequence authorizes production work.
+## WTR-1 asset-library playground (historical design)
 
-## Water asset-library playground
+This section records the completed branch prototype and does not describe the
+current production Water workspace.
 
 The Water tab is a deliberately rough development and feedback surface on a
 prototype branch, not a gameplay simulation, a production asset tool, or a
@@ -505,7 +491,8 @@ become collision, navigation, terrain, or package authority.
 ## Production package and pipeline design
 
 This section is the design reference for WTR-2.0, WTR-2.2, and WTR-2.6. The
-roadmap owns their proposed and authorization state.
+technical design owns implemented behavior and the roadmap archive owns
+completion evidence.
 
 Production semantic ID: `world.water.primary`.
 
@@ -1091,132 +1078,132 @@ behavior; this list is not a second status authority.
 
 ### Generator and catalog extensibility
 
-- [ ] `WorldGenerator` invokes the dedicated water-layout planner only after
+- `WorldGenerator` invokes the dedicated water-layout planner only after
       authoritative terrain rasterization and analysis are complete.
-- [ ] The generated-world and manifest handoff records a layout version, catalog
+- The generated-world and manifest handoff records a layout version, catalog
       fingerprint, stable region IDs, and chunk-addressable resolved facts.
-- [ ] Adding a visual type with an existing placement strategy requires catalog
+- Adding a visual type with an existing placement strategy requires catalog
       and package data but no planner or renderer identity branch.
-- [ ] A new placement strategy is bounded, deterministic, versioned, and tested
+- A new placement strategy is bounded, deterministic, versioned, and tested
       independently of terrain and feature generation.
-- [ ] New presentation types cannot alter terrain, collision, movement, sight,
+- New presentation types cannot alter terrain, collision, movement, sight,
       provisions, resources, islands, fishing outcomes, or other simulation
       state.
-- [ ] Brackish and future contextual types remain unplaced until the world
+- Brackish and future contextual types remain unplaced until the world
       contract supplies an eligible fact; package availability alone is never
       placement authority.
 
 ### Water workspace parity
 
-- [ ] Every WTR-2 milestone exposes its new production behavior in the Water
+- Every WTR-2 milestone exposes its new production behavior in the Water
       workspace before that milestone closes.
-- [ ] Seed and named-profile regeneration use the same world generator, manifest,
+- Seed and named-profile regeneration use the same world generator, manifest,
       `GeneratedWaterLayout`, and diagnostics as the game.
-- [ ] Static water, islands, transitions, animation, knowledge/fog comparisons,
+- Static water, islands, transitions, animation, knowledge/fog comparisons,
       and fishing grounds use the same production renderers and read models as
       the game; the workspace owns no parallel classifier or renderer.
-- [ ] The workspace retains focused type, island case, world profile, seed, zoom,
+- The workspace retains focused type, island case, world profile, seed, zoom,
       overlay, shoal state, pause, and reduced-motion controls without restoring
       the general Production tooling sidebar.
-- [ ] A given generated layout, package/catalog revision, read model, and
+- A given generated layout, package/catalog revision, read model, and
       presentation-time snapshot produce matching output in the workspace and
       game.
-- [ ] The WTR-1 fixed fixture may remain only as a clearly labelled visual
+- The WTR-1 fixed fixture may remain only as a clearly labelled visual
       reference and cannot become a production asset, layout, or behavior source.
 
 ### Package and grid
 
-- [ ] All runtime sheets are lowercase-safe, validated PNGs with declared sizes.
-- [ ] Every general frame is `32 x 32`; authored home frames are `480 x 480`.
-- [ ] Startup rejects a water package whose tile size disagrees with the
+- All runtime sheets are lowercase-safe, validated PNGs with declared sizes.
+- Every general frame is `32 x 32`; authored home frames are `480 x 480`.
+- Startup rejects a water package whose tile size disagrees with the
       validated runtime navigation tile size.
-- [ ] Every sheet uses and loads with `margin: 2`, `spacing: 4` duplicated gutters.
-- [ ] Internal composition respects the package's `16 px` authoring lattice and
+- Every sheet uses and loads with `margin: 2`, `spacing: 4` duplicated gutters.
+- Internal composition respects the package's `16 px` authoring lattice and
       does not expose it as gameplay/configuration state or align to the
       collision-only `8 px` lattice.
-- [ ] All 47 canonical masks resolve exactly once and all invalid diagonal masks
+- All 47 canonical masks resolve exactly once and all invalid diagonal masks
       canonicalize predictably.
-- [ ] 2x2 and 3x3 repeats show no cracks, frame bleed, one-pixel grid, or obvious
+- 2x2 and 3x3 repeats show no cracks, frame bleed, one-pixel grid, or obvious
       repeated focal object.
 
 ### Island and visual fit
 
-- [ ] Deep, shallow, lagoon, and blocking reef are distinct at normal zoom and in
+- Deep, shallow, lagoon, and blocking reef are distinct at normal zoom and in
       grayscale.
-- [ ] The home island has water beneath all transparent exterior pixels.
-- [ ] The home-aligned overlay uses the exact island transform and never paints
+- The home island has water beneath all transparent exterior pixels.
+- The home-aligned overlay uses the exact island transform and never paints
       over land/structures with a visible classification error.
-- [ ] Generic foam never appears above the authored home composition.
-- [ ] High island, low cay, atoll, rocky skerry, home harbor, and narrow channel
+- Generic foam never appears above the authored home composition.
+- High island, low cay, atoll, rocky skerry, home harbor, and narrow channel
       cases have intentional shore handoffs. No nonexistent biome is inferred.
-- [ ] No source magenta, halo, opaque transparent RGB, or color-key fringe ships.
+- No source magenta, halo, opaque transparent RGB, or color-key fringe ships.
 
 ### Determinism and gameplay isolation
 
-- [ ] A fixed world seed produces identical profile, mask, variant, direction,
+- A fixed world seed produces identical profile, mask, variant, direction,
       and phase data independent of chunk traversal and knowledge redraw order.
-- [ ] Stable manifest island IDs and presentation-region IDs, never array or
+- Stable manifest island IDs and presentation-region IDs, never array or
       activation order, determine region-phased effects.
-- [ ] A visual namespace change alters no terrain, island ID, resource, collision,
+- A visual namespace change alters no terrain, island ID, resource, collision,
       route, sight, provisions, discovery, dock return, or atoll connectivity data.
-- [ ] Current, rough, lagoon, glint, and whitecap remain visual-only; brackish is
+- Current, rough, lagoon, glint, and whitecap remain visual-only; brackish is
       not placed until an authoritative world context is separately approved.
-- [ ] Reef art maps only to authoritative `TerrainType.Reef` where the visual
+- Reef art maps only to authoritative `TerrainType.Reef` where the visual
       promises blocking reef.
 
 ### Animation and accessibility
 
-- [ ] First/last frames loop without a visible luminance, alpha, or position pop.
-- [ ] Connected surf/current regions do not tear because of independent phases.
-- [ ] Pause/resume and background-tab recovery cause no catch-up spike.
-- [ ] Reduced motion freezes all water immediately on representative frames.
-- [ ] Scene, ship/wake, and water consume the same rendering-layer presentation
+- First/last frames loop without a visible luminance, alpha, or position pop.
+- Connected surf/current regions do not tear because of independent phases.
+- Pause/resume and background-tab recovery cause no catch-up spike.
+- Reduced motion freezes all water immediately on representative frames.
+- Scene, ship/wake, and water consume the same rendering-layer presentation
       time snapshot; no presentation time enters simulation or feature APIs.
-- [ ] Supported, Personal, Unknown, current sight, route, and risk overlays remain
+- Supported, Personal, Unknown, current sight, route, and risk overlays remain
       readable with animation on and off.
-- [ ] Unknown fog does not reveal hidden terrain through motion at its edge.
+- Unknown fog does not reveal hidden terrain through motion at its edge.
 
 ### Performance
 
-- [ ] No full-world scan, texture creation, or object allocation happens per
+- No full-world scan, texture creation, or object allocation happens per
       rendered frame.
-- [ ] Static topology rebuilds only on world/terrain/package changes.
-- [ ] Knowledge changes retain dirty-chunk-local updates.
-- [ ] Water consumes the shared `ActiveChunkDelta`; it owns no resources outside
+- Static topology rebuilds only on world/terrain/package changes.
+- Knowledge changes retain dirty-chunk-local updates.
+- Water consumes the shared `ActiveChunkDelta`; it owns no resources outside
       `delta.active`, creates no second viewport policy, and retains the constant
       ocean backdrop for visible deferred chunks.
-- [ ] Animation updates only when a clip advances and only for active entries in
+- Animation updates only when a clip advances and only for active entries in
       the `visible` band; prefetched entries remain static.
-- [ ] Water uses no more than four normal plane/texture batches per active chunk,
+- Water uses no more than four normal plane/texture batches per active chunk,
       excluding the one authored-home overlay when its owner chunk is active.
-- [ ] Shipped water textures remain below `12 MiB` decoded RGBA and `2 MiB`
+- Shipped water textures remain below `12 MiB` decoded RGBA and `2 MiB`
       compressed payload unless a later reviewed budget replaces these limits.
-- [ ] Repeated camera traversal plateaus at the approved active-chunk resource,
+- Repeated camera traversal plateaus at the approved active-chunk resource,
       texture-byte, and object counts with no activation/deactivation leak.
-- [ ] Named-profile sailing and camera-movement measurements meet separately
+- Named-profile sailing and camera-movement measurements meet separately
       reviewed absolute and water-attributable p95/p99 regression budgets.
 
 ### Repository gate
 
-- [ ] Water-specific validator, mask, deterministic-selection, animation,
+- Water-specific validator, mask, deterministic-selection, animation,
       reduced-motion, and renderer lifecycle tests pass.
-- [ ] Package preparation, exact-fingerprint review, promotion lineage, and
+- Package preparation, exact-fingerprint review, promotion lineage, and
       generated catalog checks pass in the repository/I/O lane.
-- [ ] Existing world generation, collision, navigation, knowledge, and authored
+- Existing world generation, collision, navigation, knowledge, and authored
       home tests remain unchanged in outcome.
-- [ ] `npm.cmd run assets:check`, both typechecks, relevant quick/contract/integration/
+- `npm.cmd run assets:check`, both typechecks, relevant quick/contract/integration/
       I/O/performance lanes, and the production bundle pass.
-- [ ] Runtime assets are promoted through `public`; generated `dist` is not
+- Runtime assets are promoted through `public`; generated `dist` is not
       hand-authored.
 
 ## Production performance budgets and fallbacks
 
-Before WTR-2 changes runtime presentation, it records replayable
+Before WTR-2 changed runtime presentation, it recorded replayable
 baselines for the named world profiles and representative viewport/zoom cases.
 Each record includes seed, profile, viewport, p50/p95/p99 and maximum frame time,
 active/deferred chunk counts, water resource objects, decoded texture bytes,
 animation updates, and the approved absolute and incremental limits. A hard
-frame-time value from this proposal must not replace that measured contract.
+frame-time value from this design must not replace that measured contract.
 
 Default quality path:
 
@@ -1282,13 +1269,10 @@ change requires its own authority, tests, and milestone approval.
 
 ## Definition of done
 
-WTR-1 is done when the product owner can review judged-default wave and wind
-animation, representative islands with irregular shore-following shallow-to-deep
-transitions, varied animated waves around their edges, and the lean, steady, and
-rich fishing-ground cues. Its completion does not promote or integrate assets.
+WTR-1's definition of done was product review of judged-default motion, island
+handoffs, shoreline waves, and fishing-ground cues without runtime integration.
 
-WTR-2 is done only when the approved water assets are promoted through the
-existing pipeline, world generation emits a deterministic and extensible water
-layout, the game renders it through the shared active-chunk and presentation-
-clock contracts, authored and generated island handoffs are correct, fishing-
-ground quality remains knowledge-safe, and WTR-2.6 closes the production gates.
+WTR-2's definition of done was promoted assets, deterministic extensible layout,
+shared active-chunk rendering, correct island handoffs, knowledge-safe fishing
+grounds, and production handoff. Both tracks are implemented; completion
+evidence is recorded in the roadmap archive.

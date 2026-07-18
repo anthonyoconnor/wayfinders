@@ -602,8 +602,8 @@ padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
 The asset-library route provides persistent **Islands**, **Ships**, **Fishing
-shoals**, **Water**, **Great Hall**, and **Audio** tabs. Production workspaces use permanent
-left-library, centre-preview, and right-workbench regions. Water is the focused
+shoals**, **Water**, **Great Hall**, and **Audio** tabs. Production workspaces use
+permanent left-library, centre-preview, and right-workbench regions. Water is the focused
 production inspection surface: it reads the versioned water package and the
 same `WorldGenerator`/`GeneratedWaterLayout` facts as the game, offers seed,
 profile, overlay, pause, fit, and 1:1 controls, and displays the lean, steady,

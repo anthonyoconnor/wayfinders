@@ -1,9 +1,10 @@
 # Wayfinders completed roadmap archive
 
 Status: historical. This document preserves the scope, gates and acceptance
-evidence for completed `GP-0.1` through `GP-5.1`, `GR-1.1` through `GR-3.8`,
-and `AM-0` through `AM-6` work. It does not define or authorize future work. See
-`Wayfinders_Roadmap.md` for the small, current forward plan.
+evidence for completed `GP-0.1` through `GP-5.2`, `GR-1.1` through `GR-5.3`,
+`CLD-1`, `WTR-1.0` through `WTR-2.6`, and `AM-0` through `AM-6` work. It does
+not define or authorize future work. See `Wayfinders_Roadmap.md` for the small,
+current forward plan.
 
 ## Reading this archive
 
@@ -1369,6 +1370,24 @@ These measurements are historical diagnosis, not current acceptance evidence.
 The settled build still requires a controlled browser zoom matrix and trace to
 determine whether the user-visible departure symptom remains.
 
+## Water visual prototype
+
+WTR-1.0 through WTR-1.5 were completed on 2026-07-17 as a deliberately direct
+asset-workspace prototype. The Water workspace established the accepted visual
+direction through static tile and repeat comparisons, a zoomable 96 x 96 world,
+judged-default wind and wave motion, representative islands with irregular
+shore-following depth bands, broken shoreline waves, and lean, steady, and rich
+animated fishing-ground cues with no visible fish at player scale. One pause
+control stopped water, shoreline, and shoal motion, and the general Production
+tooling sidebar remained absent.
+
+The prototype remained visual-only: it registered no runtime package, changed
+no gameplay authority, and created no production renderer or animation
+framework. Verification used focused typecheck, architecture, production-bundle,
+and browser inspection appropriate to the feedback prototype. WTR-2 subsequently
+recreated the accepted direction through production contracts and runtime
+ownership.
+
 ## Water production integration
 
 WTR-2.0 through WTR-2.6 were implemented on 2026-07-17 after explicit user
@@ -1385,7 +1404,8 @@ authorization. The sequence delivered:
   repository validator included in `assets:check`;
 - a dedicated active-chunk `WaterRenderer` with cached base/surface canvas
   textures, static prefetch resources, visible-only discrete surface updates,
-  reduced motion, canonical transitions, currents, rough water, and the aligned
+  reduced motion, directional deep-to-coastal transitions, coastal underpainting
+  beneath transparent island edges, currents, rough water, and the aligned
   home-shore overlay; the former `WorldRenderer` water/wave path was removed;
 - knowledge-safe fishing-ground rendering in which hidden-quality states use the
   neutral cue and surveyed states may use lean, steady, or rich, with restrained
@@ -1402,7 +1422,7 @@ six imported-island source/candidate records.
 
 ## Archive boundary
 
-This archive includes completed gameplay through `GP-5.1`, graphics and asset
-work through `GR-5.3`, cloud atmosphere through `CLD-1`, and architecture work
-through `AM-6`. Upcoming, proposed, and deferred work is maintained only in
-`Wayfinders_Roadmap.md`.
+This archive includes completed gameplay through `GP-5.2`, graphics and asset
+work through `GR-5.3`, cloud atmosphere through `CLD-1`, water presentation
+through `WTR-2.6`, and architecture work through `AM-6`. Upcoming, proposed,
+and deferred work is maintained only in `Wayfinders_Roadmap.md`.
