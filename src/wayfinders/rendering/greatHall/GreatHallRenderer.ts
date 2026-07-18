@@ -5,6 +5,7 @@ import {
   type GreatHallPresentationNavigator,
   type GreatHallPresentationVoyage,
 } from "./GreatHallPresentationModel";
+import { achievementIconRowPositionPercent } from "../../assets/achievementIcons";
 
 export interface GreatHallRendererCallbacks {
   readonly selectionChanged?: (generation: number) => void;
@@ -200,7 +201,8 @@ function voyageMarkup(voyage: Readonly<GreatHallPresentationVoyage>): string {
 
 function achievementMarkup(achievement: Readonly<GreatHallPresentationAchievement>): string {
   const label = escapeHtml(achievement.label);
-  return `<button class="gh-achievement gh-achievement--${achievement.kind}" type="button" data-gh-achievement="${label}" aria-label="${label}"><span class="gh-symbol gh-symbol--${achievement.kind}" aria-hidden="true"></span></button>`;
+  const rowPosition = achievementIconRowPositionPercent(achievement.kind);
+  return `<button class="gh-achievement gh-achievement--${achievement.kind}" type="button" data-gh-achievement="${label}" aria-label="${label}"><span class="achievement-icon gh-symbol" data-achievement-icon-kind="${achievement.kind}" style="--achievement-icon-row-position:${rowPosition}%" aria-hidden="true"></span></button>`;
 }
 
 function stateLabel(navigator: Readonly<GreatHallPresentationNavigator>): string {

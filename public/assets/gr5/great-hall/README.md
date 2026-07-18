@@ -5,8 +5,9 @@ Hall workspace and shared game renderer:
 
 - `portraits/navigator-01.png` through `navigator-20.png` are the complete,
   ordered portrait roster;
-- `achievement-token-set.png` is the approved ten-token visual reference used
-  by the shared achievement symbols; and
+- `achievement-token-set.png` is the approved static ten-token visual reference;
+- `../achievement-icons/achievement-icon-sprites.png` is the runtime animation
+  sheet consumed by the shared achievement symbols and Icons workspace; and
 - `hall-interior-backdrop.png` is the single empty Hall plate beneath the
   interactive memorial, voyage-band, and ancestor-wall overlays.
 
@@ -15,4 +16,5 @@ in the approved graphical composition. The shared renderer does not display line
 totals.
 
 There is no runtime generation, candidate approval, promotion, or in-tool asset
-editing flow.
+editing flow. The animation artifact contract and validation owner are documented
+in `docs/Wayfinders_Asset_Pipeline.md`.

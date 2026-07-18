@@ -1,6 +1,6 @@
 # Wayfinders operational status
 
-Status: current development handoff, verified 2026-07-17.
+Status: current development handoff, verified 2026-07-18.
 
 The asset workflow through GR-4.4, the graphical Great Hall through GR-5.3,
 and gameplay through GP-6.6 are implemented. GP-5.1 replaces the filled return
@@ -34,6 +34,13 @@ longer, irregular low-pass water textures without pitched or fixed-grid pulses.
 Current inspection reports `8.409 MiB` stored audio; ocean measures `0.055` RMS
 with a `0.2152` peak and wake measures `0.060` RMS with a `0.1938` peak before
 catalog and mixer gains. The asset gate passes.
+
+All ten navigator-achievement kinds now use one checked-in animated sprite
+sheet in both the Great Hall and a dedicated read-only Icons workspace. The
+workspace presents every animation together with pause/play and review-speed
+controls. Desktop, responsive, lifecycle, shared-renderer, reduced-motion, and
+console-clean browser acceptance pass after a second visual refinement round.
+
 The explicit Enable sound activation now resumes Web Audio directly and
 completes unlock without requiring the player to leave and refocus the game;
 focused regression coverage starts a discovery cue immediately afterward. The
@@ -95,12 +102,15 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
 
 - The default browser route starts a fresh playable voyage.
 - `?mode=assets` opens URL-addressable Islands, Ships, Fishing shoals, Water,
-  Great Hall, and Audio workspaces. Islands use a focused import, properties,
+  Icons, Great Hall, and Audio workspaces. Islands use a focused import, properties,
   availability-status, sea-trial, collision-mask, and single-save workflow.
   Ships and Fishing shoals retain general asset inspection and production
   controls. Water is a read-only production inspection surface over the same
   generated layouts and runtime assets as the game, with seed, profile, zoom,
   overlay, pause, and comparison controls and no Production tooling sidebar.
+  Icons is a read-only simultaneous animation-review surface for the ten
+  navigator-achievement kinds, with synchronized pause and playback-speed
+  controls over the same sheet used in the Great Hall.
   Great Hall is a view-only host for the validated V1 fixture and the
   same bounded renderer used by the game, with a one-to-twenty navigator-count
   selector. Audio is a play-only stored-file browser with no edit or repository
@@ -148,10 +158,12 @@ active-image ownership, and resource bounds still pass. The generation code is
 identical to the clean accepted sample, so this is retained as an operational
 trend check rather than a gameplay blocker.
 
-One aggregate all-project rerun hit the fixed five-second timeout in
-`collision-save-api.test.mjs` and `production-asset-promotion.test.mjs` while
-CPU-heavy integration work ran concurrently. Both files passed immediately in
-the serial I/O project, consistent with the earlier complete I/O-lane pass.
+The latest aggregate I/O rerun hit fixed five-second timeouts in unrelated
+collision and production-asset tests under parallel load. A serial rerun
+cleared every production-asset timeout. The remaining pinned-runner case in
+`collision-save-api.test.mjs` repeatedly completed just after its five-second
+budget on this development machine; its other cases and all achievement-icon
+asset and workspace checks pass.
 
 ## Open operational gaps
 
@@ -164,3 +176,6 @@ the serial I/O project, consistent with the earlier complete I/O-lane pass.
   budgets do not by themselves close the original user-reported sluggishness.
 - Repeat the serial generation trend on a quiet machine before using the latest
   loaded-machine `P0`/`P1` p95 samples as a performance baseline.
+- Recheck the isolated `collision-save-api.test.mjs` pinned-runner launch case
+  on a quiet machine; it currently exceeds its fixed five-second budget by less
+  than one tenth of a second without involving the achievement-icon paths.

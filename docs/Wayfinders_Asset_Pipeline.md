@@ -105,6 +105,24 @@ transparent and visible pixels.
 The asset has no collision, gameplay binding, asset-library workspace, intake,
 or repository-authoring path.
 
+## Achievement icon animation sheet
+
+`public/assets/gr5/achievement-icons/achievement-icon-sprites.png` is the
+checked-in presentation artifact for the complete navigator-achievement icon
+set. It is a `2048 x 1280` non-interlaced RGBA8 PNG with ten semantic rows,
+sixteen `128 x 128` frames per row, and no gutters. Row order is owned by the
+exhaustive `AchievementIconCatalog`; the runtime cadence is twelve frames per
+second. `public/assets/gr5/great-hall/achievement-token-set.png` remains the
+approved static visual reference rather than a runtime frame atlas.
+
+`scripts/achievement-icon-asset-check.mjs`, included in `assets:check`, validates
+the exact PNG contract, transparent corners, nonempty frames, distinct icon
+rows, bounded alpha registration, and final-to-first continuity against the
+ordinary adjacent-frame motion. Both the shared Great Hall renderer and the
+read-only `?mode=assets&workspace=icons` review surface consume this same stable
+path. The sheet has no collision, intake, preparation, review, promotion,
+runtime generation, or repository-write path.
+
 ## Asset library and candidate types
 
 The `?mode=assets` library uses the same catalog, texture loader, Phaser

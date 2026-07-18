@@ -141,6 +141,17 @@ their relationship is learnable.
 | `wreck-report` | Broken mast joined by a shell knot | Small lost-generation numeral where space permits | `lostGeneration`, existing `label` |
 | `idol-location` | Unique gold shell-idol | `ordinal`; small host-type inset in expanded detail only | `displayLabel`, `locationLabel`, existing `label` |
 
+#### Animation grammar
+
+The checked-in animation preserves each medallion's silhouette, material, and
+outline-versus-inlay distinction in every frame. Motion is restrained and
+semantic: wake and lagoon marks travel, sight and survey marks pulse, fishing
+ripples breathe, the shell repair settles, and the idol alone receives the warm
+gold glint. A shared rim shimmer and subpixel-scale settling keep the family
+coherent without making motion carry achievement meaning. Reduced-motion
+presentation freezes a complete first-frame symbol. Exact sheet geometry and
+continuity validation are owned by `Wayfinders_Asset_Pipeline.md`.
+
 #### Current survey-site insets
 
 The site token remains generic and registry-friendly. The three implemented

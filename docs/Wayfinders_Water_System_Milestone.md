@@ -79,8 +79,8 @@ The design uses these current repository contracts and art references:
   Water derives its exact local eight-neighbour visual mask through
   `WorldTopology`, reuses public analysis facts where they apply, and never adds
   another full-world coastline or connectivity pass.
-- The asset library exposes Islands, Ships, Fishing shoals, Water, Great Hall,
-  and Audio. Water uses the validated runtime package and real canonical
+- The asset library exposes Islands, Ships, Fishing shoals, Water, Icons, Great
+  Hall, and Audio. Water uses the validated runtime package and real canonical
   generated layout while owning no gameplay or repository mutation authority.
   Its bounded fit/1:1 viewport derives shore and distance facts periodically so
   both sides of each seam remain inspectable.

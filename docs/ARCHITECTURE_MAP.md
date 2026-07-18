@@ -17,10 +17,13 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
 4. The asset-library mode resolves a typed asset-workspace registry and starts
-   one workspace-scoped library, Great Hall, Audio, or Water preview scene
+   one workspace-scoped library, Icons, Great Hall, Audio, or Water preview scene
    without gameplay simulation. The Water workspace starts `WaterPreviewScene`
    over the validated water package
    and real seeded generated-water facts, without creating gameplay simulation.
+   The Icons workspace starts `AchievementIconPreviewScene` over the exhaustive
+   presentation-kind catalog and checked-in animated sheet without creating
+   gameplay simulation or an asset-authoring path.
    The trial mode starts `AssetTrialScene` with one explicitly bounded
    open-water `WorldGrid`, movement authority, and selected candidate.
 5. Presentation controllers and renderers consume read models, revisions, and
@@ -162,13 +165,18 @@ adapter may own Phaser sound instances.
   namespaced selection, and scene lifetime. The Water workspace is a focused
   production inspection surface that reads the validated runtime water package
   and the same seeded `GeneratedWaterLayout` facts as the game. Its zoom, seed,
-  overlay, and pause controls own no package, terrain, or gameplay authority. The
-  view-only Great Hall workspace
+  overlay, and pause controls own no package, terrain, or gameplay authority.
+  The view-only Icons workspace consumes one exhaustive typed mapping from the
+  ten Great Hall presentation kinds to sprite-sheet rows. It presents every
+  loop together with preview-only pause and speed controls; the shared semantic
+  Great Hall renderer consumes the same sheet and mapping. Neither surface may
+  derive achievement identity from pixels. The view-only Great Hall workspace
   validates and varies a checked-in twenty-generation V1 fixture, then passes it
   to the same bounded semantic renderer used by the game. A pure adapter maps
   structured `GreatHallChronicle` fields into that contract; neither host gives
-  the fixture or renderer gameplay authority. `AssetWorkspaceSceneFactory` selects the isolated scene
-  kind at composition. Stopping a workspace aborts its DOM listeners, cancels
+  the fixture or renderer gameplay authority. `AssetWorkspaceSceneFactory`
+  selects the isolated scene kind at composition. Stopping a workspace aborts
+  its DOM listeners, cancels
   its preview-local animation frame, and removes its Phaser bindings before
   another workspace starts.
 - The Audio workspace adapts the same validated catalog used by game mode and

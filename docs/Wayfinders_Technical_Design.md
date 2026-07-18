@@ -701,7 +701,7 @@ padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
 The asset-library route provides persistent **Islands**, **Ships**, **Fishing
-shoals**, **Water**, **Great Hall**, and **Audio** tabs. Production workspaces use
+shoals**, **Water**, **Icons**, **Great Hall**, and **Audio** tabs. Production workspaces use
 permanent left-library, centre-preview, and right-workbench regions. Water is the focused
 production inspection surface: it reads the versioned water package and the
 same `WorldGenerator`/`GeneratedWaterLayout` facts as the game, offers seed,
@@ -714,8 +714,9 @@ production-tooling sidebar and cannot mutate gameplay or asset authority. The
 active workspace is URL-addressable and follows
 browser history; accessible arrow-key navigation uses roving focus. A typed
 registry partitions library catalog entries and collision profiles, while a
-scene factory mounts a library scene, the Water inspection scene, the isolated
-Great Hall approval scene, or the play-only stored-audio scene. Workspace
+scene factory mounts a library scene, the Water inspection scene, the Icons
+animation-review scene, the isolated Great Hall approval scene, or the play-only
+stored-audio scene. Workspace
 shutdown aborts its DOM listeners and Phaser bindings before the next workspace
 mounts. Where present, the left and right columns scroll independently, and the
 Phaser preview is sized to the centre column so it cannot render behind those
@@ -759,12 +760,24 @@ their save, validation, review, and promotion operations continue to use the
 narrow serialized repository seams until a dedicated workspace milestone
 replaces them.
 
+The Icons workspace is a view-only host for the closed ten-kind achievement
+presentation vocabulary. One exhaustive typed catalog owns stable row order,
+short accessible names, visual descriptions, frame geometry, and deterministic
+time-to-frame selection. Every loop is visible together; preview-only controls
+pause the set or select half, normal, or double speed. The gallery and the
+shared Great Hall renderer consume the same checked-in sheet through CSS frame
+stepping, while reduced-motion presentation freezes the first frame. Animation
+never selects an achievement or changes its exact returned label. The sheet's
+artifact and read-only validation contract live in
+`Wayfinders_Asset_Pipeline.md`.
+
 The Great Hall workspace is a view-only fixture host. Its navigator-count and
 scenario controls derive one-through-twenty variations in memory from a checked-
 in, boundary-validated V1 JSON fixture. The fixture and live game adapter feed
-the same semantic renderer. Portrait and symbol files are read directly from
-`public/assets/gr5/great-hall`; no runtime generation, promotion, file write, or
-gameplay persistence path exists. The workspace never constructs
+the same semantic renderer. Portrait and backdrop files are read directly from
+`public/assets/gr5/great-hall`, and shared achievement animation is read from
+`public/assets/gr5/achievement-icons`; no runtime generation, promotion, file
+write, or gameplay persistence path exists. The workspace never constructs
 `GameSimulation` or reads live lineage. The fixed structural ceiling is twelve
 portrait controls, four selected voyage bands, and one exact-label detail
 surface; the twenty-generation fixture-build p95 budget remains `5 ms`.

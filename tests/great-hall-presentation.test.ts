@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { buildGreatHallFixture, GREAT_HALL_FIXTURE } from "../src/wayfinders/assets/greatHall/GreatHallFixture";
 import {
+  ACHIEVEMENT_ICON_KINDS,
+  achievementIconRowPositionPercent,
+} from "../src/wayfinders/assets/achievementIcons";
+import { GreatHallRenderer } from "../src/wayfinders/rendering/greatHall/GreatHallRenderer";
+import {
   GREAT_HALL_ERA_SIZE,
   GREAT_HALL_MAX_GENERATIONS,
   validateGreatHallPresentationModel,
@@ -39,6 +44,32 @@ describe("GR-5.3 Great Hall presentation contract", () => {
       "supported-route", "mapped-water", "island-lead", "island-dossier", "survey-lead",
       "survey-report", "fishing-lead", "fishing-survey", "wreck-report", "idol-location",
     ]));
+  });
+
+  it("binds every Great Hall achievement kind to the shared animated sprite row", () => {
+    const root = {
+      addEventListener: () => undefined,
+      innerHTML: "",
+      querySelectorAll: () => [],
+      replaceChildren: () => undefined,
+    } as unknown as HTMLElement;
+    const renderer = new GreatHallRenderer(root);
+    let renderedMarkup = "";
+
+    for (let selectedGeneration = 1; selectedGeneration <= GREAT_HALL_MAX_GENERATIONS; selectedGeneration += 1) {
+      renderer.update(buildGreatHallFixture({
+        navigatorCount: GREAT_HALL_MAX_GENERATIONS,
+        selectedGeneration,
+      }));
+      renderedMarkup += root.innerHTML;
+    }
+
+    for (const kind of ACHIEVEMENT_ICON_KINDS) {
+      expect(renderedMarkup).toContain(
+        `class="achievement-icon gh-symbol" data-achievement-icon-kind="${kind}" `
+        + `style="--achievement-icon-row-position:${achievementIconRowPositionPercent(kind)}%"`,
+      );
+    }
   });
 
   it("rejects malformed fixture data before rendering", () => {

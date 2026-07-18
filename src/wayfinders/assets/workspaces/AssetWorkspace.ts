@@ -5,7 +5,12 @@ import type { RuntimeCollisionObjectKind } from "../CollisionProfileRegistry";
 export interface AssetWorkspaceBase {
   readonly id: string;
   readonly label: string;
-  readonly kind: "library" | "great-hall-preview" | "audio-preview" | "water-preview";
+  readonly kind:
+    | "library"
+    | "achievement-icons-preview"
+    | "great-hall-preview"
+    | "audio-preview"
+    | "water-preview";
 }
 
 export interface AssetLibraryWorkspaceModule extends AssetWorkspaceBase {
@@ -19,6 +24,10 @@ export interface GreatHallAssetWorkspaceModule extends AssetWorkspaceBase {
   readonly kind: "great-hall-preview";
 }
 
+export interface AchievementIconAssetWorkspaceModule extends AssetWorkspaceBase {
+  readonly kind: "achievement-icons-preview";
+}
+
 export interface AudioAssetWorkspaceModule extends AssetWorkspaceBase {
   readonly kind: "audio-preview";
 }
@@ -29,6 +38,7 @@ export interface WaterAssetWorkspaceModule extends AssetWorkspaceBase {
 
 export type AssetWorkspaceModule =
   | AssetLibraryWorkspaceModule
+  | AchievementIconAssetWorkspaceModule
   | GreatHallAssetWorkspaceModule
   | AudioAssetWorkspaceModule
   | WaterAssetWorkspaceModule;
