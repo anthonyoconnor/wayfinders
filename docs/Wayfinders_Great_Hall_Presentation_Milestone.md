@@ -6,6 +6,8 @@ and authorization state. The retained concepts under
 `concept_art/great-hall` are reference art only and are not runtime assets.
 `Wayfinders_Great_Hall_Infographic_Lexicon.md` owns the exact counting-cord,
 navigator, voyage, achievement, wreck-fate, idol, and detail-symbol vocabulary.
+`Wayfinders_Art_Style_Guide.md` owns the broader visual principles shared with
+the world and other player-facing UI.
 
 ## Outcome
 

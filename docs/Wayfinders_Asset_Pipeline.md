@@ -1,9 +1,10 @@
 # Wayfinders authored-asset pipeline
 
 This document owns the current source, preparation, island availability,
-general-family review/promotion, and repository-transaction contracts. The operator sequence is in
-`ASSET_PRODUCTION_QUICKSTART.md`; runtime rendering and collision behavior are
-in `Wayfinders_Technical_Design.md`; future workflow scope is in
+general-family review/promotion, and repository-transaction contracts. The
+operator sequence is in `ASSET_PRODUCTION_QUICKSTART.md`; shared visual
+direction is in `Wayfinders_Art_Style_Guide.md`; runtime rendering and collision
+behavior are in `Wayfinders_Technical_Design.md`; future workflow scope is in
 `Wayfinders_Roadmap.md`.
 
 ## Authority boundary

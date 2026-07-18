@@ -109,6 +109,8 @@ checking and the automated test suite, and creates the production build.
   review, promotion, and repository-transaction contracts.
 - [Asset production quickstart](docs/ASSET_PRODUCTION_QUICKSTART.md) is the
   current operator workflow.
+- [Art style guide](docs/Wayfinders_Art_Style_Guide.md) gives agents shared,
+  flexible direction for player-facing assets and game UI.
 - [Water-system design](docs/Wayfinders_Water_System_Milestone.md) retains the
   detailed design and acceptance criteria for the implemented water track.
 - [Agent guide](AGENTS.md) owns development process and documentation rules.

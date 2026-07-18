@@ -3,6 +3,8 @@
 This document retains detailed design and acceptance criteria for the water
 system. The technical design owns current runtime truth and the roadmap archive
 owns milestone completion evidence.
+`Wayfinders_Art_Style_Guide.md` owns the shared project aesthetic; this document
+retains the water-specific palette handoff, texture, motion, and topology rules.
 
 WTR-1 established the **Water** workspace visual direction. WTR-2 carried that
 direction into generated-world layout, validated runtime assets, bounded

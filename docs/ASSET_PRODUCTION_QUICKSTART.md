@@ -5,6 +5,10 @@ in the focused Islands workspace. Ships and Fishing shoals still use their
 general production tools. This is intentionally a prototype workflow, not a
 general art or atlas tool.
 
+Before generating or importing player-facing artwork, use
+`Wayfinders_Art_Style_Guide.md` for visual direction and target-size review.
+This quickstart continues to own the repository operation, not the look.
+
 ## Regenerate the shipped audio set
 
 The final audio renderer is deterministic and uses the repository's Node.js

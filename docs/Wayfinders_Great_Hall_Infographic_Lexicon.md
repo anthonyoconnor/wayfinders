@@ -14,6 +14,8 @@ Great Hall art-and-preview milestone.
 Reference art for every component is indexed in
 `../concept_art/great-hall/infographics/README.md`. Those sheets visualize this
 contract but do not override its field mappings or runtime rules.
+`Wayfinders_Art_Style_Guide.md` supplies the broader project aesthetic and
+review guidance without replacing the exact symbol mappings in this lexicon.
 
 ## Authority and safety rules
 

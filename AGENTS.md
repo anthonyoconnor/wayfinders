@@ -74,6 +74,8 @@ for a missing command, selector, mutation result, or presentation adapter.
     acceptance evidence, skipped decisions, and refactor history.
   - `docs/Wayfinders_Asset_Pipeline.md` owns current asset artifact and
     repository-transaction contracts; its quickstart owns the operator steps.
+  - `docs/Wayfinders_Art_Style_Guide.md` owns shared visual direction and
+    review principles for player-facing artwork and interface presentation.
 - Link to the canonical owner instead of copying its status, rules, metrics, or
   acceptance evidence into another document.
 - When a milestone closes, archive its durable outcome and implementation
@@ -123,6 +125,11 @@ Before adding caching, hierarchy, workers, or background processing:
 5. rerun the relevant performance lane and record the result.
 
 ## Asset work
+
+Before creating or revising player-facing art, animation, icons, or game UI,
+read `docs/Wayfinders_Art_Style_Guide.md`. Treat its direction as flexible
+cohesion guidance; feature-specific semantic contracts and explicit current
+art briefs remain authoritative for what the visual must communicate.
 
 Asset commands can modify generated or reviewed artifacts. Use the narrow
 command documented in `docs/Wayfinders_Asset_Pipeline.md`; do not run intake,
