@@ -93,13 +93,13 @@ not a migration adapter.
 
 The CLD-1 atmosphere sheet is a presentation-only runtime package outside the
 collision-authoring catalog. `src/wayfinders/assets/packages/cloud-atmosphere.json`
-owns its stable identity, four `627 x 627` fixed frame slots, per-slot stable
-names and durable `activeInGame` state, opaque
+owns its stable identity, 24 `627 x 627` fixed frame slots in a `4 x 6`
+`2508 x 3762` sheet, per-slot stable names and durable `activeInGame` state, opaque
 pixel bounds, and bounded paired cloud/shadow presentation metadata, including
 the colour palette, opacity and scale ranges, default per-chunk frequency,
 movement ranges, and route fade contract.
-Its retained source and provenance live under
-`assets-src/cld1/clouds`; the prepared RGBA sheet lives under
+Its retained source, the twenty generated keyed additions and their normalized
+transparent frames, and provenance live under `assets-src/cld1/clouds`; the prepared RGBA sheet lives under
 `public/assets/cld1/clouds`. `scripts/cloud-asset-check.mjs`, included in
 `assets:check`, validates source/runtime dimensions, frame count, structured
 catalog slots, unique variant identities, RGBA format, per-frame opaque bounds, and the presence of both

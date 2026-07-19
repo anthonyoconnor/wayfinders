@@ -560,7 +560,7 @@ records, revisions, dirty state, and canvas textures remain canonical; image
 views carry the entry's offset and may share one owner. Inactive aliases are
 destroyed or returned to bounded pools, and non-creating world reads prevent
 the renderer from expanding authoritative storage. Shared package and
-available-island textures, the player-boat visual, and one four-frame cloud
+available-island textures, the player-boat visual, and one 24-frame cloud
 sheet remain scene-owned. The ocean backdrop is resized around the lifted
 viewport and provides the deterministic placeholder if visible demand exceeds
 the active budget.
@@ -590,7 +590,7 @@ instead of a partial imported visual. Camera zoom changes no placement
 calculation.
 
 Cloud atmosphere is an independent presentation layer. Its validated package
-owns a fixed four-slot catalog aligned exactly with the four atlas frames. Each
+owns a fixed 24-slot catalog aligned exactly with the 24 atlas frames. Each
 non-deleted slot has a stable ID, display name, and durable `activeInGame`
 state. Seeded frame selection keeps its original preferred slot when active;
 an inactive or deleted preference scans forward through fixed slot order. Thus
@@ -605,15 +605,19 @@ prompts, and UI. The shadow reuses the candidate silhouette and reflection with
 a dark navy tint, a `56 x 42`-pixel southeast offset, a `0.68` opacity
 multiplier, and a broad `1.08 x 0.58` scale; the separation and flattened
 silhouette establish height immediately. It moves in lockstep with the cloud
-and can cross sea, terrain, or the ship. Cloud sprites use four fuller, top-lit
-pixel-art cumulus formations with detached puffs and sample a seeded near-white
+and can cross sea, terrain, or the ship. Cloud sprites use 24 distinct,
+top-lit pixel-art cumulus formations with decisive banks, branches, channels,
+windows, and detached clusters. They sample a seeded near-white
 ivory-to-cool-blue palette across the existing `0.22` through `0.50` scale
 range. Their `0.88` through `0.98` opacity range preserves the source art's
 dimensional highlights and blue-gray undersides over the ocean.
 
 Each referenced canonical chunk defaults to six deterministic candidate slots
 distributed by a stable low-discrepancy sequence; increasing frequency adds
-positions without moving existing slots. Slots cycle through all four authored silhouettes. The
+positions without moving existing slots. Each chunk receives a seeded starting
+frame, and successive candidate slots advance through the 24 stable catalog
+positions. The default six candidates therefore show a subset in any one
+chunk while making every active silhouette eligible across the generated world. The
 home-centre chunk reserves the first three at fixed offsets around the home
 island, guaranteeing the default opening composition without adding another
 resource class, then fills any remaining frequency with ordinary slots. The world seed,
@@ -657,7 +661,7 @@ deterministically rebuilds cloud-owned pairs. Browser diagnostics expose the
 same value and command.
 
 The runtime authored packages provide the home island, animated player boat,
-fishing-shoal cues, water sheets, and presentation-only four-frame cloud sheet. Available
+fishing-shoal cues, water sheets, and presentation-only 24-frame cloud sheet. Available
 imported islands use their prepared PNG layers; procedural fallback and other
 content use intentional developer presentation.
 The game and `?mode=assets` library share package validation, texture loading,

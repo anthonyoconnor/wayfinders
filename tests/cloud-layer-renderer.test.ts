@@ -28,6 +28,33 @@ import {
   WorldTopology,
 } from "../src/wayfinders/world/WorldTopology";
 
+const CLOUD_VARIANT_IDS = [
+  "long-broken-wisp",
+  "compact-uneven-cluster",
+  "split-trailing-wisps",
+  "shallow-crescent-bank",
+  "twin-crowned-cluster",
+  "notched-broad-bank",
+  "tapered-wedge-bank",
+  "three-tower-shelf",
+  "bow-tie-bank",
+  "forked-drift",
+  "three-finger-fan",
+  "crooked-crossbank",
+  "hook-and-beads",
+  "serpentine-ribbon",
+  "open-ring-bank",
+  "double-window-bank",
+  "triangular-hollow-bank",
+  "braided-channel-bank",
+  "curled-three-arm-cluster",
+  "stepped-trio",
+  "paired-islands",
+  "parallel-broken-bands",
+  "arc-scatter",
+  "staggered-front",
+] as const;
+
 function entry(x: number, y: number): Readonly<ActiveChunkEntry> {
   return {
     viewKey: `${x},${y}@0,0`,
@@ -252,18 +279,17 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     });
   });
 
-  it("validates four stable cloud catalog slots and the reference-led presentation", () => {
+  it("validates 24 stable cloud catalog slots and the reference-led presentation", () => {
     expect(validateCloudAssetPackage(CLOUD_ASSET_PACKAGE as never)).toBe(CLOUD_ASSET_PACKAGE);
     expect(CLOUD_ASSET_PACKAGE.contractVersion).toBe(3);
-    expect(CLOUD_ASSET_PACKAGE.variants).toHaveLength(4);
-    expect(CLOUD_ASSET_PACKAGE.image.opaqueBounds).toHaveLength(4);
-    expect(cloudAssetVariantEntries()).toMatchObject([
-      { id: "long-broken-wisp", frame: 0, activeInGame: true },
-      { id: "compact-uneven-cluster", frame: 1, activeInGame: true },
-      { id: "split-trailing-wisps", frame: 2, activeInGame: true },
-      { id: "shallow-crescent-bank", frame: 3, activeInGame: true },
-    ]);
-    expect(activeCloudAssetFrames()).toEqual([0, 1, 2, 3]);
+    expect(CLOUD_ASSET_PACKAGE.variants).toHaveLength(CLOUD_VARIANT_IDS.length);
+    expect(CLOUD_ASSET_PACKAGE.image.opaqueBounds).toHaveLength(CLOUD_VARIANT_IDS.length);
+    expect(cloudAssetVariantEntries()).toMatchObject(CLOUD_VARIANT_IDS.map((id, frame) => ({
+      id,
+      frame,
+      activeInGame: true,
+    })));
+    expect(activeCloudAssetFrames()).toEqual(CLOUD_VARIANT_IDS.map((_, frame) => frame));
     expect(CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk).toBe(6);
     expect(CLOUD_ASSET_PACKAGE.presentation.opacity.minimum).toBeGreaterThanOrEqual(0.85);
     expect(CLOUD_ASSET_PACKAGE.presentation.opacity.maximum).toBeGreaterThanOrEqual(0.95);
@@ -304,13 +330,15 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
   });
 
   it("uses only active catalog frames without changing any cloud behavior samples", () => {
-    const frameOneInactive = cloudPackageWithActiveFrames([0, 2, 3]);
+    const frameOneInactive = cloudPackageWithActiveFrames(
+      CLOUD_VARIANT_IDS.map((_, frame) => frame).filter((frame) => frame !== 1),
+    );
     expect(resolveActiveCloudAssetFrame(0, frameOneInactive)).toBe(0);
     expect(resolveActiveCloudAssetFrame(1, frameOneInactive)).toBe(2);
     expect(resolveActiveCloudAssetFrame(2, frameOneInactive)).toBe(2);
     expect(resolveActiveCloudAssetFrame(3, frameOneInactive)).toBe(3);
 
-    for (let slot = 0; slot < 4; slot++) {
+    for (let slot = 0; slot < CLOUD_VARIANT_IDS.length; slot++) {
       const baseline = resolveCloudDescriptor(13_371, entry(2, 3), 1024, CLOUD_ASSET_PACKAGE, slot)!;
       const filtered = resolveCloudDescriptor(13_371, entry(2, 3), 1024, frameOneInactive, slot)!;
       expect({ ...filtered, frame: baseline.frame }).toEqual(baseline);
@@ -331,7 +359,9 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
       variants: CLOUD_ASSET_PACKAGE.variants.map((variant, frame) => frame === 1 ? null : variant),
     } satisfies CloudAssetPackage;
     expect(validateCloudAssetPackage(deleted)).toBe(deleted);
-    expect(cloudAssetVariantEntries(deleted).map(({ frame }) => frame)).toEqual([0, 2, 3]);
+    expect(cloudAssetVariantEntries(deleted).map(({ frame }) => frame)).toEqual(
+      CLOUD_VARIANT_IDS.map((_, frame) => frame).filter((frame) => frame !== 1),
+    );
     expect(() => validateCloudAssetPackage({
       ...CLOUD_ASSET_PACKAGE,
       variants: CLOUD_ASSET_PACKAGE.variants.map((variant, frame) => frame === 1
@@ -343,9 +373,9 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
   it("reconstructs identical clouds while varying frame, scale, flip, opacity and drift", () => {
     const first = resolveCloudDescriptor(13_371, entry(2, 3), 1024);
     expect(resolveCloudDescriptor(13_371, entry(2, 3), 1024)).toEqual(first);
-    expect(new Set(Array.from({ length: 4 }, (_, slot) => (
+    expect(new Set(Array.from({ length: CLOUD_VARIANT_IDS.length }, (_, slot) => (
       resolveCloudDescriptor(13_371, entry(2, 3), 1024, CLOUD_ASSET_PACKAGE, slot)?.frame
-    )))).toEqual(new Set([0, 1, 2, 3]));
+    )))).toEqual(new Set(CLOUD_VARIANT_IDS.map((_, frame) => frame)));
     const denseChunk = Array.from({ length: 12 }, (_, slot) => (
       resolveCloudDescriptor(13_371, entry(2, 3), 1024, CLOUD_ASSET_PACKAGE, slot)!
     ));
@@ -358,7 +388,9 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     )).flat().filter((descriptor) => descriptor !== undefined);
 
     expect(descriptors.length).toBeGreaterThan(50);
-    expect(new Set(descriptors.map(({ frame }) => frame))).toEqual(new Set([0, 1, 2, 3]));
+    expect(new Set(descriptors.map(({ frame }) => frame))).toEqual(
+      new Set(CLOUD_VARIANT_IDS.map((_, frame) => frame)),
+    );
     expect(new Set(descriptors.map(({ scale }) => scale.toFixed(3))).size).toBeGreaterThan(8);
     expect(new Set(descriptors.map(({ alpha }) => alpha.toFixed(3))).size).toBeGreaterThan(8);
     expect(new Set(descriptors.map(({ tint }) => tint)).size).toBeGreaterThan(2);

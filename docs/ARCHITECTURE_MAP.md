@@ -123,8 +123,8 @@ adapter may own Phaser sound instances.
   only the home landmark's presentation position so the home-centre chunk can
   replace its ordinary candidates with three opening routes; fog and simulation
   rules never depend on clouds. Shared package textures, the
-  player-boat visual, and the four-frame cloud sheet remain a small scene-owned
-  set. Feature-specific presentation belongs in controllers and renderers.
+  player-boat visual, and the single 24-frame cloud sheet remain scene-owned.
+  Feature-specific presentation belongs in controllers and renderers.
   `WaterRenderer` consumes that same delta and owns exactly one base and one
   surface canvas texture per referenced canonical chunk. Periodic image aliases
   share those textures, aliases add no redraw work, and a visible canonical

@@ -2,20 +2,40 @@
   "contractVersion": 3,
   "assetId": "presentation.clouds.primary",
   "kind": "cloud-atmosphere",
-  "sourceAssetId": "generated.cloud-atmosphere.source.v2",
-  "runtimeRevision": 7,
+  "sourceAssetId": "generated.cloud-atmosphere.source.v3",
+  "runtimeRevision": 8,
   "image": {
     "imageId": "presentation.clouds.primary.frames",
     "textureKey": "wayfinders:image:cloud-atmosphere",
     "url": "./assets/cld1/clouds/cloud-sheet.png",
-    "pixelSize": { "width": 1254, "height": 1254 },
+    "pixelSize": { "width": 2508, "height": 3762 },
     "frameSize": { "width": 627, "height": 627 },
-    "frameCount": 4,
+    "frameCount": 24,
     "opaqueBounds": [
       { "x": 56, "y": 248, "width": 536, "height": 192 },
       { "x": 108, "y": 161, "width": 450, "height": 314 },
       { "x": 66, "y": 199, "width": 537, "height": 199 },
-      { "x": 34, "y": 156, "width": 543, "height": 291 }
+      { "x": 34, "y": 156, "width": 543, "height": 291 },
+      { "x": 75, "y": 180, "width": 474, "height": 247 },
+      { "x": 69, "y": 148, "width": 481, "height": 307 },
+      { "x": 67, "y": 176, "width": 497, "height": 249 },
+      { "x": 52, "y": 168, "width": 518, "height": 265 },
+      { "x": 84, "y": 164, "width": 458, "height": 283 },
+      { "x": 102, "y": 117, "width": 444, "height": 396 },
+      { "x": 90, "y": 118, "width": 457, "height": 378 },
+      { "x": 119, "y": 88, "width": 405, "height": 437 },
+      { "x": 76, "y": 88, "width": 471, "height": 437 },
+      { "x": 46, "y": 210, "width": 537, "height": 187 },
+      { "x": 53, "y": 91, "width": 518, "height": 422 },
+      { "x": 49, "y": 129, "width": 529, "height": 371 },
+      { "x": 59, "y": 56, "width": 500, "height": 498 },
+      { "x": 64, "y": 95, "width": 508, "height": 423 },
+      { "x": 105, "y": 106, "width": 416, "height": 391 },
+      { "x": 89, "y": 182, "width": 441, "height": 253 },
+      { "x": 52, "y": 195, "width": 522, "height": 225 },
+      { "x": 35, "y": 219, "width": 560, "height": 187 },
+      { "x": 47, "y": 204, "width": 531, "height": 175 },
+      { "x": 67, "y": 146, "width": 500, "height": 308 }
     ]
   },
   "presentation": {
@@ -62,6 +82,106 @@
     {
       "id": "shallow-crescent-bank",
       "name": "Shallow crescent bank",
+      "activeInGame": true
+    },
+    {
+      "id": "twin-crowned-cluster",
+      "name": "Twin crowned cluster",
+      "activeInGame": true
+    },
+    {
+      "id": "notched-broad-bank",
+      "name": "Notched broad bank",
+      "activeInGame": true
+    },
+    {
+      "id": "tapered-wedge-bank",
+      "name": "Tapered wedge bank",
+      "activeInGame": true
+    },
+    {
+      "id": "three-tower-shelf",
+      "name": "Three tower shelf",
+      "activeInGame": true
+    },
+    {
+      "id": "bow-tie-bank",
+      "name": "Bow-tie bank",
+      "activeInGame": true
+    },
+    {
+      "id": "forked-drift",
+      "name": "Forked drift",
+      "activeInGame": true
+    },
+    {
+      "id": "three-finger-fan",
+      "name": "Three-finger fan",
+      "activeInGame": true
+    },
+    {
+      "id": "crooked-crossbank",
+      "name": "Crooked crossbank",
+      "activeInGame": true
+    },
+    {
+      "id": "hook-and-beads",
+      "name": "Hook and beads",
+      "activeInGame": true
+    },
+    {
+      "id": "serpentine-ribbon",
+      "name": "Serpentine ribbon",
+      "activeInGame": true
+    },
+    {
+      "id": "open-ring-bank",
+      "name": "Open ring bank",
+      "activeInGame": true
+    },
+    {
+      "id": "double-window-bank",
+      "name": "Double window bank",
+      "activeInGame": true
+    },
+    {
+      "id": "triangular-hollow-bank",
+      "name": "Triangular hollow bank",
+      "activeInGame": true
+    },
+    {
+      "id": "braided-channel-bank",
+      "name": "Braided channel bank",
+      "activeInGame": true
+    },
+    {
+      "id": "curled-three-arm-cluster",
+      "name": "Curled three-arm cluster",
+      "activeInGame": true
+    },
+    {
+      "id": "stepped-trio",
+      "name": "Stepped trio",
+      "activeInGame": true
+    },
+    {
+      "id": "paired-islands",
+      "name": "Paired islands",
+      "activeInGame": true
+    },
+    {
+      "id": "parallel-broken-bands",
+      "name": "Parallel broken bands",
+      "activeInGame": true
+    },
+    {
+      "id": "arc-scatter",
+      "name": "Arc scatter",
+      "activeInGame": true
+    },
+    {
+      "id": "staggered-front",
+      "name": "Staggered front",
       "activeInGame": true
     }
   ]
