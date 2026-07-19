@@ -9,6 +9,13 @@ interface GridTraversalEntry extends GridPoint {
   tEnter: number;
 }
 
+interface MovementLeg {
+  readonly fromX: number;
+  readonly fromY: number;
+  readonly toX: number;
+  readonly toY: number;
+}
+
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
 }
@@ -128,41 +135,51 @@ export class MovementSystem implements MovementAuthority {
       return NO_MOVEMENT_RESULT;
     }
 
-    const traversal = traceWorldGridLine(fromX, fromY, proposedX, proposedY, this.config.navigation.tileSize);
-    const absoluteDistance = Math.abs(proposedDistance);
-    let actualT = 1;
-    let collided = false;
+    const legs: MovementLeg[] = [];
+    const firstLeg = this.sweepLeg(fromX, fromY, proposedX, proposedY);
+    legs.push(firstLeg);
 
-    const collisionT = firstShipCollisionTime(
-      this.world,
-      fromX,
-      fromY,
-      proposedX,
-      proposedY,
-      this.config,
-    );
-    if (collisionT !== undefined) {
-      const epsilonT = this.config.movement.collisionEpsilon / absoluteDistance;
-      actualT = Math.max(0, collisionT - epsilonT);
-      collided = true;
+    let actualX = firstLeg.toX;
+    let actualY = firstLeg.toY;
+    let slideDistance = 0;
+    const collided = actualX !== proposedX || actualY !== proposedY;
+    if (collided) {
+      const remainingX = proposedX - actualX;
+      const remainingY = proposedY - actualY;
+      const slideCandidates = [
+        this.sweepLeg(actualX, actualY, actualX + remainingX, actualY),
+        this.sweepLeg(actualX, actualY, actualX, actualY + remainingY),
+      ];
+      const slide = slideCandidates.reduce((best, candidate) => (
+        this.legDistance(candidate) > this.legDistance(best) ? candidate : best
+      ));
+      slideDistance = this.legDistance(slide);
+      if (slideDistance > 0) {
+        legs.push(slide);
+        actualX = slide.toX;
+        actualY = slide.toY;
+      }
     }
 
-    const actualX = fromX + (proposedX - fromX) * actualT;
-    const actualY = fromY + (proposedY - fromY) * actualT;
-    const actualDistance = absoluteDistance * actualT;
-    const segments = this.buildSegments(traversal, actualT, fromX, fromY, proposedX, proposedY, absoluteDistance);
+    const enteredTiles: GridPoint[] = [];
+    const segments: TravelSegment[] = [];
+    let actualDistance = 0;
+    for (const leg of legs) {
+      const distance = this.legDistance(leg);
+      if (distance === 0) continue;
+      actualDistance += distance;
+      const traversal = traceWorldGridLine(leg.fromX, leg.fromY, leg.toX, leg.toY, this.config.navigation.tileSize);
+      segments.push(...this.buildSegments(traversal, 1, leg.fromX, leg.fromY, leg.toX, leg.toY, distance));
+      for (let index = 1; index < traversal.length; index++) {
+        const canonical = this.world.topology.canonicalizeTile(traversal[index].x, traversal[index].y);
+        if (canonical) enteredTiles.push(canonical);
+      }
+    }
     const canonicalFinal = this.world.topology.canonicalizeWorld(actualX, actualY);
     if (!canonicalFinal) {
       throw new RangeError("Bounded movement escaped the synthetic world collision boundary");
     }
     const finalTile = worldToGrid(canonicalFinal.x, canonicalFinal.y, this.config.navigation.tileSize);
-    const enteredTiles: GridPoint[] = [];
-    for (let index = 1; index < traversal.length; index++) {
-      const entry = traversal[index];
-      if (entry.tEnter > actualT) break;
-      const canonical = this.world.topology.canonicalizeTile(entry.x, entry.y);
-      if (canonical) enteredTiles.push(canonical);
-    }
     const liftedDisplacement = {
       x: actualX - fromX,
       y: actualY - fromY,
@@ -180,7 +197,9 @@ export class MovementSystem implements MovementAuthority {
     ship.worldY = canonicalFinal.y;
     ship.currentTileX = finalTile.x;
     ship.currentTileY = finalTile.y;
-    if (collided) ship.speed = 0;
+    if (collided) {
+      ship.speed = deltaSeconds === 0 ? 0 : Math.sign(throttle) * slideDistance / deltaSeconds;
+    }
 
     return {
       movedDistancePixels: actualDistance,
@@ -201,6 +220,25 @@ export class MovementSystem implements MovementAuthority {
     ship.currentTileX = tile.x;
     ship.currentTileY = tile.y;
     ship.speed = 0;
+  }
+
+  private sweepLeg(fromX: number, fromY: number, toX: number, toY: number): MovementLeg {
+    const distance = Math.hypot(toX - fromX, toY - fromY);
+    if (distance === 0) return { fromX, fromY, toX: fromX, toY: fromY };
+    const collisionT = firstShipCollisionTime(this.world, fromX, fromY, toX, toY, this.config);
+    const acceptedT = collisionT === undefined
+      ? 1
+      : Math.max(0, collisionT - this.config.movement.collisionEpsilon / distance);
+    return {
+      fromX,
+      fromY,
+      toX: fromX + (toX - fromX) * acceptedT,
+      toY: fromY + (toY - fromY) * acceptedT,
+    };
+  }
+
+  private legDistance(leg: Readonly<MovementLeg>): number {
+    return Math.hypot(leg.toX - leg.fromX, leg.toY - leg.fromY);
   }
 
   private buildSegments(

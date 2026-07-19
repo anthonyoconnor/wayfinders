@@ -191,7 +191,10 @@ The ship has continuous position, heading, speed, and a current navigation tile.
 Keyboard input supplies turning and forward/reverse thrust. Movement sweeps the
 authored hull along a lifted continuous segment, maps broad- and fine-phase
 collision cells to canonical storage through `WorldTopology`, and stops before
-the first solid primitive. The final ship position and tile remain canonical.
+the first solid primitive. A glancing collision applies the remaining movement
+along the longer collision-free world axis, so the hull slides along the shore;
+a head-on or enclosed collision still stops. The final ship position and tile
+remain canonical.
 Every physical tile-centre entry is emitted once in order, including repeated
 seam crossings in one accepted move.
 

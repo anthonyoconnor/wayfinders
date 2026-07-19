@@ -182,6 +182,31 @@ describe("GR-2.4 sparse hybrid collision", () => {
     expect(fineShip.speed).toBe(0);
   });
 
+  it("slides along a wrapped shoreline while keeping the canonical endpoint", () => {
+    const config = makeConfig({
+      movement: {
+        collisionEpsilon: 0.001,
+        shipCollisionHalfExtent: 1,
+        shipSpeed: Math.SQRT2,
+      },
+    });
+    const world = new WorldGrid(4, 4, 4, WRAPPING_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Supported);
+    world.setTerrain(0, 1, TerrainType.Land);
+    const ship = createShipStateAtGrid({ x: 3, y: 0 }, 5, 45, config);
+
+    const result = new MovementSystem(world, config).update(ship, { turn: 0, throttle: 1 }, 1);
+
+    expect(result.collided).toBe(true);
+    expect(result.worldImageOffset).toEqual({ x: 128, y: 0 });
+    expect(result.enteredTiles).toEqual([{ x: 0, y: 0 }]);
+    expect(ship.currentTileX).toBe(0);
+    expect(ship.currentTileY).toBe(0);
+    expect(ship.worldX).toBeCloseTo(16, 10);
+    expect(ship.worldY).toBeLessThan(32 - config.movement.shipCollisionHalfExtent);
+    expect(ship.speed).toBeGreaterThan(0);
+  });
+
   it("keeps synthetic collision outside bounded asset worlds", () => {
     const config = makeConfig({ movement: { shipCollisionHalfExtent: 1 } });
     const bounded = new WorldGrid(4, 3, 4, BOUNDED_WORLD_TOPOLOGY);

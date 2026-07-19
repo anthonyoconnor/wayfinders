@@ -418,6 +418,51 @@ describe("navigation foundations", () => {
     expect(result.enteredTiles).toEqual([]);
   });
 
+  it("slides a glancing ship along blocking terrain without entering it", () => {
+    const config = makeConfig({
+      movement: { shipCollisionHalfExtent: 1, shipSpeed: Math.SQRT2 },
+    });
+    const world = new WorldGrid(6, 6, 3, BOUNDED_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    world.setTerrain(3, 2, TerrainType.Land);
+    const ship = createShipStateAtGrid({ x: 2, y: 2 }, 12, 45, config);
+
+    const result = new MovementSystem(world, config).update(ship, { turn: 0, throttle: 1 }, 1);
+
+    expect(result.collided).toBe(true);
+    expect(ship.worldX).toBeCloseTo(
+      96 - config.movement.shipCollisionHalfExtent - config.movement.collisionEpsilon / Math.SQRT2,
+      6,
+    );
+    expect(ship.worldY).toBeCloseTo(112, 6);
+    expect(ship.currentTileX).toBe(2);
+    expect(ship.currentTileY).toBe(3);
+    expect(ship.speed).toBeGreaterThan(0);
+    expect(result.enteredTiles).toEqual([{ x: 2, y: 3 }]);
+    expect(result.segments.reduce((total, segment) => total + segment.distancePixels, 0))
+      .toBeCloseTo(result.movedDistancePixels, 10);
+  });
+
+  it("does not slide through a blocked inside corner", () => {
+    const config = makeConfig({
+      movement: { shipCollisionHalfExtent: 1, shipSpeed: Math.SQRT2 },
+    });
+    const world = new WorldGrid(6, 6, 3, BOUNDED_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    world.setTerrain(3, 2, TerrainType.Land);
+    world.setTerrain(2, 3, TerrainType.Land);
+    const ship = createShipStateAtGrid({ x: 2, y: 2 }, 12, 45, config);
+
+    const result = new MovementSystem(world, config).update(ship, { turn: 0, throttle: 1 }, 1);
+
+    expect(result.collided).toBe(true);
+    expect(ship.currentTileX).toBe(2);
+    expect(ship.currentTileY).toBe(2);
+    expect(ship.worldX).toBeLessThan(96);
+    expect(ship.worldY).toBeLessThan(96);
+    expect(result.enteredTiles).toEqual([]);
+  });
+
   it("reuses the immutable idle result instead of allocating every fixed step", () => {
     const world = new WorldGrid(3, 3, 2, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
