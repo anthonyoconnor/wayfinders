@@ -45,6 +45,7 @@ describe("GR-3.5 guided production asset intake", () => {
     expect(PRODUCTION_ASSET_FAMILY_DEFAULTS.island).toMatchObject({
       targetWidth: 480,
       targetHeight: 480,
+      layerRole: "island-composite",
       collisionSemantics: "solid",
       runtimeCategory: "home-island",
     });

@@ -15,8 +15,8 @@ function catalog(): Readonly<AuthoredIslandPresentationCatalog> {
       gridWidth: 2,
       gridHeight: 1,
       layers: [
-        { id: "base", url: "/base.png", textureKey: "island.base", pixelWidth: 64, pixelHeight: 32, opacity: 1, blendMode: "normal" },
-        { id: "detail", url: "/detail.png", textureKey: "island.detail", pixelWidth: 64, pixelHeight: 32, opacity: 0.8, blendMode: "multiply" },
+        { id: "base", plane: "island-composite", url: "/base.png", textureKey: "island.base", pixelWidth: 64, pixelHeight: 32, opacity: 1, blendMode: "normal" },
+        { id: "detail", plane: "shore-effect", url: "/detail.png", textureKey: "island.detail", pixelWidth: 64, pixelHeight: 32, opacity: 0.8, blendMode: "multiply" },
       ],
     }],
   };
@@ -53,4 +53,32 @@ describe("GR-4.4 authored island presentation runtime", () => {
     expect(complete.entry("production.island.test-cay")).toMatchObject({ gridWidth: 2, gridHeight: 1 });
     expect(complete.diagnostics).toEqual([]);
   });
+
+  it.each(["water-apron", "shore-effect"] as const)(
+    "rejects a texture-complete %s-only island presentation",
+    (plane) => {
+      const source = catalog().islands[0];
+      const incompleteCatalog: Readonly<AuthoredIslandPresentationCatalog> = {
+        revision: "catalog-incomplete",
+        islands: [{
+          ...source,
+          layers: [{
+            ...source.layers[0],
+            id: plane,
+            plane,
+            textureKey: `island.${plane}`,
+          }],
+        }],
+      };
+      const runtime = createAuthoredIslandPresentationRuntime({
+        textures: { exists: () => true },
+      } as never, incompleteCatalog);
+
+      expect(runtime.entry(source.assetId)).toBeUndefined();
+      expect(runtime.diagnostics).toEqual([{
+        assetId: source.assetId,
+        message: "presentation has no land or island-composite plane",
+      }]);
+    },
+  );
 });

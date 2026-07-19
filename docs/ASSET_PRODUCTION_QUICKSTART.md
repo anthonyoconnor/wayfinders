@@ -137,8 +137,8 @@ examples):
   "layers": [
     {
       "id": "base",
-      "name": "Base island",
-      "role": "base",
+      "name": "Island and authored water apron",
+      "role": "island-composite",
       "sourceFile": "assets-src/gr1/island-mangrove-harbour-source.png",
       "defaultVisible": true,
       "opacity": 1,
@@ -152,18 +152,22 @@ examples):
         "innerTolerance": 48,
         "outerTolerance": 104,
         "trimAlphaThreshold": 8,
-        "padding": 8
+        "padding": 8,
+        "alphaEdgeFadePixels": 12,
+        "alphaEdgeBlendColor": [8, 48, 68]
       }
     }
   ],
   "animations": [],
-  "collision": { "mode": "shoreline-seed", "tileSize": 32, "subcellSize": 8 },
+  "collision": { "mode": "center-circle", "tileSize": 32, "subcellSize": 8 },
   "availableInGame": false
 }
 ```
 
-The generated `32`/`8` shoreline draft is visible and editable. Use the isolated
-sea trial to test the island's prepared layers and saved collision. Marking it
+The generated `32`/`8` centered-circle draft is visible and editable. It ignores
+image pixels so an opaque water apron stays navigable; refine the land shape in
+the Islands workbench. Use the isolated sea trial to test the island's prepared
+layers and saved collision. Marking it
 available adds that stable ID and exact saved mask to subsequent deterministic
 world creation; it never replaces the built-in home island.
 

@@ -49,6 +49,103 @@ function pixelOffset(width, x, y) {
   return (y * width + x) * 4;
 }
 
+const ORTHOGONAL_DISTANCE = 3;
+const DIAGONAL_DISTANCE = 4;
+
+/**
+ * Attenuates existing alpha inward from its irregular transparent silhouette.
+ *
+ * The two-pass 3/4 chamfer distance is deterministic and close to Euclidean
+ * distance without introducing a dependency or scanning a radius per pixel.
+ * Transparent pixels are distance seeds and the canvas exterior is treated as
+ * transparent, so a source that reaches an edge still fades cleanly. RGB is
+ * never copied into an initially transparent pixel and alpha can only stay
+ * equal or fall. When supplied, the blend color brings only visible pixels in
+ * the fade band toward the runtime backdrop as their coverage approaches zero.
+ */
+export function applyInwardAlphaEdgeFade(image, fadePixels, edgeBlendColor) {
+  const result = checkedImage(image);
+  if (fadePixels === undefined || fadePixels === 0) return result;
+  const radius = integer(fadePixels, "preparation.alphaEdgeFadePixels", 1);
+  const blendColor = edgeBlendColor === undefined
+    ? undefined
+    : (() => {
+        if (!Array.isArray(edgeBlendColor) || edgeBlendColor.length !== 3) {
+          throw new RangeError("preparation.alphaEdgeBlendColor must contain three RGB channels");
+        }
+        return edgeBlendColor.map((value, index) =>
+          channel(value, `preparation.alphaEdgeBlendColor[${index}]`));
+      })();
+  const pixelCount = result.width * result.height;
+  const maximumDistance = radius * ORTHOGONAL_DISTANCE + ORTHOGONAL_DISTANCE;
+  const distances = new Uint16Array(pixelCount);
+  distances.fill(Math.min(65_535, maximumDistance));
+
+  for (let y = 0; y < result.height; y++) {
+    for (let x = 0; x < result.width; x++) {
+      const index = y * result.width + x;
+      if (result.pixels[index * 4 + 3] === 0) {
+        distances[index] = 0;
+        continue;
+      }
+      if (x === 0 || y === 0 || x + 1 === result.width || y + 1 === result.height) {
+        distances[index] = ORTHOGONAL_DISTANCE;
+      }
+      if (x > 0) distances[index] = Math.min(distances[index], distances[index - 1] + ORTHOGONAL_DISTANCE);
+      if (y > 0) distances[index] = Math.min(distances[index], distances[index - result.width] + ORTHOGONAL_DISTANCE);
+      if (x > 0 && y > 0) {
+        distances[index] = Math.min(distances[index], distances[index - result.width - 1] + DIAGONAL_DISTANCE);
+      }
+      if (x + 1 < result.width && y > 0) {
+        distances[index] = Math.min(distances[index], distances[index - result.width + 1] + DIAGONAL_DISTANCE);
+      }
+    }
+  }
+
+  for (let y = result.height - 1; y >= 0; y--) {
+    for (let x = result.width - 1; x >= 0; x--) {
+      const index = y * result.width + x;
+      if (distances[index] === 0) continue;
+      if (x + 1 < result.width) {
+        distances[index] = Math.min(distances[index], distances[index + 1] + ORTHOGONAL_DISTANCE);
+      }
+      if (y + 1 < result.height) {
+        distances[index] = Math.min(distances[index], distances[index + result.width] + ORTHOGONAL_DISTANCE);
+      }
+      if (x + 1 < result.width && y + 1 < result.height) {
+        distances[index] = Math.min(distances[index], distances[index + result.width + 1] + DIAGONAL_DISTANCE);
+      }
+      if (x > 0 && y + 1 < result.height) {
+        distances[index] = Math.min(distances[index], distances[index + result.width - 1] + DIAGONAL_DISTANCE);
+      }
+    }
+  }
+
+  const fadeDistance = radius * ORTHOGONAL_DISTANCE;
+  for (let index = 0; index < pixelCount; index++) {
+    const alphaOffset = index * 4 + 3;
+    const alpha = result.pixels[alphaOffset];
+    if (alpha === 0 || distances[index] >= fadeDistance + ORTHOGONAL_DISTANCE) continue;
+    const normalizedDistance = Math.max(
+      0,
+      Math.min(1, (distances[index] - ORTHOGONAL_DISTANCE) / fadeDistance),
+    );
+    const coverage = normalizedDistance * normalizedDistance;
+    if (blendColor) {
+      const blendWeight = 1 - normalizedDistance;
+      const rgbaOffset = index * 4;
+      for (let channelIndex = 0; channelIndex < 3; channelIndex++) {
+        result.pixels[rgbaOffset + channelIndex] = Math.round(
+          result.pixels[rgbaOffset + channelIndex] * normalizedDistance
+          + blendColor[channelIndex] * blendWeight,
+        );
+      }
+    }
+    result.pixels[alphaOffset] = Math.min(alpha, Math.round(alpha * coverage));
+  }
+  return result;
+}
+
 function colorDistance(pixels, offset, matteColor) {
   return Math.hypot(
     pixels[offset] - matteColor[0],
@@ -253,5 +350,13 @@ export function trimAndContainImage(image, preparation) {
 /** Runs the complete deterministic preparation operation for one decoded layer. */
 export function prepareProductionImage(image, preparation) {
   const withoutMatte = applyConnectedBorderMatte(image, preparation);
-  return trimAndContainImage(withoutMatte, preparation);
+  const prepared = trimAndContainImage(withoutMatte, preparation);
+  return {
+    ...prepared,
+    image: applyInwardAlphaEdgeFade(
+      prepared.image,
+      preparation?.alphaEdgeFadePixels,
+      preparation?.alphaEdgeBlendColor,
+    ),
+  };
 }

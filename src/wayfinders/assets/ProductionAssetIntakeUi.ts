@@ -100,7 +100,7 @@ export function mountProductionAssetIntakeUi({
           <p data-intake-dimensions-warning hidden></p>
           <button type="button" data-intake-pad hidden></button>
         </div>
-        <label data-intake-advanced>Layer role<select name="layerRole"><option value="base">Base</option><option value="overlay">Overlay</option><option value="effect">Effect</option><option value="reference">Reference</option></select><small data-field-error="layerRole"></small></label>
+        <label data-intake-advanced>Layer role<select name="layerRole"><option value="island-composite">Island composite</option><option value="water-apron">Water apron</option><option value="shore-effect">Shore effect</option><option value="base">Base</option><option value="overlay">Overlay</option><option value="effect">Effect</option><option value="reference">Reference</option></select><small data-field-error="layerRole"></small></label>
         <label data-intake-advanced>Collision<select name="collisionSemantics"><option value="solid">Solid draft</option><option value="passable">Explicitly passable</option></select><small data-field-error="collisionSemantics"></small></label>
         <label class="production-intake-wide" data-intake-advanced>Runtime/test category<select name="runtimeCategory">
           <option value="none">None</option><option value="home-island">Home island</option>
@@ -475,7 +475,7 @@ export function mountProductionAssetIntakeUi({
       if (sourceSummary) sourceSummary.textContent = reference
         ? `Source reference: ${reference.name}`
         : focusedFamily === "island"
-          ? "Choose one PNG. Its canvas size and initial collision mask are read automatically."
+          ? "Choose one PNG. Its canvas size is read automatically and an editable centered collision circle is created."
           : "Choose one new local PNG. The source will be copied into the repository transaction.";
       if (uploadLabel) uploadLabel.hidden = Boolean(reference);
       updateDimensionControls();

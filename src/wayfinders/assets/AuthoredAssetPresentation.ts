@@ -9,6 +9,12 @@ import type { AuthoredAssetRuntime } from "./PilotAssetRuntime";
 
 export interface AuthoredHomeIslandVisual {
   readonly metadata: Readonly<AuthoredHomeIslandMetadata>;
+  readonly displayBounds: Readonly<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }>;
   setPosition(x: number, y: number): void;
   setVisible(visible: boolean): void;
   destroy(): void;
@@ -34,15 +40,25 @@ export function createAuthoredHomeIslandVisual(
   if (metadata?.kind !== "home-island") return undefined;
   const slices = [...metadata.render.slices].sort((left, right) => left.depth - right.depth);
   const images: Phaser.GameObjects.Image[] = [];
+  let displayLeft = Number.POSITIVE_INFINITY;
+  let displayTop = Number.POSITIVE_INFINITY;
+  let displayRight = Number.NEGATIVE_INFINITY;
+  let displayBottom = Number.NEGATIVE_INFINITY;
   for (const slice of slices) {
     const textureKey = assets.textureKey(slice.imageId);
     if (!textureKey) {
       for (const image of images) image.destroy();
       return undefined;
     }
+    const displayWidth = slice.pixelSize.width * slice.scale;
+    const displayHeight = slice.pixelSize.height * slice.scale;
+    displayLeft = Math.min(displayLeft, slice.pixelOffset.x);
+    displayTop = Math.min(displayTop, slice.pixelOffset.y);
+    displayRight = Math.max(displayRight, slice.pixelOffset.x + displayWidth);
+    displayBottom = Math.max(displayBottom, slice.pixelOffset.y + displayHeight);
     images.push(scene.add.image(slice.pixelOffset.x, slice.pixelOffset.y, textureKey)
       .setOrigin(0)
-      .setDisplaySize(slice.pixelSize.width * slice.scale, slice.pixelSize.height * slice.scale)
+      .setDisplaySize(displayWidth, displayHeight)
       .setDepth(slice.depth)
       .setVisible(false));
   }
@@ -50,6 +66,12 @@ export function createAuthoredHomeIslandVisual(
   let originY = 0;
   return {
     metadata,
+    displayBounds: Object.freeze({
+      left: displayLeft,
+      top: displayTop,
+      width: displayRight - displayLeft,
+      height: displayBottom - displayTop,
+    }),
     setPosition: (x, y) => {
       const deltaX = x - originX;
       const deltaY = y - originY;

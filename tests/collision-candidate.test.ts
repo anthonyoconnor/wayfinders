@@ -176,7 +176,7 @@ describe("GR-2.5 collision-only package candidates", () => {
       current,
       candidate(current, "replace", invalidCollision),
       exactValidator,
-    )).toThrow(/outside the 15x15 asset grid/);
+    )).toThrow(/outside the 25x25 asset grid/);
     expect(validationCalls).toBe(2);
   });
 

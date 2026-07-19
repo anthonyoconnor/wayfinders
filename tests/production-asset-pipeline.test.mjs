@@ -42,7 +42,7 @@ describe("GR-3.2 production preparation pipeline", () => {
       .toThrow(/No production recipes matched/);
   });
 
-  it("creates generated, blank, and explicitly passable editable drafts", async () => {
+  it("creates centered, shoreline, blank, and explicitly passable editable drafts", async () => {
     const preparedLayers = [{ image: image(480, 480, 255) }];
     const blank = await createCollisionDraft({
       id: "production.island.test",
@@ -53,6 +53,17 @@ describe("GR-3.2 production preparation pipeline", () => {
       grid: { width: 15, height: 15, subcellColumns: 60, subcellRows: 60 },
       solidSubcells: [],
     });
+
+    const centered = await createCollisionDraft({
+      id: "production.island.centered",
+      collision: { mode: "center-circle", tileSize: 32, subcellSize: 8 },
+    }, [{ image: image(64, 64, 255) }], "centered-fingerprint");
+    expect(centered).toMatchObject({
+      kind: "hybrid-grid-draft",
+      method: "prepared-canvas-centered-circle-v1",
+      grid: { width: 2, height: 2, subcellColumns: 8, subcellRows: 8 },
+    });
+    expect(centered.solidSubcells).toHaveLength(12);
 
     const shorelineImage = image(64, 64);
     fillAlpha(shorelineImage, 16, 16, 32, 32);

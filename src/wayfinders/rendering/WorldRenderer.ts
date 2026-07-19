@@ -10,6 +10,7 @@ import type {
   AuthoredIslandPresentationEntry,
   AuthoredIslandPresentationRuntime,
 } from "../assets/AuthoredIslandPresentation";
+import { hasAuthoredIslandLandPlane } from "../assets/AuthoredIslandPresentation";
 import { prototypeConfig } from "../config/prototypeConfig";
 import type { GridPoint, WorldPoint } from "../core/types";
 import { gridToWorld } from "../world/CoordinateSystem";
@@ -577,12 +578,12 @@ export class WorldRenderer {
     for (const island of generated.islands) {
       if (island.sourceKind !== "authored" || !island.authoredAssetId || !island.authoredCollision) continue;
       const presentation = this.authoredIslandPresentations?.entry(island.authoredAssetId);
-      if (!presentation) continue;
+      if (!presentation || !hasAuthoredIslandLandPlane(presentation)) continue;
       if (
         presentation.gridWidth !== island.authoredCollision.gridWidth
         || presentation.gridHeight !== island.authoredCollision.gridHeight
       ) {
-        throw new RangeError(`Authored island ${island.authoredAssetId} presentation does not match its collision bounds`);
+        continue;
       }
       const record = Object.freeze({ island, presentation });
       byIslandId.set(island.id, record);
@@ -620,7 +621,13 @@ export class WorldRenderer {
     const { island, presentation } = record;
     const size = prototypeConfig.navigation.tileSize;
     const images: Phaser.GameObjects.Image[] = [];
-    for (const [index, layer] of presentation.layers.entries()) {
+    let landPlaneIndex = 0;
+    for (const layer of presentation.layers) {
+      const depth = layer.plane === "water-apron"
+        ? 1.7
+        : layer.plane === "shore-effect"
+          ? 4.75
+          : 4 + landPlaneIndex++ * 0.01;
       const image = this.scene.add.image(
         island.bounds.minX * size + imageOffset.x,
         island.bounds.minY * size + imageOffset.y,
@@ -630,7 +637,7 @@ export class WorldRenderer {
         .setDisplaySize(presentation.gridWidth * size, presentation.gridHeight * size)
         .setAlpha(layer.opacity)
         .setBlendMode(authoredIslandBlendMode(layer.blendMode))
-        .setDepth(4 + index * 0.01);
+        .setDepth(depth);
       images.push(image);
     }
     return {

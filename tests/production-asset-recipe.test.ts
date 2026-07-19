@@ -87,6 +87,100 @@ describe("production asset recipe manifest", () => {
     });
   });
 
+  it("accepts composite and layered authored-island water roles", () => {
+    const recipe = validIslandRecipe();
+    const manifest = validateProductionAssetRecipeManifest({
+      formatVersion: 1,
+      recipes: [{
+        ...recipe,
+        layers: [
+          { ...recipe.layers[0], id: "composite", role: "island-composite" },
+          { ...recipe.layers[0], id: "apron", role: "water-apron" },
+          { ...recipe.layers[0], id: "surf", role: "shore-effect" },
+        ],
+      }],
+    });
+
+    expect(manifest.recipes[0].layers.map(({ role }) => role)).toEqual([
+      "island-composite",
+      "water-apron",
+      "shore-effect",
+    ]);
+  });
+
+  it("validates an opt-in inward alpha-edge fade", () => {
+    const recipe = validIslandRecipe();
+    const manifest = validateProductionAssetRecipeManifest({
+      formatVersion: 1,
+      recipes: [{
+        ...recipe,
+        layers: [{
+          ...recipe.layers[0],
+          role: "island-composite",
+          preparation: {
+            ...recipe.layers[0].preparation,
+            alphaEdgeFadePixels: 12,
+            alphaEdgeBlendColor: [8, 48, 68],
+          },
+        }],
+      }],
+    });
+
+    expect(manifest.recipes[0].layers[0].preparation.alphaEdgeFadePixels).toBe(12);
+    expect(manifest.recipes[0].layers[0].preparation.alphaEdgeBlendColor).toEqual([8, 48, 68]);
+    expect(() => validateProductionAssetRecipeManifest({
+      formatVersion: 1,
+      recipes: [{
+        ...recipe,
+        layers: [{
+          ...recipe.layers[0],
+          preparation: { ...recipe.layers[0].preparation, alphaEdgeFadePixels: 0 },
+        }],
+      }],
+    })).toThrow(/alphaEdgeFadePixels/u);
+    for (const alphaEdgeBlendColor of [[8, 48], [8, 48, 256], [8, 48, 68.5]]) {
+      expect(() => validateProductionAssetRecipeManifest({
+        formatVersion: 1,
+        recipes: [{
+          ...recipe,
+          layers: [{
+            ...recipe.layers[0],
+            preparation: { ...recipe.layers[0].preparation, alphaEdgeBlendColor },
+          }],
+        }],
+      })).toThrow(/alphaEdgeBlendColor/u);
+    }
+    expect(() => validateProductionAssetRecipeManifest({
+      formatVersion: 1,
+      recipes: [{
+        ...recipe,
+        layers: [{
+          ...recipe.layers[0],
+          preparation: {
+            ...recipe.layers[0].preparation,
+            alphaEdgeBlendColor: [8, 48, 68],
+          },
+        }],
+      }],
+    })).toThrow(/alphaEdgeBlendColor requires alphaEdgeFadePixels/u);
+  });
+
+  it("accepts the imported-island centered-circle editable draft", () => {
+    const manifest = validateProductionAssetRecipeManifest({
+      formatVersion: 1,
+      recipes: [{
+        ...validIslandRecipe(),
+        collision: { mode: "center-circle", tileSize: 32, subcellSize: 8 },
+      }],
+    });
+
+    expect(manifest.recipes[0].collision).toEqual({
+      mode: "center-circle",
+      tileSize: 32,
+      subcellSize: 8,
+    });
+  });
+
   it("accepts the closed pilot runtime IDs only when visual work preserves collision", () => {
     const recipe = validIslandRecipe();
     const manifest = validateProductionAssetRecipeManifest({

@@ -3,6 +3,7 @@ import { appendDeveloperLog, clearDeveloperLog } from "../../developerLog";
 import { preloadPilotAssetPackages } from "../assets/PilotAssetCatalog";
 import { preloadCloudAsset } from "../assets/CloudAssetCatalog";
 import { createPilotAssetRuntime, type PilotAssetRuntime } from "../assets/PilotAssetRuntime";
+import { AUTHORED_ASSET_IDS } from "../assets/AuthoredAssetContracts";
 import { createWaterAssetRuntime, preloadWaterAssetPackage } from "../assets/water";
 import {
   createAuthoredIslandPresentationRuntime,
@@ -365,6 +366,7 @@ export class WayfindersScene extends Phaser.Scene {
       this,
       this.authoredIslandPresentationCatalog,
     );
+    const authoredHomePresentation = this.pilotAssets.metadata(AUTHORED_ASSET_IDS.homeIsland);
     this.worldRenderer = new WorldRenderer(
       this,
       this.pilotAssets,
@@ -374,6 +376,8 @@ export class WayfindersScene extends Phaser.Scene {
       this,
       createWaterAssetRuntime(this),
       this.prefersReducedMotion,
+      this.authoredIslandPresentations,
+      authoredHomePresentation?.kind === "home-island" ? authoredHomePresentation : undefined,
     );
     this.wreckRenderer = new WreckRenderer(this);
     this.knowledgeOverlay = new KnowledgeOverlayRenderer(this);

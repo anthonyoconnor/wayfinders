@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  WATER_HOME_HANDOFF_MARGIN,
-  WATER_TEXTURE_KEYS,
-} from "../src/wayfinders/assets/water";
+import { PILOT_HOME_ISLAND_METADATA } from "../src/wayfinders/assets/AuthoredHomeIsland";
 import { prototypeConfig } from "../src/wayfinders/config/prototypeConfig";
 import { activeChunkViewKey } from "../src/wayfinders/rendering/activation";
 import type { ActiveChunkEntry } from "../src/wayfinders/rendering/activation";
@@ -199,7 +196,6 @@ describe("WaterRenderer periodic image ownership", () => {
       visibleCanonicalChunks: 1,
       activeCanvasTextures: 2,
       activeWaterImageObjects: 4,
-      homeShoreAliases: 2,
       redrawCount: 1,
       animatedRedrawCount: 0,
       tilesDrawn: 64,
@@ -283,60 +279,136 @@ describe("WaterRenderer periodic image ownership", () => {
     ]);
   });
 
-  it("owns one aligned home handoff and shore pair across the expanded periodic footprint", () => {
+  it("keeps authored-home water ownership inside chunk textures without separate sprites", () => {
     const { scene, canvases } = makeScene();
     const generated = generatedWorld();
-    const tileSize = prototypeConfig.navigation.tileSize;
-    const worldOffset = generated.grid.topology.pixelWidth;
-    const homeTopLeft = { x: 2 * tileSize, y: 2 * tileSize };
     const renderer = new WaterRenderer(scene as never, waterAssets() as never, false);
     renderer.render(generated, [entry(3, 0, { x: 0, y: 0 })]);
-    const handoff = createdImages.find(
-      ({ textureKey }) => textureKey === WATER_TEXTURE_KEYS.homeDepthHandoff,
-    );
-    const shore = createdImages.find(
-      ({ textureKey }) => textureKey === WATER_TEXTURE_KEYS.homeShore,
-    );
-    expect(handoff).toMatchObject({
-      x: homeTopLeft.x + worldOffset - WATER_HOME_HANDOFF_MARGIN,
-      y: homeTopLeft.y - WATER_HOME_HANDOFF_MARGIN,
-      frame: 0,
-      depth: 1.7,
-      visible: true,
-    });
-    expect(shore).toMatchObject({
-      x: homeTopLeft.x + worldOffset,
-      y: homeTopLeft.y,
-      frame: 0,
-      depth: 4.75,
-      visible: true,
-    });
+    expect(createdImages).toHaveLength(2);
+    expect(createdImages.every(({ textureKey }) => textureKey.includes("water.chunk"))).toBe(true);
 
     renderer.update(420);
-    expect(handoff?.frame).toBe(3);
-    expect(shore?.frame).toBe(3);
-
-    renderer.applyActiveChunks({
-      active: [entry(0, 0, { x: worldOffset, y: 0 })],
-    } as never);
-    expect(renderer.getTelemetry()).toMatchObject({
-      homeShoreAliases: 1,
-      totalHomeShoreAliasActivations: 1,
-      totalHomeShoreAliasDeactivations: 0,
-    });
-    expect(handoff?.destroyed).toBe(false);
-    expect(shore?.destroyed).toBe(false);
+    expect(createdImages).toHaveLength(2);
 
     renderer.destroy();
-    expect(handoff?.destroyed).toBe(true);
-    expect(shore?.destroyed).toBe(true);
+    expect(createdImages.every(({ destroyed }) => destroyed)).toBe(true);
     expect(canvases.size).toBe(0);
     expect(renderer.getTelemetry()).toMatchObject({
       activeImageEntries: 0,
       activeCanonicalChunks: 0,
       activeCanvasTextures: 0,
-      homeShoreAliases: 0,
     });
+  });
+
+  it("suppresses generic transitions only for revision-matched authored composite or apron art", () => {
+    const renderScenario = (
+      sourceKind: "authored" | "procedural",
+      plane: "island-composite" | "water-apron" | "land" | "shore-effect",
+      presentationRevision = "catalog-current",
+      complete = true,
+      includeLandPlane = plane === "water-apron",
+    ) => {
+      const { scene, canvases } = makeScene();
+      const source = generatedWorld(64, 32, 32);
+      const island = {
+        id: 7,
+        kind: "low-cay",
+        size: "small",
+        center: { x: 5, y: 5 },
+        radiusX: 1,
+        radiusY: 1,
+        outerRadius: 2,
+        rotation: 0,
+        shapeSeed: 4,
+        bounds: { minX: 4, minY: 4, maxX: 5, maxY: 5 },
+        sourceKind,
+        authoredAssetId: "production.island.test",
+        authoredCollision: { gridWidth: 2, gridHeight: 2, solidSubcells: [{ x: 1, y: 1 }] },
+      } as const;
+      const generated = {
+        ...source,
+        islands: [island],
+        landmarks: { ...source.landmarks, homeCenter: { x: 48, y: 16 } },
+        manifest: { authoredIslandCatalogRevision: "catalog-current" },
+        water: {
+          ...source.water,
+          baseTypeAt: () => WATER_TYPE_IDS.coastal,
+          transitionMaskAt: () => 1,
+        },
+      } as unknown as GeneratedWorld;
+      const presentations = {
+        revision: presentationRevision,
+        diagnostics: [],
+        entry: () => complete ? {
+          assetId: "production.island.test",
+          name: "Test Island",
+          revision: "asset-current",
+          gridWidth: 2,
+          gridHeight: 2,
+          layers: [
+            {
+              id: "visual",
+              plane,
+              url: "/visual.png",
+              textureKey: "visual",
+              pixelWidth: 64,
+              pixelHeight: 64,
+              opacity: 1,
+              blendMode: "normal",
+            },
+            ...(includeLandPlane ? [{
+              id: "land",
+              plane: "land" as const,
+              url: "/land.png",
+              textureKey: "land",
+              pixelWidth: 64,
+              pixelHeight: 64,
+              opacity: 1,
+              blendMode: "normal" as const,
+            }] : []),
+          ],
+        } as const : undefined,
+      };
+      const renderer = new WaterRenderer(
+        scene as never,
+        waterAssets([WATER_TYPE_IDS.deep, WATER_TYPE_IDS.coastal]) as never,
+        false,
+        presentations,
+      );
+      renderer.render(generated, [entry(0, 0, { x: 0, y: 0 })]);
+      const base = canvases.get("wayfinders.water.chunk.base.0-0")!;
+      const surface = canvases.get("wayfinders.water.chunk.surface.0-0")!;
+      const tileSize = prototypeConfig.navigation.tileSize;
+      const baseAt = (x: number, y: number) => vi.mocked(base.context.drawImage).mock.calls.find(
+        (call) => call[5] === x * tileSize + 1 && call[6] === y * tileSize + 1,
+      );
+      const surfaceAt = (x: number, y: number) => vi.mocked(surface.context.drawImage).mock.calls.find(
+        (call) => call[5] === x * tileSize && call[6] === y * tileSize,
+      );
+      return { baseAt, surfaceAt };
+    };
+
+    for (const plane of ["island-composite", "water-apron"] as const) {
+      const owned = renderScenario("authored", plane);
+      expect(owned.baseAt(4, 4)?.[2]).toBe(2);
+      expect(owned.surfaceAt(4, 4)).toBeUndefined();
+      expect(owned.baseAt(3, 4)?.[2]).toBe(2);
+      expect(owned.surfaceAt(3, 4)).toBeUndefined();
+      expect(owned.baseAt(2, 4)?.[2]).toBe(38);
+      expect(owned.surfaceAt(2, 4)).toBeDefined();
+    }
+
+    for (const scenario of [
+      renderScenario("authored", "land"),
+      renderScenario("authored", "island-composite", "catalog-stale"),
+      renderScenario("authored", "island-composite", "catalog-current", false),
+      renderScenario("procedural", "island-composite"),
+      renderScenario("authored", "water-apron", "catalog-current", true, false),
+      renderScenario("authored", "shore-effect"),
+    ]) {
+      expect(scenario.baseAt(4, 4)?.[2]).toBe(38);
+      expect(scenario.surfaceAt(4, 4)).toBeDefined();
+    }
   });
 
   it("holds the initial surface frame under reduced motion", () => {
@@ -346,12 +418,55 @@ describe("WaterRenderer periodic image ownership", () => {
     renderer.render(generated, [entry(0, 0, { x: 0, y: 0 })]);
     renderer.update(4_200);
     expect(renderer.getTelemetry()).toMatchObject({ redrawCount: 1, animatedRedrawCount: 0 });
-    expect(createdImages.find(
-      ({ textureKey }) => textureKey === WATER_TEXTURE_KEYS.homeDepthHandoff,
-    )?.frame).toBe(0);
-    expect(createdImages.find(
-      ({ textureKey }) => textureKey === WATER_TEXTURE_KEYS.homeShore,
-    )?.frame).toBe(0);
+  });
+
+  it.each([
+    { name: "missing", presentation: undefined },
+    {
+      name: "land-only",
+      presentation: {
+        ...PILOT_HOME_ISLAND_METADATA,
+        render: { ...PILOT_HOME_ISLAND_METADATA.render, plane: "land" as const },
+      },
+    },
+  ])("retains generated home water when the Home presentation is $name", ({ presentation }) => {
+    const { scene, canvases } = makeScene();
+    const source = generatedWorld(32, 32, 32);
+    const generated = {
+      ...source,
+      landmarks: {
+        ...source.landmarks,
+        homeCenter: { x: 0, y: 0 },
+      },
+      water: {
+        ...source.water,
+        baseTypeAt: () => WATER_TYPE_IDS.coastal,
+        transitionMaskAt: () => 1,
+      },
+    } as unknown as GeneratedWorld;
+    const renderer = new WaterRenderer(
+      scene as never,
+      waterAssets([WATER_TYPE_IDS.deep, WATER_TYPE_IDS.coastal]) as never,
+      false,
+      undefined,
+      presentation,
+    );
+
+    renderer.render(generated, [entry(0, 0, { x: 0, y: 0 })]);
+
+    const topLeftX = -PILOT_HOME_ISLAND_METADATA.anchors.homeCenter.x;
+    const formerlyOwnedX = source.grid.topology.canonicalizeTile(topLeftX - 1, 0)!.x;
+    const tileSize = prototypeConfig.navigation.tileSize;
+    const base = canvases.get("wayfinders.water.chunk.base.0-0")!;
+    const baseDraw = vi.mocked(base.context.drawImage).mock.calls.find(
+      (call) => call[5] === formerlyOwnedX * tileSize + 1 && call[6] === 1,
+    );
+    expect(baseDraw?.[2]).toBe(38);
+
+    const surface = canvases.get("wayfinders.water.chunk.surface.0-0")!;
+    expect(vi.mocked(surface.context.drawImage).mock.calls.some(
+      (call) => call[5] === formerlyOwnedX * tileSize && call[6] === 0,
+    )).toBe(true);
   });
 
   it("uses only deep base presentation across the periodic home footprint and collar", () => {
@@ -373,14 +488,17 @@ describe("WaterRenderer periodic image ownership", () => {
       scene as never,
       waterAssets([WATER_TYPE_IDS.deep, WATER_TYPE_IDS.coastal]) as never,
       false,
+      undefined,
+      PILOT_HOME_ISLAND_METADATA,
     );
 
     renderer.render(generated, [entry(0, 0, { x: 0, y: 0 })]);
 
     const base = canvases.get("wayfinders.water.chunk.base.0-0")!;
     const baseCalls = vi.mocked(base.context.drawImage).mock.calls;
-    const insideWrappedCollarX = 24;
-    const immediatelyOutsideX = 23;
+    const topLeftX = -PILOT_HOME_ISLAND_METADATA.anchors.homeCenter.x;
+    const insideWrappedCollarX = source.grid.topology.canonicalizeTile(topLeftX - 1, 0)!.x;
+    const immediatelyOutsideX = source.grid.topology.canonicalizeTile(topLeftX - 2, 0)!.x;
     const tileSize = prototypeConfig.navigation.tileSize;
     const baseDrawAt = (tileX: number) => baseCalls.find(
       (call) => call[5] === tileX * tileSize + 1 && call[6] === 1,
@@ -397,10 +515,12 @@ describe("WaterRenderer periodic image ownership", () => {
     expect(surfaceCalls.some(
       (call) => call[5] === insideWrappedCollarX * tileSize && call[6] === 0,
     )).toBe(false);
-    expect(surfaceCalls.find(
+    const outsideTransition = surfaceCalls.find(
       (call) => call[5] === immediatelyOutsideX * tileSize && call[6] === 0,
-    )?.slice(1)).toEqual([
-      38, 110, 32, 32, immediatelyOutsideX * tileSize, 0, 32, 32,
+    );
+    expect(outsideTransition?.[1]).toBe(38);
+    expect(outsideTransition?.slice(3)).toEqual([
+      32, 32, immediatelyOutsideX * tileSize, 0, 32, 32,
     ]);
   });
 });

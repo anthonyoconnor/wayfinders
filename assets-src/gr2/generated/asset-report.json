@@ -8,8 +8,8 @@
   "totals": {
     "packages": 3,
     "images": 4,
-    "sourceBytes": 382597,
-    "estimatedTextureBytes": 987136
+    "sourceBytes": 3080293,
+    "estimatedTextureBytes": 6355600
   },
   "entries": [
     {
@@ -20,12 +20,12 @@
           "imageId": "home.island.primary.complete",
           "runtimeFile": "public/assets/gr1/images/home-island.png",
           "loader": "image",
-          "width": 480,
-          "height": 480,
+          "width": 1254,
+          "height": 1254,
           "frameCount": 1,
-          "sourceBytes": 375897,
-          "estimatedTextureBytes": 921600,
-          "sha256": "f707fa1d7251148fa57c44a8517bdc443084681ef750d4c95c9841d24b4f1012",
+          "sourceBytes": 3073593,
+          "estimatedTextureBytes": 6290064,
+          "sha256": "91b91f782631c85075ae2b770a8ba90e94ea9d6a0b1124cfc772553064bd7215",
           "thumbnailFile": "public/assets/gr2/thumbnails/home-island-primary-1.png",
           "thumbnailWidth": 192,
           "thumbnailHeight": 192

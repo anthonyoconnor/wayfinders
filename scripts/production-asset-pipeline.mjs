@@ -12,6 +12,7 @@ import {
 } from "./asset-pipeline.mjs";
 import { prepareProductionImage } from "./production-image-preparation.mjs";
 import {
+  seedPreparedCenterCircleCollision,
   seedPreparedShorelineCollision,
 } from "./production-collision-seeding.mjs";
 import { commitAtomicFileTransaction } from "./repository-collision-transaction.mjs";
@@ -171,6 +172,19 @@ export async function createCollisionDraft(recipe, preparedLayers, fingerprint) 
       };
     case "shoreline-seed": {
       const seeded = seedPreparedShorelineCollision(base, recipe.collision);
+      return {
+        ...common,
+        kind: "hybrid-grid-draft",
+        tileSize: recipe.collision.tileSize,
+        subcellSize: recipe.collision.subcellSize,
+        grid: seeded.grid,
+        solidSubcells: seeded.solidSubcells,
+        method: seeded.method,
+        warnings: seeded.warnings,
+      };
+    }
+    case "center-circle": {
+      const seeded = seedPreparedCenterCircleCollision(base, recipe.collision);
       return {
         ...common,
         kind: "hybrid-grid-draft",

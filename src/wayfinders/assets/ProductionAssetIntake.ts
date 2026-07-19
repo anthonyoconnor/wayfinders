@@ -115,10 +115,10 @@ export const PRODUCTION_ASSET_FAMILY_DEFAULTS: Readonly<Record<ProductionAssetFa
     island: Object.freeze({
       targetWidth: 480,
       targetHeight: 480,
-      layerRole: "base",
+      layerRole: "island-composite",
       collisionSemantics: "solid",
       runtimeCategory: "home-island",
-      summary: "480×480 base layer · editable solid collision draft · optional home-island visual test",
+      summary: "480×480 island composite · editable solid collision draft · optional home-island visual test",
     }),
     vessel: Object.freeze({
       targetWidth: 96,
@@ -165,7 +165,15 @@ export class ProductionAssetIntakeValidationError extends Error {
 }
 
 const FAMILIES = new Set<ProductionAssetFamily>(["island", "vessel", "shoal", "world-feature", "environment"]);
-const LAYER_ROLES = new Set<ProductionAssetLayerRole>(["base", "overlay", "effect", "reference"]);
+const LAYER_ROLES = new Set<ProductionAssetLayerRole>([
+  "base",
+  "overlay",
+  "effect",
+  "reference",
+  "island-composite",
+  "water-apron",
+  "shore-effect",
+]);
 const COLLISION_SEMANTICS = new Set<ProductionAssetCollisionSemantics>(["passable", "solid"]);
 const CANVAS_SIZING = new Set<ProductionAssetCanvasSizing>(["native", "resize"]);
 const RUNTIME_CATEGORIES = new Set<ProductionAssetRuntimeCategory>([

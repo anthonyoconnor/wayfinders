@@ -4,12 +4,6 @@ import waterPackage from "../src/wayfinders/assets/packages/water.json";
 import {
   preloadWaterAssetPackage,
   validateWaterAssetPackage,
-  WATER_ASSET_URLS,
-  WATER_HOME_FRAME_SIZE,
-  WATER_HOME_HANDOFF_FRAME_SIZE,
-  WATER_HOME_HANDOFF_MARGIN,
-  WATER_SHEET_MARGIN,
-  WATER_SHEET_SPACING,
   WATER_TEXTURE_KEYS,
 } from "../src/wayfinders/assets/water";
 
@@ -19,6 +13,12 @@ describe("production water asset contract", () => {
     expect(validated.assetId).toBe("world.water.primary");
     expect(validated.profiles).toHaveLength(8);
     expect(new Set(validated.profiles.map(({ id }) => id)).size).toBe(8);
+    expect(waterPackage.images.map(({ imageId }) => imageId).sort()).toEqual([
+      "world.water.depth-transitions",
+      "world.water.surface-overlays",
+      "world.water.tiles.animated",
+      "world.water.tiles.static",
+    ]);
   });
 
   it("rejects missing and duplicate presentation mappings", () => {
@@ -37,7 +37,7 @@ describe("production water asset contract", () => {
       .toThrow(/tile geometry/u);
   });
 
-  it("preloads the aligned home handoff and shore sheets", () => {
+  it("preloads generic water sheets without standalone authored-home sprites", () => {
     const spritesheet = vi.fn();
     const scene = {
       load: {
@@ -49,28 +49,12 @@ describe("production water asset contract", () => {
 
     preloadWaterAssetPackage(scene as never);
 
-    expect(WATER_HOME_FRAME_SIZE).toBe(480);
-    expect(WATER_HOME_HANDOFF_FRAME_SIZE).toBe(800);
-    expect(WATER_HOME_HANDOFF_MARGIN).toBe(160);
-    expect(spritesheet).toHaveBeenCalledWith(
-      WATER_TEXTURE_KEYS.homeDepthHandoff,
-      WATER_ASSET_URLS.homeDepthHandoff,
-      {
-        frameWidth: 800,
-        frameHeight: 800,
-        margin: WATER_SHEET_MARGIN,
-        spacing: WATER_SHEET_SPACING,
-      },
-    );
-    expect(spritesheet).toHaveBeenCalledWith(
-      WATER_TEXTURE_KEYS.homeShore,
-      WATER_ASSET_URLS.homeShore,
-      {
-        frameWidth: 480,
-        frameHeight: 480,
-        margin: WATER_SHEET_MARGIN,
-        spacing: WATER_SHEET_SPACING,
-      },
-    );
+    expect(spritesheet).toHaveBeenCalledTimes(4);
+    expect(spritesheet.mock.calls.map(([key]) => key)).toEqual([
+      WATER_TEXTURE_KEYS.animated,
+      WATER_TEXTURE_KEYS.static,
+      WATER_TEXTURE_KEYS.transitions,
+      WATER_TEXTURE_KEYS.overlays,
+    ]);
   });
 });

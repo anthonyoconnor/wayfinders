@@ -65,8 +65,8 @@ periodic water layout without changing gameplay terrain. The active-chunk
 `WaterRenderer` owns cached canonical base/surface textures, shared periodic
 image aliases, visible-owner discrete animation, directional
 deep-to-coastal transitions, coastal underpainting beneath transparent island
-edges, current/rough accents, reduced motion, and the aligned home-shore
-overlay. Fishing grounds use neutral hidden-quality presentation and lean,
+edges, current/rough accents, reduced motion, and revision-matched authored
+composite/apron water ownership. Fishing grounds use neutral hidden-quality presentation and lean,
 steady, or rich surveyed cues with no visible fish. The Water workspace uses the
 real generator and runtime assets with seed, zoom, overlay, pause, and comparison
 controls, and still omits the production-tooling sidebar. Asset validation,
@@ -76,8 +76,10 @@ game and workspace browser checks pass.
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,
-deterministic shoreline seeding, atomic island availability, exact-mask round
-trips, duplicate identity rejection, rollback, and isolated-trial authority.
+deterministic `8`-pixel centered-circle collision seeding independent of painted
+pixels, manual Asset Tools refinement, atomic island availability, exact-mask
+round trips, duplicate identity rejection, rollback, and isolated-trial
+authority.
 World-generation coverage verifies deterministic authored selection without
 replacement, manifest provenance, exact collision rasterization, and
 procedural shortfall. Presentation coverage verifies revision-matched texture

@@ -21,15 +21,15 @@
         {
           "id": "base",
           "name": "Complete island",
-          "role": "base",
+          "role": "island-composite",
           "sourceFile": "public/assets/gr1/images/home-island.png",
           "defaultVisible": true,
           "opacity": 1,
           "blendMode": "normal",
           "preparation": {
             "mode": "preserve",
-            "targetWidth": 480,
-            "targetHeight": 480,
+            "targetWidth": 1254,
+            "targetHeight": 1254,
             "thumbnailMaximum": 192
           }
         }
@@ -189,8 +189,8 @@
       "layers": [
         {
           "id": "base",
-          "name": "Base visual",
-          "role": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
           "sourceFile": "assets-src/gr3/intake/production-island-river-delta-inhabited-source.png",
           "defaultVisible": true,
           "opacity": 1,
@@ -209,14 +209,15 @@
             "innerTolerance": 32,
             "outerTolerance": 80,
             "trimAlphaThreshold": 8,
-            "padding": 8
+            "padding": 8,
+            "alphaEdgeFadePixels": 96,
+            "alphaEdgeBlendColor": [8, 48, 68]
           }
         }
       ],
       "animations": [],
       "collision": {
-        "mode": "mask-file",
-        "maskFile": "assets-src/gr3/candidate-masks/production-island-river-delta-inhabited-mask.png",
+        "mode": "center-circle",
         "tileSize": 32,
         "subcellSize": 8
       },
@@ -296,8 +297,8 @@
       "layers": [
         {
           "id": "base",
-          "name": "Base visual",
-          "role": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
           "sourceFile": "assets-src/gr3/intake/production-island-island-01-crescent-cay-uninhabited-source.png",
           "defaultVisible": true,
           "opacity": 1,
@@ -316,14 +317,15 @@
             "innerTolerance": 32,
             "outerTolerance": 80,
             "trimAlphaThreshold": 8,
-            "padding": 8
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [8, 48, 68]
           }
         }
       ],
       "animations": [],
       "collision": {
-        "mode": "mask-file",
-        "maskFile": "assets-src/gr3/candidate-masks/production-island-island-01-crescent-cay-uninhabited-mask.png",
+        "mode": "center-circle",
         "tileSize": 32,
         "subcellSize": 8
       },
@@ -350,8 +352,8 @@
       "layers": [
         {
           "id": "base",
-          "name": "Base visual",
-          "role": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
           "sourceFile": "assets-src/gr3/intake/production-island-island-star-atoll-uninhabited-source.png",
           "defaultVisible": true,
           "opacity": 1,
@@ -370,14 +372,15 @@
             "innerTolerance": 32,
             "outerTolerance": 80,
             "trimAlphaThreshold": 8,
-            "padding": 8
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [8, 48, 68]
           }
         }
       ],
       "animations": [],
       "collision": {
-        "mode": "mask-file",
-        "maskFile": "assets-src/gr3/candidate-masks/production-island-island-star-atoll-uninhabited-mask.png",
+        "mode": "center-circle",
         "tileSize": 32,
         "subcellSize": 8
       },
@@ -458,8 +461,8 @@
       "layers": [
         {
           "id": "base",
-          "name": "Base visual",
-          "role": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
           "sourceFile": "assets-src/gr3/intake/production-island-island-lightning-ridge-uninhabited-source.png",
           "defaultVisible": true,
           "opacity": 1,
@@ -478,14 +481,15 @@
             "innerTolerance": 32,
             "outerTolerance": 80,
             "trimAlphaThreshold": 8,
-            "padding": 8
+            "padding": 8,
+            "alphaEdgeFadePixels": 96,
+            "alphaEdgeBlendColor": [8, 48, 68]
           }
         }
       ],
       "animations": [],
       "collision": {
-        "mode": "mask-file",
-        "maskFile": "assets-src/gr3/candidate-masks/production-island-island-lightning-ridge-uninhabited-mask.png",
+        "mode": "center-circle",
         "tileSize": 32,
         "subcellSize": 8
       },

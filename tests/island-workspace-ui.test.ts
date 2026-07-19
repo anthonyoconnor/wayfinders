@@ -63,7 +63,8 @@ describe("GR-4.1 focused island workshop", () => {
     expect(scene).toContain('focusedFamily: "island"');
     expect(intake).toContain("focusedFamily?: ProductionAssetFamily");
     expect(intake).toContain("Import island PNG");
-    expect(intake).toContain("Its canvas size and initial collision mask are read automatically.");
+    expect(intake).toContain("an editable centered collision circle is created.");
+    expect(scene).toContain('if (method === "prepared-canvas-centered-circle-v1")');
     expect(intake).toContain('name="lockAspectRatio"');
     expect(intake).toContain("productionAssetNameFromFileName(sourceFile.name)");
     expect(intake).toContain('syncAspectRatio("width")');

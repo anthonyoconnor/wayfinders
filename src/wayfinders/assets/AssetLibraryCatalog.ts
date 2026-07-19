@@ -40,7 +40,14 @@ export const ASSET_LIBRARY_CATEGORIES = Object.freeze([
 
 export type AssetLibraryCategoryId = (typeof ASSET_LIBRARY_CATEGORIES)[number]["id"];
 export type AssetLibraryEntryType = "authored-package" | "production-candidate" | "reference-image";
-export type AssetLibraryLayerRole = "base" | "overlay" | "effect" | "reference";
+export type AssetLibraryLayerRole =
+  | "base"
+  | "overlay"
+  | "effect"
+  | "reference"
+  | "island-composite"
+  | "water-apron"
+  | "shore-effect";
 export type AssetLibraryAnimationKind = "sprite-sheet" | "rotation";
 
 export type AssetLibraryDetailValue = string | number | boolean;
@@ -1191,6 +1198,17 @@ function availableIslandEntries(
     .sort((left, right) => left.id.localeCompare(right.id, "en"));
 }
 
+function authoredIslandPresentationPlane(
+  role: AssetLibraryLayerRole,
+): AuthoredIslandPresentationLayer["plane"] {
+  switch (role) {
+    case "water-apron": return "water-apron";
+    case "shore-effect": return "shore-effect";
+    case "island-composite": return "island-composite";
+    default: return "land";
+  }
+}
+
 /** Read-only, stable-ID ordered game-planning input; home remains its dedicated landmark. */
 export function availableAuthoredIslandCatalog(
   entries: readonly Readonly<AssetLibraryEntry>[] = ASSET_LIBRARY_CATALOG,
@@ -1241,6 +1259,7 @@ export function availableAuthoredIslandPresentationCatalog(
           }
           return Object.freeze({
             id: layer.id,
+            plane: authoredIslandPresentationPlane(layer.role),
             url: layer.url,
             textureKey: `wayfinders.authored-island.${entry.id}.${layer.id}.${entry.fingerprint}`,
             pixelWidth: layer.pixelSize.width,

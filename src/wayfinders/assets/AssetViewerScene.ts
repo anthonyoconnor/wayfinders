@@ -30,6 +30,7 @@ import {
   type AuthoredFishingShoalVisual,
   type AuthoredHomeIslandVisual,
 } from "./AuthoredAssetPresentation";
+import { authoredHomeViewerOrigin } from "./AssetViewerLayout";
 import { PILOT_ASSET_CATALOG, preloadPilotAssetPackages } from "./PilotAssetCatalog";
 import {
   createPilotAssetRuntime,
@@ -199,6 +200,7 @@ function escapeHtml(value: string): string {
 
 function collisionDraftMethodLabel(method: string): string {
   if (method === "prepared-alpha-connected-shoreline-v1") return "prepared alpha shoreline";
+  if (method === "prepared-canvas-centered-circle-v1") return "centered circle import default";
   if (method === "manual-blank-draft") return "manual blank draft";
   if (method === "semantic-mask-center-sample") return "semantic mask sample";
   if (method === "explicit-alpha-center-sample") return "explicit alpha sample";
@@ -825,10 +827,12 @@ export class AssetViewerScene extends Phaser.Scene {
       this.homeVisual = createAuthoredHomeIslandVisual(this, this.previewAssets);
       const metadata = this.homeVisual?.metadata;
       if (this.homeVisual && metadata) {
-        this.homeVisual.setPosition(
-          STAGE.centerX - metadata.render.pixelSize.width / 2,
-          STAGE.centerY - metadata.render.pixelSize.height / 2,
+        const origin = authoredHomeViewerOrigin(
+          metadata,
+          this.homeVisual.displayBounds,
+          { x: STAGE.centerX, y: STAGE.centerY },
         );
+        this.homeVisual.setPosition(origin.x, origin.y);
         this.homeVisual.setVisible(true);
       }
     } else if (this.state.assetId === AUTHORED_ASSET_IDS.playerBoat) {

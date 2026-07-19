@@ -21,7 +21,14 @@ export type ProductionAssetProvenanceKind =
   | "reference"
   | "selected-source"
   | "runtime-package";
-export type ProductionAssetLayerRole = "base" | "overlay" | "effect" | "reference";
+export type ProductionAssetLayerRole =
+  | "base"
+  | "overlay"
+  | "effect"
+  | "reference"
+  | "island-composite"
+  | "water-apron"
+  | "shore-effect";
 export type ProductionAssetBlendMode = "normal" | "multiply" | "screen" | "add";
 
 export interface ProductionAssetPreparation {
@@ -36,6 +43,10 @@ export interface ProductionAssetPreparation {
   readonly outerTolerance?: number;
   readonly trimAlphaThreshold?: number;
   readonly padding?: number;
+  /** Optional inward attenuation of existing alpha at the prepared silhouette. */
+  readonly alphaEdgeFadePixels?: number;
+  /** Optional RGB target used to color-match visible pixels inside the alpha fade band. */
+  readonly alphaEdgeBlendColor?: readonly [number, number, number];
 }
 
 export interface ProductionAssetLayerRecipe {
@@ -65,6 +76,7 @@ export type ProductionAssetCollisionRecipe =
   | Readonly<{ mode: "preserve" }>
   | Readonly<{ mode: "blank-draft"; tileSize: number; subcellSize: number }>
   | Readonly<{ mode: "shoreline-seed"; tileSize: number; subcellSize: number }>
+  | Readonly<{ mode: "center-circle"; tileSize: number; subcellSize: number }>
   | Readonly<{ mode: "empty"; reason: string }>
   | Readonly<{ mode: "mask-file"; maskFile: string; tileSize: number; subcellSize: number }>
   | Readonly<{
@@ -121,7 +133,15 @@ const PROVENANCE_KINDS = new Set<ProductionAssetProvenanceKind>([
   "selected-source",
   "runtime-package",
 ]);
-const LAYER_ROLES = new Set<ProductionAssetLayerRole>(["base", "overlay", "effect", "reference"]);
+const LAYER_ROLES = new Set<ProductionAssetLayerRole>([
+  "base",
+  "overlay",
+  "effect",
+  "reference",
+  "island-composite",
+  "water-apron",
+  "shore-effect",
+]);
 const BLEND_MODES = new Set<ProductionAssetBlendMode>(["normal", "multiply", "screen", "add"]);
 const PILOT_RUNTIME_IDS = new Set<AuthoredAssetId>(Object.values(AUTHORED_ASSET_IDS));
 const STABLE_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u;
@@ -197,8 +217,31 @@ function validatePreparation(input: unknown, label: string): ProductionAssetPrep
   const targetWidth = integer(parsed.targetWidth, `${label}.targetWidth`, 1, 4_096);
   const targetHeight = integer(parsed.targetHeight, `${label}.targetHeight`, 1, 4_096);
   const thumbnailMaximum = integer(parsed.thumbnailMaximum, `${label}.thumbnailMaximum`, 32, 512);
+  const alphaEdgeFadePixels = parsed.alphaEdgeFadePixels === undefined
+    ? undefined
+    : integer(parsed.alphaEdgeFadePixels, `${label}.alphaEdgeFadePixels`, 1, 512);
+  let alphaEdgeBlendColor: readonly [number, number, number] | undefined;
+  if (parsed.alphaEdgeBlendColor !== undefined) {
+    if (!Array.isArray(parsed.alphaEdgeBlendColor) || parsed.alphaEdgeBlendColor.length !== 3) {
+      throw new RangeError(`${label}.alphaEdgeBlendColor must contain three RGB channels`);
+    }
+    alphaEdgeBlendColor = Object.freeze(parsed.alphaEdgeBlendColor.map((channel, index) =>
+      integer(channel, `${label}.alphaEdgeBlendColor[${index}]`, 0, 255),
+    )) as unknown as readonly [number, number, number];
+  }
+  if (alphaEdgeBlendColor && alphaEdgeFadePixels === undefined) {
+    throw new RangeError(`${label}.alphaEdgeBlendColor requires alphaEdgeFadePixels`);
+  }
   if (mode === "preserve") {
-    return { mode, ...(sizing ? { sizing } : {}), targetWidth, targetHeight, thumbnailMaximum };
+    return {
+      mode,
+      ...(sizing ? { sizing } : {}),
+      targetWidth,
+      targetHeight,
+      thumbnailMaximum,
+      ...(alphaEdgeFadePixels ? { alphaEdgeFadePixels } : {}),
+      ...(alphaEdgeBlendColor ? { alphaEdgeBlendColor } : {}),
+    };
   }
 
   if (!Array.isArray(parsed.matteColor) || parsed.matteColor.length !== 3) {
@@ -223,6 +266,8 @@ function validatePreparation(input: unknown, label: string): ProductionAssetPrep
     outerTolerance,
     trimAlphaThreshold: integer(parsed.trimAlphaThreshold, `${label}.trimAlphaThreshold`, 0, 255),
     padding: integer(parsed.padding, `${label}.padding`, 0, 512),
+    ...(alphaEdgeFadePixels ? { alphaEdgeFadePixels } : {}),
+    ...(alphaEdgeBlendColor ? { alphaEdgeBlendColor } : {}),
   };
 }
 
@@ -230,7 +275,7 @@ function validateCollision(input: unknown, label: string): ProductionAssetCollis
   const parsed = record(input, label);
   const mode = enumValue(
     parsed.mode,
-    new Set(["preserve", "blank-draft", "shoreline-seed", "empty", "mask-file", "alpha"] as const),
+    new Set(["preserve", "blank-draft", "shoreline-seed", "center-circle", "empty", "mask-file", "alpha"] as const),
     `${label}.mode`,
   );
   if (mode === "preserve") return { mode };
@@ -238,7 +283,9 @@ function validateCollision(input: unknown, label: string): ProductionAssetCollis
   const tileSize = integer(parsed.tileSize, `${label}.tileSize`, 1, 512);
   const subcellSize = integer(parsed.subcellSize, `${label}.subcellSize`, 1, tileSize);
   if (tileSize % subcellSize !== 0) throw new RangeError(`${label}.subcellSize must divide tileSize exactly`);
-  if (mode === "blank-draft" || mode === "shoreline-seed") return { mode, tileSize, subcellSize };
+  if (mode === "blank-draft" || mode === "shoreline-seed" || mode === "center-circle") {
+    return { mode, tileSize, subcellSize };
+  }
   if (mode === "mask-file") {
     return { mode, maskFile: repositoryFile(parsed.maskFile, `${label}.maskFile`), tileSize, subcellSize };
   }
@@ -377,7 +424,18 @@ function validateRecipe(input: unknown, index: number): ProductionAssetRecipe {
   if (family === "environment" && collision.mode !== "empty") {
     throw new RangeError(`${label} environment visuals must be explicitly passable`);
   }
-  if ((collision.mode === "alpha" || collision.mode === "shoreline-seed") && lifecycle === "reference") {
+  if (
+    family !== "island"
+    && layers.some(({ role }) => (
+      role === "island-composite" || role === "water-apron" || role === "shore-effect"
+    ))
+  ) {
+    throw new RangeError(`${label} authored island presentation roles require the island family`);
+  }
+  if (
+    (collision.mode === "alpha" || collision.mode === "shoreline-seed" || collision.mode === "center-circle")
+    && lifecycle === "reference"
+  ) {
     throw new RangeError(`${label} reference art cannot seed collision authority`);
   }
 

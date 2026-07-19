@@ -28,7 +28,7 @@ describe("GR-3.6 production collision catalog", () => {
           layers: [{
             id: "base",
             name: "Base visual",
-            role: "base",
+            role: "island-composite",
             sourceFile,
             defaultVisible: true,
             opacity: 1,
@@ -125,6 +125,7 @@ describe("GR-3.6 production collision catalog", () => {
         gridHeight: 1,
         layers: [{
           id: "layer.base",
+          plane: "island-composite",
           url: "/base.png",
           textureKey: expect.stringContaining(id),
           pixelWidth: 32,

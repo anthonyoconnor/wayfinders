@@ -23,7 +23,7 @@ describe("GR-1.3 authored home-island placement", () => {
 
     const placement = stampAuthoredHomeIsland(grid, { x: 15, y: 15 });
 
-    expect(placement.topLeft).toEqual({ x: 8, y: 8 });
+    expect(placement.topLeft).toEqual({ x: 3, y: 3 });
     expect(placement.landmarks).toEqual({
       homeCenter: { x: 15, y: 15 },
       harbour: { x: 19, y: 15 },
@@ -41,6 +41,49 @@ describe("GR-1.3 authored home-island placement", () => {
       expect(grid.isSightBlocked(x, y)).toBe(authoredCellBlocksSight(cell));
       expect(grid.getIslandId(x, y)).toBe(cell.belongsToHomeIsland ? 0 : -1);
     }
+  });
+
+  it("wraps the original island in a five-cell deep-ocean apron and renders one 800px composite", () => {
+    expect(PILOT_HOME_ISLAND_METADATA.grid).toMatchObject({
+      width: 25,
+      height: 25,
+      placementOrigin: { x: 12, y: 12 },
+    });
+    for (const cell of PILOT_HOME_ISLAND_METADATA.grid.cells) {
+      if (cell.x < 5 || cell.x >= 20 || cell.y < 5 || cell.y >= 20) {
+        expect(cell.terrain).toBe("deep-ocean");
+        expect(cell.belongsToHomeIsland).toBe(false);
+      }
+    }
+    expect(PILOT_HOME_ISLAND_METADATA.anchors).toEqual({
+      homeCenter: { x: 12, y: 12 },
+      harbour: { x: 16, y: 12 },
+      dock: { x: 17, y: 12 },
+      homeReturn: { x: 17, y: 12 },
+      service: { x: 17, y: 12 },
+    });
+    expect(PILOT_HOME_ISLAND_METADATA.render.pixelSize).toEqual({ width: 1254, height: 1254 });
+    expect(PILOT_HOME_ISLAND_METADATA.render.plane).toBe("island-composite");
+    expect(PILOT_HOME_ISLAND_METADATA.render.slices).toEqual([
+      expect.objectContaining({
+        id: "complete",
+        gridBounds: { x: 0, y: 0, width: 25, height: 25 },
+        pixelOffset: { x: 0, y: 0 },
+        pixelSize: { width: 1254, height: 1254 },
+        scale: 800 / 1254,
+      }),
+    ]);
+    const complete = PILOT_HOME_ISLAND_METADATA.render.slices[0];
+    expect(complete.pixelSize.width * complete.scale).toBeCloseTo(800, 10);
+    expect(complete.pixelSize.height * complete.scale).toBeCloseTo(800, 10);
+    expect(PILOT_HOME_ISLAND_METADATA.collision?.mixedCells)
+      .toContainEqual(expect.objectContaining({ x: 9, y: 6 }));
+    expect(PILOT_HOME_ISLAND_METADATA.collision?.mixedCells)
+      .toContainEqual(expect.objectContaining({ x: 10, y: 4 }));
+    expect(PILOT_HOME_ISLAND_METADATA.collision?.mixedCells)
+      .toContainEqual({ x: 4, y: 12, solidRows: ["0001", "0001", "0001", "0001"] });
+    expect(PILOT_HOME_ISLAND_METADATA.collision?.mixedCells)
+      .toContainEqual(expect.objectContaining({ x: 17, y: 7 }));
   });
 
   it("keeps the authored footprint identical across procedural world seeds", () => {
@@ -72,22 +115,28 @@ describe("GR-1.3 authored home-island placement", () => {
     const placement = stampAuthoredHomeIsland(grid, { x: 15, y: 15 });
 
     for (const point of [
-      { x: 7, y: 1 },
-      { x: 4, y: 2 },
-      { x: 10, y: 2 },
-      { x: 3, y: 3 },
-      { x: 11, y: 3 },
-      { x: 4, y: 12 },
-      { x: 10, y: 12 },
+      { x: 10, y: 4 },
+      { x: 5, y: 12 },
+      { x: 17, y: 7 },
+      { x: 12, y: 6 },
+      { x: 9, y: 7 },
+      { x: 15, y: 7 },
+      { x: 8, y: 8 },
+      { x: 16, y: 8 },
+      { x: 9, y: 17 },
+      { x: 15, y: 17 },
     ]) {
-      expect(grid.isMovementBlocked(
-        placement.topLeft.x + point.x,
-        placement.topLeft.y + point.y,
-      )).toBe(true);
+      const worldX = placement.topLeft.x + point.x;
+      const worldY = placement.topLeft.y + point.y;
+      const fineMask = grid.getFineCollisionMask(worldX, worldY);
+      expect(grid.isMovementBlocked(worldX, worldY) || (fineMask ?? 0) !== 0).toBe(true);
     }
 
-    for (let x = 10; x <= 12; x++) {
-      expect(grid.isMovementBlocked(placement.topLeft.x + x, placement.topLeft.y + 7)).toBe(false);
+    for (let x = 15; x <= 17; x++) {
+      const worldX = placement.topLeft.x + x;
+      const worldY = placement.topLeft.y + 12;
+      expect(grid.isMovementBlocked(worldX, worldY)).toBe(false);
+      expect(grid.getFineCollisionMask(worldX, worldY) ?? 0).toBe(0);
     }
   });
 

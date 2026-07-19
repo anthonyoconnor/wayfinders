@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  PRODUCTION_CENTER_CIRCLE_SEED_METHOD,
   PRODUCTION_SHORELINE_SEED_METHOD,
+  seedPreparedCenterCircleCollision,
   seedPreparedShorelineCollision,
 } from "../scripts/production-collision-seeding.mjs";
 
@@ -24,6 +26,31 @@ function fillAlpha(
 }
 
 describe("GR-3.6 prepared shoreline collision seeding", () => {
+  it("seeds an art-independent conservative circle for imported islands", () => {
+    const blank = image(64, 64);
+    const opaque = image(64, 64);
+    fillAlpha(opaque, 0, 0, 64, 64);
+
+    const settings = { tileSize: 32, subcellSize: 8 };
+    const blankResult = seedPreparedCenterCircleCollision(blank, settings);
+    const opaqueResult = seedPreparedCenterCircleCollision(opaque, settings);
+
+    expect(blankResult).toEqual(opaqueResult);
+    expect(blankResult).toMatchObject({
+      method: PRODUCTION_CENTER_CIRCLE_SEED_METHOD,
+      grid: { width: 2, height: 2, subcellColumns: 8, subcellRows: 8 },
+      warnings: [
+        "Centered-circle collision is a conservative import default; refine the saved mask in the asset tool.",
+      ],
+    });
+    expect(blankResult.solidSubcells).toEqual([
+      { x: 3, y: 2 }, { x: 4, y: 2 },
+      { x: 2, y: 3 }, { x: 3, y: 3 }, { x: 4, y: 3 }, { x: 5, y: 3 },
+      { x: 2, y: 4 }, { x: 3, y: 4 }, { x: 4, y: 4 }, { x: 5, y: 4 },
+      { x: 3, y: 5 }, { x: 4, y: 5 },
+    ]);
+  });
+
   it("does not overflow pixel counts for the largest supported opaque subcell", () => {
     const prepared = image(512, 512);
     fillAlpha(prepared, 0, 0, 512, 512);

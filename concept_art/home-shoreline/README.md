@@ -2,8 +2,14 @@
 
 These images are reference-only concept art for improving the home-island
 deep-to-coastal water transition. They do not define terrain, collision,
-navigation, or runtime asset authority. Production behavior remains owned by
-the generated water layout and water renderer.
+navigation, or runtime asset authority.
+
+The Home-only generated-water handoff documented here is superseded as runtime
+direction. Current production islands use externally authored
+`island-composite` images that carry land and their irregular water apron to a
+deep-sea-coloured alpha fade; generated water remains the fallback outside the
+claim and for procedural islands. Current live acceptance is recorded in the
+[`island-system-study` runtime comparison](../island-system-study/runtime/README.md).
 
 `reference-current-game.png` is the supplied before image. The three concepts
 were generated with the built-in image-generation tool by changing only the
@@ -31,10 +37,10 @@ pixel-for-pixel copy:
 - continuous wave detail across depth zones; and
 - no tile, chunk, axis-aligned opacity, or continuous contour boundary.
 
-The retained in-game comparison and final capture are documented in
-[`COMPARISON.md`](COMPARISON.md). The final treatment uses the selected
-direction's asymmetric shelf, but keeps the concept's painted features more
-restrained so the production island art remains the focal point.
+The retained superseded in-game comparison is documented in
+[`COMPARISON.md`](COMPARISON.md). It remains useful evidence for why the selected
+direction's asymmetric shelf and painted features moved into each island
+composite instead of a Home-specific generated-water handoff.
 
 ## Retained explorations
 

@@ -1,4 +1,7 @@
 export const PRODUCTION_SHORELINE_SEED_METHOD = "prepared-alpha-connected-shoreline-v1";
+export const PRODUCTION_CENTER_CIRCLE_SEED_METHOD = "prepared-canvas-centered-circle-v1";
+
+const CENTER_CIRCLE_RADIUS_RATIO = 0.25;
 
 const ALPHA_THRESHOLD = 64;
 const MINIMUM_COMPONENT_OPAQUE_PIXELS = 4;
@@ -143,6 +146,47 @@ export function seedPreparedShorelineCollision(imageInput, settings) {
   return Object.freeze({
     method: PRODUCTION_SHORELINE_SEED_METHOD,
     warnings: Object.freeze(warnings),
+    grid: Object.freeze({
+      width: grid.width,
+      height: grid.height,
+      subcellColumns: grid.subcellColumns,
+      subcellRows: grid.subcellRows,
+    }),
+    solidSubcells: Object.freeze(solidSubcells),
+  });
+}
+
+/**
+ * Seeds a conservative editable island collision mask without sampling art.
+ * Imported island art may include an opaque water apron, so its pixels cannot
+ * distinguish navigable water from land. The initial circle occupies half the
+ * shorter canvas dimension and can be refined in the island asset tool.
+ */
+export function seedPreparedCenterCircleCollision(imageInput, settings) {
+  const image = checkedImage(imageInput);
+  const grid = checkedGrid(image, settings);
+  const centerX = image.width / 2;
+  const centerY = image.height / 2;
+  const radius = Math.min(image.width, image.height) * CENTER_CIRCLE_RADIUS_RATIO;
+  const radiusSquared = radius * radius;
+  const solidSubcells = [];
+
+  for (let y = 0; y < grid.subcellRows; y++) {
+    const subcellCenterY = y * grid.subcellSize + grid.subcellSize / 2;
+    for (let x = 0; x < grid.subcellColumns; x++) {
+      const subcellCenterX = x * grid.subcellSize + grid.subcellSize / 2;
+      const offsetX = subcellCenterX - centerX;
+      const offsetY = subcellCenterY - centerY;
+      if (offsetX * offsetX + offsetY * offsetY > radiusSquared) continue;
+      solidSubcells.push(Object.freeze({ x, y }));
+    }
+  }
+
+  return Object.freeze({
+    method: PRODUCTION_CENTER_CIRCLE_SEED_METHOD,
+    warnings: Object.freeze([
+      "Centered-circle collision is a conservative import default; refine the saved mask in the asset tool.",
+    ]),
     grid: Object.freeze({
       width: grid.width,
       height: grid.height,

@@ -4,18 +4,13 @@
   "recipeId": "production.island.river-delta-inhabited",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "44bc9bedc8b61bbd088b6bbaafa782e17cda9209a01568a87b3e696bac7839b3",
-  "jobKey": "37498b327982635a85a54b818e35ea17faa44ddfa5fe9e2851fce415b263bf01",
+  "recipeHash": "4d4cc282134d348be9dd4812e2590e827a6dba20b01eb7d1333e6b8660d51d73",
+  "jobKey": "6a3ae6e41c586ebf874e28fa24d12c384c5fe730bce19bd060c9a43554bbd750",
   "sources": [
     {
       "layerId": "base",
       "file": "assets-src/gr3/intake/production-island-river-delta-inhabited-source.png",
-      "sha256": "6fd27de2e8de8b0a3f30cfdfa794cccf2c769bb239ebc965c06ea9f046112e90"
-    },
-    {
-      "layerId": "collision-mask",
-      "file": "assets-src/gr3/candidate-masks/production-island-river-delta-inhabited-mask.png",
-      "sha256": "7cf83952dfcc255bf87b736247e44e6a2a0823634af9a90c64c636a06a7e48b8"
+      "sha256": "2eab4245f8e935563947d55629d8eb4fc298a3a6881e55cae4fec921707d6823"
     }
   ],
   "outputs": {
@@ -25,18 +20,18 @@
         "file": "assets-src/gr3/candidates/production-island-river-delta-inhabited/base.png",
         "width": 480,
         "height": 480,
-        "sha256": "13b9e46f059070457262903e6b020b9722f7eba74d629738481619501ee7b2a8",
+        "sha256": "65ccd774f66110bbde268003522ace98f41ea01545ff32755d2eff1d01451cf2",
         "sourceBounds": {
-          "x": 44,
-          "y": 133,
-          "width": 1177,
-          "height": 974
+          "x": 17,
+          "y": 32,
+          "width": 1226,
+          "height": 1211
         },
         "placement": {
           "x": 0,
-          "y": 41,
+          "y": 3,
           "width": 480,
-          "height": 397
+          "height": 474
         }
       }
     ],
@@ -44,12 +39,12 @@
       "file": "assets-src/gr3/candidates/production-island-river-delta-inhabited/thumbnail.png",
       "width": 192,
       "height": 192,
-      "sha256": "cebdf887dbb970ef3c0a280a98b9d34c46ca48d7c6369ee20c5788898ede6856"
+      "sha256": "e94a72e05a08d013e474f82edd5fa656f82af908c89de57ef4c87b177dba00ef"
     },
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-river-delta-inhabited/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "9f2a0514341c50db444b2ce0e623a33d79311378e3a7e8c878d10c22e519737c"
+      "sha256": "73dccfa186157f09da553e1c8379849536c843b7ac13e6d3bac42d2436e9e004"
     }
   }
 }

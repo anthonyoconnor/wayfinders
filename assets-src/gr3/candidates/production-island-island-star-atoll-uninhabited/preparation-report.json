@@ -4,18 +4,13 @@
   "recipeId": "production.island.island-star-atoll-uninhabited",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "79de3eabe8c53fafca18a205db2a62ebbb1323b843f309b51ca40d599ba8abe6",
-  "jobKey": "7d9f57e9d3112d4e115c4fa533ff477d4c5ba067835069c800d725ea0935be76",
+  "recipeHash": "01ff34f889773180627c371bfb685a5750e330eb8ea8d1a266425ae6d71c7b38",
+  "jobKey": "74639674b56334cfe54d96baae50283ede332285ed2811a8d7c0a7eaa49222b4",
   "sources": [
     {
       "layerId": "base",
       "file": "assets-src/gr3/intake/production-island-island-star-atoll-uninhabited-source.png",
-      "sha256": "0b8f5ee1a6cfe7839746e76c9686e2cb7462acf1f67355374701e8dc7b85efed"
-    },
-    {
-      "layerId": "collision-mask",
-      "file": "assets-src/gr3/candidate-masks/production-island-island-star-atoll-uninhabited-mask.png",
-      "sha256": "eeb2f5237df1905556fcbe8829233494c3b4a6fdf513adeaebe5a5e75deaa0ad"
+      "sha256": "8a6948e566e95a627e0dc1adf17f7cb72dbc4fab6c74fad6261a52b232d0834b"
     }
   ],
   "outputs": {
@@ -25,18 +20,18 @@
         "file": "assets-src/gr3/candidates/production-island-island-star-atoll-uninhabited/base.png",
         "width": 480,
         "height": 480,
-        "sha256": "16866e7f57d35374fc4027e0b2e2aa95deb0a6aa565eb93c58986d0b7e6bcdb8",
+        "sha256": "67b0e245a2ac6fff09ea2c44c35ed8fdb86eacb8feafc24c9aa7a4d077b0f427",
         "sourceBounds": {
-          "x": 44,
-          "y": 82,
-          "width": 1169,
-          "height": 1032
+          "x": -2,
+          "y": 48,
+          "width": 1264,
+          "height": 1177
         },
         "placement": {
           "x": 0,
-          "y": 28,
+          "y": 16,
           "width": 480,
-          "height": 424
+          "height": 447
         }
       }
     ],
@@ -44,12 +39,12 @@
       "file": "assets-src/gr3/candidates/production-island-island-star-atoll-uninhabited/thumbnail.png",
       "width": 192,
       "height": 192,
-      "sha256": "5cf3b19cc237476507d704990d707662111fe57390cfd252bc40d1c58bedf83d"
+      "sha256": "cb418bf81cc63a6e3982a1efc02613c2c12f694e731f60bb95d4fc9d4176bed5"
     },
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-island-star-atoll-uninhabited/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "972bd1008d3d38b66e2590235a51237c799dad532c33f30ce159e7754066dc34"
+      "sha256": "21194dda5ce8e2eaea869630a0d966ea5c850ab267317ac0666dff7c3361e120"
     }
   }
 }

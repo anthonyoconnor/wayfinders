@@ -25,9 +25,7 @@
     { "imageId": "world.water.tiles.animated", "file": "water-tiles.png", "pixelSize": { "width": 288, "height": 1152 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4 },
     { "imageId": "world.water.tiles.static", "file": "water-static.png", "pixelSize": { "width": 144, "height": 288 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4 },
     { "imageId": "world.water.depth-transitions", "file": "water-depth-transitions.png", "pixelSize": { "width": 1692, "height": 144 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4, "frameCount": 188 },
-    { "imageId": "world.water.surface-overlays", "file": "water-overlays.png", "pixelSize": { "width": 288, "height": 144 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4, "frameCount": 32 },
-    { "imageId": "world.water.home-shore-overlay", "file": "water-home-shore-overlay.png", "pixelSize": { "width": 3872, "height": 484 }, "frameSize": { "width": 480, "height": 480 }, "margin": 2, "spacing": 4, "frameCount": 8 },
-    { "imageId": "world.water.home-depth-handoff", "file": "water-home-depth-handoff.png", "loader": "spritesheet", "pixelSize": { "width": 3216, "height": 1608 }, "frameSize": { "width": 800, "height": 800 }, "margin": 2, "spacing": 4, "frameCount": 8, "framesPerSecond": 5, "origin": { "x": -160, "y": -160 }, "placement": "relative to the home top-left, above generic water and below the home island", "role": "selected asymmetric Bahamian sand-shelf depth handoff; presentation-only", "alpha": true }
+    { "imageId": "world.water.surface-overlays", "file": "water-overlays.png", "pixelSize": { "width": 288, "height": 144 }, "frameSize": { "width": 32, "height": 32 }, "margin": 2, "spacing": 4, "frameCount": 32 }
   ],
   "shoals": [
     { "quality": "lean", "file": "shoals/shoal-lean.png", "pixelSize": { "width": 96, "height": 64 } },

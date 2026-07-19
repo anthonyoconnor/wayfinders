@@ -8,8 +8,6 @@ export const WATER_TEXTURE_KEYS = Object.freeze({
   static: "wayfinders.water.static",
   transitions: "wayfinders.water.transitions",
   overlays: "wayfinders.water.overlays",
-  homeDepthHandoff: "wayfinders.water.home-depth-handoff",
-  homeShore: "wayfinders.water.home-shore",
   shoalLean: "wayfinders.water.shoal.lean",
   shoalSteady: "wayfinders.water.shoal.steady",
   shoalRich: "wayfinders.water.shoal.rich",
@@ -21,8 +19,6 @@ export const WATER_ASSET_URLS = Object.freeze({
   static: "/assets/gr1/water/water-static.png",
   transitions: "/assets/gr1/water/water-depth-transitions.png",
   overlays: "/assets/gr1/water/water-overlays.png",
-  homeDepthHandoff: "/assets/gr1/water/water-home-depth-handoff.png",
-  homeShore: "/assets/gr1/water/water-home-shore-overlay.png",
   shoalLean: "/assets/gr1/water/shoals/shoal-lean.png",
   shoalSteady: "/assets/gr1/water/shoals/shoal-steady.png",
   shoalRich: "/assets/gr1/water/shoals/shoal-rich.png",
@@ -32,9 +28,6 @@ export const WATER_METADATA_KEY = "wayfinders.water.package";
 export const WATER_TILE_SIZE = 32;
 export const WATER_SHEET_MARGIN = 2;
 export const WATER_SHEET_SPACING = 4;
-export const WATER_HOME_FRAME_SIZE = 480;
-export const WATER_HOME_HANDOFF_FRAME_SIZE = 800;
-export const WATER_HOME_HANDOFF_MARGIN = 160;
 export const WATER_TRANSITION_MASKS = Object.freeze([
   0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 19, 23, 27, 31, 38, 39,
   46, 47, 55, 63, 76, 77, 78, 79, 95, 110, 111, 127, 137, 139, 141, 143, 155, 159,
@@ -75,22 +68,6 @@ export function preloadWaterAssetPackage(scene: Phaser.Scene): void {
   scene.load.spritesheet(WATER_TEXTURE_KEYS.static, WATER_ASSET_URLS.static, frameConfig);
   scene.load.spritesheet(WATER_TEXTURE_KEYS.transitions, WATER_ASSET_URLS.transitions, frameConfig);
   scene.load.spritesheet(WATER_TEXTURE_KEYS.overlays, WATER_ASSET_URLS.overlays, frameConfig);
-  scene.load.spritesheet(
-    WATER_TEXTURE_KEYS.homeDepthHandoff,
-    WATER_ASSET_URLS.homeDepthHandoff,
-    {
-      frameWidth: WATER_HOME_HANDOFF_FRAME_SIZE,
-      frameHeight: WATER_HOME_HANDOFF_FRAME_SIZE,
-      margin: WATER_SHEET_MARGIN,
-      spacing: WATER_SHEET_SPACING,
-    },
-  );
-  scene.load.spritesheet(WATER_TEXTURE_KEYS.homeShore, WATER_ASSET_URLS.homeShore, {
-    frameWidth: WATER_HOME_FRAME_SIZE,
-    frameHeight: WATER_HOME_FRAME_SIZE,
-    margin: WATER_SHEET_MARGIN,
-    spacing: WATER_SHEET_SPACING,
-  });
   scene.load.image(WATER_TEXTURE_KEYS.shoalLean, WATER_ASSET_URLS.shoalLean);
   scene.load.image(WATER_TEXTURE_KEYS.shoalSteady, WATER_ASSET_URLS.shoalSteady);
   scene.load.image(WATER_TEXTURE_KEYS.shoalRich, WATER_ASSET_URLS.shoalRich);

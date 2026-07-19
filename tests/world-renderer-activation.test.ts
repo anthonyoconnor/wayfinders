@@ -77,9 +77,10 @@ interface FakeObject {
   displayHeight?: number;
   alpha?: number;
   blendMode?: number;
+  depth?: number;
   visible?: boolean;
   setOrigin(...args: unknown[]): FakeObject;
-  setDepth(...args: unknown[]): FakeObject;
+  setDepth(depth: number): FakeObject;
   setVisible(value: boolean): FakeObject;
   setSize(width: number, height: number): FakeObject;
   setPosition(x: number, y: number): FakeObject;
@@ -95,7 +96,7 @@ function fakeObject(x = 0, y = 0): FakeObject {
     y,
     destroyed: false,
     setOrigin() { return this; },
-    setDepth() { return this; },
+    setDepth(depth: number) { this.depth = depth; return this; },
     setVisible(value: boolean) { this.visible = value; return this; },
     setSize(width: number, height: number) {
       this.displayWidth = width;
@@ -225,20 +226,20 @@ describe("WorldRenderer active chunk resources", () => {
   it("visits only activated chunk bounds and keeps resources bounded while sailing", () => {
     const { scene } = makeScene();
     const renderer = new WorldRenderer(scene as never);
-    renderer.render(generatedWorld());
+    renderer.render(generatedWorld(64, 64, 8));
 
-    const first = renderer.syncActiveChunks([entry(1, 0, 1), entry(0, 0, 0)]);
+    const first = renderer.syncActiveChunks([entry(7, 6, 1), entry(6, 6, 0)]);
     expect(first).toMatchObject({ activated: 2, deactivated: 0, retained: 0 });
-    expect(first.telemetry.activeViewKeys).toEqual(["0,0@0,0", "1,0@0,0"]);
+    expect(first.telemetry.activeViewKeys).toEqual(["6,6@0,0", "7,6@0,0"]);
     expect(first.telemetry.tilesVisitedLastUpdate).toBe(2 * 8 * 8);
     const plateau = first.telemetry.activeResourceObjects;
     expect(plateau).toBe(0);
 
-    const stationary = renderer.syncActiveChunks([entry(0, 0, 0), entry(1, 0, 1)]);
+    const stationary = renderer.syncActiveChunks([entry(6, 6, 0), entry(7, 6, 1)]);
     expect(stationary).toMatchObject({ activated: 0, deactivated: 0, retained: 2 });
     expect(stationary.telemetry.tilesVisitedLastUpdate).toBe(0);
 
-    const moved = renderer.syncActiveChunks([entry(1, 0, 0), entry(0, 1, 1)]);
+    const moved = renderer.syncActiveChunks([entry(7, 6, 0), entry(6, 7, 1)]);
     expect(moved).toMatchObject({ activated: 1, deactivated: 1, retained: 1 });
     expect(moved.telemetry.activeImageEntries).toBe(2);
     expect(moved.telemetry.activeResourceObjects).toBe(plateau);
@@ -301,8 +302,10 @@ describe("WorldRenderer active chunk resources", () => {
         gridWidth: 4,
         gridHeight: 2,
         layers: [
-          { id: "base", url: "/base.png", textureKey: "base", pixelWidth: 128, pixelHeight: 64, opacity: 1, blendMode: "normal" },
-          { id: "detail", url: "/detail.png", textureKey: "detail", pixelWidth: 128, pixelHeight: 64, opacity: 0.75, blendMode: "multiply" },
+          { id: "apron", plane: "water-apron", url: "/apron.png", textureKey: "apron", pixelWidth: 128, pixelHeight: 64, opacity: 1, blendMode: "normal" },
+          { id: "base", plane: "land", url: "/base.png", textureKey: "base", pixelWidth: 128, pixelHeight: 64, opacity: 1, blendMode: "normal" },
+          { id: "detail", plane: "land", url: "/detail.png", textureKey: "detail", pixelWidth: 128, pixelHeight: 64, opacity: 0.75, blendMode: "multiply" },
+          { id: "surf", plane: "shore-effect", url: "/surf.png", textureKey: "surf", pixelWidth: 128, pixelHeight: 64, opacity: 0.9, blendMode: "screen" },
         ],
       } as const : undefined,
     };
@@ -313,14 +316,16 @@ describe("WorldRenderer active chunk resources", () => {
     graphicsFills.length = 0;
 
     const activated = renderer.render(generated, [entry(0, 0, 0)]);
-    expect(activated.telemetry.activeAuthoredImageObjects).toBe(2);
+    expect(activated.telemetry.activeAuthoredImageObjects).toBe(4);
     expect(images).toMatchObject([
-      { x: 224, y: 96, textureKey: "base", displayWidth: 128, displayHeight: 64, alpha: 1, blendMode: 0 },
-      { x: 224, y: 96, textureKey: "detail", displayWidth: 128, displayHeight: 64, alpha: 0.75, blendMode: 2 },
+      { x: 224, y: 96, textureKey: "apron", displayWidth: 128, displayHeight: 64, alpha: 1, blendMode: 0, depth: 1.7 },
+      { x: 224, y: 96, textureKey: "base", displayWidth: 128, displayHeight: 64, alpha: 1, blendMode: 0, depth: 4 },
+      { x: 224, y: 96, textureKey: "detail", displayWidth: 128, displayHeight: 64, alpha: 0.75, blendMode: 2, depth: 4.01 },
+      { x: 224, y: 96, textureKey: "surf", displayWidth: 128, displayHeight: 64, alpha: 0.9, blendMode: 3, depth: 4.75 },
     ]);
     const retained = renderer.syncActiveChunks([entry(1, 0, 0)]);
     expect(retained).toMatchObject({ activated: 1, deactivated: 1, retained: 0 });
-    expect(images).toHaveLength(2);
+    expect(images).toHaveLength(4);
     expect(images.every(({ destroyed }) => !destroyed)).toBe(true);
 
     renderer.syncActiveChunks([entry(2, 0, 0)]);
@@ -328,9 +333,68 @@ describe("WorldRenderer active chunk resources", () => {
     expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(0);
 
     renderer.syncActiveChunks([entry(0, 0, 0)]);
-    expect(images).toHaveLength(4);
-    expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(2);
-    expect(renderer.getTelemetry().peakResourceObjects).toBeLessThanOrEqual(7);
+    expect(images).toHaveLength(8);
+    expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(4);
+    expect(renderer.getTelemetry().peakResourceObjects).toBeLessThanOrEqual(9);
+  });
+
+  it.each([
+    { name: "water-apron-only", plane: "water-apron" as const, revision: "catalog-test", gridWidth: 2 },
+    { name: "shore-effect-only", plane: "shore-effect" as const, revision: "catalog-test", gridWidth: 2 },
+    { name: "stale composite", plane: "island-composite" as const, revision: "catalog-stale", gridWidth: 2 },
+    { name: "size-mismatched composite", plane: "island-composite" as const, revision: "catalog-test", gridWidth: 3 },
+  ])("keeps fallback terrain for a $name presentation", ({ plane, revision, gridWidth }) => {
+    const { scene, images } = makeScene();
+    const generated = generatedWorld(32, 16, 8);
+    const island = {
+      id: 11,
+      kind: "low-cay",
+      size: "small",
+      center: { x: 5, y: 4 },
+      radiusX: 1,
+      radiusY: 1,
+      outerRadius: 2,
+      rotation: 0,
+      shapeSeed: 7,
+      bounds: { minX: 4, minY: 3, maxX: 5, maxY: 4 },
+      sourceKind: "authored",
+      authoredAssetId: "production.island.incomplete",
+      authoredCollision: { gridWidth: 2, gridHeight: 2, solidSubcells: [{ x: 1, y: 1 }] },
+    } as const;
+    (generated as { islands: readonly unknown[] }).islands = [island];
+    generated.grid.setTerrain(island.bounds.minX, island.bounds.minY, TerrainType.Land);
+    generated.grid.setIslandId(island.bounds.minX, island.bounds.minY, island.id);
+    (generated as unknown as { manifest: { authoredIslandCatalogRevision: string } }).manifest = {
+      authoredIslandCatalogRevision: "catalog-test",
+    };
+    const presentations = {
+      revision,
+      diagnostics: [],
+      entry: () => ({
+        assetId: island.authoredAssetId,
+        name: "Incomplete Island",
+        revision: "revision-1",
+        gridWidth,
+        gridHeight: 2,
+        layers: [{
+          id: "visual",
+          plane,
+          url: "/visual.png",
+          textureKey: "visual",
+          pixelWidth: 64,
+          pixelHeight: 64,
+          opacity: 1,
+          blendMode: "normal" as const,
+        }],
+      }),
+    };
+    const renderer = new WorldRenderer(scene as never, undefined, presentations);
+
+    const result = renderer.render(generated, [entry(0, 0, 0)]);
+
+    expect(images).toHaveLength(0);
+    expect(result.telemetry.activeAuthoredImageObjects).toBe(0);
+    expect(result.telemetry.activeGraphicsObjects).toBeGreaterThan(0);
   });
 
   it("keeps one authored island alias stable while adjacent chunk images cross a seam", () => {
@@ -367,7 +431,7 @@ describe("WorldRenderer active chunk resources", () => {
         gridWidth: 4,
         gridHeight: 2,
         layers: [
-          { id: "base", url: "/base.png", textureKey: "base", pixelWidth: 128, pixelHeight: 64, opacity: 1, blendMode: "normal" },
+          { id: "base", plane: "island-composite", url: "/base.png", textureKey: "base", pixelWidth: 128, pixelHeight: 64, opacity: 1, blendMode: "normal" },
         ],
       } as const : undefined,
     };

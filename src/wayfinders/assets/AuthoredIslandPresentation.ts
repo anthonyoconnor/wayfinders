@@ -1,7 +1,14 @@
 import type Phaser from "phaser";
 
+export type AuthoredIslandPresentationPlane =
+  | "water-apron"
+  | "land"
+  | "island-composite"
+  | "shore-effect";
+
 export interface AuthoredIslandPresentationLayer {
   readonly id: string;
+  readonly plane: AuthoredIslandPresentationPlane;
   readonly url: string;
   readonly textureKey: string;
   readonly pixelWidth: number;
@@ -38,6 +45,20 @@ export interface AuthoredIslandPresentationRuntime {
   entry(assetId: string): Readonly<AuthoredIslandPresentationEntry> | undefined;
 }
 
+/** A presentation may replace fallback terrain only when it includes authored land. */
+export function hasAuthoredIslandLandPlane(
+  presentation: Pick<AuthoredIslandPresentationEntry, "layers">,
+): boolean {
+  return presentation.layers.some(({ plane }) => plane === "land" || plane === "island-composite");
+}
+
+/** Water ownership additionally requires a composite or dedicated apron plane. */
+export function hasAuthoredIslandWaterPlane(
+  presentation: Pick<AuthoredIslandPresentationEntry, "layers">,
+): boolean {
+  return presentation.layers.some(({ plane }) => plane === "island-composite" || plane === "water-apron");
+}
+
 /** Loads the immutable available-island snapshot before scene creation. */
 export function preloadAuthoredIslandPresentations(
   scene: Phaser.Scene,
@@ -63,6 +84,13 @@ export function createAuthoredIslandPresentationRuntime(
       diagnostics.push({
         assetId: island.assetId,
         message: `texture ${missing.textureKey} did not load`,
+      });
+      continue;
+    }
+    if (!hasAuthoredIslandLandPlane(island)) {
+      diagnostics.push({
+        assetId: island.assetId,
+        message: "presentation has no land or island-composite plane",
       });
       continue;
     }

@@ -1,13 +1,17 @@
 import Phaser from "phaser";
 import {
-  WATER_HOME_HANDOFF_MARGIN,
   WATER_TEXTURE_KEYS,
   WATER_TRANSITION_MASKS,
   type WaterAssetRuntime,
 } from "../assets/water";
-import { PILOT_HOME_ISLAND_METADATA } from "../assets/AuthoredHomeIsland";
+import type { AuthoredHomeIslandMetadata } from "../assets/AuthoredAssetContracts";
+import {
+  hasAuthoredIslandLandPlane,
+  hasAuthoredIslandWaterPlane,
+  type AuthoredIslandPresentationRuntime,
+} from "../assets/AuthoredIslandPresentation";
 import { prototypeConfig } from "../config/prototypeConfig";
-import type { GridPoint, WorldPoint } from "../core/types";
+import type { GridPoint } from "../core/types";
 import { TerrainType } from "../world/TileData";
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import type { CanonicalTileBounds, WorldTopology } from "../world/WorldTopology";
@@ -30,13 +34,6 @@ interface WaterImageView {
   readonly surface: Phaser.GameObjects.Image;
 }
 
-interface HomeShoreImage {
-  readonly imageOffset: Readonly<WorldPoint>;
-  readonly handoff: Phaser.GameObjects.Image;
-  readonly shore: Phaser.GameObjects.Image;
-  visible: boolean;
-}
-
 const BASE_TEXTURE_FRAME = "chunk";
 const BASE_TEXTURE_GUTTER = 1;
 
@@ -47,45 +44,40 @@ export interface WaterRendererTelemetry {
   readonly visibleCanonicalChunks: number;
   readonly activeCanvasTextures: number;
   readonly activeWaterImageObjects: number;
-  readonly homeShoreAliases: number;
   readonly redrawCount: number;
   readonly animatedRedrawCount: number;
   readonly tilesDrawn: number;
   readonly totalImageActivations: number;
   readonly totalImageDeactivations: number;
-  readonly totalHomeShoreAliasActivations: number;
-  readonly totalHomeShoreAliasDeactivations: number;
   readonly peakImageEntries: number;
   readonly peakCanonicalChunks: number;
-  readonly peakHomeShoreAliases: number;
 }
 
 /** Production water presentation. Authoritative terrain and revisions remain canonical. */
 export class WaterRenderer {
   private readonly canonicalChunks = new Map<string, WaterCanonicalChunk>();
   private readonly images = new Map<string, WaterImageView>();
-  private readonly homeShoreImages = new Map<string, HomeShoreImage>();
   private readonly transitionMaskIndex = new Map<number, number>(
     WATER_TRANSITION_MASKS.map((mask, index) => [mask, index]),
   );
   private generated?: GeneratedWorld;
+  private authoredWaterOwnershipTiles: ReadonlySet<number> = new Set();
   private redrawCount = 0;
   private animatedRedrawCount = 0;
   private tilesDrawn = 0;
   private currentFrame = 0;
   private totalImageActivations = 0;
   private totalImageDeactivations = 0;
-  private totalHomeShoreAliasActivations = 0;
-  private totalHomeShoreAliasDeactivations = 0;
   private peakImageEntries = 0;
   private peakCanonicalChunks = 0;
-  private peakHomeShoreAliases = 0;
   private destroyed = false;
 
   constructor(
     private readonly scene: Phaser.Scene,
     private readonly assets: Readonly<WaterAssetRuntime>,
     private readonly reducedMotion: boolean,
+    private readonly authoredIslandPresentations?: Readonly<AuthoredIslandPresentationRuntime>,
+    private readonly authoredHomePresentation?: Readonly<AuthoredHomeIslandMetadata>,
   ) {
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
   }
@@ -93,6 +85,11 @@ export class WaterRenderer {
   render(generated: GeneratedWorld, entries: readonly Readonly<ActiveChunkEntry>[]): void {
     this.clear();
     this.generated = generated;
+    this.authoredWaterOwnershipTiles = resolveAuthoredWaterOwnershipTiles(
+      generated,
+      this.authoredIslandPresentations,
+      this.authoredHomePresentation,
+    );
     this.sync(entries);
   }
 
@@ -109,11 +106,6 @@ export class WaterRenderer {
       this.drawChunk(owner, frame, true);
       this.animatedRedrawCount++;
     }
-    for (const alias of this.homeShoreImages.values()) {
-      if (!alias.visible) continue;
-      alias.handoff.setFrame(frame);
-      alias.shore.setFrame(frame);
-    }
   }
 
   getTelemetry(): Readonly<WaterRendererTelemetry> {
@@ -128,17 +120,13 @@ export class WaterRenderer {
       visibleCanonicalChunks,
       activeCanvasTextures: this.canonicalChunks.size * 2,
       activeWaterImageObjects: this.images.size * 2,
-      homeShoreAliases: this.homeShoreImages.size,
       redrawCount: this.redrawCount,
       animatedRedrawCount: this.animatedRedrawCount,
       tilesDrawn: this.tilesDrawn,
       totalImageActivations: this.totalImageActivations,
       totalImageDeactivations: this.totalImageDeactivations,
-      totalHomeShoreAliasActivations: this.totalHomeShoreAliasActivations,
-      totalHomeShoreAliasDeactivations: this.totalHomeShoreAliasDeactivations,
       peakImageEntries: this.peakImageEntries,
       peakCanonicalChunks: this.peakCanonicalChunks,
-      peakHomeShoreAliases: this.peakHomeShoreAliases,
     });
   }
 
@@ -194,10 +182,8 @@ export class WaterRenderer {
     for (const view of this.images.values()) {
       if (view.entry.band === "visible") this.canonicalChunks.get(view.canonicalKey)!.visible = true;
     }
-    this.syncHomeShore(entries);
     this.peakImageEntries = Math.max(this.peakImageEntries, this.images.size);
     this.peakCanonicalChunks = Math.max(this.peakCanonicalChunks, this.canonicalChunks.size);
-    this.peakHomeShoreAliases = Math.max(this.peakHomeShoreAliases, this.homeShoreImages.size);
   }
 
   private ensureCanonicalChunk(coordinate: Readonly<GridPoint>): WaterCanonicalChunk {
@@ -275,7 +261,6 @@ export class WaterRenderer {
     const generated = this.generated!;
     const snapshot = generated.water.chunk(owner.coordinate.x, owner.coordinate.y);
     const tileSize = prototypeConfig.navigation.tileSize;
-    const homeDepthFootprint = authoredHomeDepthFootprint(generated);
     const targetKey = animated ? owner.surfaceTextureKey : owner.baseTextureKey;
     const target = this.scene.textures.get(targetKey) as Phaser.Textures.CanvasTexture;
     const context = target.getContext();
@@ -294,13 +279,8 @@ export class WaterRenderer {
         const localX = (x - snapshot.startX) * tileSize;
         const localY = (y - snapshot.startY) * tileSize;
         const generatedType = generated.water.baseTypeAt(x, y);
-        const usesAuthoredHomeDepth = periodicFootprintContainsTile(
-          homeDepthFootprint,
-          x,
-          y,
-          generated.grid.topology,
-        );
-        const presentedType = usesAuthoredHomeDepth ? WATER_TYPE_IDS.deep : generatedType;
+        const usesAuthoredWater = this.authoredWaterOwnershipTiles.has(y * generated.grid.width + x);
+        const presentedType = usesAuthoredWater ? WATER_TYPE_IDS.deep : generatedType;
         const variant = generated.water.variantAt(x, y);
         const profile = this.assets.profiles.get(presentedType);
         if (!profile) continue;
@@ -317,7 +297,7 @@ export class WaterRenderer {
         }
         const mask = generated.water.transitionMaskAt(x, y);
         const maskIndex = this.transitionMaskIndex.get(mask);
-        if (!usesAuthoredHomeDepth && maskIndex !== undefined && mask !== 0) {
+        if (!usesAuthoredWater && maskIndex !== undefined && mask !== 0) {
           this.drawFrame(
             surfaceContext,
             WATER_TEXTURE_KEYS.transitions,
@@ -334,7 +314,7 @@ export class WaterRenderer {
           this.drawFrame(surfaceContext, WATER_TEXTURE_KEYS.overlays, 24 + phase, 8, localX, localY);
         } else if (
           !blockedIslandCell
-          && !usesAuthoredHomeDepth
+          && !usesAuthoredWater
           && (
             generatedType === WATER_TYPE_IDS.coastal
             || generatedType === WATER_TYPE_IDS.lagoon
@@ -406,75 +386,6 @@ export class WaterRenderer {
     context.globalAlpha = 1;
   }
 
-  private syncHomeShore(entries: readonly Readonly<ActiveChunkEntry>[]): void {
-    const generated = this.generated!;
-    const topology = generated.grid.topology;
-    const topLeft = {
-      x: generated.landmarks.homeCenter.x - PILOT_HOME_ISLAND_METADATA.anchors.homeCenter.x,
-      y: generated.landmarks.homeCenter.y - PILOT_HOME_ISLAND_METADATA.anchors.homeCenter.y,
-    };
-    const tileSize = prototypeConfig.navigation.tileSize;
-    const handoffMarginTiles = WATER_HOME_HANDOFF_MARGIN / tileSize;
-    const footprint: CanonicalTileBounds = {
-      minX: topLeft.x - handoffMarginTiles,
-      minY: topLeft.y - handoffMarginTiles,
-      maxX: topLeft.x + PILOT_HOME_ISLAND_METADATA.grid.width - 1 + handoffMarginTiles,
-      maxY: topLeft.y + PILOT_HOME_ISLAND_METADATA.grid.height - 1 + handoffMarginTiles,
-    };
-    const desired = new Map<string, { imageOffset: WorldPoint; visible: boolean }>();
-    for (const entry of entries) {
-      const viewBounds = liftedChunkBounds(entry, topology);
-      for (const imageOffset of periodicOffsetsIntersecting(footprint, viewBounds, topology)) {
-        const key = imageOffsetKey(imageOffset);
-        const existing = desired.get(key);
-        desired.set(key, {
-          imageOffset,
-          visible: (existing?.visible ?? false) || entry.band === "visible",
-        });
-      }
-    }
-
-    for (const [key, alias] of this.homeShoreImages) {
-      const next = desired.get(key);
-      if (!next) {
-        alias.handoff.destroy();
-        alias.shore.destroy();
-        this.homeShoreImages.delete(key);
-        this.totalHomeShoreAliasDeactivations++;
-        continue;
-      }
-      alias.visible = next.visible;
-      alias.handoff.setVisible(next.visible);
-      alias.shore.setVisible(next.visible);
-      if (next.visible) {
-        alias.handoff.setFrame(this.currentFrame);
-        alias.shore.setFrame(this.currentFrame);
-      }
-    }
-    for (const [key, next] of desired) {
-      if (this.homeShoreImages.has(key)) continue;
-      const handoff = this.scene.add.image(
-        topLeft.x * tileSize + next.imageOffset.x - WATER_HOME_HANDOFF_MARGIN,
-        topLeft.y * tileSize + next.imageOffset.y - WATER_HOME_HANDOFF_MARGIN,
-        WATER_TEXTURE_KEYS.homeDepthHandoff,
-        this.currentFrame,
-      ).setOrigin(0).setDepth(1.7).setVisible(next.visible);
-      const shore = this.scene.add.image(
-        topLeft.x * tileSize + next.imageOffset.x,
-        topLeft.y * tileSize + next.imageOffset.y,
-        WATER_TEXTURE_KEYS.homeShore,
-        this.currentFrame,
-      ).setOrigin(0).setDepth(4.75).setVisible(next.visible);
-      this.homeShoreImages.set(key, {
-        imageOffset: Object.freeze({ ...next.imageOffset }),
-        handoff,
-        shore,
-        visible: next.visible,
-      });
-      this.totalHomeShoreAliasActivations++;
-    }
-  }
-
   private assertValidEntry(entry: Readonly<ActiveChunkEntry>): void {
     const topology = this.generated!.grid.topology;
     const { x, y } = entry.canonicalChunk;
@@ -514,129 +425,76 @@ export class WaterRenderer {
     this.images.clear();
     for (const owner of this.canonicalChunks.values()) this.destroyCanonicalChunk(owner);
     this.canonicalChunks.clear();
-    for (const alias of this.homeShoreImages.values()) {
-      alias.handoff.destroy();
-      alias.shore.destroy();
-    }
-    this.totalHomeShoreAliasDeactivations += this.homeShoreImages.size;
-    this.homeShoreImages.clear();
     this.generated = undefined;
+    this.authoredWaterOwnershipTiles = new Set();
   }
 }
 
-function authoredHomeDepthFootprint(generated: Readonly<GeneratedWorld>): CanonicalTileBounds {
-  const topLeftX = generated.landmarks.homeCenter.x - PILOT_HOME_ISLAND_METADATA.anchors.homeCenter.x;
-  const topLeftY = generated.landmarks.homeCenter.y - PILOT_HOME_ISLAND_METADATA.anchors.homeCenter.y;
+function resolveAuthoredWaterOwnershipTiles(
+  generated: Readonly<GeneratedWorld>,
+  presentations?: Readonly<AuthoredIslandPresentationRuntime>,
+  authoredHomePresentation?: Readonly<AuthoredHomeIslandMetadata>,
+): ReadonlySet<number> {
+  const tiles = new Set<number>();
+  if (authoredHomePresentation?.render.plane === "island-composite") {
+    addPeriodicFootprintTiles(
+      tiles,
+      authoredHomeDepthFootprint(generated, authoredHomePresentation),
+      generated.grid.topology,
+    );
+  }
+  if (
+    !presentations
+    || generated.manifest?.authoredIslandCatalogRevision !== presentations.revision
+  ) return tiles;
+
+  for (const island of generated.islands) {
+    if (island.sourceKind !== "authored" || !island.authoredAssetId || !island.authoredCollision) continue;
+    const presentation = presentations.entry(island.authoredAssetId);
+    if (
+      !presentation
+      || presentation.gridWidth !== island.authoredCollision.gridWidth
+      || presentation.gridHeight !== island.authoredCollision.gridHeight
+      || !hasAuthoredIslandLandPlane(presentation)
+      || !hasAuthoredIslandWaterPlane(presentation)
+    ) continue;
+    addPeriodicFootprintTiles(tiles, {
+      minX: island.bounds.minX - 1,
+      minY: island.bounds.minY - 1,
+      maxX: island.bounds.maxX + 1,
+      maxY: island.bounds.maxY + 1,
+    }, generated.grid.topology);
+  }
+  return tiles;
+}
+
+function addPeriodicFootprintTiles(
+  target: Set<number>,
+  footprint: Readonly<CanonicalTileBounds>,
+  topology: Readonly<WorldTopology>,
+): void {
+  for (let y = footprint.minY; y <= footprint.maxY; y++) {
+    for (let x = footprint.minX; x <= footprint.maxX; x++) {
+      const canonical = topology.canonicalizeTile(x, y);
+      if (canonical) target.add(canonical.y * topology.tileWidth + canonical.x);
+    }
+  }
+}
+
+function authoredHomeDepthFootprint(
+  generated: Readonly<GeneratedWorld>,
+  metadata: Readonly<AuthoredHomeIslandMetadata>,
+): CanonicalTileBounds {
+  const topLeftX = generated.landmarks.homeCenter.x - metadata.anchors.homeCenter.x;
+  const topLeftY = generated.landmarks.homeCenter.y - metadata.anchors.homeCenter.y;
   return {
     minX: topLeftX - 1,
     minY: topLeftY - 1,
-    maxX: topLeftX + PILOT_HOME_ISLAND_METADATA.grid.width,
-    maxY: topLeftY + PILOT_HOME_ISLAND_METADATA.grid.height,
+    maxX: topLeftX + metadata.grid.width,
+    maxY: topLeftY + metadata.grid.height,
   };
-}
-
-function periodicFootprintContainsTile(
-  footprint: Readonly<CanonicalTileBounds>,
-  x: number,
-  y: number,
-  topology: Readonly<WorldTopology>,
-): boolean {
-  return periodicAxisContainsTile(
-    footprint.minX,
-    footprint.maxX,
-    x,
-    topology.tileWidth,
-    topology.wrapsX,
-  ) && periodicAxisContainsTile(
-    footprint.minY,
-    footprint.maxY,
-    y,
-    topology.tileHeight,
-    topology.wrapsY,
-  );
-}
-
-function periodicAxisContainsTile(
-  footprintMinimum: number,
-  footprintMaximum: number,
-  tile: number,
-  span: number,
-  wraps: boolean,
-): boolean {
-  if (!wraps) return tile >= footprintMinimum && tile <= footprintMaximum;
-  const firstImage = Math.ceil((tile - footprintMaximum) / span);
-  const lastImage = Math.floor((tile - footprintMinimum) / span);
-  return firstImage <= lastImage;
 }
 
 function canonicalChunkKey(coordinate: Readonly<GridPoint>): string {
   return `${coordinate.x},${coordinate.y}`;
-}
-
-function imageOffsetKey(offset: Readonly<WorldPoint>): string {
-  return `${offset.x},${offset.y}`;
-}
-
-function liftedChunkBounds(
-  entry: Readonly<ActiveChunkEntry>,
-  topology: Readonly<WorldTopology>,
-): CanonicalTileBounds {
-  const offsetX = entry.imageOffset.x / topology.tileSize;
-  const offsetY = entry.imageOffset.y / topology.tileSize;
-  const minX = entry.canonicalChunk.x * topology.chunkSize + offsetX;
-  const minY = entry.canonicalChunk.y * topology.chunkSize + offsetY;
-  return {
-    minX,
-    minY,
-    maxX: Math.min(topology.tileWidth, (entry.canonicalChunk.x + 1) * topology.chunkSize) - 1 + offsetX,
-    maxY: Math.min(topology.tileHeight, (entry.canonicalChunk.y + 1) * topology.chunkSize) - 1 + offsetY,
-  };
-}
-
-function periodicOffsetsIntersecting(
-  footprint: Readonly<CanonicalTileBounds>,
-  view: Readonly<CanonicalTileBounds>,
-  topology: Readonly<WorldTopology>,
-): WorldPoint[] {
-  const xOffsets = intersectingAxisOffsets(
-    footprint.minX,
-    footprint.maxX,
-    view.minX,
-    view.maxX,
-    topology.tileWidth,
-    topology.wrapsX,
-  );
-  const yOffsets = intersectingAxisOffsets(
-    footprint.minY,
-    footprint.maxY,
-    view.minY,
-    view.maxY,
-    topology.tileHeight,
-    topology.wrapsY,
-  );
-  const result: WorldPoint[] = [];
-  for (const offsetY of yOffsets) {
-    for (const offsetX of xOffsets) {
-      result.push({ x: offsetX * topology.tileSize, y: offsetY * topology.tileSize });
-    }
-  }
-  return result;
-}
-
-function intersectingAxisOffsets(
-  footprintMinimum: number,
-  footprintMaximum: number,
-  viewMinimum: number,
-  viewMaximum: number,
-  span: number,
-  wraps: boolean,
-): number[] {
-  if (!wraps) {
-    return footprintMaximum >= viewMinimum && footprintMinimum <= viewMaximum ? [0] : [];
-  }
-  const firstImage = Math.ceil((viewMinimum - footprintMaximum) / span);
-  const lastImage = Math.floor((viewMaximum - footprintMinimum) / span);
-  const offsets: number[] = [];
-  for (let image = firstImage; image <= lastImage; image++) offsets.push(image * span);
-  return offsets;
 }

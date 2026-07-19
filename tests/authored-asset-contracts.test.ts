@@ -46,6 +46,7 @@ function homeFixture(): Record<string, unknown> {
       service: { x: 4, y: 2 },
     },
     render: {
+      plane: "island-composite",
       pixelSize: { width: 160, height: 160 },
       slices: [{
         id: "complete",
@@ -230,6 +231,16 @@ describe("GR-1.1 authored asset contracts", () => {
     const duplicateGrid = duplicate.grid as { cells: Record<string, unknown>[] };
     duplicateGrid.cells[1] = { ...duplicateGrid.cells[0] };
     expect(() => validateAuthoredAssetMetadata(duplicate)).toThrow(/duplicate cell/);
+  });
+
+  it("requires Home to declare whether its image owns water", () => {
+    const missing = homeFixture();
+    delete (missing.render as Record<string, unknown>).plane;
+    expect(() => validateAuthoredAssetMetadata(missing)).toThrow(/render\.plane/);
+
+    const unsupported = homeFixture();
+    (unsupported.render as Record<string, unknown>).plane = "water-apron";
+    expect(() => validateAuthoredAssetMetadata(unsupported)).toThrow(/render\.plane/);
   });
 
   it("expands a compact fixed authored row map without procedural tile assembly", () => {

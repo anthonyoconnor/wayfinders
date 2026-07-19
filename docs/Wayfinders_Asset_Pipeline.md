@@ -154,8 +154,11 @@ add prepared production candidates without creating a second simulation.
 
 **Add PNG** starts guided intake for a new local image. In the Islands
 workspace, family, layer role, solid collision semantics, and runtime category
-are fixed island defaults rather than operator fields. The form reads the PNG's
-native canvas immediately, derives the editable asset name from the filename,
+are fixed island defaults rather than operator fields. Intake treats the PNG's
+island-and-water image as one `island-composite` layer by default. That
+single RGBA plane is sufficient for runtime; hand-authored packages may instead
+separate a `water-apron`, ordinary land layers, and an optional `shore-effect`.
+The form reads the native canvas immediately, derives the editable asset name from the filename,
 and defaults to keeping its dimensions. When manual dimensions are enabled, an
 aspect-ratio lock updates width or height from the other value using the source
 PNG ratio. A solid candidate whose
@@ -254,6 +257,16 @@ general families this invalidates review. A modified or missing prepared output,
 generated collision draft makes the derived output stale without changing the
 input fingerprint. A failed job cannot leave another job partially updated.
 
+An `island-composite` recipe opts into a size-scaled inward alpha-edge fade
+after final canvas placement. The deterministic fade follows the existing
+irregular alpha silhouette and only reduces existing coverage. Inside that fade
+band, `alphaEdgeBlendColor` linearly brings visible RGB toward the runtime
+deep-water median `[8, 48, 68]` as coverage approaches zero; initially
+transparent pixels and the fully opaque interior stay byte-for-byte unchanged.
+It never changes canvas placement or collision geometry. Guided island intake
+records both settings automatically so the authored deep-sea fringe can
+dissolve into runtime water without a contour-shaped edge.
+
 Guided intake copies the uploaded PNG under
 `assets-src/gr3/intake`, appends its validated recipe, and runs deterministic
 preparation inside the repository-wide intake lock. Duplicate names and stable
@@ -261,14 +274,14 @@ IDs are reported instead of overwriting an existing recipe, source, or candidate
 Failure and cancellation restore the manifest and generated index and remove
 new partial output.
 
-For island recipes, preparation derives a best-effort shoreline seed from the
-prepared alpha at `8`-pixel subcell resolution inside the `32`-pixel navigation
-grid. Connected opaque geometry retains fine projections and concavities;
-isolated low-coverage noise is ignored. The draft records a deterministic
-method ID and warnings for blank, disconnected, edge-touching, or unusually
-broad geometry. This is an editable seed and cannot make the island available
-until its exact saved mask validates. Passable families continue to produce explicit
-empty collision.
+For imported island recipes, preparation creates a conservative centered-circle
+seed at `8`-pixel subcell resolution inside the `32`-pixel navigation grid. The
+circle occupies half the shorter prepared-canvas dimension, does not sample the
+image pixels, and records a deterministic method ID plus a reminder to refine
+the complete mask in the Islands workbench. This allows the visible island PNG
+to include an opaque water apron without turning that water into collision. The
+editable seed cannot make the island available until its exact saved mask
+validates. Passable families continue to produce explicit empty collision.
 
 For an imported island, **Save changes** validates the name and complete
 collision draft against the current repository record, writes recipe and

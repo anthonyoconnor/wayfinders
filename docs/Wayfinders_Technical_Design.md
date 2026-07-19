@@ -578,10 +578,16 @@ descriptor, positions visible prepared layers at the lifted collision-bounds
 origin, and scales them to the exact saved grid canvas. Periodic footprint
 intersection activates a view even when the island's canonical centre chunk is
 outside the viewport. One descriptor, feature state, and texture set back all
-views; view identity includes the whole-world offset. A missing texture or
-catalog-revision disagreement uses the complete procedural developer
-presentation instead of a partial imported visual. Camera zoom changes no
-placement calculation.
+views; view identity includes the whole-world offset. A single
+`island-composite` layer may contain both land and its baked water
+transition and renders in the `4.x` land stack. Layered assets may instead use a
+`water-apron` at depth `1.7`, ordinary land planes at `4.x`, and a
+`shore-effect` at `4.75`. A complete imported presentation contains either an
+ordinary land plane or an `island-composite`; water-apron-only and
+shore-effect-only entries keep the coherent developer fallback. A missing
+texture or catalog-revision disagreement uses that same complete fallback
+instead of a partial imported visual. Camera zoom changes no placement
+calculation.
 
 Cloud atmosphere is an independent presentation layer. Its validated package
 owns a fixed four-slot catalog aligned exactly with the four atlas frames. Each
@@ -690,18 +696,20 @@ surface texture remains exact-sized. The surface plane composes directional
 depth transitions, glints, currents, and rough-water/whitecap accents. A lifted
 ocean rectangle covers deferred gaps.
 
-Every visible periodic image of the expanded home footprint may own one aligned
-home-water alias. In the authored-home footprint and its one-tile collar,
-ordinary chunk water is presented as deep and its coarse directional transition
-and coastal caustic are suppressed beneath that alias; authoritative terrain
-and generated layout facts do not change. The alias pairs an `800 x 800`
-bathymetry handoff below the home art with the separate `480 x 480` shoreline
-animation above it. The handoff has a five-tile margin, an asymmetric shelf
-whose broadest reach is at least three times its narrowest, a curved harbor
-channel, detached substrate and sandbar patches, and a broken multi-stage
-alpha/color ramp. Both images share one periodic lifetime and frame phase.
-Reduced motion leaves frame zero in place. Knowledge, fog, risk, and route
-renderers remain later layers and do not feed water classification.
+When the authored-home package and every referenced texture loaded, an explicit
+`render.plane: island-composite` lets its footprint and one-tile collar present
+ordinary chunk water as deep and suppress its coarse directional transition and
+coastal caustic beneath the home composite. A `land` Home plane retains
+generated water; authoritative terrain and generated layout facts do not
+change. The same suppression applies to an imported island's canvas and
+one-tile collar
+only when the complete presentation catalog matches the world revision,
+contains authored land or an `island-composite`, and contains either an
+`island-composite` or `water-apron` plane. Missing, incomplete, stale, and
+land-only presentations do not claim water, and procedural islands always
+retain generated water.
+Knowledge, fog, risk, and route renderers remain later layers and do not feed
+water classification.
 
 Fishing-ground presentation uses the fog-filtered read model. Hidden-quality
 states always use the neutral steady surface cue; surveyed states may select
@@ -745,11 +753,12 @@ controls. Existing recipe names and stable IDs are
 checked in the form and again under the repository lock; conflicts block
 intake without a separate confirmation step. Validated family defaults and
 identity become one source recipe and one pending candidate through the
-constrained development-server API. Island preparation creates a deterministic,
-editable `8`-pixel shoreline
-seed from prepared alpha and retains its method and uncertainty warnings with
-the draft. Passable families remain explicitly empty, and no generated draft
-becomes runtime authority automatically.
+constrained development-server API. Imported-island preparation creates a
+deterministic, editable `8`-pixel centered-circle seed covering half the shorter
+prepared-canvas dimension. It deliberately ignores image pixels so a baked
+water apron remains navigable, and retains its method and refinement warning
+with the draft. Passable families remain explicitly empty, and no generated
+draft becomes runtime authority automatically.
 
 The Islands workspace replaces the general production surface with one focused
 workbench. Left-library selection alone chooses the preview and editor. The
@@ -762,7 +771,7 @@ layer composition, animation, validation, fingerprints, review, promotion, or
 portable-package controls. Import fixes the family and collision semantics to
 island defaults, derives the initial name from the filename, reads the PNG
 canvas, offers aspect-locked manual sizing and grid padding when needed, prepares
-the image, seeds the shoreline mask, and selects the resulting unavailable
+the image, seeds the centered-circle mask, and selects the resulting unavailable
 island. Saving an imported island commits its editable name, complete mask, and
 one durable `availableInGame` boolean through a rollback-safe repository
 operation. Enabling availability validates current prepared art and the exact

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
@@ -6,8 +6,13 @@ const packagePath = resolve(root, "src/wayfinders/assets/packages/water.json");
 const publicRoot = resolve(root, "public/assets/gr1/water");
 const metadata = JSON.parse(await readFile(packagePath, "utf8"));
 const requiredProfiles = ["abyss", "brackish", "coastal", "current", "deep", "lagoon", "reef", "rough"];
+const requiredImageIds = [
+  "world.water.depth-transitions",
+  "world.water.surface-overlays",
+  "world.water.tiles.animated",
+  "world.water.tiles.static",
+];
 const pngSignature = "89504e470d0a1a0a";
-const homeDepthHandoffId = "world.water.home-depth-handoff";
 
 function pngHeader(bytes, label) {
   if (
@@ -49,26 +54,14 @@ const profileIds = [...metadata.profiles.map(({ id }) => id)].sort();
 if (JSON.stringify(profileIds) !== JSON.stringify(requiredProfiles)) {
   throw new Error(`Water package profiles do not match the runtime catalog: ${profileIds.join(", ")}`);
 }
-const homeDepthHandoff = metadata.images.find(({ imageId }) => imageId === homeDepthHandoffId);
-if (
-  !homeDepthHandoff
-  || homeDepthHandoff.file !== "water-home-depth-handoff.png"
-  || homeDepthHandoff.loader !== "spritesheet"
-  || homeDepthHandoff.pixelSize.width !== 3216
-  || homeDepthHandoff.pixelSize.height !== 1608
-  || homeDepthHandoff.frameSize.width !== 800
-  || homeDepthHandoff.frameSize.height !== 800
-  || homeDepthHandoff.margin !== 2
-  || homeDepthHandoff.spacing !== 4
-  || homeDepthHandoff.frameCount !== 8
-  || homeDepthHandoff.framesPerSecond !== 5
-  || homeDepthHandoff.origin?.x !== -160
-  || homeDepthHandoff.origin?.y !== -160
-  || homeDepthHandoff.placement !== "relative to the home top-left, above generic water and below the home island"
-  || homeDepthHandoff.role !== "selected asymmetric Bahamian sand-shelf depth handoff; presentation-only"
-  || homeDepthHandoff.alpha !== true
-) {
-  throw new Error("Home depth handoff metadata does not match the selected 8-frame runtime contract");
+const imageIds = [...metadata.images.map(({ imageId }) => imageId)].sort();
+if (JSON.stringify(imageIds) !== JSON.stringify(requiredImageIds)) {
+  throw new Error(`Water package images do not match the generic runtime contract: ${imageIds.join(", ")}`);
+}
+const expectedPublicPngs = metadata.images.map(({ file }) => file).sort();
+const actualPublicPngs = (await readdir(publicRoot)).filter((file) => file.endsWith(".png")).sort();
+if (JSON.stringify(actualPublicPngs) !== JSON.stringify(expectedPublicPngs)) {
+  throw new Error(`Published water sheets do not match the generic runtime contract: ${actualPublicPngs.join(", ")}`);
 }
 for (const image of metadata.images) {
   const bytes = await readFile(resolve(publicRoot, image.file));

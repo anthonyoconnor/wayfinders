@@ -1,8 +1,11 @@
 # Island water-system concept study
 
-These concepts apply the current island-and-sea art direction to four island
-archetypes. They are not tile layouts; they are targets for the procedural
-water, shoreline, surf, and bathymetry systems.
+These concepts apply the current island-and-sea art direction to four authored
+island archetypes. They are art targets rather than collision layouts: each
+production island is created outside the game and imported as a transparent
+RGBA image whose painted water apron joins the animated deep-sea base.
+
+Procedural islands are temporary stand-ins and are not an art-production target.
 
 ## Shared system rules
 
@@ -25,6 +28,8 @@ water, shoreline, surf, and bathymetry systems.
   and discontinuous outer surf.
 
 The rocky ridge and river delta are the clearest references for validating that
-the system responds to coast type, exposure, and underwater terrain rather than
-simply dilating the island silhouette.
+authored water responds to coast type, exposure, and underwater terrain rather
+than simply dilating the island silhouette.
 
+The square runtime-source prompts and import mapping are recorded in
+`RUNTIME_ASSET_PROMPTS.md`.

@@ -80,51 +80,15 @@
       "frameCount": 32,
       "layout": "x = frame 0..7; rows = glint, shallow-caustic, current-ribbon, whitecap",
       "alpha": true
-    },
-    {
-      "imageId": "world.water.home-shore-overlay",
-      "file": "runtime/water-home-shore-overlay.png",
-      "loader": "spritesheet",
-      "pixelSize": { "width": 3872, "height": 484 },
-      "frameSize": { "width": 480, "height": 480 },
-      "margin": 2,
-      "spacing": 4,
-      "frameCount": 8,
-      "framesPerSecond": 5,
-      "origin": { "x": 0, "y": 0 },
-      "placement": "same top-left and scale as home.island.primary",
-      "alpha": true
-    },
-    {
-      "imageId": "world.water.home-depth-handoff",
-      "file": "runtime/water-home-depth-handoff.png",
-      "loader": "spritesheet",
-      "pixelSize": { "width": 3216, "height": 1608 },
-      "frameSize": { "width": 800, "height": 800 },
-      "margin": 2,
-      "spacing": 4,
-      "frameCount": 8,
-      "framesPerSecond": 5,
-      "origin": { "x": -160, "y": -160 },
-      "placement": "relative to the home top-left, above generic water and below the home island",
-      "role": "selected asymmetric Bahamian sand-shelf depth handoff; presentation-only",
-      "alpha": true
     }
   ],
   "previewImages": [
-    "runtime/water-contact-sheet.png",
-    "runtime/water-home-island-preview.png"
+    "runtime/water-contact-sheet.png"
   ],
   "sourceImages": [
     "source/water-deep-master.png",
     "source/water-shallow-master.png",
     "source/water-reef-master.png",
     "source/water-current-master.png"
-  ],
-  "islandBlend": {
-    "authoredIslandUnderlay": "continue coastal water beneath transparent authored-island pixels",
-    "authoredIslandOverlay": "use only an asset-aligned shoreline clip above the authored composition",
-    "genericFoamRule": "never draw coarse generic foam above home.island.primary",
-    "topologyAuthority": "terrain and package metadata, never image pixels"
-  }
+  ]
 }

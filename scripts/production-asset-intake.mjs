@@ -20,6 +20,9 @@ const RUNTIME_BINDINGS = Object.freeze({
   "fishing-shoal": "shoal.fishing.primary",
 });
 
+// Median deep-water RGB sampled from the runtime water-static.png atlas.
+const DEFAULT_ISLAND_COMPOSITE_EDGE_BLEND_COLOR = Object.freeze([8, 48, 68]);
+
 export class ProductionAssetIntakeCancelledError extends Error {
   constructor() {
     super("Production asset intake was cancelled");
@@ -72,6 +75,13 @@ function preparationFor(image, request) {
     targetWidth: request.targetWidth,
     targetHeight: request.targetHeight,
     thumbnailMaximum: 192,
+    ...(request.layerRole === "island-composite" ? {
+      alphaEdgeFadePixels: Math.max(
+        4,
+        Math.min(128, Math.round(Math.min(request.targetWidth, request.targetHeight) / 11)),
+      ),
+      alphaEdgeBlendColor: DEFAULT_ISLAND_COMPOSITE_EDGE_BLEND_COLOR,
+    } : {}),
   };
   if (hasTransparency) return { mode: "preserve", ...common };
   return {
@@ -108,19 +118,25 @@ function buildRecipe(request, image, sourceFile, manifest) {
     provenance: { kind: "selected-source", sourceFile },
     layers: [{
       id: "base",
-      name: request.layerRole === "effect" ? "Visual effect" : "Base visual",
+      name: request.layerRole === "island-composite"
+        ? "Island and water composite"
+        : request.layerRole === "water-apron"
+          ? "Water apron"
+          : request.layerRole === "shore-effect" || request.layerRole === "effect"
+            ? "Visual effect"
+            : "Base visual",
       role: request.layerRole,
       sourceFile,
       defaultVisible: true,
       opacity: 1,
-      blendMode: request.layerRole === "effect" ? "screen" : "normal",
+      blendMode: request.layerRole === "effect" || request.layerRole === "shore-effect" ? "screen" : "normal",
       preparation: preparationFor(image, request),
     }],
     animations: [],
     collision: request.collisionSemantics === "passable"
       ? { mode: "empty", reason: `The ${request.family} family is explicitly passable` }
       : request.family === "island"
-        ? { mode: "shoreline-seed", tileSize: 32, subcellSize: 8 }
+        ? { mode: "center-circle", tileSize: 32, subcellSize: 8 }
         : { mode: "blank-draft", tileSize: 32, subcellSize: 8 },
     ...(request.family === "island" ? { availableInGame: false } : {}),
     ...(runtimeAssetId ? {

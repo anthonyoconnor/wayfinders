@@ -4,18 +4,13 @@
   "recipeId": "production.island.island-01-crescent-cay-uninhabited",
   "family": "island",
   "lifecycle": "candidate",
-  "recipeHash": "e0ca6c9933510e1237cd1751fb94cd0890fa93571f4407c456eb1afea42d17d8",
-  "jobKey": "469d9516feb2a3c39d5af179b7182a04c35599180a1f20724297f7eb4f395f90",
+  "recipeHash": "fbc3814f0654332d3c10d71f725d7fa435f4c0d9d63bb2b32d38696605e9c6cb",
+  "jobKey": "f2b7a6523bbe654a23b9c02e998162348cba8848845027b367b384170a379187",
   "sources": [
     {
       "layerId": "base",
       "file": "assets-src/gr3/intake/production-island-island-01-crescent-cay-uninhabited-source.png",
-      "sha256": "e78149a2484dc936f0158ee833e22f8030ccf74fca5aa6c7ebe6fab8099799d6"
-    },
-    {
-      "layerId": "collision-mask",
-      "file": "assets-src/gr3/candidate-masks/production-island-island-01-crescent-cay-uninhabited-mask.png",
-      "sha256": "f59e109682c076ff7c7e35cbd4bd3594c7d0c4c36dce8b0b23314030a32f1cd2"
+      "sha256": "9634862645fe48d1e7ac3043e742f641c4e63f883e7903df7b01bdf8c10c3ef8"
     }
   ],
   "outputs": {
@@ -25,17 +20,17 @@
         "file": "assets-src/gr3/candidates/production-island-island-01-crescent-cay-uninhabited/base.png",
         "width": 320,
         "height": 320,
-        "sha256": "44f95c0d38d6206f1295f21e48bef2759c94cd3547b29bb4e87fec4e6075b348",
+        "sha256": "d200eb105a24733b0b689ed9d615ad7cc6681a112a0e4b6625848cf718d5793b",
         "sourceBounds": {
-          "x": 303,
-          "y": 293,
-          "width": 618,
-          "height": 659
+          "x": 56,
+          "y": 56,
+          "width": 1110,
+          "height": 1153
         },
         "placement": {
-          "x": 10,
+          "x": 6,
           "y": 0,
-          "width": 300,
+          "width": 308,
           "height": 320
         }
       }
@@ -44,12 +39,12 @@
       "file": "assets-src/gr3/candidates/production-island-island-01-crescent-cay-uninhabited/thumbnail.png",
       "width": 192,
       "height": 192,
-      "sha256": "97931c01bd83eff69d8fef1790d41880349bfb5006307dae3582165311bc21c7"
+      "sha256": "553d5920d86b24b6efd72513cc3a804ced3be2aac94e6798241439e762551898"
     },
     "collisionDraft": {
       "file": "assets-src/gr3/candidates/production-island-island-01-crescent-cay-uninhabited/collision-draft.json",
       "kind": "hybrid-grid-draft",
-      "sha256": "438acca52d37cc54f6d3740f61c38685e402ba97dc65ccbbb15184e50e0588f8"
+      "sha256": "d32d97d5c080277fd60e2a1c892010179ec9438e8748f7686c006e7ed036e8fd"
     }
   }
 }

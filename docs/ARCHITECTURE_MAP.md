@@ -128,13 +128,16 @@ adapter may own Phaser sound instances.
   `WaterRenderer` consumes that same delta and owns exactly one base and one
   surface canvas texture per referenced canonical chunk. Periodic image aliases
   share those textures, aliases add no redraw work, and a visible canonical
-  surface redraws at most once per presentation frame. Inside the authored-home
-  footprint and its one-tile collar, the renderer presents deep base water and
-  suppresses the generic tile transition so one periodic home-aligned
-  bathymetry handoff can own the asymmetric sub-tile shelf without changing
-  terrain or layout authority. That handoff and the separate aligned
-  home-shore overlay follow one periodic alias lifetime. `WorldRenderer` owns
-  the lifted deferred-gap ocean backdrop and no longer draws water or waves.
+  surface redraws at most once per presentation frame. A successfully loaded
+  authored-home presentation and each complete, revision-matched imported
+  presentation with land/composite ownership and composite/apron water
+  ownership claim their canvas plus a
+  one-tile collar: the renderer presents deep base water there and suppresses
+  the generic tile transition without changing terrain or layout authority.
+  Procedural islands and imported presentations without authored water keep
+  ordinary generated water. `WorldRenderer` owns the lifted deferred-gap ocean
+  backdrop and the periodic authored island planes; it does not draw generic
+  water or waves.
 - `src/wayfinders/audio/index.ts` is the public stored-audio and mixer seam. It
   validates the canonical catalog, resolves catalog-relative runtime URLs, and
   owns in-memory master/category gain, bounded deterministic voice decisions,
@@ -216,7 +219,10 @@ adapter may own Phaser sound instances.
   snapshot of prepared visible layers. `WayfindersScene` preloads it and
   `WorldRenderer` resolves manifest-recorded asset IDs, aligns layers to planned
   collision bounds, and activates each visible periodic image by footprint
-  intersection. One canonical descriptor and prepared texture set back every
+  intersection. A single `island-composite` plane may carry land and its
+  authored water transition together; optional `water-apron`, ordinary land,
+  and `shore-effect` planes render at depths `1.7`, `4.x`, and `4.75`
+  respectively. One canonical descriptor and prepared texture set back every
   image view, even when the descriptor's canonical centre is outside the
   viewport.
   Missing or revision-mismatched presentation falls back coherently to developer

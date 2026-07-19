@@ -86,6 +86,8 @@ export interface AuthoredRenderSlice {
   depth: number;
 }
 
+export type AuthoredHomePresentationPlane = "land" | "island-composite";
+
 export interface AuthoredAssetMetadataBase {
   contractVersion: typeof AUTHORED_ASSET_CONTRACT_VERSION;
   assetId: AuthoredAssetId;
@@ -119,6 +121,7 @@ export interface AuthoredHomeIslandMetadata extends AuthoredAssetMetadataBase {
     service: Readonly<GridPoint>;
   };
   render: {
+    plane: AuthoredHomePresentationPlane;
     pixelSize: Readonly<PixelSize>;
     slices: readonly Readonly<AuthoredRenderSlice>[];
   };
@@ -435,6 +438,10 @@ function validateHomeIsland(parsed: Record<string, unknown>): AuthoredHomeIsland
   assertDockPathToEdge(cells, width, height, anchors.dock);
 
   const renderInput = record(parsed.render, "render");
+  const presentationPlane = renderInput.plane;
+  if (presentationPlane !== "land" && presentationPlane !== "island-composite") {
+    throw new RangeError("render.plane must be land or island-composite");
+  }
   const pixelSize = size(renderInput.pixelSize, "render.pixelSize");
   if (!Array.isArray(renderInput.slices) || renderInput.slices.length === 0) {
     throw new TypeError("render.slices must be a non-empty array");
@@ -490,7 +497,7 @@ function validateHomeIsland(parsed: Record<string, unknown>): AuthoredHomeIsland
     ...(collision ? { collision } : {}),
     grid: { width, height, placementOrigin, cells },
     anchors,
-    render: { pixelSize, slices },
+    render: { plane: presentationPlane, pixelSize, slices },
   };
 }
 

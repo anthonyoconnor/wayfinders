@@ -1,12 +1,16 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const runtimeRoot = path.join(root, "runtime");
-const HOME_DEPTH_HANDOFF_ID = "world.water.home-depth-handoff";
-const HOME_DEPTH_HANDOFF_FILE = "water-home-depth-handoff.png";
+const REQUIRED_IMAGE_IDS = [
+  "world.water.depth-transitions",
+  "world.water.surface-overlays",
+  "world.water.tiles.animated",
+  "world.water.tiles.static",
+];
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -52,28 +56,23 @@ assert(
   "animation wrap delta exceeds the normal step tolerance",
 );
 assert(report.validation.transparentOverlayPixels > 0, "overlay alpha validation did not run");
-assert(report.validation.transparentHomeOverlayPixels > 0, "home-overlay alpha validation did not run");
-assert(report.validation.transparentHomeHandoffPixels > 0, "home-depth-handoff alpha validation did not run");
-assert(report.validation.homeHandoff?.alphaLevels >= 24, "home-depth-handoff must retain at least 24 alpha levels");
-assert(report.validation.homeHandoff?.lumaBands >= 10, "home-depth-handoff must retain at least 10 luma bands");
-assert(report.validation.homeHandoff?.maximumAxisRun < 32, "home-depth-handoff contour contains a long axis-aligned run");
-assert(report.validation.homeHandoff?.shelfWidthRatio >= 3, "home-depth-handoff shelf width is too uniform");
-
-const homeDepthHandoff = manifest.images.find(({ imageId }) => imageId === HOME_DEPTH_HANDOFF_ID);
-assert(homeDepthHandoff, `${HOME_DEPTH_HANDOFF_ID} is missing from the manifest`);
-assert(homeDepthHandoff.file === `runtime/${HOME_DEPTH_HANDOFF_FILE}`, `${HOME_DEPTH_HANDOFF_ID} file mismatch`);
-assert(homeDepthHandoff.loader === "spritesheet", `${HOME_DEPTH_HANDOFF_ID} loader must be spritesheet`);
-assert(homeDepthHandoff.pixelSize.width === 3216 && homeDepthHandoff.pixelSize.height === 1608, `${HOME_DEPTH_HANDOFF_ID} pixel size mismatch`);
-assert(homeDepthHandoff.frameSize.width === 800 && homeDepthHandoff.frameSize.height === 800, `${HOME_DEPTH_HANDOFF_ID} frame size mismatch`);
-assert(homeDepthHandoff.margin === 2 && homeDepthHandoff.spacing === 4, `${HOME_DEPTH_HANDOFF_ID} frame gutter mismatch`);
-assert(homeDepthHandoff.frameCount === 8, `${HOME_DEPTH_HANDOFF_ID} frame count mismatch`);
-assert(homeDepthHandoff.framesPerSecond === 5, `${HOME_DEPTH_HANDOFF_ID} playback rate mismatch`);
-assert(homeDepthHandoff.origin.x === -160 && homeDepthHandoff.origin.y === -160, `${HOME_DEPTH_HANDOFF_ID} origin mismatch`);
-assert(homeDepthHandoff.placement === "relative to the home top-left, above generic water and below the home island", `${HOME_DEPTH_HANDOFF_ID} placement mismatch`);
-assert(homeDepthHandoff.role === "selected asymmetric Bahamian sand-shelf depth handoff; presentation-only", `${HOME_DEPTH_HANDOFF_ID} role mismatch`);
-assert(homeDepthHandoff.alpha === true, `${HOME_DEPTH_HANDOFF_ID} must retain alpha`);
+const imageIds = manifest.images.map(({ imageId }) => imageId).sort();
+assert(JSON.stringify(imageIds) === JSON.stringify(REQUIRED_IMAGE_IDS), "water package must contain only the four generic runtime sheets");
 
 const reportByFile = new Map(report.outputs.map((output) => [output.filename, output]));
+const expectedOutputFiles = [
+  ...manifest.images.map(({ file }) => file.replace(/^runtime\//u, "")),
+  ...manifest.previewImages.map((file) => file.replace(/^runtime\//u, "")),
+].sort();
+assert(
+  JSON.stringify([...reportByFile.keys()].sort()) === JSON.stringify(expectedOutputFiles),
+  "build report outputs must match the generic runtime sheets and declared previews",
+);
+const actualRuntimePngs = (await readdir(runtimeRoot)).filter((file) => file.endsWith(".png")).sort();
+assert(
+  JSON.stringify(actualRuntimePngs) === JSON.stringify(expectedOutputFiles),
+  "runtime output directory must not contain undeclared or retired water sheets",
+);
 for (const output of report.outputs) {
   const buffer = await readFile(path.join(runtimeRoot, output.filename));
   const header = pngHeader(buffer, output.filename);
@@ -89,8 +88,6 @@ const expectedFrames = new Map([
   ["world.water.tiles.static", 32],
   ["world.water.depth-transitions", 188],
   ["world.water.surface-overlays", 32],
-  ["world.water.home-shore-overlay", 8],
-  [HOME_DEPTH_HANDOFF_ID, 8],
 ]);
 for (const image of manifest.images) {
   const filename = image.file.replace(/^runtime\//u, "");

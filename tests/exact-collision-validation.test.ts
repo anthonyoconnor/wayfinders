@@ -43,9 +43,9 @@ describe("GR-2.5 exact collision candidate validation", () => {
   it("rejects a clear anchor whose exact navigation edges cannot escape the asset", () => {
     const metadata = structuredClone(homeIslandPackage);
     const enclosingCells = [
-      [10, 7], [13, 7],
-      [11, 6], [12, 6],
-      [11, 8], [12, 8],
+      [15, 12], [18, 12],
+      [16, 11], [17, 11],
+      [16, 13], [17, 13],
     ];
     metadata.collision = {
       kind: "hybrid-grid",

@@ -39,10 +39,12 @@ design:
 
 The design uses these current repository contracts and art references:
 
-- `public/assets/gr1/images/home-island.png` is a tracked `480 x 480` RGBA runtime image
-  aligned to a `15 x 15` navigation-cell package. It already includes turquoise
-  shallows, an irregular shorewash/foam edge, harbor water, rocks, sand, and a
-  transparent exterior.
+- `public/assets/gr1/images/home-island.png` is a tracked `1254 x 1254` RGBA
+  island composite presented across a `25 x 25` navigation-cell package. Its
+  original `15 x 15` logical island occupies the centred interior, surrounded
+  by five deep-ocean cells on every side. The single image carries land,
+  harbour, painted bathymetry, broken shorewash, and an alpha-faded deep-water
+  exterior.
 - The retained `assets-src/gr1/water` pack contains the current water reference
   material and provenance notes. It remains source material only and must never
   be sampled, keyed, or loaded by the game.
@@ -69,9 +71,13 @@ The design uses these current repository contracts and art references:
   aliases share them. Prefetched canonical owners remain static, each visible
   owner advances at most once per presentation frame, and aliases add no redraw.
   `WorldRenderer` no longer draws water or waves.
-- Water is drawn beneath authored home and imported-island art. Coastal
-  underpainting and mask-derived shelves prevent transparent shoreline pixels
-  from exposing rectangular backdrop artifacts.
+- Generated water remains beneath authored island art. A complete,
+  revision-matched authored presentation containing land or a composite plus
+  composite/apron water claims its canvas and a one-cell collar. The renderer
+  keeps deep base water there but suppresses the generic directional transition
+  and coastal caustic so the painted composite or apron owns the visible shelf.
+  Procedural, incomplete, missing, or stale presentations retain ordinary
+  generated water.
 - WTR-1 used a workspace-local animation lifecycle. WTR-2 now uses
   presentation-time snapshots, discrete visible-only updates, pause, background
   recovery, and reduced-motion fallback without introducing simulation time.
@@ -247,30 +253,37 @@ The home composition has a better organic shore than a coarse tile mask can
 produce. Treat it as an authored composition with a water handoff, not as a
 rectangle that replaces the ocean.
 
-1. Draw deep/coastal water throughout the home package footprint, including
-   behind pixels that will later be covered by opaque island art.
-2. Draw generic depth transitions, underwater details, and generic surface
-   effects below the home composition.
-3. Draw `home.island.primary` at its existing `15 x 15` grid position and depth.
-4. Draw only the package-aligned `480 x 480` home shoreline/glint clip above the
-   composition. Its top-left, scale, and frame origin must match the home image
-   exactly.
-5. Never draw coarse generic foam above the home island. Its square/cardinal
-   geometry cannot match the baked organic foam edge.
+1. Draw deep base water throughout the `25 x 25` Home package canvas and its
+   one-cell collar.
+2. When the complete Home presentation is loaded at the matching runtime revision,
+   suppress generic directional transitions and coastal caustics inside that
+   claim.
+3. Draw the single `1254 x 1254` `island-composite` image across `800 x 800`
+   world pixels at the package-aligned transform and authored depth.
+4. Let the image's deep-water-coloured, inward-alpha-faded exterior join the
+   remaining generated sea. No separate Home shoreline or handoff sheet is
+   loaded.
+5. Keep generic foam below the composite; its square/cardinal geometry cannot
+   match the baked organic foam edge.
 
-The renderer does not need to sample PNG alpha to decide terrain. It simply
-renders the water underlay first and the authored image afterward. Topology,
-collision, dock return, and anchors continue to come from package metadata.
+The renderer does not sample PNG alpha to decide terrain. Topology, collision,
+dock return, and anchors continue to come from package metadata independently
+of the painted land and water.
 
 ### Other authored islands
 
-Adopt the same contract for future packages:
+The production island catalog uses the same contract automatically for imported
+presentations:
 
-- declare a shared shore-handoff palette;
-- provide clean RGBA runtime art rather than magenta-keyed RGB;
-- allow water under transparent composition pixels;
-- optionally provide a composition-aligned shoreline overlay clip; and
-- keep collision/terrain metadata authoritative.
+- prefer one clean RGBA `island-composite` that carries land and its authored
+  water apron;
+- alternatively combine an optional `water-apron`, ordinary land, and
+  `shore-effect` planes at their declared depths;
+- claim generated-water suppression only for a complete, revision-matched
+  presentation with both land and authored-water ownership;
+- let missing, stale, land-only, and procedural presentations fall back to
+  ordinary generated water; and
+- keep collision and terrain metadata authoritative and independent from pixels.
 
 ### Generated islands
 
@@ -352,9 +365,10 @@ activation gaps.
 | 0.25 | Shallow/depth transitions | Cached topology |
 | 0.5 | Reef/seagrass underwater detail | Terrain-readable; below foam |
 | 1 | Generic ripple/current/whitecap overlays | Sparse and animation-capable |
+| 1.7 | Optional authored water apron | Package-aligned imported-island plane |
 | 2–3 | Generated terrain/coast | Existing terrain authority |
-| 4.5 | Authored home island | Existing package depth |
-| 4.6 | Authored home shoreline overlay | Same transform as home art |
+| 4.x | Authored land or island composite | Package-declared depth; Home uses `4.5` |
+| 4.75 | Optional authored shore effect | Package-aligned plane above land/composite |
 | existing upper depths | Ship/wake, knowledge, risk, routes, fog, diagnostics | Preserve current ordering contracts |
 
 Knowledge refreshes update a tint/uniform or the knowledge-specific presentation
@@ -414,8 +428,9 @@ frame = frameStart + ((tick + phaseBucket) mod frameCount)
 ```
 
 Use tile phases for disconnected deep glints. Use one region/island phase for
-connected surf so adjacent foam does not tear. The home-aligned clip is one
-region and must advance as a single frame.
+connected generated surf so adjacent foam does not tear. Authored island
+composites carry their static painted transition and do not add a separate Home
+animation clip.
 
 ### Initial clip budget
 
@@ -426,7 +441,6 @@ region and must advance as a single frame.
 | Current ribbon | 8 | 4–7 | region | Only classified current cells |
 | Whitecap | 8 | 5–7 | region/tile | Rare exposed-water patches |
 | Reef breaker | 4–8 | 3–5 | region | Reef perimeter only |
-| Home shoreline | 8 | 5 | home region/global | One aligned composition clip |
 
 The prepared current source reads west-to-east. Initial implementation may use
 four cardinal orientations through 90-degree rotations. Diagonal flow requires
@@ -452,17 +466,17 @@ second production authority.
 | `runtime/water-static.png` | 144 x 288 | Reduced-motion/static profile variants |
 | `runtime/water-depth-transitions.png` | 1692 x 144 | 47 canonical masks x four phases, with gutters |
 | `runtime/water-overlays.png` | 288 x 144 | Glint, caustic, current, and whitecap alpha clips |
-| `runtime/water-home-shore-overlay.png` | 3872 x 484 | Eight guttered `480 x 480` home-aligned frames |
 | `runtime/water-contact-sheet.png` | 512 x 256 | Profile review board |
-| `runtime/water-home-island-preview.png` | 640 x 640 | Home/depth-handoff review composite |
 | `water-package.json` | n/a | Source profile, sheet, mask, animation, and handoff metadata |
 | `runtime/build-report.json` | n/a | Output dimensions and SHA-256 hashes |
 | `validate-water-package.mjs` | n/a | Header, hash, frame geometry, mask, seam/loop-report validation |
 
-The five runtime sheets occupy roughly `0.55 MiB` compressed and `9.6 MiB`
-decoded RGBA. Source masters and previews are authoring/review files and must not
-ship. `build-water-package.mjs` deterministically rebuilds the retained source
-outputs without changing `public`, `dist`, or current source files.
+The four generic runtime sheets occupy roughly `0.46 MiB` compressed and
+`2.51 MiB` decoded RGBA. The contact sheet and source masters are authoring and
+review files and must not ship. Home-specific shoreline/handoff sheets are not
+part of the package. `build-water-package.mjs` deterministically rebuilds the
+retained source outputs without changing `public`, `dist`, or current source
+files.
 
 The builder and retained `runtime` directory are source-preparation evidence,
 not alternate production authority. Current runtime ownership belongs to the
@@ -1151,7 +1165,8 @@ behavior; this list is not a second status authority.
 ### Package and grid
 
 - All runtime sheets are lowercase-safe, validated PNGs with declared sizes.
-- Every general frame is `32 x 32`; authored home frames are `480 x 480`.
+- Every general water frame is `32 x 32`; the Home transition is part of its
+      separate `1254 x 1254` island composite rather than a water-package frame.
 - Startup rejects a water package whose tile size disagrees with the
       validated runtime navigation tile size.
 - Every sheet uses and loads with `margin: 2`, `spacing: 4` duplicated gutters.
@@ -1167,9 +1182,10 @@ behavior; this list is not a second status authority.
 
 - Deep, shallow, lagoon, and blocking reef are distinct at normal zoom and in
       grayscale.
-- The home island has water beneath all transparent exterior pixels.
-- The home-aligned overlay uses the exact island transform and never paints
-      over land/structures with a visible classification error.
+- The Home composite joins generated deep water through a coloured inward alpha
+      fade with no separate shoreline/handoff overlay.
+- Complete imported composites and water aprons use their exact package
+      transforms and claim only their canvas plus the one-cell collar.
 - Generic foam never appears above the authored home composition.
 - High island, low cay, atoll, rocky skerry, home harbor, and narrow channel
       cases have intentional shore handoffs. No nonexistent biome is inferred.
@@ -1216,8 +1232,8 @@ behavior; this list is not a second status authority.
       base/surface image objects share them; aliases create zero redraws.
 - Animation updates only when a clip advances, at most once per visible
       canonical owner per presentation frame; prefetched owners remain static.
-- The aligned authored-home overlay may have one view per intersecting periodic
-      image, shares package frames, and follows the active-image lifetime.
+- Each authored island plane may have one view per intersecting periodic image,
+      shares its prepared texture, and follows the active-image lifetime.
 - Shipped water textures remain below `12 MiB` decoded RGBA and `2 MiB`
       compressed payload unless a later reviewed budget replaces these limits.
 - Repeated camera traversal and circumnavigation plateau at the `25` active
@@ -1255,8 +1271,7 @@ Default quality path:
 - translated periodic image views that share those textures;
 - cached 47-mask transitions;
 - sparse animated overlays;
-- aligned home-overlay aliases for active footprint images, animated only when
-  their shared band is `visible`; and
+- authored composite/apron aliases for active footprint images; and
 - discrete 3–7 FPS clip updates rather than continuous per-frame deformation.
 
 Fallback order when profiling exceeds budget:
@@ -1266,7 +1281,7 @@ Fallback order when profiling exceeds budget:
 3. reduce phase buckets and batch fragmentation;
 4. freeze deep glints while retaining shallow/reef/home motion;
 5. use `water-static.png` for all generic water while retaining terrain colors;
-6. retain only the aligned home shore clip; then
+6. retain authored composite/apron planes while dropping optional shore effects;
 7. use the complete reduced-motion path.
 
 Do not solve performance by weakening fog, terrain readability, collision
@@ -1277,7 +1292,7 @@ deferred-placeholder behavior.
 
 | Risk | Mitigation |
 | --- | --- |
-| Generic foam fights the baked home shoreline | Keep generic foam below authored art; use only the aligned home clip above it |
+| Generic foam fights a baked authored shoreline | Suppress generic transitions/caustics only for complete authored-water claims and keep generic foam below the composite |
 | Attractive decorative water implies mechanics | Map mechanics only from `TerrainType`; label visual-only profiles explicitly |
 | Checkerboard/boiling motion | Use coherent regions, sparse density, low FPS, and limited phase buckets |
 | A second presentation-lifetime policy | Consume only the scene-owned `ActiveChunkDelta`; retain the shared cap, priority, and deferred placeholder |

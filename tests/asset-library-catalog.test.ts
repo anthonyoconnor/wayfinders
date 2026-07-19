@@ -191,14 +191,14 @@ describe("asset library catalog", () => {
       thumbnailUrl: expect.any(String),
       package: {
         runtimeRevision: expect.any(Number),
-        metadata: { kind: "home-island", grid: { width: 15, height: 15 } },
+        metadata: { kind: "home-island", grid: { width: 25, height: 25 } },
       },
     });
     if (home?.entryType !== "authored-package") throw new Error("Expected authored home package");
     expect(home.package.runtimeRevision).toBe(home.package.metadata.runtimeRevision);
     expect(home.layers).toEqual([expect.objectContaining({
       imageId: "home.island.primary.complete",
-      pixelSize: { width: 480, height: 480 },
+      pixelSize: { width: 1254, height: 1254 },
     })]);
 
     expect(boat).toMatchObject({

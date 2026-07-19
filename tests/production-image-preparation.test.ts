@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   applyConnectedBorderMatte,
+  applyInwardAlphaEdgeFade,
   prepareProductionImage,
   trimAndContainImage,
 } from "../scripts/production-image-preparation.mjs";
@@ -137,6 +138,90 @@ describe("GR-3.2 production image preparation", () => {
       targetWidth: 2,
       targetHeight: 2,
     })).toThrow(/does not fit/u);
+  });
+
+  it("fades inward from an irregular alpha silhouette without expanding alpha", () => {
+    const source = image(11, 11, [16, 42, 67, 0]);
+    for (let y = 2; y <= 8; y++) {
+      for (let x = 2; x <= 8; x++) setPixel(source, x, y, [16, 42, 67, 255]);
+    }
+    setPixel(source, 2, 2, [16, 42, 67, 0]);
+    setPixel(source, 3, 2, [16, 42, 67, 0]);
+    setPixel(source, 2, 3, [16, 42, 67, 0]);
+    const beforeAlpha = Array.from({ length: source.width * source.height }, (_, index) => source.pixels[index * 4 + 3]);
+
+    const result = applyInwardAlphaEdgeFade(source, 2);
+
+    expect(pixel(result, 3, 3)[3]).toBe(0);
+    expect(pixel(result, 4, 4)[3]).toBe(113);
+    expect(pixel(result, 5, 5)[3]).toBe(255);
+    expect(pixel(result, 0, 0)).toEqual([16, 42, 67, 0]);
+    for (let index = 0; index < beforeAlpha.length; index++) {
+      expect(result.pixels[index * 4 + 3]).toBeLessThanOrEqual(beforeAlpha[index]);
+    }
+    for (let x = 0; x < result.width; x++) {
+      expect(pixel(result, x, 0)[3]).toBe(0);
+      expect(pixel(result, x, result.height - 1)[3]).toBe(0);
+    }
+    for (let y = 0; y < result.height; y++) {
+      expect(pixel(result, 0, y)[3]).toBe(0);
+      expect(pixel(result, result.width - 1, y)[3]).toBe(0);
+    }
+  });
+
+  it("keeps deep interior alpha and produces stable bytes for an edge-touching silhouette", () => {
+    const source = image(12, 12, [22, 58, 79, 255]);
+    setPixel(source, 0, 0, [22, 58, 79, 0]);
+    setPixel(source, 1, 0, [22, 58, 79, 0]);
+    setPixel(source, 0, 1, [22, 58, 79, 0]);
+
+    const first = applyInwardAlphaEdgeFade(source, 3);
+    const second = applyInwardAlphaEdgeFade(source, 3);
+
+    expect(first.pixels).toEqual(second.pixels);
+    const inwardAlpha = [0, 1, 2, 3, 4].map((x) => pixel(first, x, 6)[3]);
+    expect(inwardAlpha).toEqual([0, 28, 113, 255, 255]);
+    for (let index = 1; index < inwardAlpha.length; index++) {
+      expect(inwardAlpha[index]).toBeGreaterThanOrEqual(inwardAlpha[index - 1]);
+    }
+    for (let x = 0; x < first.width; x++) {
+      expect(pixel(first, x, 0)[3]).toBe(0);
+      expect(pixel(first, x, first.height - 1)[3]).toBe(0);
+    }
+    for (let y = 0; y < first.height; y++) {
+      expect(pixel(first, 0, y)[3]).toBe(0);
+      expect(pixel(first, first.width - 1, y)[3]).toBe(0);
+    }
+    expect(pixel(first, 6, 6)[3]).toBe(255);
+    expect(source.pixels[(6 * source.width + 6) * 4 + 3]).toBe(255);
+  });
+
+  it("color-matches only visible pixels in the fade band while retaining squared coverage", () => {
+    const source = image(12, 12, [100, 120, 140, 255]);
+    setPixel(source, 0, 0, [231, 17, 29, 0]);
+    const result = applyInwardAlphaEdgeFade(source, 3, [8, 48, 68]);
+
+    expect(pixel(result, 0, 6)).toEqual([8, 48, 68, 0]);
+    expect(pixel(result, 1, 6)).toEqual([39, 72, 92, 28]);
+    expect(pixel(result, 2, 6)).toEqual([69, 96, 116, 113]);
+    expect(pixel(result, 3, 6)).toEqual([100, 120, 140, 255]);
+    expect(pixel(result, 6, 6)).toEqual([100, 120, 140, 255]);
+    expect(pixel(result, 0, 0)).toEqual([231, 17, 29, 0]);
+
+    const inwardAlpha = [0, 1, 2, 3, 4].map((x) => pixel(result, x, 6)[3]);
+    for (let index = 1; index < inwardAlpha.length; index++) {
+      expect(inwardAlpha[index]).toBeGreaterThanOrEqual(inwardAlpha[index - 1]);
+    }
+
+    const prepared = prepareProductionImage(source, {
+      mode: "preserve",
+      sizing: "native",
+      targetWidth: 12,
+      targetHeight: 12,
+      alphaEdgeFadePixels: 3,
+      alphaEdgeBlendColor: [8, 48, 68],
+    });
+    expect(prepared.image.pixels).toEqual(result.pixels);
   });
 
   it("is byte-for-byte deterministic", () => {
