@@ -44,6 +44,7 @@ function makeHarness(key = "island-fog-test") {
   const scratchCalls: FillCall[] = [];
   const filteredClearCalls: ClearCall[] = [];
   const displaySizes: Array<{ width: number; height: number }> = [];
+  const images: Array<{ visible: boolean }> = [];
   const canvasContexts = [makeContext(scratchCalls), makeContext(undefined, filteredClearCalls)];
   vi.stubGlobal("document", {
     createElement: () => {
@@ -80,14 +81,20 @@ function makeHarness(key = "island-fog-test") {
     add: {
       image: () => {
         const image = {
+          visible: true,
           setOrigin: () => image,
           setDisplaySize: (width: number, height: number) => {
             displaySizes.push({ width, height });
             return image;
           },
           setDepth: () => image,
+          setVisible: (visible: boolean) => {
+            image.visible = visible;
+            return image;
+          },
           destroy: () => undefined,
         };
+        images.push(image);
         return image;
       },
     },
@@ -98,6 +105,7 @@ function makeHarness(key = "island-fog-test") {
     scratchCalls,
     filteredClearCalls,
     displaySizes,
+    images,
     textureKeys: () => [...textures.keys()].sort(),
     texture: (chunkX = 0, chunkY = 0) => {
       const texture = textures.get(`${key}-knowledge-mask-${chunkX}-${chunkY}`);
@@ -124,6 +132,32 @@ function activateAllChunks(renderer: KnowledgeOverlayRenderer, world: WorldGrid)
 afterEach(() => vi.unstubAllGlobals());
 
 describe("exact island dossier fog reveal", () => {
+  it("hides existing and newly activated fog views during presentation review", () => {
+    const world = new WorldGrid(8, 1, 4, WRAPPING_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const activeChunks = new ActiveChunkSet({
+      topology: world.topology,
+      prefetchRing: 0,
+      maxActiveChunks: 2,
+    });
+    const { renderer, images } = makeHarness("fog-review-test");
+    renderer.applyActiveChunkDelta(
+      world,
+      activeChunks.update({ minX: 0, minY: 0, maxX: 3, maxY: 0 }),
+    );
+    expect(images.map(({ visible }) => visible)).toEqual([true]);
+
+    expect(renderer.setVisible(false)).toBe(true);
+    renderer.applyActiveChunkDelta(
+      world,
+      activeChunks.update({ minX: 0, minY: 0, maxX: 7, maxY: 0 }),
+    );
+    expect(images.map(({ visible }) => visible)).toEqual([false, false]);
+    expect(renderer.setVisible(false)).toBe(false);
+    expect(renderer.setVisible(true)).toBe(true);
+    expect(images.map(({ visible }) => visible)).toEqual([true, true]);
+  });
+
   it("shares one canonical mask across seam aliases and sizes partial chunks exactly", () => {
     const wrapping = new WorldGrid(4, 1, 4, WRAPPING_WORLD_TOPOLOGY);
     wrapping.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);

@@ -122,6 +122,14 @@ a:focus-visible {
   image-rendering: pixelated;
 }
 
+.game-host[data-map-review="true"] canvas {
+  cursor: grab;
+}
+
+.game-host[data-map-review="true"] canvas:active {
+  cursor: grabbing;
+}
+
 .shell-controls {
   position: fixed;
   z-index: 20;

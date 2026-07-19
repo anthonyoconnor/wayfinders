@@ -596,6 +596,14 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
       visibleClouds: 0,
       visibleShadows: 0,
     });
+
+    expect(renderer.setIgnoreFog(true)).toBe(true);
+    renderer.sync(supported, new Set(), 0, 35_000);
+    renderer.sync(supported, new Set(), 0, 40_000);
+    expect(renderer.getResourceTelemetry()).toMatchObject({ visibleClouds: 1, visibleShadows: 1 });
+    expect(renderer.setIgnoreFog(false)).toBe(true);
+    renderer.sync(supported, new Set(), 0, 45_000);
+    expect(renderer.getResourceTelemetry()).toMatchObject({ visibleClouds: 0, visibleShadows: 0 });
   });
 
   it("renders a flattened paired shadow above the ship with lockstep motion and visibility", () => {

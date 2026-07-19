@@ -885,10 +885,15 @@ needed by adapters; listeners cannot mutate simulation state through the bus.
 The developer UI can regenerate by seed, inspect island approaches, move to
 survey anchors, teleport to water, adjust provisions, force a wreck, toggle
 navigation/visibility/guidance diagnostics, independently enable or disable
-cloud atmosphere, and tune supported configuration. The checked-by-default
-cloud switch is session-only and scene-owned; it is not a simulation debug or
-configuration value. Opening the drawer does not pause sailing. Lifecycle gates
-still suppress input.
+cloud atmosphere, enter map review, and tune supported configuration. Map
+review is session-only presentation state: it hides the knowledge fog, allows
+all cloud pairs to render independently of fog, pauses sailing input, detaches
+the camera from the ship, and enables pointer-drag or WASD/arrow panning plus a
+wider wheel or Q/E zoom range. Leaving map review restores the fog and the
+smoothed ship-follow camera without changing knowledge or ship state. The
+checked-by-default cloud switch is session-only and scene-owned; it is not a
+simulation debug or configuration value. Opening the drawer does not pause
+sailing. Lifecycle gates still suppress input.
 
 `window.__WAYFINDERS__` exposes bounded snapshot, command, overlay, resource,
 and performance diagnostics for browser automation. Its cloud command and

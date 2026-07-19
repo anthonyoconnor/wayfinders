@@ -135,6 +135,14 @@ interface MovementKeys {
   cancel: Phaser.Input.Keyboard.Key;
 }
 
+interface MapReviewPanGesture {
+  readonly pointerId: number;
+  readonly pointerX: number;
+  readonly pointerY: number;
+  readonly scrollX: number;
+  readonly scrollY: number;
+}
+
 interface PresentationResourceSnapshot {
   readonly activeChunks: ReturnType<ActiveChunkSet["getTelemetry"]>;
   readonly world: ReturnType<WorldRenderer["getTelemetry"]>;
@@ -157,6 +165,7 @@ interface BrowserDebugApi {
   forceWreck: () => boolean;
   regenerate: (seed?: number) => ReturnType<GameSimulation["snapshot"]>;
   setOverlay: (name: keyof GameSimulation["debug"], visible: boolean) => void;
+  setMapReviewMode: (enabled: boolean) => boolean;
   setCloudAtmosphere: (visible: boolean) => boolean;
   setCloudFrequency: (cloudsPerChunk: number) => boolean;
   cloudAtmosphere: () => Readonly<{
@@ -304,6 +313,8 @@ export class WayfindersScene extends Phaser.Scene {
   private lastViewportZoom = Number.NaN;
   private cameraFitZoom = 1;
   private cameraZoomRatio = 1;
+  private mapReviewMode = false;
+  private mapReviewPanGesture?: Readonly<MapReviewPanGesture>;
   private browserDebugApi?: BrowserDebugApi;
   private activeLifecycleCue?: HTMLElement;
   private activeLifecycleCueAnimation?: Animation;
@@ -435,6 +446,8 @@ export class WayfindersScene extends Phaser.Scene {
     }, false) as MovementKeys;
 
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
+    this.input.on(Phaser.Input.Events.POINTER_UP, this.onPointerUp, this);
     this.input.on(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
     // Fractional zoom and pixel rounding create visible one-pixel steps. A
     // stronger damped follow keeps the first camera response below one frame.
@@ -473,10 +486,14 @@ export class WayfindersScene extends Phaser.Scene {
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const textInputFocused = this.isTextEntryElement(activeElement);
     const greatHallOpen = this.greatHallView?.isOpen ?? false;
-    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && !greatHallOpen && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) {
+    const keyboardZoomAllowed = (!developerToolsOpen || this.mapReviewMode)
+      && !textInputFocused
+      && !this.simulation.generationHandoverActive
+      && !greatHallOpen;
+    if (keyboardZoomAllowed && Phaser.Input.Keyboard.JustDown(this.keys.zoomIn)) {
       this.changeZoom(0.1);
     }
-    if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && !greatHallOpen && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) {
+    if (keyboardZoomAllowed && Phaser.Input.Keyboard.JustDown(this.keys.zoomOut)) {
       this.changeZoom(-0.1);
     }
     if (!developerToolsOpen && !textInputFocused && !this.simulation.generationHandoverActive && !greatHallOpen && Phaser.Input.Keyboard.JustDown(this.keys.survey)) {
@@ -485,6 +502,7 @@ export class WayfindersScene extends Phaser.Scene {
     if (!developerToolsOpen && !textInputFocused && Phaser.Input.Keyboard.JustDown(this.keys.cancel)) {
       if (this.greatHallView?.mode === "home") this.closeGreatHallHome();
     }
+    if (this.mapReviewMode && !textInputFocused && !greatHallOpen) this.updateMapReviewCamera(delta);
     const movementInput = this.readMovementInput();
     let keepAdvancing = true;
     this.clock.advance(delta, (deltaSeconds) => {
@@ -529,6 +547,7 @@ export class WayfindersScene extends Phaser.Scene {
       textEntryFocused: this.isTextEntryElement(activeElement),
       generationHandoverActive: this.simulation.generationHandoverActive,
       greatHallOpen: this.greatHallView?.isOpen ?? false,
+      mapReviewModeActive: this.mapReviewMode,
     };
   }
 
@@ -565,6 +584,14 @@ export class WayfindersScene extends Phaser.Scene {
     const horizontalFit = this.scale.width / (tileSize * 13);
     this.cameraFitZoom = Phaser.Math.Clamp(Math.min(verticalFit, horizontalFit), 0.7, 1.55);
     this.cameras.main.removeBounds();
+    if (this.mapReviewMode) {
+      this.cameras.main.setZoom(Phaser.Math.Clamp(
+        this.cameras.main.zoom,
+        this.mapReviewMinimumZoom(),
+        2.5,
+      ));
+      return;
+    }
     this.cameras.main.setZoom(Phaser.Math.Clamp(
       this.cameraFitZoom * this.cameraZoomRatio,
       0.65,
@@ -573,6 +600,7 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private syncCameraFraming(): void {
+    if (this.mapReviewMode) return;
     const camera = this.cameras.main;
     const zoom = Math.max(Number.EPSILON, camera.zoom);
     const homeScreenOffsetX = this.simulation.atDock ? Math.min(160, this.scale.width * 0.09) : 0;
@@ -1043,7 +1071,9 @@ export class WayfindersScene extends Phaser.Scene {
     }
     if (diagnosticsDue && this.gameStatus) {
       const voyage = `Voyage ${this.simulation.navigatorVoyageNumber} of 4`;
-      const message = this.greatHallView?.mode === "home"
+      const message = this.mapReviewMode
+        ? "Map review: drag or use WASD / arrows to pan; wheel or Q/E zoom"
+        : this.greatHallView?.mode === "home"
         ? "Great Hall · lineage chronicle open at the home dock"
         : this.simulation.generationHandoverActive
         ? "A navigator's journeys are being remembered · continue to begin the next generation"
@@ -1069,6 +1099,16 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private onPointerDown(pointer: Phaser.Input.Pointer): void {
+    if (this.mapReviewMode && pointer.button === 0) {
+      this.mapReviewPanGesture = {
+        pointerId: pointer.id,
+        pointerX: pointer.x,
+        pointerY: pointer.y,
+        scrollX: this.cameras.main.scrollX,
+        scrollY: this.cameras.main.scrollY,
+      };
+      return;
+    }
     if (!this.teleportOnClick) return;
     const canonicalPointer = this.simulation.world.topology.normalizeWorld(pointer.worldX, pointer.worldY);
     const tileSize = this.simulation.config.navigation.tileSize;
@@ -1084,6 +1124,18 @@ export class WayfindersScene extends Phaser.Scene {
     }
   }
 
+  private onPointerMove(pointer: Phaser.Input.Pointer): void {
+    const gesture = this.mapReviewPanGesture;
+    if (!this.mapReviewMode || !gesture || gesture.pointerId !== pointer.id || !pointer.isDown) return;
+    const zoom = Math.max(Number.EPSILON, this.cameras.main.zoom);
+    this.cameras.main.scrollX = gesture.scrollX - (pointer.x - gesture.pointerX) / zoom;
+    this.cameras.main.scrollY = gesture.scrollY - (pointer.y - gesture.pointerY) / zoom;
+  }
+
+  private onPointerUp(pointer: Phaser.Input.Pointer): void {
+    if (this.mapReviewPanGesture?.pointerId === pointer.id) this.mapReviewPanGesture = undefined;
+  }
+
   private onPointerWheel(
     _pointer: Phaser.Input.Pointer,
     _objects: Phaser.GameObjects.GameObject[],
@@ -1094,10 +1146,37 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private changeZoom(delta: number): void {
-    const zoom = Phaser.Math.Clamp(this.cameras.main.zoom + delta, 0.65, 1.7);
+    const minimum = this.mapReviewMode ? this.mapReviewMinimumZoom() : 0.65;
+    const maximum = this.mapReviewMode ? 2.5 : 1.7;
+    const zoom = Phaser.Math.Clamp(this.cameras.main.zoom + delta, minimum, maximum);
     this.cameraZoomRatio = zoom / Math.max(Number.EPSILON, this.cameraFitZoom);
     this.cameras.main.setZoom(zoom);
     this.syncCameraFraming();
+  }
+
+  private mapReviewMinimumZoom(): number {
+    const chunkPixels = this.simulation.world.chunkSize
+      * this.simulation.config.navigation.tileSize;
+    // At most five chunk images can intersect either axis (four complete
+    // chunks plus a boundary sliver), preserving the scene's 25-view cap.
+    return Phaser.Math.Clamp(
+      Math.max(this.scale.width / (chunkPixels * 4), this.scale.height / (chunkPixels * 4)),
+      0.15,
+      1.7,
+    );
+  }
+
+  private updateMapReviewCamera(deltaMs: number): void {
+    const horizontal = Number(this.keys.right.isDown || this.keys.alternateRight.isDown)
+      - Number(this.keys.left.isDown || this.keys.alternateLeft.isDown);
+    const vertical = Number(this.keys.reverse.isDown || this.keys.alternateReverse.isDown)
+      - Number(this.keys.forward.isDown || this.keys.alternateForward.isDown);
+    if (horizontal === 0 && vertical === 0) return;
+    const length = Math.hypot(horizontal, vertical);
+    const worldDistance = 650 * Math.min(deltaMs, 50) / 1000
+      / Math.max(Number.EPSILON, this.cameras.main.zoom);
+    this.cameras.main.scrollX += horizontal / length * worldDistance;
+    this.cameras.main.scrollY += vertical / length * worldDistance;
   }
 
   private mountDeveloperTools(): void {
@@ -1169,6 +1248,8 @@ export class WayfindersScene extends Phaser.Scene {
             ${this.toggleMarkup("currentSight", "Current line of sight")}
             ${this.toggleMarkup("forwardRange", "Forward reach limit")}
             ${this.toggleMarkup("returnViability", "Return route viability")}
+            <label class="tool-check"><input data-map-review type="checkbox" ${this.mapReviewMode ? "checked" : ""}> Map review mode (hide fog and free camera)</label>
+            <p class="tool-live-note">In map review mode, drag the map or use WASD / arrows to pan; use the wheel or Q/E to zoom. Sailing is paused.</p>
             ${this.cloudToggleMarkup()}
             ${this.numberMarkup(
               "cloud-frequency",
@@ -1236,6 +1317,9 @@ export class WayfindersScene extends Phaser.Scene {
     });
     slot.querySelector<HTMLInputElement>("input[data-cloud-atmosphere]")?.addEventListener("change", (event) => {
       this.setCloudAtmosphereEnabled((event.currentTarget as HTMLInputElement).checked);
+    }, { signal });
+    slot.querySelector<HTMLInputElement>("input[data-map-review]")?.addEventListener("change", (event) => {
+      this.setMapReviewMode((event.currentTarget as HTMLInputElement).checked);
     }, { signal });
     slot.querySelectorAll<HTMLInputElement>("input[data-config]").forEach((input) => {
       input.addEventListener("change", () => {
@@ -1928,6 +2012,33 @@ export class WayfindersScene extends Phaser.Scene {
     return changed;
   }
 
+  private setMapReviewMode(enabled: boolean): boolean {
+    if (this.mapReviewMode === enabled) return false;
+    this.mapReviewMode = enabled;
+    this.mapReviewPanGesture = undefined;
+    this.knowledgeOverlay.setVisible(!enabled);
+    this.cloudLayer.setIgnoreFog(enabled);
+    const camera = this.cameras.main;
+    if (enabled) {
+      camera.stopFollow();
+      camera.setFollowOffset(0, 0);
+      this.teleportOnClick = false;
+      this.updateTeleportButton();
+    } else {
+      this.cameraZoomRatio = camera.zoom / Math.max(Number.EPSILON, this.cameraFitZoom);
+      this.configureCamera();
+      camera.startFollow(this.shipRenderer.container, false, 0.18, 0.18);
+      camera.centerOn(this.currentShipPose.worldX, this.currentShipPose.worldY);
+      this.syncCameraFraming();
+    }
+    if (this.gameHost) this.gameHost.dataset.mapReview = String(enabled);
+    const input = document.querySelector<HTMLInputElement>("#scene-tools-slot input[data-map-review]");
+    if (input) input.checked = enabled;
+    this.lastDiagnosticsRevision = -1;
+    this.syncPresentation(true);
+    return true;
+  }
+
   private setCloudFrequency(cloudsPerChunk: number): boolean {
     const changed = this.cloudLayer.setCloudsPerChunk(cloudsPerChunk);
     if (changed) this.syncPresentation(true);
@@ -2219,6 +2330,7 @@ export class WayfindersScene extends Phaser.Scene {
         return this.simulation.snapshot();
       },
       setOverlay: (name, visible) => this.simulation.setDebugVisibility(name, visible),
+      setMapReviewMode: (enabled) => this.setMapReviewMode(enabled),
       setCloudAtmosphere: (visible) => this.setCloudAtmosphereEnabled(visible),
       setCloudFrequency: (cloudsPerChunk) => this.setCloudFrequency(cloudsPerChunk),
       cloudAtmosphere: () => Object.freeze({
@@ -2846,6 +2958,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.fishingShoalRenderer.destroy();
     this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
+    this.input.off(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);
+    this.input.off(Phaser.Input.Events.POINTER_UP, this.onPointerUp, this);
     this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
     this.dismissLifecycleCue();
     this.activeLifecycleCue?.remove();

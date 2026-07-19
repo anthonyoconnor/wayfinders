@@ -340,6 +340,7 @@ export class CloudLayerRenderer {
   private readonly views = new Map<string, CloudView>();
   private readonly activeEntries = new Map<string, Readonly<ActiveChunkEntry>>();
   private enabled = true;
+  private ignoreFog = false;
   private seed = 0;
   private chunkSizePixels = 0;
   private chunkCapacity = 0;
@@ -375,6 +376,13 @@ export class CloudLayerRenderer {
     this.enabled = enabled;
     if (enabled) this.createActiveViews();
     else this.destroyViews();
+    return true;
+  }
+
+  setIgnoreFog(ignoreFog: boolean): boolean {
+    if (this.ignoreFog === ignoreFog) return false;
+    this.ignoreFog = ignoreFog;
+    for (const view of this.views.values()) view.coverageRevision = "";
     return true;
   }
 
@@ -451,7 +459,7 @@ export class CloudLayerRenderer {
         presentation.clearPaddingTiles,
       );
       if (view.coverageRevision !== coverageRevision) {
-        view.clearOfFog = isCloudEnvelopeFullyClear(
+        view.clearOfFog = this.ignoreFog || isCloudEnvelopeFullyClear(
           world,
           currentEnvelope,
           revealedIslandIds,

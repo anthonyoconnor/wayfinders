@@ -231,8 +231,10 @@ adapter may own Phaser sound instances.
 Diagnostics are distributed with their owner: simulation traces and counters
 live in `core`, presentation/resource counters in `WayfindersScene` and its
 renderers, and output adaptation in `src/developerLog.ts`. Diagnostics never own
-authoritative mutation. The cloud enable switch and telemetry are scene-owned
-presentation diagnostics and never enter `GameSimulation.debug`.
+authoritative mutation. The cloud enable switch, map-review camera/fog switch,
+and telemetry are scene-owned presentation diagnostics and never enter
+`GameSimulation.debug`. Map review detaches the camera without moving the ship
+or changing authoritative knowledge.
 
 ## Feature folder convention
 

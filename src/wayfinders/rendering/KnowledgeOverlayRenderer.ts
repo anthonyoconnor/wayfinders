@@ -66,6 +66,7 @@ export class KnowledgeOverlayRenderer {
   private peakActiveTextures = 0;
   private totalTextureAllocations = 0;
   private totalTextureReleases = 0;
+  private visible = true;
 
   constructor(private readonly scene: Phaser.Scene) {
     const paddedPixels = (prototypeConfig.navigation.chunkSize + MASK_PADDING_TILES * 2) * MASK_SCALE;
@@ -132,6 +133,13 @@ export class KnowledgeOverlayRenderer {
       totalTextureAllocations: this.totalTextureAllocations,
       totalTextureReleases: this.totalTextureReleases,
     });
+  }
+
+  setVisible(visible: boolean): boolean {
+    if (this.visible === visible) return false;
+    this.visible = visible;
+    for (const { image } of this.views.values()) image.setVisible(visible);
+    return true;
   }
 
   sync(
@@ -259,7 +267,8 @@ export class KnowledgeOverlayRenderer {
       // The texture frame is surrounded by sampled neighbour padding, so
       // linear filtering can meet adjacent quads without an overlap stripe.
       .setDisplaySize(displayWidth, displayHeight)
-      .setDepth(35);
+      .setDepth(35)
+      .setVisible(this.visible);
     const view = { image, canonicalKey: this.chunkKey(chunk) };
     this.views.set(entry.viewKey, view);
     this.assertResourceCap();
