@@ -2,7 +2,7 @@
 
 Status: forward plan. Gameplay is complete through `GP-6.6`; the Great Hall
 track is complete through `GR-5.3`; cloud atmosphere is complete through
-`CLD-2`; and water presentation is complete through `WTR-2.6`.
+`CLD-3`; and water presentation is complete through `WTR-2.6`.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -51,9 +51,9 @@ architecture map; its delivery history is archived.
 
 The asset-workspace shell, focused island workshop, single island-availability
 lifecycle, deterministic authored-island world planning, bounded periodic
-authored runtime presentation, independent revealed-map cloud atmosphere, and
-production water system are implemented. No further production-presentation
-milestone is currently proposed.
+authored runtime presentation, independent revealed-map cloud atmosphere, live
+cloud-world authoring preview, and production water system are implemented. No
+further production-presentation milestone is currently proposed.
 
 The Voyage Sense thread, its supply commitments, and the continuous global
 world are implemented through `GP-6.6`. No later gameplay milestone is

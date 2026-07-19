@@ -6,6 +6,11 @@ import {
   createCloudAssetAuthoringMiddleware,
 } from "../scripts/cloud-asset-authoring-api.mjs";
 import { CloudAssetAuthoringError } from "../scripts/cloud-asset-authoring.mjs";
+import {
+  CLOUD_ASSET_AUTHORING_FORMAT_VERSION,
+  cloudAssetAuthoringSettingsFromPackage,
+} from "../src/wayfinders/assets/CloudAssetAuthoring.ts";
+import { CLOUD_ASSET_PACKAGE } from "../src/wayfinders/assets/CloudAssetCatalog.ts";
 
 const servers = [];
 
@@ -16,7 +21,7 @@ afterEach(async () => {
 
 function identityRequest() {
   return {
-    formatVersion: 1,
+    formatVersion: CLOUD_ASSET_AUTHORING_FORMAT_VERSION,
     assetId: "presentation.clouds.primary",
     runtimeRevision: 6,
     variantId: "long-broken-wisp",
@@ -24,7 +29,11 @@ function identityRequest() {
 }
 
 function saveRequest() {
-  return { ...identityRequest(), activeInGame: false };
+  return {
+    ...identityRequest(),
+    activeInGame: false,
+    settings: cloudAssetAuthoringSettingsFromPackage(CLOUD_ASSET_PACKAGE),
+  };
 }
 
 async function start(authoring, maximumBytes = 16 * 1_024) {

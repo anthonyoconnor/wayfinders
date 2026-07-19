@@ -1345,6 +1345,26 @@ Deletion writes a `null` tombstone instead of repacking the shared atlas, so
 surviving frame identities never shift. An empty active catalog intentionally
 produces no cloud or shadow views.
 
+### CLD-3 — Live cloud-world authoring
+
+Status: implemented and verified on 2026-07-18.
+
+The Clouds workspace now renders the complete deterministic atmosphere over a
+real seeded `96 x 96` generated world. It shares the runtime chunk descriptor,
+opening-home composition, and route-motion seams, draws the package frames and
+paired shadows in runtime order, and provides preview-only seed, accelerated
+speed, layout guides, reroll, and pause controls. Live sliders cover package
+frequency and density, cloud size and opacity, ordinary and opening movement,
+all three opening positions, and the shadow transform; each accepted input
+updates the preview without regenerating the world.
+
+One exact format-V2 save now commits the selected frame's availability and the
+complete normalized settings draft through the existing optimistic repository
+lock and atomic-file transaction. Settings-only, availability-only, and combined
+changes advance the runtime revision once; total no-ops remain byte-identical.
+Tint, depth, fog-clear padding, atlas geometry, terrain, and gameplay state stay
+outside the authoring seam.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development
@@ -1530,6 +1550,6 @@ browser state is recorded in `IMPLEMENTATION_STATUS.md`.
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-6.6`, graphics and asset
-work through `GR-5.3`, cloud atmosphere through `CLD-1`, water presentation
+work through `GR-5.3`, cloud atmosphere through `CLD-3`, water presentation
 through `WTR-2.6`, and architecture work through `AM-6`. Upcoming, proposed,
 and deferred work is maintained only in `Wayfinders_Roadmap.md`.

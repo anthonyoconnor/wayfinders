@@ -106,17 +106,27 @@ catalog slots, unique variant identities, RGBA format, per-frame opaque bounds, 
 transparent and visible pixels.
 
 `?mode=assets&workspace=clouds` is the package's focused authoring surface. It
-lists each non-deleted frame and previews the exact paired-shadow treatment.
-**Save changes** persists the selected slot's `activeInGame` state, while
-confirmed **Delete cloud** replaces that slot with `null`. Both requests carry
-the stable variant ID and expected runtime revision through a bounded,
-same-origin development-server API. The service revalidates under the shared
-repository lock and commits the package with the atomic file transaction;
-stale requests make no change. Deletion is permanent at the catalog level, but
-does not erase or repack the shared PNG: the unaddressable pixels remain inert
-so surviving Phaser frame IDs and seeded selection stay stable. Git remains the
-recovery path. The workspace has no collision, gameplay authority, atlas edit,
-intake, or presentation-tuning path.
+lists each non-deleted frame and renders the complete cloud atmosphere over a
+real seeded `96 x 96` generated world through the runtime chunk-layout and
+motion resolvers. World seed, accelerated speed, route guides, reroll, and pause
+are preview-only. The live package draft covers frequency, density, opacity,
+scale, ordinary and opening movement, all three opening offsets, and shadow
+offset, flattening, and strength; every slider input immediately updates the
+world canvas. Tint, depth, fog-clear padding, atlas geometry, and gameplay state
+remain read-only.
+
+**Save changes** persists the complete normalized settings draft together with
+the selected slot's `activeInGame` state in one optimistic revision. The exact,
+bounded same-origin request carries the stable variant ID and expected runtime
+revision. The service revalidates under the shared repository lock, preserves
+non-editable presentation fields, and commits through the atomic file
+transaction; stale or invalid requests make no change, and total no-ops remain
+byte-identical. **Reset settings** changes only the in-memory draft. Confirmed
+**Delete cloud** replaces the selected slot with `null` without erasing or
+repacking the shared PNG, so unaddressable pixels remain inert and surviving
+Phaser frame IDs and seeded selection stay stable. Git remains the recovery
+path. The workspace has no collision, gameplay authority, atlas edit, or intake
+path.
 
 ## Achievement icon animation sheet
 

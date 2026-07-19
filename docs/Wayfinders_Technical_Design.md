@@ -768,18 +768,36 @@ its direct collision save and is always available.
 
 The Clouds workspace is a focused presentation-asset surface outside the
 collision catalog. Its left column lists every non-deleted fixed frame with an
-Active or Inactive badge, the centre previews the selected source frame and its
-actual flattened offset shadow, and the right workbench owns one durable
-**Active in game** checkbox plus guarded **Delete cloud**. Saving or deleting
-posts an exact same-origin request containing the package runtime revision and
-stable variant ID. The server re-reads and validates the package under the
-shared repository lock, rejects stale requests, increments the revision once,
-and atomically persists the new package before the workspace reloads. Deletion
-replaces only that catalog slot with `null`; the inert atlas pixels and opaque
-bounds remain checked in so every surviving frame ID and seeded preference is
-stable. All slots may be inactive or deleted, yielding an empty runtime cloud
-layer. Git is the recovery path. The workspace does not edit the atlas,
-presentation tuning, cloud movement, fog behavior, or debug frequency.
+Active or Inactive badge. The centre renders the complete atmosphere over a
+real seeded `96 x 96` generated world through the same deterministic
+per-chunk descriptor and route functions used by `CloudLayerRenderer`; shadows
+and clouds retain runtime draw order, frame selection, tint, scale, opacity,
+reflection, opening-home replacement, and motion. Preview-only world seed,
+`1x` through `24x` speed, route guides, reroll, and pause controls alter no
+package or gameplay state.
+
+The right workbench owns one live, validated package draft. It exposes the
+default three-through-twelve candidates per chunk, chunk density, cloud opacity
+and scale ranges, ordinary drift distance and duration, appearance and
+route-edge fades, all three opening offsets plus opening size and motion, and
+the paired shadow's offset, scale, and opacity. Ordered pairs remain ordered as
+their sliders cross. Every accepted input immediately rebuilds only the preview
+descriptors over the existing generated world. **Reset settings** restores the
+checked-in presentation in memory. Atlas geometry, tint palettes, layer depths,
+fog-clear padding, runtime debug frequency, terrain, and gameplay remain outside
+this authoring contract.
+
+**Save changes** posts the complete normalized settings draft together with the
+selected frame's **Active in game** state, package runtime revision, and stable
+variant ID. The server re-reads and validates the package under the shared
+repository lock, rejects stale requests, preserves every non-editable field,
+increments the revision once if either availability or settings changed, and
+atomically persists the package before the workspace reloads. A total no-op is
+byte-identical and does not advance the revision. Guarded deletion replaces only
+the selected catalog slot with `null`; inert atlas pixels and opaque bounds stay
+checked in so every surviving frame ID and seeded preference remains stable.
+All slots may be inactive or deleted, yielding an empty runtime cloud layer.
+Git is the recovery path.
 
 Island review, approval, promotion, and runtime binding are not lifecycle
 paths. Ships and Fishing shoals retain the general package and candidate tools;

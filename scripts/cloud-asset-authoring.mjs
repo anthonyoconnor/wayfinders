@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  applyCloudAssetAuthoringSettings,
+  cloudAssetAuthoringSettingsFromPackage,
   validateCloudAssetIdentityRequest,
   validateCloudAssetSaveRequest,
 } from "../src/wayfinders/assets/CloudAssetAuthoring.ts";
@@ -57,7 +59,7 @@ function assertCurrentRevision(cloudPackage, request) {
   }
 }
 
-function updatedPackage(cloudPackage, variants) {
+function updatedPackage(cloudPackage, variants, presentation = cloudPackage.presentation) {
   if (!Number.isSafeInteger(cloudPackage.runtimeRevision)
     || cloudPackage.runtimeRevision >= Number.MAX_SAFE_INTEGER) {
     throw new CloudAssetAuthoringError("Cloud package runtimeRevision cannot be incremented safely");
@@ -66,6 +68,7 @@ function updatedPackage(cloudPackage, variants) {
     return validateCloudAssetPackage({
       ...cloudPackage,
       runtimeRevision: cloudPackage.runtimeRevision + 1,
+      presentation,
       variants,
     });
   } catch (error) {
@@ -104,29 +107,49 @@ export function createCloudAssetAuthoringService({
       const current = await readPackage(packagePath);
       assertCurrentRevision(current, request);
       const { index, variant } = variantSlot(current, request.variantId);
-      if (variant.activeInGame === request.activeInGame) {
+      const currentSettings = cloudAssetAuthoringSettingsFromPackage(current);
+      const availabilityChanged = variant.activeInGame !== request.activeInGame;
+      const settingsChanged = JSON.stringify(currentSettings) !== JSON.stringify(request.settings);
+      if (!availabilityChanged && !settingsChanged) {
         return {
           assetId: current.assetId,
           variantId: variant.id,
           activeInGame: variant.activeInGame,
+          settings: currentSettings,
           changed: false,
+          availabilityChanged: false,
+          settingsChanged: false,
           previousRuntimeRevision: current.runtimeRevision,
           runtimeRevision: current.runtimeRevision,
-          message: `${variant.name} is already ${variant.activeInGame ? "active" : "inactive"} in game`,
+          message: `${variant.name} and the cloud settings are already saved`,
         };
       }
       const variants = [...current.variants];
-      variants[index] = { ...variant, activeInGame: request.activeInGame };
-      const updated = updatedPackage(current, variants);
+      if (availabilityChanged) {
+        variants[index] = { ...variant, activeInGame: request.activeInGame };
+      }
+      const presentation = settingsChanged
+        ? applyCloudAssetAuthoringSettings(current.presentation, request.settings)
+        : current.presentation;
+      const updated = updatedPackage(current, variants, presentation);
       await persist(updated);
+      const savedSettings = cloudAssetAuthoringSettingsFromPackage(updated);
+      const message = availabilityChanged && settingsChanged
+        ? `${variant.name} availability and cloud settings were updated`
+        : availabilityChanged
+          ? `${variant.name} was marked ${request.activeInGame ? "active" : "inactive"} in game`
+          : "Cloud settings were updated";
       return {
         assetId: updated.assetId,
         variantId: variant.id,
         activeInGame: request.activeInGame,
+        settings: savedSettings,
         changed: true,
+        availabilityChanged,
+        settingsChanged,
         previousRuntimeRevision: current.runtimeRevision,
         runtimeRevision: updated.runtimeRevision,
-        message: `${variant.name} was marked ${request.activeInGame ? "active" : "inactive"} in game`,
+        message,
       };
     });
   }

@@ -7,6 +7,10 @@ import {
   createCloudAssetAuthoringService,
 } from "../scripts/cloud-asset-authoring.mjs";
 import { commitAtomicFileTransaction } from "../scripts/repository-collision-transaction.mjs";
+import {
+  CLOUD_ASSET_AUTHORING_FORMAT_VERSION,
+  cloudAssetAuthoringSettingsFromPackage,
+} from "../src/wayfinders/assets/CloudAssetAuthoring.ts";
 import { CLOUD_ASSET_PACKAGE } from "../src/wayfinders/assets/CloudAssetCatalog.ts";
 
 const roots = [];
@@ -41,10 +45,22 @@ async function readPackage(packagePath) {
 
 function identity(cloudPackage, variantId) {
   return {
-    formatVersion: 1,
+    formatVersion: CLOUD_ASSET_AUTHORING_FORMAT_VERSION,
     assetId: "presentation.clouds.primary",
     runtimeRevision: cloudPackage.runtimeRevision,
     variantId,
+  };
+}
+
+function settings(cloudPackage) {
+  return JSON.parse(JSON.stringify(cloudAssetAuthoringSettingsFromPackage(cloudPackage)));
+}
+
+function saveRequest(cloudPackage, variantId, activeInGame, authoredSettings = settings(cloudPackage)) {
+  return {
+    ...identity(cloudPackage, variantId),
+    activeInGame,
+    settings: authoredSettings,
   };
 }
 
@@ -57,15 +73,14 @@ describe("cloud asset repository authoring", () => {
     const activeInGame = !variant.activeInGame;
     const service = createCloudAssetAuthoringService({ repositoryRoot: root });
 
-    const saved = await service.save({
-      ...identity(initial, variant.id),
-      activeInGame,
-    });
+    const saved = await service.save(saveRequest(initial, variant.id, activeInGame));
     expect(saved).toMatchObject({
       assetId: initial.assetId,
       variantId: variant.id,
       activeInGame,
       changed: true,
+      availabilityChanged: true,
+      settingsChanged: false,
       previousRuntimeRevision: initial.runtimeRevision,
       runtimeRevision: initial.runtimeRevision + 1,
     });
@@ -79,18 +94,74 @@ describe("cloud asset repository authoring", () => {
     });
 
     const beforeNoOp = await readFile(packagePath, "utf8");
-    const noOp = await service.save({
-      ...identity(written, variant.id),
-      activeInGame,
-    });
+    const noOp = await service.save(saveRequest(written, variant.id, activeInGame));
     expect(noOp).toMatchObject({
       variantId: variant.id,
       activeInGame,
       changed: false,
+      availabilityChanged: false,
+      settingsChanged: false,
       previousRuntimeRevision: written.runtimeRevision,
       runtimeRevision: written.runtimeRevision,
     });
     expect(await readFile(packagePath, "utf8")).toBe(beforeNoOp);
+  });
+
+  it("persists settings-only and combined saves atomically while preserving non-editable presentation", async () => {
+    const { root, packagePath } = await repository();
+    const initial = await readPackage(packagePath);
+    const variant = initial.variants.find((entry) => entry !== null);
+    const service = createCloudAssetAuthoringService({ repositoryRoot: root });
+    const authoredSettings = settings(initial);
+    authoredSettings.candidatesPerChunk = 9;
+    authoredSettings.chunkDensity = 0.55;
+    authoredSettings.shadow.offsetPixels = { x: 72, y: 60 };
+
+    const settingsOnly = await service.save(saveRequest(
+      initial,
+      variant.id,
+      variant.activeInGame,
+      authoredSettings,
+    ));
+    expect(settingsOnly).toMatchObject({
+      activeInGame: variant.activeInGame,
+      settings: authoredSettings,
+      changed: true,
+      availabilityChanged: false,
+      settingsChanged: true,
+      previousRuntimeRevision: initial.runtimeRevision,
+      runtimeRevision: initial.runtimeRevision + 1,
+    });
+    const afterSettings = await readPackage(packagePath);
+    expect(afterSettings.variants).toEqual(initial.variants);
+    expect(cloudAssetAuthoringSettingsFromPackage(afterSettings)).toEqual(authoredSettings);
+    expect(afterSettings.presentation.depth).toBe(initial.presentation.depth);
+    expect(afterSettings.presentation.cloudTintsRgb).toEqual(initial.presentation.cloudTintsRgb);
+    expect(afterSettings.presentation.clearPaddingTiles).toBe(initial.presentation.clearPaddingTiles);
+    expect(afterSettings.presentation.shadow.depth).toBe(initial.presentation.shadow.depth);
+    expect(afterSettings.presentation.shadow.tintRgb).toEqual(initial.presentation.shadow.tintRgb);
+
+    const combinedSettings = settings(afterSettings);
+    combinedSettings.scale = { minimum: 0.3, maximum: 0.8 };
+    const combined = await service.save(saveRequest(
+      afterSettings,
+      variant.id,
+      !variant.activeInGame,
+      combinedSettings,
+    ));
+    expect(combined).toMatchObject({
+      activeInGame: !variant.activeInGame,
+      changed: true,
+      availabilityChanged: true,
+      settingsChanged: true,
+      previousRuntimeRevision: afterSettings.runtimeRevision,
+      runtimeRevision: afterSettings.runtimeRevision + 1,
+    });
+    const afterCombined = await readPackage(packagePath);
+    expect(afterCombined.runtimeRevision).toBe(initial.runtimeRevision + 2);
+    expect(afterCombined.variants.find((entry) => entry?.id === variant.id)?.activeInGame)
+      .toBe(!variant.activeInGame);
+    expect(cloudAssetAuthoringSettingsFromPackage(afterCombined)).toEqual(combinedSettings);
   });
 
   it("deletes one catalog entry as a fixed-slot tombstone", async () => {
@@ -127,7 +198,11 @@ describe("cloud asset repository authoring", () => {
       runtimeRevision: initial.runtimeRevision + 1,
     };
 
-    await expect(service.save({ ...stale, activeInGame: !variant.activeInGame }))
+    await expect(service.save({
+      ...stale,
+      activeInGame: !variant.activeInGame,
+      settings: settings(initial),
+    }))
       .rejects.toThrow(/Stale cloud package revision/);
     await expect(service.remove(stale)).rejects.toThrow(/Stale cloud package revision/);
     await expect(service.remove(identity(initial, "missing-cloud")))
@@ -152,8 +227,7 @@ describe("cloud asset repository authoring", () => {
     const service = createCloudAssetAuthoringService({ repositoryRoot: root, commitTransaction });
 
     await expect(service.save({
-      ...identity(initial, variant.id),
-      activeInGame: !variant.activeInGame,
+      ...saveRequest(initial, variant.id, !variant.activeInGame),
     })).rejects.toEqual(expect.objectContaining({
       name: CloudAssetAuthoringError.name,
       message: expect.stringMatching(/did not round-trip exactly/),

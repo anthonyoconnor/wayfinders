@@ -2,6 +2,8 @@ import type Phaser from "phaser";
 import packageInput from "./packages/cloud-atmosphere.json";
 
 const CLOUD_VARIANT_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u;
+export const CLOUD_PACKAGE_CANDIDATES_MINIMUM = 3;
+export const CLOUD_PACKAGE_CANDIDATES_MAXIMUM = 12;
 
 export interface CloudAssetVariant {
   readonly id: string;
@@ -153,6 +155,12 @@ export function validateCloudAssetPackage(
   });
   unitInterval(presentation.chunkDensity, "presentation.chunkDensity");
   positiveInteger(presentation.candidatesPerChunk, "presentation.candidatesPerChunk");
+  if (presentation.candidatesPerChunk < CLOUD_PACKAGE_CANDIDATES_MINIMUM
+    || presentation.candidatesPerChunk > CLOUD_PACKAGE_CANDIDATES_MAXIMUM) {
+    throw new RangeError(
+      `Cloud candidates per chunk must be from ${CLOUD_PACKAGE_CANDIDATES_MINIMUM} through ${CLOUD_PACKAGE_CANDIDATES_MAXIMUM}`,
+    );
+  }
   finite(presentation.depth, "presentation.depth");
   unitInterval(presentation.opacity.minimum, "presentation.opacity.minimum");
   unitInterval(presentation.opacity.maximum, "presentation.opacity.maximum");

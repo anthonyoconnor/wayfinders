@@ -4520,7 +4520,6 @@ html[data-application-mode="assets"] #developer-tools-close {
     animation-iteration-count: 1 !important;
   }
 }
-+
 .cloud-preview-stage {
   position: relative;
   z-index: 5;
@@ -4721,6 +4720,182 @@ html[data-application-mode="assets"] #developer-tools-close {
   color: #ffb9aa;
 }
 
+.cloud-preview-intro {
+  max-width: 58rem;
+  color: var(--shell-muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.cloud-world-preview-toolbar {
+  display: flex;
+  align-items: end;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  padding: 0.65rem;
+  border: 1px solid rgba(139, 208, 207, 0.22);
+  border-radius: 0.65rem;
+  background: rgba(3, 17, 23, 0.58);
+}
+
+.cloud-world-preview-toolbar label {
+  display: grid;
+  gap: 0.22rem;
+  color: var(--shell-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
+.cloud-world-preview-toolbar input[type="number"],
+.cloud-world-preview-toolbar select,
+.cloud-world-preview-toolbar button {
+  min-height: 2rem;
+  padding: 0.35rem 0.5rem;
+  color: var(--shell-ink);
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+  background: rgba(7, 34, 43, 0.92);
+  font: inherit;
+}
+
+.cloud-world-preview-toolbar input[type="number"] {
+  width: 7rem;
+}
+
+.cloud-world-preview-toolbar button {
+  cursor: pointer;
+}
+
+.cloud-world-preview-check {
+  display: flex !important;
+  min-height: 2rem;
+  padding: 0 0.45rem;
+  align-items: center;
+  flex-direction: row !important;
+  gap: 0.4rem !important;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+}
+
+.cloud-world-preview-check input {
+  accent-color: var(--shell-accent-strong);
+}
+
+.cloud-world-preview-canvas-shell {
+  min-height: 0;
+  padding: clamp(0.35rem, 1vw, 0.8rem);
+  background:
+    radial-gradient(circle at 50% 45%, rgba(89, 177, 179, 0.2), transparent 58%),
+    #051c24;
+}
+
+.cloud-world-preview-canvas-shell canvas {
+  width: min(100%, 42rem);
+  max-height: min(68vh, 42rem);
+  object-fit: contain;
+  border: 1px solid rgba(195, 235, 234, 0.18);
+  border-radius: 0.25rem;
+  background: #0d566c;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.3);
+}
+
+.cloud-world-preview-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.cloud-world-preview-pills span {
+  padding: 0.28rem 0.48rem;
+  color: #ccebea;
+  border: 1px solid rgba(139, 208, 207, 0.22);
+  border-radius: 999px;
+  background: rgba(8, 45, 55, 0.72);
+  font-size: 0.62rem;
+}
+
+.cloud-library-help {
+  margin: 0.65rem 0.75rem;
+  color: var(--shell-muted);
+  font-size: 0.64rem;
+  line-height: 1.5;
+}
+
+.cloud-settings-group {
+  overflow: hidden;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.5rem;
+  background: rgba(3, 17, 23, 0.42);
+}
+
+.cloud-settings-group summary {
+  padding: 0.6rem 0.65rem;
+  color: var(--shell-ink);
+  cursor: pointer;
+  list-style-position: inside;
+  user-select: none;
+}
+
+.cloud-settings-group summary > span {
+  display: inline-grid;
+  margin-left: 0.2rem;
+  gap: 0.12rem;
+  vertical-align: middle;
+}
+
+.cloud-settings-group summary small {
+  color: var(--shell-muted);
+  font-size: 0.58rem;
+  font-weight: 400;
+}
+
+.cloud-settings-grid {
+  display: grid;
+  padding: 0.25rem 0.65rem 0.7rem;
+  gap: 0.65rem;
+}
+
+.cloud-setting-control {
+  display: grid !important;
+  gap: 0.35rem !important;
+}
+
+.cloud-setting-control > span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cloud-setting-control strong {
+  color: var(--shell-ink);
+  font-size: 0.64rem;
+  font-weight: 600;
+}
+
+.cloud-setting-control output {
+  color: var(--shell-accent-strong);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.62rem;
+}
+
+.cloud-setting-control input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--shell-accent-strong);
+}
+
+.cloud-preview-settings-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+}
+
+.cloud-preview-settings-actions button:disabled,
+.cloud-preview-delete:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
 @media (max-width: 900px) {
   .cloud-preview-card > header {
     align-items: start;
@@ -4733,5 +4908,14 @@ html[data-application-mode="assets"] #developer-tools-close {
 
   .cloud-preview-canvas-shell {
     min-height: 16rem;
+  }
+
+  .cloud-world-preview-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cloud-world-preview-check {
+    justify-content: flex-start;
   }
 }

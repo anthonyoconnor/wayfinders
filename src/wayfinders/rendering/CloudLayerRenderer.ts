@@ -1,6 +1,7 @@
 import type Phaser from "phaser";
 import {
   CLOUD_ASSET_PACKAGE,
+  CLOUD_PACKAGE_CANDIDATES_MAXIMUM,
   resolveActiveCloudAssetFrame,
   type CloudAssetPackage,
 } from "../assets/CloudAssetCatalog";
@@ -12,7 +13,7 @@ import type { ActiveChunkDelta, ActiveChunkEntry } from "./activation";
 const CLOUD_NAMESPACE = 0x43_4c_44_31;
 const TWO_PI = Math.PI * 2;
 export const CLOUD_FREQUENCY_MINIMUM = 0;
-export const CLOUD_FREQUENCY_MAXIMUM = 12;
+export const CLOUD_FREQUENCY_MAXIMUM = CLOUD_PACKAGE_CANDIDATES_MAXIMUM;
 
 export interface CloudDescriptor {
   readonly id: string;
@@ -222,6 +223,51 @@ export function resolveOpeningCloudDescriptors(
       initialFade: opening.initialFade,
     });
   }));
+}
+
+/**
+ * Resolves the exact descriptor set the runtime owns for one canonical chunk.
+ * Asset tooling uses this renderer-neutral seam so its live world preview stays
+ * in lockstep with the game when opening-cloud or ordinary layout rules change.
+ */
+export function resolveCloudDescriptorsForChunk(
+  seed: number,
+  entry: Readonly<ActiveChunkEntry>,
+  chunkSizePixels: number,
+  frequency: number,
+  homeWorldPosition: Readonly<{ x: number; y: number }> | undefined,
+  cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
+): readonly Readonly<CloudDescriptor>[] {
+  if (!Number.isInteger(frequency)
+    || frequency < CLOUD_FREQUENCY_MINIMUM
+    || frequency > CLOUD_FREQUENCY_MAXIMUM) {
+    throw new RangeError(
+      `Cloud frequency must be an integer from ${CLOUD_FREQUENCY_MINIMUM} through ${CLOUD_FREQUENCY_MAXIMUM}`,
+    );
+  }
+  const canonicalChunkKey = `${entry.canonicalChunk.x},${entry.canonicalChunk.y}`;
+  const descriptors: Readonly<CloudDescriptor>[] = [];
+  if (homeWorldPosition !== undefined
+    && canonicalChunkKey === ownerChunkKeyAt(homeWorldPosition, chunkSizePixels)) {
+    const openingDescriptors = resolveOpeningCloudDescriptors(
+      seed,
+      canonicalChunkKey,
+      homeWorldPosition,
+      cloudPackage,
+    );
+    descriptors.push(...openingDescriptors.slice(0, frequency));
+    const ordinarySlots = Math.max(0, frequency - openingDescriptors.length);
+    for (let slot = 0; slot < ordinarySlots; slot++) {
+      const descriptor = resolveCloudDescriptor(seed, entry, chunkSizePixels, cloudPackage, slot);
+      if (descriptor) descriptors.push(descriptor);
+    }
+  } else {
+    for (let slot = 0; slot < frequency; slot++) {
+      const descriptor = resolveCloudDescriptor(seed, entry, chunkSizePixels, cloudPackage, slot);
+      if (descriptor) descriptors.push(descriptor);
+    }
+  }
+  return Object.freeze(descriptors);
 }
 
 export function isCloudFootprintFullyClear(
@@ -589,27 +635,15 @@ export class CloudLayerRenderer {
   private createActiveViews(): void {
     if (!this.scene.textures.exists(this.cloudPackage.image.textureKey)) return;
     for (const entry of this.activeEntries.values()) {
-      const canonicalChunkKey = `${entry.canonicalChunk.x},${entry.canonicalChunk.y}`;
-      if (canonicalChunkKey === this.homeAnchor?.ownerChunkKey) {
-        const openingDescriptors = resolveOpeningCloudDescriptors(
-          this.seed,
-          canonicalChunkKey,
-          this.homeAnchor.position,
-          this.cloudPackage,
-        );
-        for (const descriptor of openingDescriptors.slice(0, this.frequency)) {
-          this.createView(descriptor, entry);
-        }
-        const ordinarySlots = Math.max(0, this.frequency - openingDescriptors.length);
-        for (let slot = 0; slot < ordinarySlots; slot++) {
-          const descriptor = resolveCloudDescriptor(this.seed, entry, this.chunkSizePixels, this.cloudPackage, slot);
-          if (descriptor) this.createView(descriptor, entry);
-        }
-        continue;
-      }
-      for (let slot = 0; slot < this.frequency; slot++) {
-        const descriptor = resolveCloudDescriptor(this.seed, entry, this.chunkSizePixels, this.cloudPackage, slot);
-        if (descriptor) this.createView(descriptor, entry);
+      for (const descriptor of resolveCloudDescriptorsForChunk(
+        this.seed,
+        entry,
+        this.chunkSizePixels,
+        this.frequency,
+        this.homeAnchor?.position,
+        this.cloudPackage,
+      )) {
+        this.createView(descriptor, entry);
       }
     }
     this.assertResourceCap();
