@@ -1,5 +1,6 @@
 import { AUDIO_ASSET_WORKSPACE } from "./workspaces/AudioAssetWorkspace";
 import { ACHIEVEMENT_ICON_ASSET_WORKSPACE } from "./workspaces/AchievementIconAssetWorkspace";
+import { CLOUD_ASSET_WORKSPACE } from "./workspaces/CloudAssetWorkspace";
 import { FISHING_SHOAL_ASSET_WORKSPACE } from "./workspaces/FishingShoalAssetWorkspace";
 import { GREAT_HALL_ASSET_WORKSPACE } from "./workspaces/GreatHallAssetWorkspace";
 import { ISLAND_ASSET_WORKSPACE } from "./workspaces/IslandAssetWorkspace";
@@ -12,6 +13,7 @@ export const ASSET_WORKSPACES = Object.freeze([
   SHIP_ASSET_WORKSPACE,
   FISHING_SHOAL_ASSET_WORKSPACE,
   WATER_ASSET_WORKSPACE,
+  CLOUD_ASSET_WORKSPACE,
   ACHIEVEMENT_ICON_ASSET_WORKSPACE,
   GREAT_HALL_ASSET_WORKSPACE,
   AUDIO_ASSET_WORKSPACE,

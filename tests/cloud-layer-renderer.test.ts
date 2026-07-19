@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  activeCloudAssetFrames,
   CLOUD_ASSET_PACKAGE,
+  cloudAssetVariantEntries,
   preloadCloudAsset,
+  resolveActiveCloudAssetFrame,
   type CloudAssetPackage,
   validateCloudAssetPackage,
 } from "../src/wayfinders/assets/CloudAssetCatalog";
@@ -167,6 +170,18 @@ function testCloudPackage(
   };
 }
 
+function cloudPackageWithActiveFrames(
+  activeFrames: readonly number[],
+): Readonly<CloudAssetPackage> {
+  const active = new Set(activeFrames);
+  return {
+    ...CLOUD_ASSET_PACKAGE,
+    variants: CLOUD_ASSET_PACKAGE.variants.map((variant, frame) => (
+      variant === null ? null : { ...variant, activeInGame: active.has(frame) }
+    )),
+  };
+}
+
 function oneChunkDelta(x = 1, y = 1): ReturnType<ActiveChunkSet["update"]> {
   const chunkSize = 32;
   const topology = new WorldTopology(
@@ -238,11 +253,18 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     });
   });
 
-  it("validates four distinct runtime frames and the reference-led presentation", () => {
+  it("validates four stable cloud catalog slots and the reference-led presentation", () => {
     expect(validateCloudAssetPackage(CLOUD_ASSET_PACKAGE as never)).toBe(CLOUD_ASSET_PACKAGE);
+    expect(CLOUD_ASSET_PACKAGE.contractVersion).toBe(2);
     expect(CLOUD_ASSET_PACKAGE.variants).toHaveLength(4);
     expect(CLOUD_ASSET_PACKAGE.image.opaqueBounds).toHaveLength(4);
-    expect(new Set(CLOUD_ASSET_PACKAGE.variants).size).toBe(4);
+    expect(cloudAssetVariantEntries()).toMatchObject([
+      { id: "long-broken-wisp", frame: 0, activeInGame: true },
+      { id: "compact-uneven-cluster", frame: 1, activeInGame: true },
+      { id: "split-trailing-wisps", frame: 2, activeInGame: true },
+      { id: "shallow-crescent-bank", frame: 3, activeInGame: true },
+    ]);
+    expect(activeCloudAssetFrames()).toEqual([0, 1, 2, 3]);
     expect(CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk).toBe(6);
     expect(CLOUD_ASSET_PACKAGE.presentation.opacity.minimum).toBeGreaterThanOrEqual(0.85);
     expect(CLOUD_ASSET_PACKAGE.presentation.opacity.maximum).toBeGreaterThanOrEqual(0.95);
@@ -282,6 +304,53 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
         frameHeight: CLOUD_ASSET_PACKAGE.image.frameSize.height,
       },
     ]]);
+  });
+
+  it("uses only active catalog frames without changing any cloud behavior samples", () => {
+    const frameOneInactive = cloudPackageWithActiveFrames([0, 2, 3]);
+    expect(resolveActiveCloudAssetFrame(0, frameOneInactive)).toBe(0);
+    expect(resolveActiveCloudAssetFrame(1, frameOneInactive)).toBe(2);
+    expect(resolveActiveCloudAssetFrame(2, frameOneInactive)).toBe(2);
+    expect(resolveActiveCloudAssetFrame(3, frameOneInactive)).toBe(3);
+
+    for (let slot = 0; slot < 4; slot++) {
+      const baseline = resolveCloudDescriptor(13_371, entry(2, 3), 1024, CLOUD_ASSET_PACKAGE, slot)!;
+      const filtered = resolveCloudDescriptor(13_371, entry(2, 3), 1024, frameOneInactive, slot)!;
+      expect({ ...filtered, frame: baseline.frame }).toEqual(baseline);
+      expect(filtered.frame).toBe(baseline.frame === 1 ? 2 : baseline.frame);
+    }
+
+    const oneActive = cloudPackageWithActiveFrames([2]);
+    expect(Array.from({ length: 8 }, (_, slot) => (
+      resolveCloudDescriptor(13_371, entry(2, 3), 1024, oneActive, slot)?.frame
+    ))).toEqual(Array.from({ length: 8 }, () => 2));
+    expect(resolveOpeningCloudDescriptors(13_371, "home", { x: 512, y: 512 }, oneActive))
+      .toHaveLength(3);
+    expect(new Set(resolveOpeningCloudDescriptors(
+      13_371,
+      "home",
+      { x: 512, y: 512 },
+      oneActive,
+    ).map(({ frame }) => frame))).toEqual(new Set([2]));
+
+    const noneActive = cloudPackageWithActiveFrames([]);
+    expect(resolveCloudDescriptor(13_371, entry(2, 3), 1024, noneActive)).toBeUndefined();
+    expect(resolveOpeningCloudDescriptors(13_371, "home", { x: 512, y: 512 }, noneActive)).toEqual([]);
+  });
+
+  it("accepts deleted fixed slots while rejecting duplicate cloud identities", () => {
+    const deleted = {
+      ...CLOUD_ASSET_PACKAGE,
+      variants: CLOUD_ASSET_PACKAGE.variants.map((variant, frame) => frame === 1 ? null : variant),
+    } satisfies CloudAssetPackage;
+    expect(validateCloudAssetPackage(deleted)).toBe(deleted);
+    expect(cloudAssetVariantEntries(deleted).map(({ frame }) => frame)).toEqual([0, 2, 3]);
+    expect(() => validateCloudAssetPackage({
+      ...CLOUD_ASSET_PACKAGE,
+      variants: CLOUD_ASSET_PACKAGE.variants.map((variant, frame) => frame === 1
+        ? { ...CLOUD_ASSET_PACKAGE.variants[0]!, name: "Another cloud" }
+        : variant),
+    })).toThrow(/repeats variant/u);
   });
 
   it("reconstructs identical clouds while varying frame, scale, flip, opacity and drift", () => {

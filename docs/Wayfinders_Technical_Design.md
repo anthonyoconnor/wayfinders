@@ -583,7 +583,16 @@ catalog-revision disagreement uses the complete procedural developer
 presentation instead of a partial imported visual. Camera zoom changes no
 placement calculation.
 
-Cloud atmosphere is an independent presentation layer. Each candidate owns a
+Cloud atmosphere is an independent presentation layer. Its validated package
+owns a fixed four-slot catalog aligned exactly with the four atlas frames. Each
+non-deleted slot has a stable ID, display name, and durable `activeInGame`
+state. Seeded frame selection keeps its original preferred slot when active;
+an inactive or deleted preference scans forward through fixed slot order. Thus
+availability changes only the eligible visual, never position, motion, fog,
+frequency, opacity, scale, tint, reflection, or shadow behavior. With no active
+slots, the layer creates no descriptors or sprite pairs.
+
+Each candidate owns a
 paired shadow at depth `51` and cloud at depth `52`, above map art, knowledge,
 the ship, feature markers, and Voyage Sense guidance but below diagnostics,
 prompts, and UI. The shadow reuses the candidate silhouette and reflection with
@@ -703,7 +712,7 @@ padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
 The asset-library route provides persistent **Islands**, **Ships**, **Fishing
-shoals**, **Water**, **Icons**, **Great Hall**, and **Audio** tabs. Production workspaces use
+shoals**, **Water**, **Clouds**, **Icons**, **Great Hall**, and **Audio** tabs. Production workspaces use
 permanent left-library, centre-preview, and right-workbench regions. Water is the focused
 production inspection surface: it reads the versioned water package and the
 same `WorldGenerator`/`GeneratedWaterLayout` facts as the game, offers seed,
@@ -716,7 +725,8 @@ production-tooling sidebar and cannot mutate gameplay or asset authority. The
 active workspace is URL-addressable and follows
 browser history; accessible arrow-key navigation uses roving focus. A typed
 registry partitions library catalog entries and collision profiles, while a
-scene factory mounts a library scene, the Water inspection scene, the Icons
+scene factory mounts a library scene, the Water inspection scene, the Clouds
+catalog scene, the Icons
 animation-review scene, the isolated Great Hall approval scene, or the play-only
 stored-audio scene. Workspace
 shutdown aborts its DOM listeners and Phaser bindings before the next workspace
@@ -755,6 +765,21 @@ index and review records, source PNG, semantic mask, and prepared directory in
 one rollback-safe operation guarded by the current candidate fingerprint.
 Names and stable IDs remain unique. The built-in home island keeps
 its direct collision save and is always available.
+
+The Clouds workspace is a focused presentation-asset surface outside the
+collision catalog. Its left column lists every non-deleted fixed frame with an
+Active or Inactive badge, the centre previews the selected source frame and its
+actual flattened offset shadow, and the right workbench owns one durable
+**Active in game** checkbox plus guarded **Delete cloud**. Saving or deleting
+posts an exact same-origin request containing the package runtime revision and
+stable variant ID. The server re-reads and validates the package under the
+shared repository lock, rejects stale requests, increments the revision once,
+and atomically persists the new package before the workspace reloads. Deletion
+replaces only that catalog slot with `null`; the inert atlas pixels and opaque
+bounds remain checked in so every surviving frame ID and seeded preference is
+stable. All slots may be inactive or deleted, yielding an empty runtime cloud
+layer. Git is the recovery path. The workspace does not edit the atlas,
+presentation tuning, cloud movement, fog behavior, or debug frequency.
 
 Island review, approval, promotion, and runtime binding are not lifecycle
 paths. Ships and Fishing shoals retain the general package and candidate tools;

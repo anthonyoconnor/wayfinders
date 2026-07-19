@@ -1,5 +1,9 @@
 import type Phaser from "phaser";
-import { CLOUD_ASSET_PACKAGE, type CloudAssetPackage } from "../assets/CloudAssetCatalog";
+import {
+  CLOUD_ASSET_PACKAGE,
+  resolveActiveCloudAssetFrame,
+  type CloudAssetPackage,
+} from "../assets/CloudAssetCatalog";
 import { seededValue } from "../world/SeededRandom";
 import type { WorldGrid } from "../world/WorldGrid";
 import { isKnowledgeOverlayFullyClearInBounds } from "./KnowledgeClearCoverage";
@@ -128,6 +132,11 @@ export function resolveCloudDescriptor(
   const frameOffset = Math.floor(
     seededValue(seed + CLOUD_NAMESPACE + 13, chunkX, chunkY) * cloudPackage.image.frameCount,
   );
+  const frame = resolveActiveCloudAssetFrame(
+    (frameOffset + slot) % cloudPackage.image.frameCount,
+    cloudPackage,
+  );
+  if (frame === undefined) return undefined;
   const amplitude = lerp(
     cloudPackage.presentation.driftAmplitudePixels.minimum,
     cloudPackage.presentation.driftAmplitudePixels.maximum,
@@ -136,7 +145,7 @@ export function resolveCloudDescriptor(
   return Object.freeze({
     id: `cloud:${chunkX},${chunkY}:${slot}`,
     ownerChunkKey: `${chunkX},${chunkY}`,
-    frame: (frameOffset + slot) % cloudPackage.image.frameCount,
+    frame,
     baseX: (chunkX + positionX) * chunkSizePixels,
     baseY: (chunkY + positionY) * chunkSizePixels,
     scale: lerp(cloudPackage.presentation.scale.minimum, cloudPackage.presentation.scale.maximum, sample(4)),
@@ -171,6 +180,9 @@ export function resolveOpeningCloudDescriptors(
   const frameOffset = Math.floor(
     seededValue(seed + CLOUD_NAMESPACE + 0x48_4f_4d_45, 0, 0) * image.frameCount,
   );
+  if (resolveActiveCloudAssetFrame(frameOffset, cloudPackage) === undefined) {
+    return Object.freeze([]);
+  }
   return Object.freeze(opening.offsetPixels.map((offset, slot) => {
     const slotSeed = seed + CLOUD_NAMESPACE + 0x48_4f_4d_45 + slot * 7_919;
     const sample = (sampleSlot: number) => seededValue(slotSeed + sampleSlot * 977, slot, 0);
@@ -188,7 +200,7 @@ export function resolveOpeningCloudDescriptors(
     return Object.freeze({
       id: `cloud:home:${slot}`,
       ownerChunkKey,
-      frame: (frameOffset + slot) % image.frameCount,
+      frame: resolveActiveCloudAssetFrame((frameOffset + slot) % image.frameCount, cloudPackage)!,
       baseX: homeWorldPosition.x + offset.x,
       baseY: homeWorldPosition.y + offset.y,
       scale: lerp(

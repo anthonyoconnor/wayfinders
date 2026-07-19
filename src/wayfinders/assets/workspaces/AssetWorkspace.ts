@@ -10,6 +10,7 @@ export interface AssetWorkspaceBase {
     | "achievement-icons-preview"
     | "great-hall-preview"
     | "audio-preview"
+    | "cloud-preview"
     | "water-preview";
 }
 
@@ -36,11 +37,16 @@ export interface WaterAssetWorkspaceModule extends AssetWorkspaceBase {
   readonly kind: "water-preview";
 }
 
+export interface CloudAssetWorkspaceModule extends AssetWorkspaceBase {
+  readonly kind: "cloud-preview";
+}
+
 export type AssetWorkspaceModule =
   | AssetLibraryWorkspaceModule
   | AchievementIconAssetWorkspaceModule
   | GreatHallAssetWorkspaceModule
   | AudioAssetWorkspaceModule
+  | CloudAssetWorkspaceModule
   | WaterAssetWorkspaceModule;
 
 export function assetWorkspaceSelectionKey(workspaceId: string): string {

@@ -20,6 +20,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
       { id: "ships", label: "Ships" },
       { id: "fishing-shoals", label: "Fishing shoals" },
       { id: "water", label: "Water" },
+      { id: "clouds", label: "Clouds" },
       { id: "icons", label: "Icons" },
       { id: "great-hall", label: "Great Hall" },
       { id: "audio", label: "Audio" },
@@ -45,12 +46,14 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(resolveAssetWorkspace("?mode=assets&workspace=ships").id).toBe("ships");
     expect(resolveAssetWorkspace("?mode=assets&workspace=fishing-shoals").id).toBe("fishing-shoals");
     expect(resolveAssetWorkspace("?mode=assets&workspace=water").id).toBe("water");
+    expect(resolveAssetWorkspace("?mode=assets&workspace=clouds").id).toBe("clouds");
     expect(resolveAssetWorkspace("?mode=assets&workspace=icons").id).toBe("icons");
     expect(resolveAssetWorkspace("?mode=assets&workspace=great-hall").id).toBe("great-hall");
     expect(resolveAssetWorkspace("?mode=assets&workspace=audio").id).toBe("audio");
     expect(resolveAssetWorkspace("?mode=assets&workspace=unknown").id).toBe("islands");
     expect(assetWorkspaceHref("islands")).toBe("?mode=assets&workspace=islands");
     expect(assetWorkspaceHref("water")).toBe("?mode=assets&workspace=water");
+    expect(assetWorkspaceHref("clouds")).toBe("?mode=assets&workspace=clouds");
     expect(assetWorkspaceHref("icons")).toBe("?mode=assets&workspace=icons");
     expect(assetWorkspaceHref("great-hall")).toBe("?mode=assets&workspace=great-hall");
     expect(assetWorkspaceHref("audio")).toBe("?mode=assets&workspace=audio");
@@ -60,7 +63,8 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(adjacentAssetWorkspaceId("islands", -1)).toBe("audio");
     expect(adjacentAssetWorkspaceId("islands", 1)).toBe("ships");
     expect(adjacentAssetWorkspaceId("fishing-shoals", 1)).toBe("water");
-    expect(adjacentAssetWorkspaceId("water", 1)).toBe("icons");
+    expect(adjacentAssetWorkspaceId("water", 1)).toBe("clouds");
+    expect(adjacentAssetWorkspaceId("clouds", 1)).toBe("icons");
     expect(adjacentAssetWorkspaceId("icons", 1)).toBe("great-hall");
     expect(adjacentAssetWorkspaceId("great-hall", 1)).toBe("audio");
     expect(adjacentAssetWorkspaceId("audio", 1)).toBe("islands");
@@ -68,6 +72,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(assetWorkspaceSceneKey("icons")).toBe("AssetViewerScene:icons");
     expect(assetWorkspaceSceneKey("great-hall")).toBe("AssetViewerScene:great-hall");
     expect(assetWorkspaceSceneKey("water")).toBe("AssetViewerScene:water");
+    expect(assetWorkspaceSceneKey("clouds")).toBe("AssetViewerScene:clouds");
     expect(assetWorkspaceSelectionKey("ships")).toBe("wayfinders:asset-workspace:ships:selection");
   });
 
@@ -107,6 +112,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
     );
 
     expect(factory).toContain('case "achievement-icons-preview"');
+    expect(factory).toContain('case "cloud-preview"');
     expect(scene).toContain("ACHIEVEMENT_ICON_KINDS.map");
     expect(scene).toContain("ACHIEVEMENT_ICON_CATALOG[kind]");
     expect(scene).toContain('class="achievement-icon"');

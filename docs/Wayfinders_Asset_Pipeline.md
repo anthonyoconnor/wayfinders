@@ -93,18 +93,30 @@ not a migration adapter.
 
 The CLD-1 atmosphere sheet is a presentation-only runtime package outside the
 collision-authoring catalog. `src/wayfinders/assets/packages/cloud-atmosphere.json`
-owns its stable identity, four `627 x 627` frame layout, variant names, opaque
+owns its stable identity, four `627 x 627` fixed frame slots, per-slot stable
+names and durable `activeInGame` state, opaque
 pixel bounds, and bounded paired cloud/shadow presentation metadata, including
 the colour palette, opacity and scale ranges, default per-chunk frequency,
 opening-home offsets, and route fade contract.
 Its retained source and provenance live under
 `assets-src/cld1/clouds`; the prepared RGBA sheet lives under
 `public/assets/cld1/clouds`. `scripts/cloud-asset-check.mjs`, included in
-`assets:check`, validates source/runtime dimensions, frame count, unique variant
-coverage, RGBA format, per-frame opaque bounds, and the presence of both
+`assets:check`, validates source/runtime dimensions, frame count, structured
+catalog slots, unique variant identities, RGBA format, per-frame opaque bounds, and the presence of both
 transparent and visible pixels.
-The asset has no collision, gameplay binding, asset-library workspace, intake,
-or repository-authoring path.
+
+`?mode=assets&workspace=clouds` is the package's focused authoring surface. It
+lists each non-deleted frame and previews the exact paired-shadow treatment.
+**Save changes** persists the selected slot's `activeInGame` state, while
+confirmed **Delete cloud** replaces that slot with `null`. Both requests carry
+the stable variant ID and expected runtime revision through a bounded,
+same-origin development-server API. The service revalidates under the shared
+repository lock and commits the package with the atomic file transaction;
+stale requests make no change. Deletion is permanent at the catalog level, but
+does not erase or repack the shared PNG: the unaddressable pixels remain inert
+so surviving Phaser frame IDs and seeded selection stay stable. Git remains the
+recovery path. The workspace has no collision, gameplay authority, atlas edit,
+intake, or presentation-tuning path.
 
 ## Achievement icon animation sheet
 

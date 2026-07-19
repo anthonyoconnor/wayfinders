@@ -3,6 +3,7 @@ import type { AudioCatalogLoadResult } from "../audio";
 import { AchievementIconPreviewScene } from "./achievementIcons/AchievementIconPreviewScene";
 import { AssetViewerScene } from "./AssetViewerScene";
 import { AudioAssetWorkspaceScene } from "./audioPreview/AudioAssetWorkspaceScene";
+import { CloudAssetWorkspaceScene } from "./cloudPreview/CloudAssetWorkspaceScene";
 import { GreatHallPreviewScene } from "./greatHall/GreatHallPreviewScene";
 import { audioWorkspaceCatalogSource } from "./workspaces/AudioWorkspaceCatalog";
 import type { AssetWorkspaceModule } from "./workspaces/AssetWorkspace";
@@ -19,6 +20,7 @@ export function createAssetWorkspaceScene(
       workspace,
       audioWorkspaceCatalogSource(audioCatalogResult),
     );
+    case "cloud-preview": return new CloudAssetWorkspaceScene(workspace);
     case "water-preview": return new WaterPreviewScene(workspace);
     case "library": return new AssetViewerScene(workspace);
   }

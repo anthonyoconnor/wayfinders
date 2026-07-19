@@ -1,9 +1,9 @@
 {
-  "contractVersion": 1,
+  "contractVersion": 2,
   "assetId": "presentation.clouds.primary",
   "kind": "cloud-atmosphere",
   "sourceAssetId": "generated.cloud-atmosphere.source.v2",
-  "runtimeRevision": 5,
+  "runtimeRevision": 6,
   "image": {
     "imageId": "presentation.clouds.primary.frames",
     "textureKey": "wayfinders:image:cloud-atmosphere",
@@ -55,9 +55,25 @@
     }
   },
   "variants": [
-    "long-broken-wisp",
-    "compact-uneven-cluster",
-    "split-trailing-wisps",
-    "shallow-crescent-bank"
+    {
+      "id": "long-broken-wisp",
+      "name": "Long broken wisp",
+      "activeInGame": true
+    },
+    {
+      "id": "compact-uneven-cluster",
+      "name": "Compact uneven cluster",
+      "activeInGame": true
+    },
+    {
+      "id": "split-trailing-wisps",
+      "name": "Split trailing wisps",
+      "activeInGame": true
+    },
+    {
+      "id": "shallow-crescent-bank",
+      "name": "Shallow crescent bank",
+      "activeInGame": true
+    }
   ]
 }

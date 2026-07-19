@@ -2,7 +2,7 @@
 
 Status: forward plan. Gameplay is complete through `GP-6.6`; the Great Hall
 track is complete through `GR-5.3`; cloud atmosphere is complete through
-`CLD-1`; and water presentation is complete through `WTR-2.6`.
+`CLD-2`; and water presentation is complete through `WTR-2.6`.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 

@@ -1,8 +1,20 @@
 import type Phaser from "phaser";
 import packageInput from "./packages/cloud-atmosphere.json";
 
+const CLOUD_VARIANT_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u;
+
+export interface CloudAssetVariant {
+  readonly id: string;
+  readonly name: string;
+  readonly activeInGame: boolean;
+}
+
+export interface CloudAssetVariantEntry extends CloudAssetVariant {
+  readonly frame: number;
+}
+
 export interface CloudAssetPackage {
-  readonly contractVersion: 1;
+  readonly contractVersion: 2;
   readonly assetId: "presentation.clouds.primary";
   readonly kind: "cloud-atmosphere";
   readonly sourceAssetId: string;
@@ -43,7 +55,8 @@ export interface CloudAssetPackage {
       tintRgb: Readonly<{ red: number; green: number; blue: number }>;
     }>;
   }>;
-  readonly variants: readonly string[];
+  /** Fixed frame slots. A null slot is a permanently deleted catalog entry. */
+  readonly variants: readonly (Readonly<CloudAssetVariant> | null)[];
 }
 
 function positiveInteger(value: number, label: string): number {
@@ -80,8 +93,10 @@ function colorChannel(value: number, label: string): number {
   return value;
 }
 
-export function validateCloudAssetPackage(input: typeof packageInput): Readonly<CloudAssetPackage> {
-  if (input.contractVersion !== 1 || input.assetId !== "presentation.clouds.primary" || input.kind !== "cloud-atmosphere") {
+export function validateCloudAssetPackage(
+  input: typeof packageInput | Readonly<CloudAssetPackage>,
+): Readonly<CloudAssetPackage> {
+  if (input.contractVersion !== 2 || input.assetId !== "presentation.clouds.primary" || input.kind !== "cloud-atmosphere") {
     throw new RangeError("Cloud package identity or contract version is invalid");
   }
   const { image, presentation } = input;
@@ -90,15 +105,39 @@ export function validateCloudAssetPackage(input: typeof packageInput): Readonly<
   positiveInteger(image.frameSize.width, "image.frameSize.width");
   positiveInteger(image.frameSize.height, "image.frameSize.height");
   positiveInteger(image.frameCount, "image.frameCount");
+  positiveInteger(input.runtimeRevision, "runtimeRevision");
   if (image.pixelSize.width % image.frameSize.width !== 0 || image.pixelSize.height % image.frameSize.height !== 0) {
     throw new RangeError("Cloud sheet dimensions must be divisible by its frame dimensions");
   }
   if ((image.pixelSize.width / image.frameSize.width) * (image.pixelSize.height / image.frameSize.height) !== image.frameCount) {
     throw new RangeError("Cloud sheet frame grid must equal image.frameCount");
   }
-  if (input.variants.length !== image.frameCount || new Set(input.variants).size !== image.frameCount) {
-    throw new RangeError("Cloud package must name every frame with a unique variant");
+  if (!Array.isArray(input.variants) || input.variants.length !== image.frameCount) {
+    throw new RangeError("Cloud package must declare one variant slot for every frame");
   }
+  const variantIds = new Set<string>();
+  const variantNames = new Set<string>();
+  input.variants.forEach((variant, index) => {
+    if (variant === null) return;
+    if (!CLOUD_VARIANT_ID.test(variant.id)) {
+      throw new RangeError(`variants[${index}].id must be a stable lowercase ID`);
+    }
+    if (variantIds.has(variant.id)) {
+      throw new RangeError(`Cloud package repeats variant ${variant.id}`);
+    }
+    variantIds.add(variant.id);
+    if (variant.name.trim() !== variant.name || variant.name.length === 0 || variant.name.length > 80) {
+      throw new RangeError(`variants[${index}].name must be trimmed and at most 80 characters`);
+    }
+    const normalizedName = variant.name.toLocaleLowerCase("en-US");
+    if (variantNames.has(normalizedName)) {
+      throw new RangeError(`Cloud package repeats variant name ${variant.name}`);
+    }
+    variantNames.add(normalizedName);
+    if (typeof variant.activeInGame !== "boolean") {
+      throw new TypeError(`variants[${index}].activeInGame must be a boolean`);
+    }
+  });
   if (image.opaqueBounds.length !== image.frameCount) {
     throw new RangeError("Cloud package must declare opaque bounds for every frame");
   }
@@ -185,6 +224,39 @@ export function validateCloudAssetPackage(input: typeof packageInput): Readonly<
 }
 
 export const CLOUD_ASSET_PACKAGE = validateCloudAssetPackage(packageInput);
+
+export function cloudAssetVariantEntries(
+  cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
+): readonly Readonly<CloudAssetVariantEntry>[] {
+  return Object.freeze(cloudPackage.variants.flatMap((variant, frame) => (
+    variant === null ? [] : [Object.freeze({ ...variant, frame })]
+  )));
+}
+
+export function activeCloudAssetFrames(
+  cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
+): readonly number[] {
+  return Object.freeze(cloudAssetVariantEntries(cloudPackage)
+    .filter(({ activeInGame }) => activeInGame)
+    .map(({ frame }) => frame));
+}
+
+/** Keeps the preferred seeded frame when active, otherwise scans stable slots forward. */
+export function resolveActiveCloudAssetFrame(
+  preferredFrame: number,
+  cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
+): number | undefined {
+  if (!Number.isInteger(preferredFrame)
+    || preferredFrame < 0
+    || preferredFrame >= cloudPackage.image.frameCount) {
+    throw new RangeError("Preferred cloud frame is outside the package frame grid");
+  }
+  for (let offset = 0; offset < cloudPackage.image.frameCount; offset++) {
+    const frame = (preferredFrame + offset) % cloudPackage.image.frameCount;
+    if (cloudPackage.variants[frame]?.activeInGame) return frame;
+  }
+  return undefined;
+}
 
 export function preloadCloudAsset(scene: Phaser.Scene): void {
   const { image } = CLOUD_ASSET_PACKAGE;

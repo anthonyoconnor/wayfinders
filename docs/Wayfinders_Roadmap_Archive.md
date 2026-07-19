@@ -1328,6 +1328,23 @@ the scene-owned checkbox remains isolated from the other overlays. The approved
 current-game mockup remains reference-only at
 `concept_art/clouds/cloud-atmosphere-current-game-mockup.png`.
 
+### CLD-2 — Cloud catalog lifecycle
+
+Status: implemented and accepted on 2026-07-18.
+
+The asset shell now includes a dedicated Clouds workspace that lists every
+stored cloud frame, previews its package-owned paired shadow, and exposes
+durable Active-in-game and guarded catalog-deletion actions. A cloud-specific
+same-origin authoring seam validates exact stable-ID and runtime-revision
+requests under the shared repository lock and atomically persists the package.
+
+The package now owns four immutable frame slots. Availability affects only
+eligible frame selection; seeded positions, movement, fog coverage, visual
+samples, frequency, and shadow pairing retain their existing contracts.
+Deletion writes a `null` tombstone instead of repacking the shared atlas, so
+surviving frame identities never shift. An empty active catalog intentionally
+produces no cloud or shadow views.
+
 ## Architecture and scale track
 
 The architecture batch established the current large-world and agent-development

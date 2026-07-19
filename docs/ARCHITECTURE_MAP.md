@@ -17,7 +17,7 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
 4. The asset-library mode resolves a typed asset-workspace registry and starts
-   one workspace-scoped library, Icons, Great Hall, Audio, or Water preview scene
+   one workspace-scoped library, Icons, Great Hall, Audio, Water, or Clouds preview scene
    without gameplay simulation. The Water workspace starts `WaterPreviewScene`
    over the validated water package
    and real seeded generated-water facts, without creating gameplay simulation.
@@ -155,7 +155,9 @@ adapter may own Phaser sound instances.
 - Asset tools share runtime package validation, presentation factories, and the
   accepted hybrid collision contract. Narrow same-origin development-server
   operations serialize source intake, candidate save or deletion, review, and exact-
-  fingerprint promotion. The disposable candidate trial owns only an isolated
+  fingerprint promotion. Cloud availability and fixed-slot catalog deletion use
+  their own optimistic runtime-revision requests through the same repository
+  lock and atomic-file transaction. The disposable candidate trial owns only an isolated
   open-water `WorldGrid`, movement authority, and candidate presentation; it
   does not create `GameSimulation`, mutate the runtime world catalog, or add a
   gameplay-persistence seam.
@@ -166,6 +168,12 @@ adapter may own Phaser sound instances.
   production inspection surface that reads the validated runtime water package
   and the same seeded `GeneratedWaterLayout` facts as the game. Its zoom, seed,
   overlay, and pause controls own no package, terrain, or gameplay authority.
+  The Clouds workspace reads the validated cloud package, lists its non-deleted
+  fixed frame slots, and previews each frame with its package-owned paired
+  shadow. It owns namespaced selection and the cloud-specific availability and
+  guarded catalog-deletion adapter; it cannot edit motion, fog, frequency,
+  atlas geometry, or gameplay state. A deleted slot remains `null` so physical
+  frame identities never shift.
   The view-only Icons workspace consumes one exhaustive typed mapping from the
   ten Great Hall presentation kinds to sprite-sheet rows. It presents every
   loop together with preview-only pause and speed controls; the shared semantic

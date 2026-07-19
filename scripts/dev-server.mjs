@@ -17,6 +17,8 @@ import { createProductionCandidateAuthoringMiddleware } from "./production-candi
 import { createProductionCandidateAuthoringService } from "./production-candidate-authoring.mjs";
 import { createProductionCandidatePromotionMiddleware } from "./production-candidate-promotion-api.mjs";
 import { createProductionCandidatePromoter } from "./production-candidate-promotion.mjs";
+import { createCloudAssetAuthoringMiddleware } from "./cloud-asset-authoring-api.mjs";
+import { createCloudAssetAuthoringService } from "./cloud-asset-authoring.mjs";
 
 const DEFAULT_PORT = 5173;
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -78,6 +80,10 @@ try {
     expectedOrigin: collisionSaveOrigin(port),
     promoteCandidate: createProductionCandidatePromoter({ repositoryRoot }),
   });
+  const cloudAssetAuthoringMiddleware = createCloudAssetAuthoringMiddleware({
+    expectedOrigin: collisionSaveOrigin(port),
+    authoring: createCloudAssetAuthoringService({ repositoryRoot }),
+  });
   const server = await createServer({
     plugins: [{
       name: "wayfinders-local-asset-writes",
@@ -87,6 +93,7 @@ try {
         viteServer.middlewares.use(assetIntakeMiddleware);
         viteServer.middlewares.use(candidateAuthoringMiddleware);
         viteServer.middlewares.use(candidatePromotionMiddleware);
+        viteServer.middlewares.use(cloudAssetAuthoringMiddleware);
       },
     }],
     server: {

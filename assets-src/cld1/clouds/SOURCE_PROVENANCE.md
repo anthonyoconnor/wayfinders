@@ -8,7 +8,12 @@
 - Generator path: built-in OpenAI image generation, followed by the installed
   imagegen skill's chroma-key removal helper.
 - Source asset ID: `generated.cloud-atmosphere.source.v2`
-- Runtime revision: `5`
+- Runtime revision: `6`
+
+Runtime revision 6 adds the fixed-slot cloud catalog used by the Clouds asset
+workspace. Each atlas slot now carries a stable name and durable availability;
+catalog deletion leaves an inert tombstone so this source sheet never needs to
+be repacked and surviving frame identities cannot move.
 
 The refresh used the supplied island-and-ocean screenshot as its visual-style
 reference and the prior sheet as its layout target. The prompt requested four

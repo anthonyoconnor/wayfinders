@@ -121,7 +121,19 @@ if ((expected.width / frame.width) * (expected.height / frame.height) !== metada
   throw new RangeError("Cloud frame grid does not match the declared frame count");
 }
 if (!Array.isArray(metadata.variants) || metadata.variants.length !== metadata.image.frameCount) {
-  throw new RangeError("Cloud package must name every frame variant");
+  throw new RangeError("Cloud package must declare one catalog slot per frame");
+}
+const variantIds = new Set();
+for (const [frame, variant] of metadata.variants.entries()) {
+  if (variant === null) continue;
+  if (typeof variant !== "object"
+    || typeof variant.id !== "string"
+    || typeof variant.name !== "string"
+    || typeof variant.activeInGame !== "boolean") {
+    throw new RangeError(`Cloud variant slot ${frame} is invalid`);
+  }
+  if (variantIds.has(variant.id)) throw new RangeError(`Cloud package repeats variant ${variant.id}`);
+  variantIds.add(variant.id);
 }
 const alpha = alphaStats(runtime, runtimeHeader, "Cloud runtime", frame.width, frame.height);
 if (alpha.transparent === 0 || alpha.nonTransparent === 0) {
@@ -130,4 +142,8 @@ if (alpha.transparent === 0 || alpha.nonTransparent === 0) {
 if (JSON.stringify(alpha.frameBounds) !== JSON.stringify(metadata.image.opaqueBounds)) {
   throw new RangeError("Cloud opaque bounds disagree with the runtime pixels");
 }
-console.log(`Cloud asset: OK (${metadata.image.frameCount} variants, ${runtimeHeader.width}x${runtimeHeader.height} RGBA)`);
+const activeVariants = metadata.variants.filter((variant) => variant?.activeInGame).length;
+console.log(
+  `Cloud asset: OK (${variantIds.size} catalog variants, ${activeVariants} active, `
+  + `${runtimeHeader.width}x${runtimeHeader.height} RGBA)`,
+);

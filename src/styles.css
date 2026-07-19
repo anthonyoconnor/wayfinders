@@ -4520,3 +4520,218 @@ html[data-application-mode="assets"] #developer-tools-close {
     animation-iteration-count: 1 !important;
   }
 }
++
+.cloud-preview-stage {
+  position: relative;
+  z-index: 5;
+  min-width: 0;
+  min-height: 0;
+  grid-column: 2;
+  grid-row: 1;
+  overflow: auto;
+  padding: clamp(0.7rem, 1.8vw, 1.4rem);
+  background:
+    radial-gradient(circle at 48% -8%, rgba(139, 208, 207, 0.22), transparent 48%),
+    linear-gradient(155deg, #07232d, #041419 72%);
+}
+
+.cloud-preview-card {
+  display: grid;
+  width: min(70rem, 100%);
+  margin: 0 auto;
+  gap: 0.9rem;
+  color: var(--shell-ink);
+}
+
+.cloud-preview-card > header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cloud-preview-card h2,
+.cloud-preview-card p,
+.cloud-preview-card .eyebrow {
+  margin: 0;
+}
+
+.cloud-preview-card h2 {
+  color: var(--shell-accent-strong);
+  font-size: clamp(1.15rem, 2vw, 1.7rem);
+}
+
+.cloud-preview-kind,
+.cloud-preview-workbench header > span {
+  padding: 0.25rem 0.45rem;
+  border: 1px solid rgba(139, 208, 207, 0.28);
+  border-radius: 999px;
+  color: #b8f3d0;
+  background: rgba(37, 120, 78, 0.24);
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+
+.cloud-preview-canvas-shell {
+  display: grid;
+  min-height: 22rem;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid rgba(139, 208, 207, 0.22);
+  border-radius: 0.85rem;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(82, 164, 173, 0.36), transparent 54%),
+    linear-gradient(180deg, #276c7b, #114555 68%, #0a3443);
+  box-shadow: inset 0 0 5rem rgba(0, 0, 0, 0.22);
+}
+
+.cloud-preview-canvas-shell canvas {
+  display: block;
+  width: min(100%, 52rem);
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.cloud-preview-facts {
+  display: grid;
+  margin: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.55rem;
+}
+
+.cloud-preview-facts > div {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.45rem;
+  background: rgba(3, 17, 23, 0.58);
+}
+
+.cloud-preview-facts dt {
+  color: var(--shell-muted);
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cloud-preview-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
+}
+
+.cloud-preview-note,
+.cloud-preview-delete-note {
+  color: var(--shell-muted);
+  font-size: 0.68rem;
+  line-height: 1.5;
+}
+
+.cloud-preview-card--empty {
+  min-height: 24rem;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.cloud-preview-card--empty p:last-child {
+  max-width: 30rem;
+  color: var(--shell-muted);
+}
+
+.cloud-library-thumb {
+  background-color: #164b5b;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+.cloud-library-item {
+  grid-template-columns: 3.5rem minmax(0, 1fr) auto;
+}
+
+.asset-library-status[data-cloud-status="active"] {
+  color: #b8f3d0;
+  background: rgba(37, 120, 78, 0.34);
+}
+
+.asset-library-status[data-cloud-status="inactive"] {
+  color: #a7bdc2;
+  background: rgba(60, 79, 86, 0.46);
+}
+
+.cloud-library-empty {
+  margin: 0;
+  padding: 1rem 0.5rem;
+  color: var(--shell-muted);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.cloud-preview-workbench {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.cloud-preview-availability {
+  display: flex !important;
+  min-height: 3.2rem;
+  padding: 0.65rem 0.7rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.45rem;
+  background: rgba(3, 17, 23, 0.52);
+}
+
+.cloud-preview-availability > span {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.cloud-preview-availability small {
+  color: var(--shell-muted);
+  font-size: 0.62rem;
+}
+
+.cloud-preview-availability input {
+  width: 1.15rem;
+  height: 1.15rem;
+  accent-color: #53e18d;
+}
+
+.cloud-preview-delete {
+  color: #ffd0c6 !important;
+  border-color: rgba(217, 100, 79, 0.5) !important;
+  background: rgba(92, 31, 27, 0.62) !important;
+}
+
+.cloud-preview-status {
+  min-height: 1.25rem;
+  margin: 0;
+  color: #b8f3d0;
+  font-size: 0.68rem;
+}
+
+.cloud-preview-status--error {
+  color: #ffb9aa;
+}
+
+@media (max-width: 900px) {
+  .cloud-preview-card > header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .cloud-preview-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-preview-canvas-shell {
+    min-height: 16rem;
+  }
+}
