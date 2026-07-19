@@ -2,7 +2,8 @@
 
 Status: forward plan. Gameplay is complete through `GP-6.6`; the Great Hall
 track is complete through `GR-5.3`; cloud atmosphere is complete through
-`CLD-3`; and water presentation is complete through `WTR-2.6`.
+`CLD-3`; and water presentation is complete through `WTR-2.6`. `STM-1` is
+proposed; storm runtime implementation is not authorized.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -25,6 +26,7 @@ authorized.
 - `AUD-x` identifies game-audio milestones and their acceptance gates.
 - `WTR-x.y` identifies water-presentation milestones and acceptance gates.
 - `CLD-x.y` identifies cloud-atmosphere milestones and acceptance gates.
+- `STM-x.y` identifies cross-system storm milestones and acceptance gates.
 - A milestone is complete only when its behavior, tests, maintainability,
   performance criteria, and acceptance evidence pass.
 - This roadmap proposes sequencing but authorizes no work by itself.
@@ -52,13 +54,14 @@ architecture map; its delivery history is archived.
 The asset-workspace shell, focused island workshop, single island-availability
 lifecycle, deterministic authored-island world planning, bounded periodic
 authored runtime presentation, independent revealed-map cloud atmosphere, live
-cloud-world authoring preview, and production water system are implemented. No
-further production-presentation milestone is currently proposed.
+cloud-world authoring preview, and production water system are implemented.
+They establish the presentation seams used by the proposed storm track.
 
 The Voyage Sense thread, its supply commitments, and the continuous global
-world are implemented through `GP-6.6`. No later gameplay milestone is
-currently proposed. Remaining audio acceptance follow-up requires no new
-runtime scope; the production water system is complete through `WTR-2.6`.
+world are implemented through `GP-6.6`. `STM-1` is the next proposed gameplay
+and presentation track, but it is not authorized. Remaining audio acceptance
+follow-up requires no new runtime scope; the production water system is
+complete through `WTR-2.6`.
 Great Hall concept and planning work is complete. The product owner accepted the
 `GR-5.2` view-only approval workspace and recorded **Go** on 2026-07-16. The
 shared presentation contract, renderer, fixture, game adapter, and bounded era
@@ -183,10 +186,72 @@ Status: implemented on 2026-07-17. The durable runtime contracts and behavior
 are owned by the technical design and architecture map; completion evidence is
 archived in `Wayfinders_Roadmap_Archive.md`.
 
+## Storm system
+
+### STM-1 — Deterministic regional storm system
+
+Status: proposed on 2026-07-19. Implementation is not authorized.
+
+Add sparse, deterministic storm regions that move and wrap across the global
+world. Storm state is gameplay authority owned independently from the existing
+decorative cloud and water renderers. One immutable presentation model then
+drives storm cloud mass, shadow, rain, water and shore response, vessel
+response, weather UI, and optional sound without rendered pixels becoming a
+rule source.
+
+The first storm release has four bounded gameplay effects: heading-relative
+sailing speed, reduced turn response, temporarily reduced current sight, and
+severe-storm rejection of fishing-shoal surveying. It does not add passive
+drift, provision surcharges, hull health, direct storm wrecks, lightning
+damage, terrain mutation, dynamic collision, or time-dependent route costs.
+Personal and Supported knowledge cannot be erased by a passing storm.
+
+Visually, the five studies under `concept_art/storms` are contrast and
+readability fixtures, not five biome-specific mechanics or runtime assets. The
+runtime family is a reusable layered storm kit. All current-state storm cues
+must be clipped to current-clear visibility coverage, remain readable at world
+seams and corners, preserve routes, markers, shorelines, the vessel, and UI,
+and expose equivalent static cues when reduced motion or flash-safe
+presentation is enabled.
+
+The proposed implementation sequence is:
+
+1. `STM-1.0` — lock the product contract, tuning bands, vertical slice, and
+   measured baseline, then record an explicit gameplay **Go**;
+2. `STM-1.1` — add deterministic storm plans, wrapped footprints, lifecycles,
+   overlap rules, local queries, revisions, and headless presentation data;
+3. `STM-1.2` — build the reusable visual kit and a direct-linkable Storms
+   approval workspace, then record an explicit visual **Go**;
+4. `STM-1.3` — integrate movement handling, visibility refresh, and atomic
+   severe-storm fishing rejection without changing route or provision rules;
+5. `STM-1.4` — integrate the bounded renderer, accessibility, weather status,
+   lifecycle cleanup, and optional audio after the current audio acceptance
+   follow-up is closed; and
+6. `STM-1.5` — close seam, replay, performance, resource-plateau, live-browser,
+   and documentation acceptance.
+
+```mermaid
+flowchart LR
+    S0["STM-1.0 contract and baseline"] --> G0{"Gameplay Go?"}
+    G0 -->|Revise| S0
+    G0 -->|Go| S1["STM-1.1 deterministic authority"]
+    S1 --> S2["STM-1.2 visual kit and preview"]
+    S2 --> G1{"Visual Go?"}
+    G1 -->|Revise| S2
+    G1 -->|Go| S3["STM-1.3 gameplay integration"]
+    S3 --> S4["STM-1.4 runtime presentation"]
+    S4 --> S5["STM-1.5 acceptance and closure"]
+```
+
+Detailed authority, fixed-step ordering, effect bands, visual layering, asset
+family, fog rules, budgets, tests, non-goals, risks, and acceptance criteria
+are defined in `Wayfinders_Storm_System_Milestone.md`.
+
 ## Authorization boundary
 
 WTR-1.0 through WTR-1.5 and WTR-2.0 through WTR-2.6 are complete. No later water
-milestone is authorized. Gameplay is complete through `GP-6.6`; any later
-gameplay or production-asset milestone requires explicit user authorization.
+milestone is authorized. Gameplay is complete through `GP-6.6`; `STM-1` is
+proposed but not authorized. Storm implementation, like any later gameplay or
+production-asset milestone, requires explicit user authorization.
 Do not implement gameplay saving; it may return only through an explicitly
 authorized milestone designed for the game that exists at that time.
