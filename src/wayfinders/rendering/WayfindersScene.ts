@@ -1915,19 +1915,6 @@ export class WayfindersScene extends Phaser.Scene {
       const name = input.dataset.overlay as keyof GameSimulation["debug"];
       input.checked = this.simulation.debug[name];
     });
-    const legend = document.querySelector<HTMLElement>("#risk-legend");
-    if (!legend) return;
-    const visibility = {
-      forwardRange: this.simulation.debug.forwardRange,
-      returnViability: this.simulation.debug.returnViability,
-    };
-    legend.querySelectorAll<HTMLElement>("[data-overlay-legend]").forEach((entry) => {
-      const name = entry.dataset.overlayLegend as keyof typeof visibility;
-      entry.hidden = !visibility[name];
-    });
-    legend.hidden = this.simulation.generationHandoverActive
-      || (this.greatHallView?.isOpen ?? false)
-      || (!visibility.forwardRange && !visibility.returnViability);
   }
 
   private setCloudAtmosphereEnabled(enabled: boolean): boolean {

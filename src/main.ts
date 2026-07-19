@@ -200,8 +200,6 @@ const toolsEyebrow = document.querySelector<HTMLElement>(".developer-tools__head
 if (toolsEyebrow) toolsEyebrow.textContent = applicationMode === "assets"
   ? "Production tooling"
   : applicationMode === "asset-trial" ? "Disposable candidate world" : "Prototype sandbox";
-const riskLegend = document.querySelector<HTMLElement>("#risk-legend");
-if (riskLegend && applicationMode !== "game") riskLegend.hidden = true;
 if (applicationMode !== "game") setDeveloperToolsOpen(true);
 document.documentElement.dataset.appReady = "true";
 document.documentElement.dataset.applicationMode = applicationMode;
