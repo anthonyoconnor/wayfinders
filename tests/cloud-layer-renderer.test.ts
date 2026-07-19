@@ -13,10 +13,10 @@ import {
   CloudLayerRenderer,
   isCloudEnvelopeFullyClear,
   isCloudFootprintFullyClear,
+  resolveCloudDescriptorsForChunk,
   resolveCloudEnvelopeAtPosition,
   resolveCloudDescriptor,
   resolveCloudMotion,
-  resolveOpeningCloudDescriptors,
 } from "../src/wayfinders/rendering/CloudLayerRenderer";
 import { ActiveChunkSet, type ActiveChunkEntry } from "../src/wayfinders/rendering/activation";
 import { gridToWorld } from "../src/wayfinders/world/CoordinateSystem";
@@ -27,7 +27,6 @@ import {
   WRAPPING_WORLD_TOPOLOGY,
   WorldTopology,
 } from "../src/wayfinders/world/WorldTopology";
-import { makeConfig } from "./helpers";
 
 function entry(x: number, y: number): Readonly<ActiveChunkEntry> {
   return {
@@ -255,7 +254,7 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
 
   it("validates four stable cloud catalog slots and the reference-led presentation", () => {
     expect(validateCloudAssetPackage(CLOUD_ASSET_PACKAGE as never)).toBe(CLOUD_ASSET_PACKAGE);
-    expect(CLOUD_ASSET_PACKAGE.contractVersion).toBe(2);
+    expect(CLOUD_ASSET_PACKAGE.contractVersion).toBe(3);
     expect(CLOUD_ASSET_PACKAGE.variants).toHaveLength(4);
     expect(CLOUD_ASSET_PACKAGE.image.opaqueBounds).toHaveLength(4);
     expect(cloudAssetVariantEntries()).toMatchObject([
@@ -275,8 +274,6 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(CLOUD_ASSET_PACKAGE.presentation.cloudTintsRgb.at(-1)!.red).toBeGreaterThanOrEqual(200);
     expect(CLOUD_ASSET_PACKAGE.presentation.driftAmplitudePixels.minimum).toBeGreaterThanOrEqual(80);
     expect(CLOUD_ASSET_PACKAGE.presentation.driftPeriodSeconds.maximum).toBeLessThanOrEqual(180);
-    expect(CLOUD_ASSET_PACKAGE.presentation.openingClouds.offsetPixels).toHaveLength(3);
-    expect(CLOUD_ASSET_PACKAGE.presentation.openingClouds.initialFade).toBeGreaterThanOrEqual(0.4);
     expect(CLOUD_ASSET_PACKAGE.presentation.routeFadeFraction).toBeGreaterThan(0);
     expect(CLOUD_ASSET_PACKAGE.presentation.shadow.depth).toBeGreaterThan(50);
     expect(CLOUD_ASSET_PACKAGE.presentation.shadow.depth).toBeLessThan(CLOUD_ASSET_PACKAGE.presentation.depth);
@@ -324,18 +321,8 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(Array.from({ length: 8 }, (_, slot) => (
       resolveCloudDescriptor(13_371, entry(2, 3), 1024, oneActive, slot)?.frame
     ))).toEqual(Array.from({ length: 8 }, () => 2));
-    expect(resolveOpeningCloudDescriptors(13_371, "home", { x: 512, y: 512 }, oneActive))
-      .toHaveLength(3);
-    expect(new Set(resolveOpeningCloudDescriptors(
-      13_371,
-      "home",
-      { x: 512, y: 512 },
-      oneActive,
-    ).map(({ frame }) => frame))).toEqual(new Set([2]));
-
     const noneActive = cloudPackageWithActiveFrames([]);
     expect(resolveCloudDescriptor(13_371, entry(2, 3), 1024, noneActive)).toBeUndefined();
-    expect(resolveOpeningCloudDescriptors(13_371, "home", { x: 512, y: 512 }, noneActive)).toEqual([]);
   });
 
   it("accepts deleted fixed slots while rejecting duplicate cloud identities", () => {
@@ -446,130 +433,47 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(isCloudEnvelopeFullyClear(world, envelope, new Set(), 32, 1)).toBe(true);
   });
 
-  it("reserves three immediately readable opening clouds around the revealed home island", () => {
-    const world = new WorldGrid(64, 64, 32, BOUNDED_WORLD_TOPOLOGY);
-    const knowledge = new Uint8Array(world.tileCount).fill(KnowledgeState.Unknown);
-    for (let y = 0; y < 64; y++) {
-      for (let x = 0; x < 64; x++) {
-        if (Math.hypot(x - 32, y - 32) <= 14) knowledge[y * 64 + x] = KnowledgeState.Supported;
-      }
-    }
-    world.replaceKnowledge(knowledge, new Uint32Array(world.tileCount));
-
-    const { scene, sprites } = createSpriteScene();
-    const chunks = new ActiveChunkSet({
-      topology: world.topology,
-      prefetchRing: 0,
-      maxActiveChunks: 9,
-    });
-    const renderer = new CloudLayerRenderer(scene as never, false);
-    const homeWorldPosition = { x: 32 * 32 + 16, y: 32 * 32 + 16 };
-    const delta = chunks.update({ minX: 0, minY: 0, maxX: 63, maxY: 63 });
-    renderer.applyActiveChunkDelta(
-      delta,
-      13_371,
-      32 * 32,
-      homeWorldPosition,
-    );
-    const openingDescriptors = resolveOpeningCloudDescriptors(
-      13_371,
-      "1,1",
-      homeWorldPosition,
-    );
-    expect(openingDescriptors).toHaveLength(3);
-    expect(new Set(openingDescriptors.map(({ tint }) => tint)).size).toBe(3);
-    expect(new Set(openingDescriptors.map(({ scale }) => scale.toFixed(3))).size).toBe(3);
-    renderer.sync(world, new Set(), 0, 0);
-
-    const openingClouds = sprites.filter(({ name }) => (
-      name.startsWith("cloud:home:") && !name.endsWith(":shadow")
-    ));
-    const openingShadows = sprites.filter(({ name }) => (
-      name.startsWith("cloud:home:") && name.endsWith(":shadow")
-    ));
-    expect(openingClouds).toHaveLength(3);
-    expect(openingShadows).toHaveLength(3);
-    expect(openingClouds.every(({ visible, alpha }) => visible && alpha > 0)).toBe(true);
-    expect(openingShadows.every(({ visible, alpha }) => visible && alpha > 0)).toBe(true);
-    expect(new Set(openingClouds.map(({ tint }) => tint))).toEqual(
-      new Set(openingDescriptors.map(({ tint }) => tint)),
-    );
-    expect(new Set(openingClouds.map(({ scaleX }) => scaleX.toFixed(3))).size).toBe(3);
-    expect(renderer.getResourceTelemetry().activeClouds).toBeLessThanOrEqual(
-      delta.telemetry.capacity * CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
-    );
-    const initialAlphas = openingClouds.map(({ alpha }) => alpha);
-
-    renderer.sync(world, new Set(), 0, 4_000);
-    expect(openingClouds.every(({ alpha }, index) => alpha > initialAlphas[index]!)).toBe(true);
-    expect(renderer.getResourceTelemetry().visibleShadows).toBe(renderer.getResourceTelemetry().visibleClouds);
-  });
-
-  it("shows every opening cloud at its initial position in the generated starting world", () => {
-    for (const seed of [1, 42, 13_371, 99_173, 0xffff_ffff]) {
-      const generatedSimulation = new GameSimulation(makeConfig({ world: { seed } }));
-      const generatedHomePosition = gridToWorld(
-        generatedSimulation.generated.landmarks.homeCenter,
-        generatedSimulation.config.navigation.tileSize,
-      );
-      const generatedDescriptors = resolveOpeningCloudDescriptors(
-        generatedSimulation.generated.seed,
-        "home",
-        generatedHomePosition,
-      );
-      expect(generatedDescriptors.map((descriptor) => isCloudEnvelopeFullyClear(
-        generatedSimulation.world,
-        resolveCloudEnvelopeAtPosition(
-          descriptor,
-          resolveCloudMotion(descriptor, 0, false),
-        ),
-        new Set(generatedSimulation.revealedIslandIds),
-        generatedSimulation.config.navigation.tileSize,
-        CLOUD_ASSET_PACKAGE.presentation.clearPaddingTiles,
-      )), `seed ${seed}`).toEqual([true, true, true]);
-    }
-
+  it("uses ordinary seeded chunk descriptors for the generated starting chunk", () => {
     const simulation = new GameSimulation();
     const homeWorldPosition = gridToWorld(
       simulation.generated.landmarks.homeCenter,
       simulation.config.navigation.tileSize,
     );
-    const openingDescriptors = resolveOpeningCloudDescriptors(
-      simulation.generated.seed,
-      "home",
-      homeWorldPosition,
-    );
-
-    expect(openingDescriptors).toHaveLength(3);
     const chunkSizePixels = simulation.world.chunkSize * simulation.config.navigation.tileSize;
     const homeChunkX = Math.floor(homeWorldPosition.x / chunkSizePixels);
     const homeChunkY = Math.floor(homeWorldPosition.y / chunkSizePixels);
-    const { scene, sprites } = createSpriteScene();
+    const homeEntry = entry(homeChunkX, homeChunkY);
+    const descriptors = resolveCloudDescriptorsForChunk(
+      simulation.generated.seed,
+      homeEntry,
+      chunkSizePixels,
+      CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
+    );
+
+    expect(descriptors).toEqual(Array.from(
+      { length: CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk },
+      (_, slot) => resolveCloudDescriptor(
+        simulation.generated.seed,
+        homeEntry,
+        chunkSizePixels,
+        CLOUD_ASSET_PACKAGE,
+        slot,
+      ),
+    ));
+    expect(descriptors).toHaveLength(CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk);
+    expect(descriptors.every(({ id }) => id.startsWith(`cloud:${homeChunkX},${homeChunkY}:`))).toBe(true);
+
+    const { scene } = createSpriteScene();
     const renderer = new CloudLayerRenderer(scene as never, false);
     renderer.applyActiveChunkDelta(
       oneChunkDelta(homeChunkX, homeChunkY),
       simulation.generated.seed,
       chunkSizePixels,
-      homeWorldPosition,
     );
-    renderer.sync(
-      simulation.world,
-      new Set(simulation.revealedIslandIds),
-      simulation.islandFogRevealRevision,
-      0,
-    );
-
-    expect(sprites.filter(({ name, visible }) => (
-      name.startsWith("cloud:home:") && !name.endsWith(":shadow") && visible
-    ))).toHaveLength(3);
     expect(renderer.getResourceTelemetry()).toMatchObject({
       activeClouds: CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
       activeShadows: CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
     });
-    expect(renderer.getResourceTelemetry().visibleClouds).toBeGreaterThanOrEqual(3);
-    expect(renderer.getResourceTelemetry().visibleShadows).toBe(
-      renderer.getResourceTelemetry().visibleClouds,
-    );
   });
 
   it("keeps an eligible cloud pair visible throughout multiple slow drift cycles", () => {

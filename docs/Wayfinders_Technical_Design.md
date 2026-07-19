@@ -772,15 +772,15 @@ Active or Inactive badge. The centre renders the complete atmosphere over a
 real seeded `96 x 96` generated world through the same deterministic
 per-chunk descriptor and route functions used by `CloudLayerRenderer`; shadows
 and clouds retain runtime draw order, frame selection, tint, scale, opacity,
-reflection, opening-home replacement, and motion. Preview-only world seed,
-`1x` through `24x` speed, route guides, reroll, and pause controls alter no
-package or gameplay state.
+reflection, and motion. Every chunk, including the starting chunk, uses the
+same seeded candidate slots without exclusions or landmark-relative placement.
+Preview-only world seed, `1x` through `24x` speed, route guides, reroll, and
+pause controls alter no package or gameplay state.
 
 The right workbench owns one live, validated package draft. It exposes the
 default three-through-twelve candidates per chunk, chunk density, cloud opacity
-and scale ranges, ordinary drift distance and duration, appearance and
-route-edge fades, all three opening offsets plus opening size and motion, and
-the paired shadow's offset, scale, and opacity. Ordered pairs remain ordered as
+and scale ranges, drift distance and duration, appearance and route-edge fades,
+and the paired shadow's offset, scale, and opacity. Ordered pairs remain ordered as
 their sliders cross. Every accepted input immediately rebuilds only the preview
 descriptors over the existing generated world. **Reset settings** restores the
 checked-in presentation in memory. Atlas geometry, tint palettes, layer depths,

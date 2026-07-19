@@ -29,7 +29,6 @@ export interface CloudDescriptor {
   readonly driftAmplitudeY: number;
   readonly driftPeriodMs: number;
   readonly phase: number;
-  readonly initialFade: number;
 }
 
 export interface CloudFootprintEnvelope {
@@ -43,11 +42,6 @@ export interface CloudMotionSample {
   readonly x: number;
   readonly y: number;
   readonly routeFade: number;
-}
-
-interface HomeAtmosphereAnchor {
-  readonly position: Readonly<{ x: number; y: number }>;
-  readonly ownerChunkKey: string;
 }
 
 interface CloudView {
@@ -100,13 +94,6 @@ function radicalInverse(index: number, base: number): number {
     fraction /= base;
   }
   return result;
-}
-
-function ownerChunkKeyAt(
-  position: Readonly<{ x: number; y: number }>,
-  chunkSizePixels: number,
-): string {
-  return `${Math.floor(position.x / chunkSizePixels)},${Math.floor(position.y / chunkSizePixels)}`;
 }
 
 export function resolveCloudDescriptor(
@@ -166,76 +153,19 @@ export function resolveCloudDescriptor(
       sample(10),
     ) * 1000,
     phase: sample(11) * TWO_PI,
-    initialFade: 0,
   });
-}
-
-export function resolveOpeningCloudDescriptors(
-  seed: number,
-  ownerChunkKey: string,
-  homeWorldPosition: Readonly<{ x: number; y: number }>,
-  cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
-): readonly Readonly<CloudDescriptor>[] {
-  const { image, presentation } = cloudPackage;
-  const opening = presentation.openingClouds;
-  const frameOffset = Math.floor(
-    seededValue(seed + CLOUD_NAMESPACE + 0x48_4f_4d_45, 0, 0) * image.frameCount,
-  );
-  if (resolveActiveCloudAssetFrame(frameOffset, cloudPackage) === undefined) {
-    return Object.freeze([]);
-  }
-  return Object.freeze(opening.offsetPixels.map((offset, slot) => {
-    const slotSeed = seed + CLOUD_NAMESPACE + 0x48_4f_4d_45 + slot * 7_919;
-    const sample = (sampleSlot: number) => seededValue(slotSeed + sampleSlot * 977, slot, 0);
-    const amplitude = lerp(
-      opening.driftAmplitudePixels.minimum,
-      opening.driftAmplitudePixels.maximum,
-      sample(1),
-    );
-    const openingPhase = lerp(0.24, 0.76, slot / Math.max(1, opening.offsetPixels.length - 1));
-    const tintIndex = slot === 0
-      ? 0
-      : slot === opening.offsetPixels.length - 1
-        ? presentation.cloudTintsRgb.length - 1
-        : Math.floor((presentation.cloudTintsRgb.length - 1) / 2);
-    return Object.freeze({
-      id: `cloud:home:${slot}`,
-      ownerChunkKey,
-      frame: resolveActiveCloudAssetFrame((frameOffset + slot) % image.frameCount, cloudPackage)!,
-      baseX: homeWorldPosition.x + offset.x,
-      baseY: homeWorldPosition.y + offset.y,
-      scale: lerp(
-        opening.scale.minimum,
-        opening.scale.maximum,
-        slot / Math.max(1, opening.offsetPixels.length - 1),
-      ),
-      alpha: lerp(presentation.opacity.minimum, presentation.opacity.maximum, sample(3)),
-      tint: rgbTint(presentation.cloudTintsRgb[tintIndex]!),
-      flipX: sample(4) < 0.5,
-      driftAmplitudeX: amplitude * (sample(5) < 0.5 ? -1 : 1),
-      driftAmplitudeY: amplitude * lerp(0.2, 0.36, sample(6)) * (sample(7) < 0.5 ? -1 : 1),
-      driftPeriodMs: lerp(
-        opening.driftPeriodSeconds.minimum,
-        opening.driftPeriodSeconds.maximum,
-        sample(8),
-      ) * 1000,
-      phase: openingPhase * TWO_PI,
-      initialFade: opening.initialFade,
-    });
-  }));
 }
 
 /**
  * Resolves the exact descriptor set the runtime owns for one canonical chunk.
  * Asset tooling uses this renderer-neutral seam so its live world preview stays
- * in lockstep with the game when opening-cloud or ordinary layout rules change.
+ * in lockstep with the game's seeded layout rules.
  */
 export function resolveCloudDescriptorsForChunk(
   seed: number,
   entry: Readonly<ActiveChunkEntry>,
   chunkSizePixels: number,
   frequency: number,
-  homeWorldPosition: Readonly<{ x: number; y: number }> | undefined,
   cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
 ): readonly Readonly<CloudDescriptor>[] {
   if (!Number.isInteger(frequency)
@@ -245,27 +175,10 @@ export function resolveCloudDescriptorsForChunk(
       `Cloud frequency must be an integer from ${CLOUD_FREQUENCY_MINIMUM} through ${CLOUD_FREQUENCY_MAXIMUM}`,
     );
   }
-  const canonicalChunkKey = `${entry.canonicalChunk.x},${entry.canonicalChunk.y}`;
   const descriptors: Readonly<CloudDescriptor>[] = [];
-  if (homeWorldPosition !== undefined
-    && canonicalChunkKey === ownerChunkKeyAt(homeWorldPosition, chunkSizePixels)) {
-    const openingDescriptors = resolveOpeningCloudDescriptors(
-      seed,
-      canonicalChunkKey,
-      homeWorldPosition,
-      cloudPackage,
-    );
-    descriptors.push(...openingDescriptors.slice(0, frequency));
-    const ordinarySlots = Math.max(0, frequency - openingDescriptors.length);
-    for (let slot = 0; slot < ordinarySlots; slot++) {
-      const descriptor = resolveCloudDescriptor(seed, entry, chunkSizePixels, cloudPackage, slot);
-      if (descriptor) descriptors.push(descriptor);
-    }
-  } else {
-    for (let slot = 0; slot < frequency; slot++) {
-      const descriptor = resolveCloudDescriptor(seed, entry, chunkSizePixels, cloudPackage, slot);
-      if (descriptor) descriptors.push(descriptor);
-    }
+  for (let slot = 0; slot < frequency; slot++) {
+    const descriptor = resolveCloudDescriptor(seed, entry, chunkSizePixels, cloudPackage, slot);
+    if (descriptor) descriptors.push(descriptor);
   }
   return Object.freeze(descriptors);
 }
@@ -439,7 +352,6 @@ export class CloudLayerRenderer {
   private lastSyncAllocationCount = 0;
   private lastWorld: WorldGrid | undefined;
   private motionEpochMs: number | undefined;
-  private homeAnchor: Readonly<HomeAtmosphereAnchor> | undefined;
   private frequency: number;
 
   constructor(
@@ -486,23 +398,12 @@ export class CloudLayerRenderer {
     delta: Readonly<ActiveChunkDelta>,
     seed: number,
     chunkSizePixels: number,
-    homeWorldPosition?: Readonly<{ x: number; y: number }>,
   ): void {
     this.chunkCapacity = delta.telemetry.capacity;
     const worldChanged = this.seed !== seed || this.chunkSizePixels !== chunkSizePixels;
-    const nextHomeAnchor = homeWorldPosition === undefined
-      ? undefined
-      : Object.freeze({
-        position: Object.freeze({ x: homeWorldPosition.x, y: homeWorldPosition.y }),
-        ownerChunkKey: ownerChunkKeyAt(homeWorldPosition, chunkSizePixels),
-      });
-    const homeChanged = this.homeAnchor?.position.x !== nextHomeAnchor?.position.x
-      || this.homeAnchor?.position.y !== nextHomeAnchor?.position.y
-      || this.homeAnchor?.ownerChunkKey !== nextHomeAnchor?.ownerChunkKey;
-    if (worldChanged || homeChanged) this.destroyViews();
+    if (worldChanged) this.destroyViews();
     this.seed = seed;
     this.chunkSizePixels = chunkSizePixels;
-    this.homeAnchor = nextHomeAnchor;
 
     const desiredKeys = new Set(delta.active.map(({ viewKey }) => viewKey));
     for (const { viewKey } of delta.deactivated) this.destroyImageViews(viewKey);
@@ -575,7 +476,7 @@ export class CloudLayerRenderer {
       }
       const fadeDurationMs = presentation.fadeInSeconds * 1000;
       if (view.visibilityStartedAt === undefined) {
-        view.visibilityStartedAt = timeMs - fadeDurationMs * descriptor.initialFade;
+        view.visibilityStartedAt = timeMs;
       }
       const activationFade = fadeDurationMs === 0
         ? 1
@@ -629,7 +530,6 @@ export class CloudLayerRenderer {
     this.chunkCapacity = 0;
     this.lastWorld = undefined;
     this.motionEpochMs = undefined;
-    this.homeAnchor = undefined;
   }
 
   private createActiveViews(): void {
@@ -640,7 +540,6 @@ export class CloudLayerRenderer {
         entry,
         this.chunkSizePixels,
         this.frequency,
-        this.homeAnchor?.position,
         this.cloudPackage,
       )) {
         this.createView(descriptor, entry);

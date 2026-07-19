@@ -4,7 +4,7 @@ import {
   type CloudAssetPackage,
 } from "./CloudAssetCatalog";
 
-export const CLOUD_ASSET_AUTHORING_FORMAT_VERSION = 2 as const;
+export const CLOUD_ASSET_AUTHORING_FORMAT_VERSION = 3 as const;
 export const CLOUD_ASSET_AUTHORING_ASSET_ID = "presentation.clouds.primary" as const;
 
 const STABLE_ID = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/u;
@@ -25,13 +25,6 @@ export const CLOUD_ASSET_AUTHORING_SETTINGS_BOUNDS = Object.freeze({
   driftPeriodSeconds: frozenBounds(1, 600),
   fadeInSeconds: frozenBounds(0, 30),
   routeFadeFraction: frozenBounds(0, 0.49),
-  openingClouds: Object.freeze({
-    offsetPixels: frozenBounds(-1_024, 1_024),
-    scale: frozenBounds(0.05, 2),
-    driftAmplitudePixels: frozenBounds(1, 512),
-    driftPeriodSeconds: frozenBounds(1, 600),
-    initialFade: frozenBounds(0, 1),
-  }),
   shadow: Object.freeze({
     offsetPixels: frozenBounds(-1_024, 1_024),
     opacityMultiplier: frozenBounds(0, 1),
@@ -58,17 +51,6 @@ export interface CloudAssetAuthoringSettings {
   readonly driftPeriodSeconds: Readonly<CloudAssetAuthoringRange>;
   readonly fadeInSeconds: number;
   readonly routeFadeFraction: number;
-  readonly openingClouds: Readonly<{
-    readonly offsetPixels: readonly [
-      Readonly<CloudAssetAuthoringPoint>,
-      Readonly<CloudAssetAuthoringPoint>,
-      Readonly<CloudAssetAuthoringPoint>,
-    ];
-    readonly scale: Readonly<CloudAssetAuthoringRange>;
-    readonly driftAmplitudePixels: Readonly<CloudAssetAuthoringRange>;
-    readonly driftPeriodSeconds: Readonly<CloudAssetAuthoringRange>;
-    readonly initialFade: number;
-  }>;
   readonly shadow: Readonly<{
     readonly offsetPixels: Readonly<CloudAssetAuthoringPoint>;
     readonly opacityMultiplier: number;
@@ -185,58 +167,11 @@ export function validateCloudAssetAuthoringSettings(
     "driftPeriodSeconds",
     "fadeInSeconds",
     "routeFadeFraction",
-    "openingClouds",
     "shadow",
   ], "Cloud asset authoring settings");
 
-  const openingInput = record(parsed.openingClouds, "settings.openingClouds");
-  exactKeys(openingInput, [
-    "offsetPixels",
-    "scale",
-    "driftAmplitudePixels",
-    "driftPeriodSeconds",
-    "initialFade",
-  ], "settings.openingClouds");
-  if (!Array.isArray(openingInput.offsetPixels) || openingInput.offsetPixels.length !== 3) {
-    throw new RangeError("settings.openingClouds.offsetPixels must contain exactly three offsets");
-  }
-  const openingOffsets = openingInput.offsetPixels.map((offset, index) => boundedPoint(
-    offset,
-    bounds.openingClouds.offsetPixels.minimum,
-    bounds.openingClouds.offsetPixels.maximum,
-    `settings.openingClouds.offsetPixels[${index}]`,
-  )) as unknown as CloudAssetAuthoringSettings["openingClouds"]["offsetPixels"];
-
   const shadowInput = record(parsed.shadow, "settings.shadow");
   exactKeys(shadowInput, ["offsetPixels", "opacityMultiplier", "scale"], "settings.shadow");
-
-  const openingClouds = Object.freeze({
-    offsetPixels: Object.freeze(openingOffsets),
-    scale: boundedRange(
-      openingInput.scale,
-      bounds.openingClouds.scale.minimum,
-      bounds.openingClouds.scale.maximum,
-      "settings.openingClouds.scale",
-    ),
-    driftAmplitudePixels: boundedRange(
-      openingInput.driftAmplitudePixels,
-      bounds.openingClouds.driftAmplitudePixels.minimum,
-      bounds.openingClouds.driftAmplitudePixels.maximum,
-      "settings.openingClouds.driftAmplitudePixels",
-    ),
-    driftPeriodSeconds: boundedRange(
-      openingInput.driftPeriodSeconds,
-      bounds.openingClouds.driftPeriodSeconds.minimum,
-      bounds.openingClouds.driftPeriodSeconds.maximum,
-      "settings.openingClouds.driftPeriodSeconds",
-    ),
-    initialFade: boundedNumber(
-      openingInput.initialFade,
-      bounds.openingClouds.initialFade.minimum,
-      bounds.openingClouds.initialFade.maximum,
-      "settings.openingClouds.initialFade",
-    ),
-  });
   const shadow = Object.freeze({
     offsetPixels: boundedPoint(
       shadowInput.offsetPixels,
@@ -299,7 +234,6 @@ export function validateCloudAssetAuthoringSettings(
       "settings.fadeInSeconds",
     ),
     routeFadeFraction,
-    openingClouds,
     shadow,
   });
 }
@@ -317,13 +251,6 @@ export function cloudAssetAuthoringSettingsFromPackage(
     driftPeriodSeconds: presentation.driftPeriodSeconds,
     fadeInSeconds: presentation.fadeInSeconds,
     routeFadeFraction: presentation.routeFadeFraction,
-    openingClouds: {
-      offsetPixels: presentation.openingClouds.offsetPixels,
-      scale: presentation.openingClouds.scale,
-      driftAmplitudePixels: presentation.openingClouds.driftAmplitudePixels,
-      driftPeriodSeconds: presentation.openingClouds.driftPeriodSeconds,
-      initialFade: presentation.openingClouds.initialFade,
-    },
     shadow: {
       offsetPixels: presentation.shadow.offsetPixels,
       opacityMultiplier: presentation.shadow.opacityMultiplier,
@@ -347,7 +274,6 @@ export function applyCloudAssetAuthoringSettings(
     driftPeriodSeconds: normalized.driftPeriodSeconds,
     fadeInSeconds: normalized.fadeInSeconds,
     routeFadeFraction: normalized.routeFadeFraction,
-    openingClouds: normalized.openingClouds,
     shadow: Object.freeze({
       ...presentation.shadow,
       offsetPixels: normalized.shadow.offsetPixels,

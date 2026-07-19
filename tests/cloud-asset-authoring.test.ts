@@ -42,9 +42,6 @@ describe("cloud asset authoring requests", () => {
     expect(settings).toEqual(settingsSnapshot());
     expect(Object.isFrozen(settings)).toBe(true);
     expect(Object.isFrozen(settings.opacity)).toBe(true);
-    expect(Object.isFrozen(settings.openingClouds)).toBe(true);
-    expect(Object.isFrozen(settings.openingClouds.offsetPixels)).toBe(true);
-    expect(settings.openingClouds.offsetPixels.every(Object.isFrozen)).toBe(true);
     expect(Object.isFrozen(settings.shadow)).toBe(true);
     expect(Object.isFrozen(settings.shadow.offsetPixels)).toBe(true);
 
@@ -64,13 +61,6 @@ describe("cloud asset authoring requests", () => {
     settings.driftPeriodSeconds = { minimum: 20, maximum: 360 };
     settings.fadeInSeconds = 8;
     settings.routeFadeFraction = 0.2;
-    settings.openingClouds = {
-      offsetPixels: [{ x: -100, y: -60 }, { x: 100, y: -60 }, { x: 0, y: 120 }],
-      scale: { minimum: 0.2, maximum: 0.8 },
-      driftAmplitudePixels: { minimum: 20, maximum: 160 },
-      driftPeriodSeconds: { minimum: 15, maximum: 420 },
-      initialFade: 0.25,
-    };
     settings.shadow = {
       offsetPixels: { x: 80, y: 64 },
       opacityMultiplier: 0.5,
@@ -101,7 +91,7 @@ describe("cloud asset authoring requests", () => {
     expect(() => validateCloudAssetIdentityRequest({
       ...identityRequest(),
       formatVersion: 1,
-    })).toThrow(/formatVersion must be 2/);
+    })).toThrow(/formatVersion must be 3/);
     expect(() => validateCloudAssetSaveRequest({
       ...identityRequest(),
       activeInGame: false,
@@ -139,10 +129,6 @@ describe("cloud asset authoring requests", () => {
       .toThrow(/between 0 and 30/);
     expect(() => validateCloudAssetAuthoringSettings({ ...settings, routeFadeFraction: 0.5 }))
       .toThrow(/between 0 and 0\.49/);
-    expect(() => validateCloudAssetAuthoringSettings({
-      ...settings,
-      openingClouds: { ...settings.openingClouds, offsetPixels: settings.openingClouds.offsetPixels.slice(0, 2) },
-    })).toThrow(/exactly three offsets/);
     expect(() => validateCloudAssetAuthoringSettings({
       ...settings,
       shadow: { ...settings.shadow, scale: { x: 4, y: 1 } },

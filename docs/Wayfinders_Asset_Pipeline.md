@@ -97,7 +97,7 @@ owns its stable identity, four `627 x 627` fixed frame slots, per-slot stable
 names and durable `activeInGame` state, opaque
 pixel bounds, and bounded paired cloud/shadow presentation metadata, including
 the colour palette, opacity and scale ranges, default per-chunk frequency,
-opening-home offsets, and route fade contract.
+movement ranges, and route fade contract.
 Its retained source and provenance live under
 `assets-src/cld1/clouds`; the prepared RGBA sheet lives under
 `public/assets/cld1/clouds`. `scripts/cloud-asset-check.mjs`, included in
@@ -110,10 +110,9 @@ lists each non-deleted frame and renders the complete cloud atmosphere over a
 real seeded `96 x 96` generated world through the runtime chunk-layout and
 motion resolvers. World seed, accelerated speed, route guides, reroll, and pause
 are preview-only. The live package draft covers frequency, density, opacity,
-scale, ordinary and opening movement, all three opening offsets, and shadow
-offset, flattening, and strength; every slider input immediately updates the
-world canvas. Tint, depth, fog-clear padding, atlas geometry, and gameplay state
-remain read-only.
+scale, movement, and shadow offset, flattening, and strength; every slider input
+immediately updates the world canvas. Tint, depth, fog-clear padding, atlas
+geometry, and gameplay state remain read-only.
 
 **Save changes** persists the complete normalized settings draft together with
 the selected slot's `activeInGame` state in one optimistic revision. The exact,

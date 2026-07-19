@@ -5,7 +5,6 @@ import {
   type CloudDescriptor,
 } from "../../rendering/CloudLayerRenderer";
 import type { ActiveChunkEntry } from "../../rendering/activation";
-import { gridToWorld } from "../../world/CoordinateSystem";
 import { TerrainType } from "../../world/TileData";
 import { WorldGenerator, type GeneratedWorld } from "../../world/WorldGenerator";
 
@@ -53,7 +52,6 @@ export function resolveCloudWorldPreviewDescriptors(
   const chunkColumns = Math.ceil(grid.width / grid.chunkSize);
   const chunkRows = Math.ceil(grid.height / grid.chunkSize);
   const chunkSizePixels = grid.chunkSize * grid.tileSize;
-  const homeWorldPosition = gridToWorld(generated.landmarks.homeCenter, grid.tileSize);
   const descriptors: Readonly<CloudDescriptor>[] = [];
   for (let chunkY = 0; chunkY < chunkRows; chunkY++) {
     for (let chunkX = 0; chunkX < chunkColumns; chunkX++) {
@@ -62,7 +60,6 @@ export function resolveCloudWorldPreviewDescriptors(
         previewChunkEntry(chunkX, chunkY),
         chunkSizePixels,
         cloudPackage.presentation.candidatesPerChunk,
-        homeWorldPosition,
         cloudPackage,
       ));
     }
@@ -128,7 +125,7 @@ export class CloudWorldPreviewCanvas {
     const fadeDurationMs = cloudPackage.presentation.fadeInSeconds * 1_000;
 
     for (const { descriptor, motion } of samples) {
-      const fade = this.fadeFor(descriptor, motion.routeFade, options.activationAgeMs, fadeDurationMs);
+      const fade = this.fadeFor(motion.routeFade, options.activationAgeMs, fadeDurationMs);
       this.drawDescriptor(
         context,
         descriptor,
@@ -140,7 +137,7 @@ export class CloudWorldPreviewCanvas {
       );
     }
     for (const { descriptor, motion } of samples) {
-      const fade = this.fadeFor(descriptor, motion.routeFade, options.activationAgeMs, fadeDurationMs);
+      const fade = this.fadeFor(motion.routeFade, options.activationAgeMs, fadeDurationMs);
       this.drawDescriptor(
         context,
         descriptor,
@@ -275,14 +272,13 @@ export class CloudWorldPreviewCanvas {
   }
 
   private fadeFor(
-    descriptor: Readonly<CloudDescriptor>,
     routeFade: number,
     activationAgeMs: number,
     fadeDurationMs: number,
   ): number {
     const activationFade = fadeDurationMs === 0
       ? 1
-      : clamp01(activationAgeMs / fadeDurationMs + descriptor.initialFade);
+      : clamp01(activationAgeMs / fadeDurationMs);
     return activationFade * routeFade;
   }
 

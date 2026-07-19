@@ -38,9 +38,6 @@ const ORDERED_SETTING_PATHS = Object.freeze([
   ["scale.minimum", "scale.maximum"],
   ["driftAmplitudePixels.minimum", "driftAmplitudePixels.maximum"],
   ["driftPeriodSeconds.minimum", "driftPeriodSeconds.maximum"],
-  ["openingClouds.scale.minimum", "openingClouds.scale.maximum"],
-  ["openingClouds.driftAmplitudePixels.minimum", "openingClouds.driftAmplitudePixels.maximum"],
-  ["openingClouds.driftPeriodSeconds.minimum", "openingClouds.driftPeriodSeconds.maximum"],
 ] as const);
 
 type SettingFormat = "integer" | "percent" | "scale" | "pixels" | "seconds";
@@ -371,7 +368,7 @@ export class CloudAssetWorkspaceScene extends Phaser.Scene {
         </div>
         <span class="cloud-preview-kind" data-cloud-preview-draft-state>Checked-in settings</span>
       </header>
-      <p class="cloud-preview-intro">A real generated 96 × 96 world uses the game’s seeded chunk layout, opening composition, scale, shadows, and route motion. Every setting below updates this view immediately.</p>
+      <p class="cloud-preview-intro">A real generated 96 × 96 world uses the game’s seeded chunk layout, scale, shadows, and route motion. Every setting below updates this view immediately.</p>
       <div class="cloud-world-preview-toolbar" aria-label="Cloud world preview controls">
         <label>World seed <input type="number" data-cloud-preview-control="seed" value="${this.previewSeed}"></label>
         <label>Preview speed
@@ -437,23 +434,6 @@ export class CloudAssetWorkspaceScene extends Phaser.Scene {
           ${this.settingControl({ path: "driftPeriodSeconds.maximum", label: "Slowest route", minimum: bounds.driftPeriodSeconds.minimum, maximum: bounds.driftPeriodSeconds.maximum, step: 1, format: "seconds" })}
           ${this.settingControl({ path: "fadeInSeconds", label: "Appear duration", minimum: bounds.fadeInSeconds.minimum, maximum: bounds.fadeInSeconds.maximum, step: 0.5, format: "seconds" })}
           ${this.settingControl({ path: "routeFadeFraction", label: "Route-edge fade", minimum: bounds.routeFadeFraction.minimum, maximum: bounds.routeFadeFraction.maximum, step: 0.01, format: "percent" })}
-        </div>
-      </details>
-
-      <details class="cloud-settings-group">
-        <summary><span><strong>Opening composition</strong><small>Home positions, sizes, and motion</small></span></summary>
-        <div class="cloud-settings-grid">
-          ${[0, 1, 2].map((index) => `
-            ${this.settingControl({ path: `openingClouds.offsetPixels.${index}.x`, label: `Cloud ${index + 1} horizontal`, minimum: bounds.openingClouds.offsetPixels.minimum, maximum: bounds.openingClouds.offsetPixels.maximum, step: 4, format: "pixels" })}
-            ${this.settingControl({ path: `openingClouds.offsetPixels.${index}.y`, label: `Cloud ${index + 1} vertical`, minimum: bounds.openingClouds.offsetPixels.minimum, maximum: bounds.openingClouds.offsetPixels.maximum, step: 4, format: "pixels" })}
-          `).join("")}
-          ${this.settingControl({ path: "openingClouds.scale.minimum", label: "Minimum opening size", minimum: bounds.openingClouds.scale.minimum, maximum: bounds.openingClouds.scale.maximum, step: 0.01, format: "scale" })}
-          ${this.settingControl({ path: "openingClouds.scale.maximum", label: "Maximum opening size", minimum: bounds.openingClouds.scale.minimum, maximum: bounds.openingClouds.scale.maximum, step: 0.01, format: "scale" })}
-          ${this.settingControl({ path: "openingClouds.driftAmplitudePixels.minimum", label: "Minimum opening travel", minimum: bounds.openingClouds.driftAmplitudePixels.minimum, maximum: bounds.openingClouds.driftAmplitudePixels.maximum, step: 4, format: "pixels" })}
-          ${this.settingControl({ path: "openingClouds.driftAmplitudePixels.maximum", label: "Maximum opening travel", minimum: bounds.openingClouds.driftAmplitudePixels.minimum, maximum: bounds.openingClouds.driftAmplitudePixels.maximum, step: 4, format: "pixels" })}
-          ${this.settingControl({ path: "openingClouds.driftPeriodSeconds.minimum", label: "Fastest opening route", minimum: bounds.openingClouds.driftPeriodSeconds.minimum, maximum: bounds.openingClouds.driftPeriodSeconds.maximum, step: 1, format: "seconds" })}
-          ${this.settingControl({ path: "openingClouds.driftPeriodSeconds.maximum", label: "Slowest opening route", minimum: bounds.openingClouds.driftPeriodSeconds.minimum, maximum: bounds.openingClouds.driftPeriodSeconds.maximum, step: 1, format: "seconds" })}
-          ${this.settingControl({ path: "openingClouds.initialFade", label: "Initial visibility", minimum: bounds.openingClouds.initialFade.minimum, maximum: bounds.openingClouds.initialFade.maximum, step: 0.01, format: "percent" })}
         </div>
       </details>
 

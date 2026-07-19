@@ -11,7 +11,6 @@ import {
   generateCloudWorldPreview,
   resolveCloudWorldPreviewDescriptors,
 } from "../src/wayfinders/assets/cloudPreview/CloudWorldPreview.ts";
-import { gridToWorld } from "../src/wayfinders/world/CoordinateSystem.ts";
 
 function settingsSnapshot() {
   return JSON.parse(JSON.stringify(
@@ -36,7 +35,6 @@ describe("cloud world asset preview", () => {
     const secondDescriptors = resolveCloudWorldPreviewDescriptors(previewModel, CLOUD_ASSET_PACKAGE);
     expect(firstDescriptors).toHaveLength(54);
     expect(secondDescriptors).toEqual(firstDescriptors);
-    expect(firstDescriptors.filter(({ id }) => id.startsWith("cloud:home:"))).toHaveLength(3);
   });
 
   it("updates world density and frequency without replacing the generated layout model", () => {
@@ -44,8 +42,7 @@ describe("cloud world asset preview", () => {
     sparse.candidatesPerChunk = 3;
     sparse.chunkDensity = 0;
     const sparseDescriptors = resolveCloudWorldPreviewDescriptors(previewModel, packageWithSettings(sparse));
-    expect(sparseDescriptors).toHaveLength(3);
-    expect(sparseDescriptors.every(({ id }) => id.startsWith("cloud:home:"))).toBe(true);
+    expect(sparseDescriptors).toHaveLength(0);
 
     const full = settingsSnapshot();
     full.candidatesPerChunk = 12;
@@ -53,22 +50,8 @@ describe("cloud world asset preview", () => {
     expect(resolveCloudWorldPreviewDescriptors(previewModel, packageWithSettings(full))).toHaveLength(108);
   });
 
-  it("applies opening position and size drafts through the shared runtime descriptor seam", () => {
-    const settings = settingsSnapshot();
-    settings.openingClouds.offsetPixels = [
-      { x: -200, y: -120 },
-      { x: 160, y: -40 },
-      { x: 40, y: 180 },
-    ];
-    settings.openingClouds.scale = { minimum: 0.6, maximum: 0.6 };
-    const descriptors = resolveCloudWorldPreviewDescriptors(previewModel, packageWithSettings(settings));
-    const opening = descriptors.filter(({ id }) => id.startsWith("cloud:home:"));
-    const home = gridToWorld(
-      previewModel.generated.landmarks.homeCenter,
-      previewModel.generated.grid.tileSize,
-    );
-    expect(opening.map(({ baseX, baseY }) => ({ x: baseX - home.x, y: baseY - home.y })))
-      .toEqual(settings.openingClouds.offsetPixels);
-    expect(opening.every(({ scale }) => scale === 0.6)).toBe(true);
+  it("uses ordinary seeded descriptors for every chunk, including the starting chunk", () => {
+    const descriptors = resolveCloudWorldPreviewDescriptors(previewModel, CLOUD_ASSET_PACKAGE);
+    expect(descriptors.every(({ id }) => /^cloud:\d+,\d+:\d+$/u.test(id))).toBe(true);
   });
 });

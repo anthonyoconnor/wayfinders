@@ -45,7 +45,7 @@ describe("CLD-3 cloud asset workspace", () => {
     expect(scene).toContain("Delete cloud");
   });
 
-  it("exposes live controls for layout, size, positions, movement, opening clouds, and shadows", () => {
+  it("exposes live controls for layout, size, movement, and shadows", () => {
     for (const path of [
       "candidatesPerChunk",
       "chunkDensity",
@@ -57,9 +57,6 @@ describe("CLD-3 cloud asset workspace", () => {
       "driftAmplitudePixels.maximum",
       "driftPeriodSeconds.minimum",
       "driftPeriodSeconds.maximum",
-      "openingClouds.scale.minimum",
-      "openingClouds.driftAmplitudePixels.maximum",
-      "openingClouds.driftPeriodSeconds.maximum",
       "shadow.offsetPixels.x",
       "shadow.offsetPixels.y",
       "shadow.scale.x",
@@ -68,8 +65,6 @@ describe("CLD-3 cloud asset workspace", () => {
     ]) {
       expect(scene).toContain(path);
     }
-    expect(scene).toContain('openingClouds.offsetPixels.${index}.x');
-    expect(scene).toContain('openingClouds.offsetPixels.${index}.y');
     expect(scene).toContain("validateCloudAssetAuthoringSettings(draft)");
     expect(scene).toContain("this.drawWorldPreview()");
     expect(scene).toContain("settings: this.settingsDraft");

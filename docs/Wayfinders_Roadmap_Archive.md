@@ -1283,8 +1283,7 @@ hidden, and only the pair's current padded footprint is compared with the same
 clear coverage rendered by the knowledge overlay. Current ship sight can
 therefore uncover an already-moving cloud naturally, and fog changes never
 create, destroy, restart, or reroute one. This also replaces full-route startup
-rejection, ensuring all three reserved home clouds are visible in the generated
-opening world.
+rejection, so fog changes do not affect descriptor existence or route state.
 
 The same follow-up raised the cloud opacity range to `0.34` through `0.52` and
 the default frequency from four to six pairs per active chunk. Candidate slots
@@ -1293,15 +1292,9 @@ original positions. A session-only debug control and browser command select
 zero through twelve pairs per chunk, rebuilding only cloud-owned resources
 within the active-chunk cap.
 
-Opening-view acceptance on 2026-07-17 reserved three deterministic routes around
-the home island, increased the shadow separation, and replaced the small orbit
-with readable directional drift. Ordinary routes last `120` through `180`
-seconds and ease opacity across both ends before a transparent position wrap;
-the home routes start partially faded in and remain within the same bounded
-candidate budget. A four-tone white-to-storm-blue palette and wider seeded
-scale range add darker weather and more varied silhouettes; the opening trio
-guarantees visibly distinct light, middle, and dark tones at small, middle, and
-large scales.
+Cloud routes last `120` through `180` seconds and ease opacity across both ends
+before a transparent position wrap. A four-tone white-to-storm-blue palette and
+wider seeded scale range add darker weather and more varied silhouettes.
 
 The scene-owned **Cloud atmosphere** developer checkbox defaults on, immediately
 releases cloud/shadow pairs when disabled, and deterministically rebuilds only
@@ -1318,7 +1311,7 @@ Contract coverage verifies package shape, all four variants across deterministic
 samples, transform, opacity, frequency and motion variety, current-footprint
 fog occlusion, independent
 toggle lifecycle, deterministic reconstruction, corner-crossing revealed-area
-placement, three-cloud generated-world opening composition, live-sight reveal,
+placement, ordinary starting-chunk generation, live-sight reveal,
 perceptible directional movement,
 route-end opacity easing, colour and size variety, shadow
 transform/depth/visibility pairing, world-identity invalidation, paired
@@ -1350,15 +1343,14 @@ produces no cloud or shadow views.
 Status: implemented and verified on 2026-07-18.
 
 The Clouds workspace now renders the complete deterministic atmosphere over a
-real seeded `96 x 96` generated world. It shares the runtime chunk descriptor,
-opening-home composition, and route-motion seams, draws the package frames and
+real seeded `96 x 96` generated world. It shares the runtime chunk-descriptor
+and route-motion seams, draws the package frames and
 paired shadows in runtime order, and provides preview-only seed, accelerated
 speed, layout guides, reroll, and pause controls. Live sliders cover package
-frequency and density, cloud size and opacity, ordinary and opening movement,
-all three opening positions, and the shadow transform; each accepted input
+frequency and density, cloud size and opacity, movement, and the shadow transform; each accepted input
 updates the preview without regenerating the world.
 
-One exact format-V2 save now commits the selected frame's availability and the
+One exact format-V3 save now commits the selected frame's availability and the
 complete normalized settings draft through the existing optimistic repository
 lock and atomic-file transaction. Settings-only, availability-only, and combined
 changes advance the runtime revision once; total no-ops remain byte-identical.

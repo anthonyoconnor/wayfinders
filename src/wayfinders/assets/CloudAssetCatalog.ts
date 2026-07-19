@@ -16,7 +16,7 @@ export interface CloudAssetVariantEntry extends CloudAssetVariant {
 }
 
 export interface CloudAssetPackage {
-  readonly contractVersion: 2;
+  readonly contractVersion: 3;
   readonly assetId: "presentation.clouds.primary";
   readonly kind: "cloud-atmosphere";
   readonly sourceAssetId: string;
@@ -42,13 +42,6 @@ export interface CloudAssetPackage {
     fadeInSeconds: number;
     routeFadeFraction: number;
     clearPaddingTiles: number;
-    openingClouds: Readonly<{
-      offsetPixels: readonly Readonly<{ x: number; y: number }>[];
-      scale: Readonly<{ minimum: number; maximum: number }>;
-      driftAmplitudePixels: Readonly<{ minimum: number; maximum: number }>;
-      driftPeriodSeconds: Readonly<{ minimum: number; maximum: number }>;
-      initialFade: number;
-    }>;
     shadow: Readonly<{
       depth: number;
       offsetPixels: Readonly<{ x: number; y: number }>;
@@ -76,18 +69,6 @@ function finite(value: number, label: string): number {
   return value;
 }
 
-function positiveRange(
-  range: Readonly<{ minimum: number; maximum: number }>,
-  label: string,
-): void {
-  if (!Number.isFinite(range.minimum)
-    || !Number.isFinite(range.maximum)
-    || range.minimum <= 0
-    || range.minimum > range.maximum) {
-    throw new RangeError(`${label} must be finite, positive, and ordered`);
-  }
-}
-
 function colorChannel(value: number, label: string): number {
   if (!Number.isInteger(value) || value < 0 || value > 255) {
     throw new RangeError(`${label} must be an integer from zero through 255`);
@@ -98,7 +79,7 @@ function colorChannel(value: number, label: string): number {
 export function validateCloudAssetPackage(
   input: typeof packageInput | Readonly<CloudAssetPackage>,
 ): Readonly<CloudAssetPackage> {
-  if (input.contractVersion !== 2 || input.assetId !== "presentation.clouds.primary" || input.kind !== "cloud-atmosphere") {
+  if (input.contractVersion !== 3 || input.assetId !== "presentation.clouds.primary" || input.kind !== "cloud-atmosphere") {
     throw new RangeError("Cloud package identity or contract version is invalid");
   }
   const { image, presentation } = input;
@@ -202,19 +183,6 @@ export function validateCloudAssetPackage(
   if (!Number.isInteger(presentation.clearPaddingTiles) || presentation.clearPaddingTiles < 0) {
     throw new RangeError("Cloud clear padding must be a non-negative integer");
   }
-  const { openingClouds } = presentation;
-  if (openingClouds.offsetPixels.length < 3
-    || openingClouds.offsetPixels.length > presentation.candidatesPerChunk) {
-    throw new RangeError("Opening cloud offsets must reserve at least three and at most one chunk of candidates");
-  }
-  for (const [index, offset] of openingClouds.offsetPixels.entries()) {
-    finite(offset.x, `presentation.openingClouds.offsetPixels[${index}].x`);
-    finite(offset.y, `presentation.openingClouds.offsetPixels[${index}].y`);
-  }
-  positiveRange(openingClouds.scale, "presentation.openingClouds.scale");
-  positiveRange(openingClouds.driftAmplitudePixels, "presentation.openingClouds.driftAmplitudePixels");
-  positiveRange(openingClouds.driftPeriodSeconds, "presentation.openingClouds.driftPeriodSeconds");
-  unitInterval(openingClouds.initialFade, "presentation.openingClouds.initialFade");
   const { shadow } = presentation;
   finite(shadow.depth, "presentation.shadow.depth");
   if (shadow.depth >= presentation.depth) throw new RangeError("Cloud shadow depth must be below cloud depth");

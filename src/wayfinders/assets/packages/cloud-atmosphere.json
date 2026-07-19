@@ -1,9 +1,9 @@
 {
-  "contractVersion": 2,
+  "contractVersion": 3,
   "assetId": "presentation.clouds.primary",
   "kind": "cloud-atmosphere",
   "sourceAssetId": "generated.cloud-atmosphere.source.v2",
-  "runtimeRevision": 6,
+  "runtimeRevision": 7,
   "image": {
     "imageId": "presentation.clouds.primary.frames",
     "textureKey": "wayfinders:image:cloud-atmosphere",
@@ -35,17 +35,6 @@
     "fadeInSeconds": 4,
     "routeFadeFraction": 0.1,
     "clearPaddingTiles": 1,
-    "openingClouds": {
-      "offsetPixels": [
-        { "x": -80, "y": -48 },
-        { "x": 80, "y": -48 },
-        { "x": 0, "y": 80 }
-      ],
-      "scale": { "minimum": 0.24, "maximum": 0.42 },
-      "driftAmplitudePixels": { "minimum": 56, "maximum": 80 },
-      "driftPeriodSeconds": { "minimum": 100, "maximum": 140 },
-      "initialFade": 0.65
-    },
     "shadow": {
       "depth": 51,
       "offsetPixels": { "x": 56, "y": 42 },

@@ -172,8 +172,9 @@ adapter may own Phaser sound instances.
   The Clouds workspace reads the validated cloud package, lists its non-deleted
   fixed frame slots, and projects the same pure chunk-descriptor and route model
   as `CloudLayerRenderer` over a real seeded `96 x 96` generated world. Its
-  bounded live draft owns package frequency, density, opacity, scale, ordinary
-  and opening motion, three opening positions, and paired-shadow transform.
+  bounded live draft owns package frequency, density, opacity, scale, motion,
+  and paired-shadow transform. The starting chunk uses the same seeded slots as
+  every other chunk and has no landmark-specific descriptor seam.
   Preview seed, speed, guides, and pause are local inspection controls. One
   guarded save atomically persists the complete settings draft together with
   the selected frame's availability; guarded deletion remains a separate

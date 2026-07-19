@@ -602,10 +602,6 @@ export class WayfindersScene extends Phaser.Scene {
       delta,
       this.simulation.generated.seed,
       this.simulation.world.chunkSize * this.simulation.config.navigation.tileSize,
-      gridToWorld(
-        this.simulation.generated.landmarks.homeCenter,
-        this.simulation.config.navigation.tileSize,
-      ),
     );
     this.riskOverlay.applyActiveChunkDelta(this.simulation.world, delta);
     this.wreckRenderer.applyActiveChunks(delta.active);
