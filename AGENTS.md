@@ -18,6 +18,10 @@ copying those documents here.
    failures are distinguishable from new ones.
 
 On PowerShell, invoke npm as `npm.cmd`; other shells may use `npm`.
+On PowerShell, run the dev server with `npm.cmd run dev -- --host 127.0.0.1 --port <port>`.
+In Codex managed sandbox sessions, Vite/esbuild may require escalated execution permission to load `vite.config.ts`.
+
+Only run the server when necessary and slways stop any dev servers after you no longer need it.
 
 ## Where changes belong
 
