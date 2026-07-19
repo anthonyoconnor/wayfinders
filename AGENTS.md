@@ -58,6 +58,8 @@ for a missing command, selector, mutation result, or presentation adapter.
    codebase can change all callers and contracts together. Do not retain
    transition facades, dual runtime paths, or tests that protect obsolete
    scaffolding after the coordinated change is complete.
+10. As a final step before a milestone is considered complete rebase the branch off
+    the latest main version and resolve any conflicts.
 
 ## Documentation ownership
 
