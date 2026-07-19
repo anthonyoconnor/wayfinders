@@ -301,8 +301,13 @@ export class WayfindersScene extends Phaser.Scene {
   private lastViewportWidth = Number.NaN;
   private lastViewportHeight = Number.NaN;
   private lastViewportZoom = Number.NaN;
+  private cameraFitZoom = 1;
+  private cameraZoomRatio = 1;
   private browserDebugApi?: BrowserDebugApi;
-  private activeLifecycleCue?: Phaser.GameObjects.Text;
+  private activeLifecycleCue?: HTMLElement;
+  private activeLifecycleCueAnimation?: Animation;
+  private activeLifecycleCueTimer?: number;
+  private lifecycleCueSequence = 0;
   private returnCueScheduled = false;
   private pendingReturnedVoyage?: Readonly<GreatHallReturnedVoyage>;
   private pendingReturnVoyagesRemaining?: number;
@@ -393,6 +398,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.entityDebugGraphics = this.add.graphics().setDepth(72);
     this.gameHost = document.querySelector<HTMLElement>("#game-host") ?? undefined;
     this.gameStatus = document.querySelector<HTMLElement>("#game-status") ?? undefined;
+    this.mountLifecycleCue();
     for (const diagnostic of this.pilotAssets.diagnostics) {
       this.log(`Using developer graphics for ${diagnostic.assetId}: ${diagnostic.message}`);
     }
@@ -430,6 +436,8 @@ export class WayfindersScene extends Phaser.Scene {
     // stronger damped follow keeps the first camera response below one frame.
     this.cameras.main.startFollow(this.shipRenderer.container, false, 0.18, 0.18);
     this.configureCamera();
+    this.syncCameraFraming();
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.onSceneResize);
     this.shipRenderer.sync(this.currentShipPose);
     this.cameras.main.centerOn(this.currentShipPose.worldX, this.currentShipPose.worldY);
     this.renderWorld();
@@ -492,6 +500,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.updateSailingAmbience(delta / 1000);
     this.updateGameMusic(delta / 1000);
     this.frameTiming.record(delta, this.clock.lastDroppedMs, document.visibilityState === "visible");
+    this.syncCameraFraming();
     this.syncPresentation();
   }
 
@@ -548,8 +557,30 @@ export class WayfindersScene extends Phaser.Scene {
 
   private configureCamera(): void {
     const tileSize = prototypeConfig.navigation.tileSize;
+    const verticalFit = this.scale.height / (tileSize * 20.5);
+    const horizontalFit = this.scale.width / (tileSize * 13);
+    this.cameraFitZoom = Phaser.Math.Clamp(Math.min(verticalFit, horizontalFit), 0.7, 1.55);
     this.cameras.main.removeBounds();
-    this.cameras.main.setZoom(Math.max(0.7, Math.min(1.15, this.scale.height / (tileSize * 26))));
+    this.cameras.main.setZoom(Phaser.Math.Clamp(
+      this.cameraFitZoom * this.cameraZoomRatio,
+      0.65,
+      1.7,
+    ));
+  }
+
+  private syncCameraFraming(): void {
+    const camera = this.cameras.main;
+    const zoom = Math.max(Number.EPSILON, camera.zoom);
+    const homeScreenOffsetX = this.simulation.atDock ? Math.min(160, this.scale.width * 0.09) : 0;
+    const homeScreenOffsetY = this.simulation.atDock ? -Math.min(32, this.scale.height * 0.035) : 0;
+    const followOffsetX = homeScreenOffsetX / zoom;
+    const followOffsetY = homeScreenOffsetY / zoom;
+    if (
+      Math.abs(camera.followOffset.x - followOffsetX) > 0.01
+      || Math.abs(camera.followOffset.y - followOffsetY) > 0.01
+    ) {
+      camera.setFollowOffset(followOffsetX, followOffsetY);
+    }
   }
 
   private renderWorld(): void {
@@ -1059,7 +1090,10 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private changeZoom(delta: number): void {
-    this.cameras.main.setZoom(Phaser.Math.Clamp(this.cameras.main.zoom + delta, 0.65, 1.7));
+    const zoom = Phaser.Math.Clamp(this.cameras.main.zoom + delta, 0.65, 1.7);
+    this.cameraZoomRatio = zoom / Math.max(Number.EPSILON, this.cameraFitZoom);
+    this.cameras.main.setZoom(zoom);
+    this.syncCameraFraming();
   }
 
   private mountDeveloperTools(): void {
@@ -2068,6 +2102,7 @@ export class WayfindersScene extends Phaser.Scene {
     });
     this.resetShipPresentation(true, true);
     this.configureCamera();
+    this.syncCameraFraming();
     this.cameras.main.centerOn(this.currentShipPose.worldX, this.currentShipPose.worldY);
     this.renderWorld();
     this.lastDebugRevision = -1;
@@ -2674,36 +2709,72 @@ export class WayfindersScene extends Phaser.Scene {
     });
   }
 
-  private showLifecycleCue(message: string, color: string, holdMs = 2_600): void {
-    if (this.activeLifecycleCue) {
-      this.tweens.killTweensOf(this.activeLifecycleCue);
-      this.activeLifecycleCue.destroy();
-      this.activeLifecycleCue = undefined;
-    }
-    const cue = this.add.text(this.scale.width / 2, Math.max(90, this.scale.height * 0.17), message, {
-      align: "center",
-      color,
-      fontFamily: "ui-monospace, monospace",
-      fontSize: "17px",
-      fontStyle: "bold",
-      stroke: "#082d35",
-      strokeThickness: 6,
-    }).setOrigin(0.5).setScrollFactor(0).setDepth(110).setAlpha(0);
+  private mountLifecycleCue(): void {
+    this.activeLifecycleCue?.remove();
+    const cue = document.createElement("div");
+    cue.className = "game-lifecycle-cue";
+    cue.setAttribute("role", "status");
+    cue.setAttribute("aria-live", "polite");
+    cue.setAttribute("aria-atomic", "true");
+    document.body.append(cue);
     this.activeLifecycleCue = cue;
-    this.cameras.main.flash(180, 125, 212, 199, false);
-    this.tweens.add({
-      targets: cue,
-      alpha: { from: 0, to: 1 },
-      y: cue.y - 8,
-      duration: 240,
-      yoyo: true,
-      hold: holdMs,
-      onComplete: () => {
-        cue.destroy();
-        if (this.activeLifecycleCue === cue) this.activeLifecycleCue = undefined;
-      },
+    this.lifecycleCueSequence += 1;
+  }
+
+  private showLifecycleCue(message: string, color: string, holdMs = 2_600): void {
+    this.dismissLifecycleCue();
+    const cue = this.activeLifecycleCue;
+    if (!cue) return;
+    const sequence = ++this.lifecycleCueSequence;
+    cue.style.setProperty("--lifecycle-cue-accent", color);
+    queueMicrotask(() => {
+      if (this.activeLifecycleCue !== cue || this.lifecycleCueSequence !== sequence) return;
+      cue.textContent = message;
+      const dismissCue = (): void => {
+        if (this.activeLifecycleCue === cue && this.lifecycleCueSequence === sequence) {
+          this.dismissLifecycleCue();
+        }
+      };
+      if (this.prefersReducedMotion) {
+        cue.style.opacity = "1";
+        this.activeLifecycleCueTimer = window.setTimeout(dismissCue, holdMs);
+        return;
+      }
+      this.cameras.main.flash(180, 125, 212, 199, false);
+      const fadeMs = 240;
+      const duration = holdMs + fadeMs * 2;
+      this.activeLifecycleCueAnimation = cue.animate([
+        { opacity: 0, transform: "translate(-50%, calc(-50% + 8px))", offset: 0 },
+        { opacity: 1, transform: "translate(-50%, -50%)", offset: fadeMs / duration },
+        { opacity: 1, transform: "translate(-50%, -50%)", offset: (fadeMs + holdMs) / duration },
+        { opacity: 0, transform: "translate(-50%, calc(-50% - 8px))", offset: 1 },
+      ], {
+        duration,
+        easing: "ease-out",
+        fill: "forwards",
+      });
+      this.activeLifecycleCueAnimation.addEventListener("finish", dismissCue, { once: true });
     });
   }
+
+  private dismissLifecycleCue(): void {
+    this.lifecycleCueSequence += 1;
+    if (this.activeLifecycleCueTimer !== undefined) {
+      window.clearTimeout(this.activeLifecycleCueTimer);
+      this.activeLifecycleCueTimer = undefined;
+    }
+    this.activeLifecycleCueAnimation?.cancel();
+    this.activeLifecycleCueAnimation = undefined;
+    if (this.activeLifecycleCue) {
+      this.activeLifecycleCue.textContent = "";
+      this.activeLifecycleCue.style.opacity = "0";
+    }
+  }
+
+  private readonly onSceneResize = (): void => {
+    this.configureCamera();
+    this.syncCameraFraming();
+  };
 
   private captureShipPose(): ShipRenderPose {
     const { heading, speed } = this.simulation.ship;
@@ -2743,6 +2814,7 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private destroyBindings(): void {
+    this.scale.off(Phaser.Scale.Events.RESIZE, this.onSceneResize);
     this.audioControls?.destroy();
     this.audioControls = undefined;
     this.audioCueController?.destroy();
@@ -2784,11 +2856,9 @@ export class WayfindersScene extends Phaser.Scene {
     this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.onPointerWheel, this);
-    if (this.activeLifecycleCue) {
-      this.tweens.killTweensOf(this.activeLifecycleCue);
-      this.activeLifecycleCue.destroy();
-      this.activeLifecycleCue = undefined;
-    }
+    this.dismissLifecycleCue();
+    this.activeLifecycleCue?.remove();
+    this.activeLifecycleCue = undefined;
     if (window.__WAYFINDERS__ === this.browserDebugApi) delete window.__WAYFINDERS__;
     this.browserDebugApi = undefined;
   }
