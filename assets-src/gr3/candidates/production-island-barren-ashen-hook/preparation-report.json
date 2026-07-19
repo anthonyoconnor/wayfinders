@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.barren.ashen-hook",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "95cf637f73e2c3b81497b8b10f1abaa9aeade1aec5781ba43a95aa3b91c2b55a",
+  "jobKey": "fb7c86b10dde80eedaf32999934a41ed4242a4ac43f2d852a3ece9e70cefa032",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-barren-ashen-hook-source.png",
+      "sha256": "63d2079342059619f6f414c005677feee45758f80e290ee7a91c8794b2c812fb"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-barren-ashen-hook-mask.png",
+      "sha256": "d1cd2120eb645070963cb0f0fccb561dca855af62b16a2276992b7491a137757"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-barren-ashen-hook/base.png",
+        "width": 448,
+        "height": 512,
+        "sha256": "03d4a79e111c6b0e3625b51cfb4a7aa83132c72ce204ad1adb955bb4f3c1539c",
+        "sourceBounds": {
+          "x": 115,
+          "y": 108,
+          "width": 1051,
+          "height": 1026
+        },
+        "placement": {
+          "x": 0,
+          "y": 37,
+          "width": 448,
+          "height": 437
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-barren-ashen-hook/thumbnail.png",
+      "width": 168,
+      "height": 192,
+      "sha256": "48fb07eba32eeed9a3048faa0939864560324bce667913b55e25a3a4e7a22ada"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-barren-ashen-hook/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "d16e1af76956cc347a771eeacb564e1087e7c836475b3a4c2a2cfdb1d869dc22"
+    }
+  }
+}

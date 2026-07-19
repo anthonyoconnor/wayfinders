@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.winter.emberhearth-isle",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "1d6821be0906b440b407671dd38ed582db625b3558e6a451fe04483ab9e358f1",
+  "jobKey": "8f066fc2b4038c39545077d6b53166345e33fa504fa8b2a6c99c2c535a44cf0f",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-winter-emberhearth-isle-source.png",
+      "sha256": "d7c0f0c5b1e00f1c33eb6ac1551e42741429b12133b340f1d5d291a6f941012d"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-winter-emberhearth-isle-mask.png",
+      "sha256": "66ae0c058288204e163ae3180b23b22a9ceeb0ba12435e795e37ae1fef380302"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-winter-emberhearth-isle/base.png",
+        "width": 576,
+        "height": 512,
+        "sha256": "148fb77c485d19e4055b52901ec0884147bca889102e8842d9361fbafc70701b",
+        "sourceBounds": {
+          "x": 122,
+          "y": 36,
+          "width": 1065,
+          "height": 1124
+        },
+        "placement": {
+          "x": 45,
+          "y": 0,
+          "width": 485,
+          "height": 512
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-winter-emberhearth-isle/thumbnail.png",
+      "width": 192,
+      "height": 171,
+      "sha256": "d8bc74fa0eff0fdb5ab0ea05c98f24dc6a983eb2a73ad5dd8cb11de94e9862f2"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-winter-emberhearth-isle/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "0326aa6669c6e02b85466609a268a91b8bc6752a4c90772d6bc33d1ac0182ecc"
+    }
+  }
+}

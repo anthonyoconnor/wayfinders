@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.tropical.moonhook-cay",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "ad811ef2c7cefb6e53fec292a62b64e3203e06f35f832f2ece0a2abd9ea40dfe",
+  "jobKey": "578b803a108be07fe3211b224652a8fc2c3c73a692fd7353215f6fdf09ce4cc6",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-tropical-moonhook-cay-source.png",
+      "sha256": "5446dda6bdda5393523bf37c4c67e0d9c04ce20ba873d558a9ed7328f903e17e"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-tropical-moonhook-cay-mask.png",
+      "sha256": "b61cdd5f4fca5bf5fe3da84b2a24c1b602dbde9e2c36103744d306d593d39cd6"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-tropical-moonhook-cay/base.png",
+        "width": 448,
+        "height": 384,
+        "sha256": "e56da8047de6e842127b68a8e18af29875832be76f9557184049ce518bc96358",
+        "sourceBounds": {
+          "x": 63,
+          "y": 81,
+          "width": 1124,
+          "height": 1077
+        },
+        "placement": {
+          "x": 23,
+          "y": 0,
+          "width": 401,
+          "height": 384
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-tropical-moonhook-cay/thumbnail.png",
+      "width": 192,
+      "height": 165,
+      "sha256": "9f7c352c97728fe8ddf7d771e7557bc7a3dc3a780f9a8a6ae31d9fee48cd3fc5"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-tropical-moonhook-cay/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "e0a4478dc0d4300bcacb0fb8bed08affac68b4474e67b1ec1b07cd4b21fb6b10"
+    }
+  }
+}

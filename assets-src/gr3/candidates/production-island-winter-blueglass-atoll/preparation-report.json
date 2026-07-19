@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.winter.blueglass-atoll",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "4760230638c0699ad0387aadcaaf99da4a3e7bd4dba8f9e319653fd0dd86de8e",
+  "jobKey": "783362fe0567883d2a4b972a2d0ff3b38c7b9fb598ac4f4846e32eb2e7652bc6",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-winter-blueglass-atoll-source.png",
+      "sha256": "52095b0490f9aff2242d8011adc0b7e726529db78c05ea07551c3d96e27bd272"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-winter-blueglass-atoll-mask.png",
+      "sha256": "6344c898ea249e7caa55e6e921df813e8e593b746af80ec9407986936b464ea7"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-winter-blueglass-atoll/base.png",
+        "width": 512,
+        "height": 512,
+        "sha256": "b719398b9d3c82a49cfd1499a581a49ab7ecb7f841b964d506481dc95fd6bbc8",
+        "sourceBounds": {
+          "x": 85,
+          "y": 48,
+          "width": 1085,
+          "height": 1162
+        },
+        "placement": {
+          "x": 17,
+          "y": 0,
+          "width": 478,
+          "height": 512
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-winter-blueglass-atoll/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "85f6a9fe55467c311bd90b7ffae4eecf0cbd87be1d2ddbc31a9eeb3bf529da8e"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-winter-blueglass-atoll/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "f76a910100a0dca38168cedad3af2eabfa4c4de25a9fbba45fd3102c8310ad07"
+    }
+  }
+}

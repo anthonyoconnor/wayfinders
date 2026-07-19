@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.tropical.mangrove-forks",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "2ea94c639c8227b533c124fa425ffe8d5d4454ccfa86acf270a1bc0e5a4d30fd",
+  "jobKey": "4cfcdc46eda6c57fa5b2aa7d9854669204dc2fda16d62a2fc3b28902011cafe7",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-tropical-mangrove-forks-source.png",
+      "sha256": "089a75830f1610252fddce297173b684e01065d9382a96c9b07c5f5d0734048c"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-tropical-mangrove-forks-mask.png",
+      "sha256": "ced0b326f904f861e036f744e5ac238e0822903a7b6d46c341e371705d8bba97"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-tropical-mangrove-forks/base.png",
+        "width": 576,
+        "height": 640,
+        "sha256": "28a4959d3aeca12d509b3a05f314ebcac885f2d1728de981001547aecfc98c5c",
+        "sourceBounds": {
+          "x": 42,
+          "y": 33,
+          "width": 1167,
+          "height": 1176
+        },
+        "placement": {
+          "x": 0,
+          "y": 30,
+          "width": 576,
+          "height": 580
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-tropical-mangrove-forks/thumbnail.png",
+      "width": 173,
+      "height": 192,
+      "sha256": "a7441d17f6c1b46e2efc5ab36824b61409c4858ecbe894433dc6cbac232665a0"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-tropical-mangrove-forks/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "2b354daed14d45266b7a0fd39dd7ce3a9033edcee98292d8dfb7d179064546ff"
+    }
+  }
+}

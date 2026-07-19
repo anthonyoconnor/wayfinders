@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.desert.copperwind-port",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "c4c45122c6dd0a9d3815b77784792729528313ae68bf9c6cbb9780192bb7d3a0",
+  "jobKey": "1e968a25112ce892fda3459d440a4b7946eb46e307044344641a06169ec021b6",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-desert-copperwind-port-source.png",
+      "sha256": "029fd336a73279e5cde498cbeedc1b29df8cec7c519b0a4b83ff73da4809a4ca"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-desert-copperwind-port-mask.png",
+      "sha256": "ad6251bd452a738b1ed7fa08fb6ba301b7c67c50d31b0a521c589a905410109d"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-desert-copperwind-port/base.png",
+        "width": 576,
+        "height": 448,
+        "sha256": "19e400d6a42f62b71954855edc74ae1a0ba6b55e46459fcc513cd7c9499ad607",
+        "sourceBounds": {
+          "x": 191,
+          "y": 72,
+          "width": 873,
+          "height": 1090
+        },
+        "placement": {
+          "x": 108,
+          "y": 0,
+          "width": 359,
+          "height": 448
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-desert-copperwind-port/thumbnail.png",
+      "width": 192,
+      "height": 149,
+      "sha256": "a4c58809743f5f8cdfce90a755ad0dc31e1a085ceabc9895a8e4ed848d5937fe"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-desert-copperwind-port/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "5f2f4cfd7cb5a568739ec52b398d2ebb253b84c5f0a985b833d4e07dab933575"
+    }
+  }
+}

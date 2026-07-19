@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.winter.frostharbor",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "14af3f4fb0a418b4a9fb4b058065cb6ff899c14135c8a25f6d4aede5623eb9e6",
+  "jobKey": "24b71cb467f12f1543dcedb18db7cf1c31776ab11cb4e6f665ac2343dcbbd7e3",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-winter-frostharbor-source.png",
+      "sha256": "3853ff0f40034cc80d2f25ba507a2d00d4a243a39d58e643652d522157018cbb"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-winter-frostharbor-mask.png",
+      "sha256": "09982a0fc871094ced9ebba1f25bc9a952b6b3d4f586ee59af57dcad7592f00f"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-winter-frostharbor/base.png",
+        "width": 640,
+        "height": 576,
+        "sha256": "225cf4ac6c9fb7d568e4c39a23b11656c5775c289a9c18a58ae61428e8dd002d",
+        "sourceBounds": {
+          "x": 134,
+          "y": 65,
+          "width": 1017,
+          "height": 1038
+        },
+        "placement": {
+          "x": 38,
+          "y": 0,
+          "width": 564,
+          "height": 576
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-winter-frostharbor/thumbnail.png",
+      "width": 192,
+      "height": 173,
+      "sha256": "e9172965660c0a40e89a39c951b0bc2aad973d0b7cba2e035a99210fcee02a4d"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-winter-frostharbor/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "edfc09e2f9d411d8cc7bccac0a57cd480f25a7d0806bebe7dc3b15b60a71a7b9"
+    }
+  }
+}

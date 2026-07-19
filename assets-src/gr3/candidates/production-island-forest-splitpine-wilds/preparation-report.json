@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.forest.splitpine-wilds",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "8831c3734dbbec537c714a0130b2f9362a6db5a3cfd3a510664eae5271b218db",
+  "jobKey": "65f0f28ffa3a3b7f231da355f3c35e40d30e6cd05bf199c7c95daafca0fb1ea1",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-forest-splitpine-wilds-source.png",
+      "sha256": "dfbf1c280601d51d45e3114146a9f74d806dbc38029bcdbc974817db573141e0"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-forest-splitpine-wilds-mask.png",
+      "sha256": "bd75e9b77bf039190a38dd8651d1b14263fd423fb3fdc3a09f6d4593db6da64d"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-forest-splitpine-wilds/base.png",
+        "width": 512,
+        "height": 512,
+        "sha256": "1eb01d9ea883eb82c2660c16cbfe420ed126f55da8b15e55aa1340df82526cd1",
+        "sourceBounds": {
+          "x": 108,
+          "y": 40,
+          "width": 1130,
+          "height": 1106
+        },
+        "placement": {
+          "x": 0,
+          "y": 5,
+          "width": 512,
+          "height": 501
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-forest-splitpine-wilds/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "6618f1ece202626cb28373d32ca7d3099e54edeb56988fe6533cf4bdb5e707df"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-forest-splitpine-wilds/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "d4a1d30b7c4f239faf15988a15cec9ac72dc8ec0fc7a7dcc2a12cf24f24f8d37"
+    }
+  }
+}

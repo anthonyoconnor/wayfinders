@@ -211,7 +211,11 @@
             "trimAlphaThreshold": 8,
             "padding": 8,
             "alphaEdgeFadePixels": 96,
-            "alphaEdgeBlendColor": [8, 48, 68]
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
           }
         }
       ],
@@ -319,7 +323,11 @@
             "trimAlphaThreshold": 8,
             "padding": 8,
             "alphaEdgeFadePixels": 64,
-            "alphaEdgeBlendColor": [8, 48, 68]
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
           }
         }
       ],
@@ -374,7 +382,11 @@
             "trimAlphaThreshold": 8,
             "padding": 8,
             "alphaEdgeFadePixels": 64,
-            "alphaEdgeBlendColor": [8, 48, 68]
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
           }
         }
       ],
@@ -483,13 +495,1197 @@
             "trimAlphaThreshold": 8,
             "padding": 8,
             "alphaEdgeFadePixels": 96,
-            "alphaEdgeBlendColor": [8, 48, 68]
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
           }
         }
       ],
       "animations": [],
       "collision": {
         "mode": "center-circle",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.tropical.sunweave-lagoon",
+      "name": "Sunweave Lagoon",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Tropical",
+      "sortOrder": 100,
+      "tags": [
+        "island",
+        "tropical",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-tropical-sunweave-lagoon-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-tropical-sunweave-lagoon-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 640,
+            "targetHeight": 576,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              255,
+              0,
+              255
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 96,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-tropical-sunweave-lagoon-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.tropical.mangrove-forks",
+      "name": "Mangrove Forks",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Tropical",
+      "sortOrder": 110,
+      "tags": [
+        "island",
+        "tropical",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-tropical-mangrove-forks-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-tropical-mangrove-forks-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 576,
+            "targetHeight": 640,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              255,
+              0,
+              255
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 96,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-tropical-mangrove-forks-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.tropical.moonhook-cay",
+      "name": "Moonhook Cay",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Tropical",
+      "sortOrder": 120,
+      "tags": [
+        "island",
+        "tropical",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-tropical-moonhook-cay-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-tropical-moonhook-cay-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 448,
+            "targetHeight": 384,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              255,
+              0,
+              255
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-tropical-moonhook-cay-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.tropical.three-fin-atoll",
+      "name": "Three-Fin Atoll",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Tropical",
+      "sortOrder": 130,
+      "tags": [
+        "island",
+        "tropical",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-tropical-three-fin-atoll-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-tropical-three-fin-atoll-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 512,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              255,
+              0,
+              255
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-tropical-three-fin-atoll-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.desert.saffron-haven",
+      "name": "Saffron Haven",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Desert",
+      "sortOrder": 140,
+      "tags": [
+        "island",
+        "desert",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-desert-saffron-haven-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-desert-saffron-haven-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 640,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              238,
+              9,
+              237
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-desert-saffron-haven-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.desert.copperwind-port",
+      "name": "Copperwind Port",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Desert",
+      "sortOrder": 150,
+      "tags": [
+        "island",
+        "desert",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-desert-copperwind-port-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-desert-copperwind-port-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 576,
+            "targetHeight": 448,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              237,
+              9,
+              237
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-desert-copperwind-port-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.desert.glass-dune-isle",
+      "name": "Glass Dune Isle",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Desert",
+      "sortOrder": 160,
+      "tags": [
+        "island",
+        "desert",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-desert-glass-dune-isle-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-desert-glass-dune-isle-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 512,
+            "targetHeight": 384,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              238,
+              10,
+              238
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-desert-glass-dune-isle-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.desert.scorpion-mesa",
+      "name": "Scorpion Mesa",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Desert",
+      "sortOrder": 170,
+      "tags": [
+        "island",
+        "desert",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-desert-scorpion-mesa-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-desert-scorpion-mesa-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 448,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              238,
+              8,
+              231
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-desert-scorpion-mesa-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.forest.cedar-crown",
+      "name": "Cedar Crown",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Forest",
+      "sortOrder": 180,
+      "tags": [
+        "island",
+        "forest",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-forest-cedar-crown-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-forest-cedar-crown-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 640,
+            "targetHeight": 576,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              255,
+              0,
+              255
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 96,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-forest-cedar-crown-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.forest.mosswater-reach",
+      "name": "Mosswater Reach",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Forest",
+      "sortOrder": 190,
+      "tags": [
+        "island",
+        "forest",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-forest-mosswater-reach-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-forest-mosswater-reach-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 576,
+            "targetHeight": 448,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              255,
+              0,
+              255
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-forest-mosswater-reach-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.forest.splitpine-wilds",
+      "name": "Splitpine Wilds",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Forest",
+      "sortOrder": 200,
+      "tags": [
+        "island",
+        "forest",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-forest-splitpine-wilds-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-forest-splitpine-wilds-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 512,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              255,
+              0,
+              255
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-forest-splitpine-wilds-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.forest.ferncoil-isle",
+      "name": "Ferncoil Isle",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Forest",
+      "sortOrder": 210,
+      "tags": [
+        "island",
+        "forest",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-forest-ferncoil-isle-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-forest-ferncoil-isle-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 448,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              255,
+              0,
+              255
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-forest-ferncoil-isle-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.winter.frostharbor",
+      "name": "Frostharbor",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Winter",
+      "sortOrder": 220,
+      "tags": [
+        "island",
+        "winter",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-winter-frostharbor-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-winter-frostharbor-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 640,
+            "targetHeight": 576,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              237,
+              9,
+              236
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 96,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-winter-frostharbor-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.winter.emberhearth-isle",
+      "name": "Emberhearth Isle",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Winter",
+      "sortOrder": 230,
+      "tags": [
+        "island",
+        "winter",
+        "inhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-winter-emberhearth-isle-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-winter-emberhearth-isle-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 576,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              238,
+              9,
+              234
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-winter-emberhearth-isle-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.winter.whitefang-skerry",
+      "name": "Whitefang Skerry",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Winter",
+      "sortOrder": 240,
+      "tags": [
+        "island",
+        "winter",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-winter-whitefang-skerry-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-winter-whitefang-skerry-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 384,
+            "targetHeight": 576,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              238,
+              9,
+              234
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-winter-whitefang-skerry-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.winter.blueglass-atoll",
+      "name": "Blueglass Atoll",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Winter",
+      "sortOrder": 250,
+      "tags": [
+        "island",
+        "winter",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-winter-blueglass-atoll-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-winter-blueglass-atoll-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 512,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              238,
+              9,
+              234
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-winter-blueglass-atoll-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.barren.cinder-crown",
+      "name": "Cinder Crown",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Barren",
+      "sortOrder": 260,
+      "tags": [
+        "island",
+        "barren",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-barren-cinder-crown-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-barren-cinder-crown-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 576,
+            "targetHeight": 576,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              238,
+              9,
+              237
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 96,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-barren-cinder-crown-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.barren.ashen-hook",
+      "name": "Ashen Hook",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Barren",
+      "sortOrder": 270,
+      "tags": [
+        "island",
+        "barren",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-barren-ashen-hook-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-barren-ashen-hook-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 448,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              238,
+              9,
+              234
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-barren-ashen-hook-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.barren.saltbone-flats",
+      "name": "Saltbone Flats",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Barren",
+      "sortOrder": 280,
+      "tags": [
+        "island",
+        "barren",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-barren-saltbone-flats-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-barren-saltbone-flats-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 640,
+            "targetHeight": 448,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              236,
+              10,
+              236
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-barren-saltbone-flats-mask.png",
+        "tileSize": 32,
+        "subcellSize": 8
+      },
+      "availableInGame": true
+    },
+    {
+      "id": "production.island.barren.blackneedle-isle",
+      "name": "Blackneedle Isle",
+      "family": "island",
+      "lifecycle": "source",
+      "collection": "Production islands: Barren",
+      "sortOrder": 290,
+      "tags": [
+        "island",
+        "barren",
+        "uninhabited",
+        "source"
+      ],
+      "provenance": {
+        "kind": "selected-source",
+        "sourceFile": "assets-src/gr3/intake/production-island-barren-blackneedle-isle-source.png"
+      },
+      "layers": [
+        {
+          "id": "base",
+          "name": "Island and authored water apron",
+          "role": "island-composite",
+          "sourceFile": "assets-src/gr3/intake/production-island-barren-blackneedle-isle-source.png",
+          "defaultVisible": true,
+          "opacity": 1,
+          "blendMode": "normal",
+          "preparation": {
+            "mode": "connected-border",
+            "sizing": "contain",
+            "targetWidth": 512,
+            "targetHeight": 512,
+            "thumbnailMaximum": 192,
+            "matteColor": [
+              237,
+              9,
+              234
+            ],
+            "innerTolerance": 32,
+            "outerTolerance": 104,
+            "trimAlphaThreshold": 8,
+            "padding": 8,
+            "alphaEdgeFadePixels": 64,
+            "alphaEdgeBlendColor": [
+              8,
+              48,
+              68
+            ]
+          }
+        }
+      ],
+      "animations": [],
+      "collision": {
+        "mode": "mask-file",
+        "maskFile": "assets-src/gr3/candidate-masks/production-island-barren-blackneedle-isle-mask.png",
         "tileSize": 32,
         "subcellSize": 8
       },

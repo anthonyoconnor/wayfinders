@@ -34,10 +34,10 @@ describe("GR-3.2 production preparation pipeline", () => {
   });
 
   it("selects the current preparable sources and can select a runtime recipe explicitly", () => {
-    expect(selectProductionRecipes(manifest, [])).toHaveLength(6);
+    expect(selectProductionRecipes(manifest, [])).toHaveLength(26);
     expect(selectProductionRecipes(manifest, ["--id", "home.island.primary"]))
       .toHaveLength(1);
-    expect(selectProductionRecipes(manifest, ["--family=island"])).toHaveLength(7);
+    expect(selectProductionRecipes(manifest, ["--family=island"])).toHaveLength(27);
     expect(() => selectProductionRecipes(manifest, ["--id", "missing.asset"]))
       .toThrow(/No production recipes matched/);
   });
@@ -94,7 +94,7 @@ describe("GR-3.2 production preparation pipeline", () => {
         expect.objectContaining({ id: "production.island.horseshoe", lifecycle: "candidate" }),
       ]),
     });
-    expect(productionIndex.entries).toHaveLength(6);
+    expect(productionIndex.entries).toHaveLength(26);
   });
 
   it("continues a batch after one isolated recipe failure", async () => {

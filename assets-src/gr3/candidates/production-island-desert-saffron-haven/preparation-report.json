@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.desert.saffron-haven",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "f27e687489d177382650472f2730e6fbaba79766913fc961678e9d3751402ded",
+  "jobKey": "a0078c0db087ee557c633618050678b9ae985c795af372cc50c3f47ace5ff0c4",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-desert-saffron-haven-source.png",
+      "sha256": "d7cf1154a18480d0278994792f05d31196b16e79a59e1e2dcf992d3807e459bc"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-desert-saffron-haven-mask.png",
+      "sha256": "76390b50f5ce4abff9595c6a83da5dc390d314c286e669c8e1623ba0c568b001"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-desert-saffron-haven/base.png",
+        "width": 640,
+        "height": 512,
+        "sha256": "d60d72b14c78b1d45d72a51e7ed687c615ad0a90fd0f0eff695b20f00941b7dd",
+        "sourceBounds": {
+          "x": 78,
+          "y": 36,
+          "width": 1098,
+          "height": 1143
+        },
+        "placement": {
+          "x": 74,
+          "y": 0,
+          "width": 492,
+          "height": 512
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-desert-saffron-haven/thumbnail.png",
+      "width": 192,
+      "height": 154,
+      "sha256": "c8648062212c439e41b6cbc0858732a665ea3d4b6e38f3db706701784f7ed235"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-desert-saffron-haven/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "580594b1d1e619b2e068b41cd3fa72f8ca900570d2baca13c7e2717aa783bc69"
+    }
+  }
+}

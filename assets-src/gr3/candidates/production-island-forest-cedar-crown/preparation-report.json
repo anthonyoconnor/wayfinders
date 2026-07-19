@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.forest.cedar-crown",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "c574d09bf2f95de80db6b8fbe9e606245500705927c4f721ceb388d7fc742248",
+  "jobKey": "0eefa4f20cc0d2e0f4cc34ae3f3579152a0164742b22ae8db77145c2a31fd473",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-forest-cedar-crown-source.png",
+      "sha256": "a3e263f9b11a4b8c464d00d1fad9628e13ebfb210130c4b8ace3188717e2e6d8"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-forest-cedar-crown-mask.png",
+      "sha256": "f7a0ad1b9e0c5c1cd7fb478334e0201b94655044f14fdf0c93d2281ec11f7137"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-forest-cedar-crown/base.png",
+        "width": 640,
+        "height": 576,
+        "sha256": "43a70cdd37980f322cd3461ef773883ea4d55c1635fa015f43bfb18b7bf320b1",
+        "sourceBounds": {
+          "x": 159,
+          "y": 74,
+          "width": 1072,
+          "height": 1072
+        },
+        "placement": {
+          "x": 32,
+          "y": 0,
+          "width": 576,
+          "height": 576
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-forest-cedar-crown/thumbnail.png",
+      "width": 192,
+      "height": 173,
+      "sha256": "d463d7a712173cb674aa566d2f79e16772c89edda6dc3a4547ad8a70d77566f5"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-forest-cedar-crown/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "f9fd329e791c914895ca43a94445853922c5a9e2dc5af92b7fdff0a5f710ffa9"
+    }
+  }
+}

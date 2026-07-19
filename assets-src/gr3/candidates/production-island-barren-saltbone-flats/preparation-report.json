@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.barren.saltbone-flats",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "1f1a85ffe323e96ae1eaf8dd3375631a216aa647507d067e90289d10e8ce95ea",
+  "jobKey": "35e5d0b4e690cb36fabb47e2abba63f85cfd5c0ac674a983506f04c2eb09dfc8",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-barren-saltbone-flats-source.png",
+      "sha256": "b71de96100a474252c714091015d7614e363b1a8224f2708b7a62c28128676d0"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-barren-saltbone-flats-mask.png",
+      "sha256": "139feee34d84e6cb62f2008131d056b0198a74dbddec8879414063d39e8a4787"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-barren-saltbone-flats/base.png",
+        "width": 640,
+        "height": 448,
+        "sha256": "eff8b2556f6defa2ae8fc2c5e427a9cda0c68596849153b33a43f339a98b2347",
+        "sourceBounds": {
+          "x": 58,
+          "y": 44,
+          "width": 1139,
+          "height": 1084
+        },
+        "placement": {
+          "x": 84,
+          "y": 0,
+          "width": 471,
+          "height": 448
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-barren-saltbone-flats/thumbnail.png",
+      "width": 192,
+      "height": 134,
+      "sha256": "ad2d2668747cde0c1f52faff1ef606c0ae56f98e5d03d72adb354878218d9c6b"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-barren-saltbone-flats/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "648606d42a8b4d2abc161250de964ecef1c7f02238917f980561a6c92e0ce61b"
+    }
+  }
+}

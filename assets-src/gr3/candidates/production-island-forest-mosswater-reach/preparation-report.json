@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.forest.mosswater-reach",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "ebfed178af32caad16bcbf1b5a754b93fd247bc3b782dcc7631c7933066ef5d9",
+  "jobKey": "f1568e3f8f6f589f9205e0878c2220d3931e38f05f7e982ed7d20f437a59ac9e",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-forest-mosswater-reach-source.png",
+      "sha256": "cf4f56c22aa66d36916d91c6a3f3fb1d5e90f7215c38eae3dadd14768c6dfdf8"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-forest-mosswater-reach-mask.png",
+      "sha256": "a72a026869c577ec012bf55914cbc32c77f1adeb86b1d66b1a257ab0e33c7103"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-forest-mosswater-reach/base.png",
+        "width": 576,
+        "height": 448,
+        "sha256": "87d624cf0274667ac39bad7940dd0bae2ec8bc37eed471d1740d10032fabc81e",
+        "sourceBounds": {
+          "x": 16,
+          "y": 204,
+          "width": 1222,
+          "height": 704
+        },
+        "placement": {
+          "x": 0,
+          "y": 58,
+          "width": 576,
+          "height": 332
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-forest-mosswater-reach/thumbnail.png",
+      "width": 192,
+      "height": 149,
+      "sha256": "0a616d882668f239494ddf1ad2604bd1cb6defc524c225a1597ed899ed0debb4"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-forest-mosswater-reach/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "dcd8412e164d9028a9ae85b97a41b0717d70d846cde1bef0f74790bc0975a94b"
+    }
+  }
+}

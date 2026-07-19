@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.desert.scorpion-mesa",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "627be945fe2091fa6b3f4882876d60d53c0f539b35489d0b4f84955b59debf7e",
+  "jobKey": "88fc98bb95b0ba260cff835825b5acf836b99f9ad02b35cab12dc542789f3536",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-desert-scorpion-mesa-source.png",
+      "sha256": "d5859eb781ac92f0b0109bdafc6219239d1c4c8c28ae64c24632cdd3aa8b48a0"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-desert-scorpion-mesa-mask.png",
+      "sha256": "4aa72fa674561c51987600d7ee1b1dd7d4da510a311029795884d31eb3a52308"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-desert-scorpion-mesa/base.png",
+        "width": 448,
+        "height": 512,
+        "sha256": "7e99168d799ff0b25f4d92e11bcbfa6828ce72b7c473b8f393830d2cb1ab3a33",
+        "sourceBounds": {
+          "x": 59,
+          "y": 70,
+          "width": 1139,
+          "height": 1109
+        },
+        "placement": {
+          "x": 0,
+          "y": 38,
+          "width": 448,
+          "height": 436
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-desert-scorpion-mesa/thumbnail.png",
+      "width": 168,
+      "height": 192,
+      "sha256": "b2003584b2b5382f25307420a4b4d1d49b8f662ecbbe56c0944a1ee85ea732c8"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-desert-scorpion-mesa/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "9ecfd4b123161ee5e48c99cf53cb3bb6303cc3a9bd4bbc68c2334dff12382de8"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.desert.glass-dune-isle",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "31a1debdc2c37d3743af3ba04ec601b0863ac4b0a1230d4341d73c0774afc8cb",
+  "jobKey": "4fbb9b9cd5ca65e42f1eb42301e23e4e0764ca9777bad55b12428ea632fffc5d",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-desert-glass-dune-isle-source.png",
+      "sha256": "cdbc3bc31f84c8a0806ba6cc68f1d758b297d46229cdb4c08bfea2855eb6b0d8"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-desert-glass-dune-isle-mask.png",
+      "sha256": "02c4716879aaae3603d759b4604a56d56c3d3f1ab4ef57367d5796b292752a9a"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-desert-glass-dune-isle/base.png",
+        "width": 512,
+        "height": 384,
+        "sha256": "565d3682fe6c2b7fb7b4c66afddb2f586967380258db3a5f8f432f36abdf6eb2",
+        "sourceBounds": {
+          "x": 233,
+          "y": 62,
+          "width": 892,
+          "height": 1113
+        },
+        "placement": {
+          "x": 102,
+          "y": 0,
+          "width": 308,
+          "height": 384
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-desert-glass-dune-isle/thumbnail.png",
+      "width": 192,
+      "height": 144,
+      "sha256": "79ae496bd6ebccaeaf3a1c6f7b9a52395b8bdddecf977bcf210d68ae026f87a6"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-desert-glass-dune-isle/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "3aa1af066c3db902faeacf55a8ad15de23bce1fa83199e8129572c770073f52c"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.tropical.three-fin-atoll",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "147026c46fb82da5692dd92190edd12559f5ec9f9d78184bd88914e3d07aea72",
+  "jobKey": "eb10cf2bed07d63636734e636f827011b3d8258be28af201a965f0e82a5235c1",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-tropical-three-fin-atoll-source.png",
+      "sha256": "5124acb98dfd2cb52bbcbfb6b434fbd7bb036ba23be19c226ca4fc18f2724206"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-tropical-three-fin-atoll-mask.png",
+      "sha256": "1365922b6345c91ea81024d5456785fb3f1a4fde084194b2bb39f88058be8e42"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-tropical-three-fin-atoll/base.png",
+        "width": 512,
+        "height": 512,
+        "sha256": "cd88268be36fc4e624c4e20f6dead019f60fa06aa9ecf6471f4bce2dd9502483",
+        "sourceBounds": {
+          "x": 92,
+          "y": 66,
+          "width": 1125,
+          "height": 1110
+        },
+        "placement": {
+          "x": 0,
+          "y": 3,
+          "width": 512,
+          "height": 505
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-tropical-three-fin-atoll/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "7073e1dce68937d678ea8a7d9bc504cbbfc48423d1d8a04bf9775065f32d2a6e"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-tropical-three-fin-atoll/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "3607a66219c96ea38c76ecf960bdbbf04b454d0f69b5fca44a264d07e9c789fe"
+    }
+  }
+}

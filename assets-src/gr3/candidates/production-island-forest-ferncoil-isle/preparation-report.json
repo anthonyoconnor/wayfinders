@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.forest.ferncoil-isle",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "de3727a0b62bbe9abfe3661cd9d531dade861f2567aa40276875c42cb8be3f34",
+  "jobKey": "1a24207e423f6992b52adc317632f2f0035960c78b9f8bd3039aa0ed4c5f5f50",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-forest-ferncoil-isle-source.png",
+      "sha256": "8f457d4c6189ffe2b33b46c57ef1c0cd8cda267c4477909c57a23ec8c938d079"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-forest-ferncoil-isle-mask.png",
+      "sha256": "0e564a09ecb0dafe3163857e92c9c8bf9fad3d69240591fc3203f730fb3996a6"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-forest-ferncoil-isle/base.png",
+        "width": 448,
+        "height": 512,
+        "sha256": "59c90b9e420a546628a8dd2992e872d7433885733ba37724790cc3a2c0c24b9c",
+        "sourceBounds": {
+          "x": 177,
+          "y": 34,
+          "width": 1001,
+          "height": 1204
+        },
+        "placement": {
+          "x": 11,
+          "y": 0,
+          "width": 426,
+          "height": 512
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-forest-ferncoil-isle/thumbnail.png",
+      "width": 168,
+      "height": 192,
+      "sha256": "435b42701d58f2ed8aae817ee091fac2264029fbf95eb09f309f8b0e1d5628ce"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-forest-ferncoil-isle/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "3ee4ca812812ccab89cdc5a34fe10bd27f3ada707a01e59a00b8c588410dcfcf"
+    }
+  }
+}

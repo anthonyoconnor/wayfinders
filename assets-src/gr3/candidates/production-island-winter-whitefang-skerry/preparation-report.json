@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.winter.whitefang-skerry",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "5d23eb1992fb6fe9f8bd7a1be5f5c6196aaff8d3c6f8f05ac2bc04b945ebea8e",
+  "jobKey": "851d33f256395b2232947da7e0b3d6d3957c82743d7005be4e1566dea6a91efa",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-winter-whitefang-skerry-source.png",
+      "sha256": "5f6030fa0668a448952a4809712b3912e03e6f35cf7446487c51dfa9a6e7db0e"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-winter-whitefang-skerry-mask.png",
+      "sha256": "28687b0e66dad1ba27c7ef360500d47c10032ccb675846eefe570d6628ce32b7"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-winter-whitefang-skerry/base.png",
+        "width": 384,
+        "height": 576,
+        "sha256": "6c4902fcbd898f908905814f53f3b4337ca6d17abf29ed06462bbe56c918a247",
+        "sourceBounds": {
+          "x": 200,
+          "y": 70,
+          "width": 865,
+          "height": 1136
+        },
+        "placement": {
+          "x": 0,
+          "y": 36,
+          "width": 384,
+          "height": 504
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-winter-whitefang-skerry/thumbnail.png",
+      "width": 128,
+      "height": 192,
+      "sha256": "c994e86ac601cd247f90f606cc84327531c71ebbf3c3b8cf59a0732eb448bebe"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-winter-whitefang-skerry/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "240bf6762383aaac5c50209926b6ad042053fd32e5002076135a28a25bf0f670"
+    }
+  }
+}

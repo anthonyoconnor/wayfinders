@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.barren.blackneedle-isle",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "52a24a1b28815d222f69a398dabd2debb21c9149f12b631078e5e6764f74b33b",
+  "jobKey": "bd084bc09dc6d9d1cdbb318c3ac11aee32346be3bb5307629081193beb3506d6",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-barren-blackneedle-isle-source.png",
+      "sha256": "6a7d577ac8d7108c911be20395ea0c2f9265675f7952148e06a68c05e3d19379"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-barren-blackneedle-isle-mask.png",
+      "sha256": "272382a34d2ac4506927dc058cbd1484928547c0ac463c171030c5d544500e72"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-barren-blackneedle-isle/base.png",
+        "width": 512,
+        "height": 512,
+        "sha256": "35751606c4a6267636c1d5b2d5e2c220df9ff49b092dfaa9969b4065c1648b26",
+        "sourceBounds": {
+          "x": 70,
+          "y": 89,
+          "width": 1151,
+          "height": 1020
+        },
+        "placement": {
+          "x": 0,
+          "y": 29,
+          "width": 512,
+          "height": 454
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-barren-blackneedle-isle/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "5e504aa41e2096efd760b6fa80d6dbad6cfce336c01bb3d0f613baa93f9fc8f5"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-barren-blackneedle-isle/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "09adc6837e7eedc22d56927c8319af431013655845fcc7b9eec591954a48dcdf"
+    }
+  }
+}

@@ -46,14 +46,14 @@ function validIslandRecipe() {
 describe("production asset recipe manifest", () => {
   it("retains the three runtime packages alongside the current imported source inventory", () => {
     const manifest = validateProductionAssetRecipeManifest(productionRecipes);
-    expect(manifest.recipes).toHaveLength(9);
+    expect(manifest.recipes).toHaveLength(29);
     expect(manifest.recipes.filter((recipe) => recipe.lifecycle === "runtime").map((recipe) => recipe.id))
       .toEqual([
         AUTHORED_ASSET_IDS.homeIsland,
         AUTHORED_ASSET_IDS.playerBoat,
         AUTHORED_ASSET_IDS.fishingShoal,
       ]);
-    expect(manifest.recipes.filter((recipe) => recipe.lifecycle === "source")).toHaveLength(6);
+    expect(manifest.recipes.filter((recipe) => recipe.lifecycle === "source")).toHaveLength(26);
   });
 
   it("validates and freezes a lightweight island source recipe", () => {

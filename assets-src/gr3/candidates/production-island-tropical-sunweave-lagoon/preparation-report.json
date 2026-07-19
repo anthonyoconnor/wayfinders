@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.tropical.sunweave-lagoon",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "02df2abbc6fcfdc27f1172fbcade4243ccbd0f568408acba0bf4f21a0df315ee",
+  "jobKey": "abbf151d03ee1364f1b3ace8f06c258c36eaa5cd295c7c7374cfc1890197563a",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-tropical-sunweave-lagoon-source.png",
+      "sha256": "961b7ee0b526fd763148b017fa3d6bd2b2f5e6d4697a465cff5b3e6b0aa80e17"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-tropical-sunweave-lagoon-mask.png",
+      "sha256": "22224462640869682d76df04b033c7234c73e1161eaf89d3a875f3eaf9d43965"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-tropical-sunweave-lagoon/base.png",
+        "width": 640,
+        "height": 576,
+        "sha256": "e4af817b7e787b30d68b1942a1f14d4143e9d9645ec883f6761ed45712172194",
+        "sourceBounds": {
+          "x": 17,
+          "y": 65,
+          "width": 1221,
+          "height": 1126
+        },
+        "placement": {
+          "x": 7,
+          "y": 0,
+          "width": 625,
+          "height": 576
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-tropical-sunweave-lagoon/thumbnail.png",
+      "width": 192,
+      "height": 173,
+      "sha256": "27b590c0d32a04e35c8af46166f7ac85830355fc3466269732bd2b664d9697ec"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-tropical-sunweave-lagoon/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "542e1ac178281b6271b00a7bdeb9b543b8c82b7fee3be893dc6e3e52712247c1"
+    }
+  }
+}

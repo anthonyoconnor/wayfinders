@@ -1,8 +1,260 @@
 {
   "formatVersion": 1,
   "pipelineVersion": 2,
-  "manifestSha256": "3c88c56b93980b9460a61aa357db7a779b9415c2054deb523ef0a0ef63cc3374",
+  "manifestSha256": "bb8100bc5b2ef5fcbd7adab04579ed3f29a4b017f81348d0b6d6c3e878093187",
   "entries": [
+    {
+      "id": "production.island.barren.ashen-hook",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "fb7c86b10dde80eedaf32999934a41ed4242a4ac43f2d852a3ece9e70cefa032",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-barren-ashen-hook-source.png",
+        "assets-src/gr3/candidate-masks/production-island-barren-ashen-hook-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-barren-ashen-hook/base.png",
+          "width": 448,
+          "height": 512,
+          "sha256": "03d4a79e111c6b0e3625b51cfb4a7aa83132c72ce204ad1adb955bb4f3c1539c"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-barren-ashen-hook/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-barren-ashen-hook/collision-draft.json"
+    },
+    {
+      "id": "production.island.barren.blackneedle-isle",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "bd084bc09dc6d9d1cdbb318c3ac11aee32346be3bb5307629081193beb3506d6",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-barren-blackneedle-isle-source.png",
+        "assets-src/gr3/candidate-masks/production-island-barren-blackneedle-isle-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-barren-blackneedle-isle/base.png",
+          "width": 512,
+          "height": 512,
+          "sha256": "35751606c4a6267636c1d5b2d5e2c220df9ff49b092dfaa9969b4065c1648b26"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-barren-blackneedle-isle/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-barren-blackneedle-isle/collision-draft.json"
+    },
+    {
+      "id": "production.island.barren.cinder-crown",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "6bc00b77db5f5a6d5a42e7f33f0c3d00f58e6f4712df57d66ef9df83d6f1eda2",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-barren-cinder-crown-source.png",
+        "assets-src/gr3/candidate-masks/production-island-barren-cinder-crown-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-barren-cinder-crown/base.png",
+          "width": 576,
+          "height": 576,
+          "sha256": "12d0e910474032883adf648f915ca7346fa0c7af4cb3d92693808dabe1cdf7a8"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-barren-cinder-crown/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-barren-cinder-crown/collision-draft.json"
+    },
+    {
+      "id": "production.island.barren.saltbone-flats",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "35e5d0b4e690cb36fabb47e2abba63f85cfd5c0ac674a983506f04c2eb09dfc8",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-barren-saltbone-flats-source.png",
+        "assets-src/gr3/candidate-masks/production-island-barren-saltbone-flats-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-barren-saltbone-flats/base.png",
+          "width": 640,
+          "height": 448,
+          "sha256": "eff8b2556f6defa2ae8fc2c5e427a9cda0c68596849153b33a43f339a98b2347"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-barren-saltbone-flats/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-barren-saltbone-flats/collision-draft.json"
+    },
+    {
+      "id": "production.island.desert.copperwind-port",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "1e968a25112ce892fda3459d440a4b7946eb46e307044344641a06169ec021b6",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-desert-copperwind-port-source.png",
+        "assets-src/gr3/candidate-masks/production-island-desert-copperwind-port-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-desert-copperwind-port/base.png",
+          "width": 576,
+          "height": 448,
+          "sha256": "19e400d6a42f62b71954855edc74ae1a0ba6b55e46459fcc513cd7c9499ad607"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-desert-copperwind-port/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-desert-copperwind-port/collision-draft.json"
+    },
+    {
+      "id": "production.island.desert.glass-dune-isle",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "4fbb9b9cd5ca65e42f1eb42301e23e4e0764ca9777bad55b12428ea632fffc5d",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-desert-glass-dune-isle-source.png",
+        "assets-src/gr3/candidate-masks/production-island-desert-glass-dune-isle-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-desert-glass-dune-isle/base.png",
+          "width": 512,
+          "height": 384,
+          "sha256": "565d3682fe6c2b7fb7b4c66afddb2f586967380258db3a5f8f432f36abdf6eb2"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-desert-glass-dune-isle/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-desert-glass-dune-isle/collision-draft.json"
+    },
+    {
+      "id": "production.island.desert.saffron-haven",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "a0078c0db087ee557c633618050678b9ae985c795af372cc50c3f47ace5ff0c4",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-desert-saffron-haven-source.png",
+        "assets-src/gr3/candidate-masks/production-island-desert-saffron-haven-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-desert-saffron-haven/base.png",
+          "width": 640,
+          "height": 512,
+          "sha256": "d60d72b14c78b1d45d72a51e7ed687c615ad0a90fd0f0eff695b20f00941b7dd"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-desert-saffron-haven/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-desert-saffron-haven/collision-draft.json"
+    },
+    {
+      "id": "production.island.desert.scorpion-mesa",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "88fc98bb95b0ba260cff835825b5acf836b99f9ad02b35cab12dc542789f3536",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-desert-scorpion-mesa-source.png",
+        "assets-src/gr3/candidate-masks/production-island-desert-scorpion-mesa-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-desert-scorpion-mesa/base.png",
+          "width": 448,
+          "height": 512,
+          "sha256": "7e99168d799ff0b25f4d92e11bcbfa6828ce72b7c473b8f393830d2cb1ab3a33"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-desert-scorpion-mesa/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-desert-scorpion-mesa/collision-draft.json"
+    },
+    {
+      "id": "production.island.forest.cedar-crown",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "0eefa4f20cc0d2e0f4cc34ae3f3579152a0164742b22ae8db77145c2a31fd473",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-forest-cedar-crown-source.png",
+        "assets-src/gr3/candidate-masks/production-island-forest-cedar-crown-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-forest-cedar-crown/base.png",
+          "width": 640,
+          "height": 576,
+          "sha256": "43a70cdd37980f322cd3461ef773883ea4d55c1635fa015f43bfb18b7bf320b1"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-forest-cedar-crown/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-forest-cedar-crown/collision-draft.json"
+    },
+    {
+      "id": "production.island.forest.ferncoil-isle",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "1a24207e423f6992b52adc317632f2f0035960c78b9f8bd3039aa0ed4c5f5f50",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-forest-ferncoil-isle-source.png",
+        "assets-src/gr3/candidate-masks/production-island-forest-ferncoil-isle-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-forest-ferncoil-isle/base.png",
+          "width": 448,
+          "height": 512,
+          "sha256": "59c90b9e420a546628a8dd2992e872d7433885733ba37724790cc3a2c0c24b9c"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-forest-ferncoil-isle/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-forest-ferncoil-isle/collision-draft.json"
+    },
+    {
+      "id": "production.island.forest.mosswater-reach",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "f1568e3f8f6f589f9205e0878c2220d3931e38f05f7e982ed7d20f437a59ac9e",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-forest-mosswater-reach-source.png",
+        "assets-src/gr3/candidate-masks/production-island-forest-mosswater-reach-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-forest-mosswater-reach/base.png",
+          "width": 576,
+          "height": 448,
+          "sha256": "87d624cf0274667ac39bad7940dd0bae2ec8bc37eed471d1740d10032fabc81e"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-forest-mosswater-reach/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-forest-mosswater-reach/collision-draft.json"
+    },
+    {
+      "id": "production.island.forest.splitpine-wilds",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "65f0f28ffa3a3b7f231da355f3c35e40d30e6cd05bf199c7c95daafca0fb1ea1",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-forest-splitpine-wilds-source.png",
+        "assets-src/gr3/candidate-masks/production-island-forest-splitpine-wilds-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-forest-splitpine-wilds/base.png",
+          "width": 512,
+          "height": 512,
+          "sha256": "1eb01d9ea883eb82c2660c16cbfe420ed126f55da8b15e55aa1340df82526cd1"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-forest-splitpine-wilds/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-forest-splitpine-wilds/collision-draft.json"
+    },
     {
       "id": "production.island.horseshoe",
       "family": "island",
@@ -124,6 +376,174 @@
       ],
       "thumbnailFile": "assets-src/gr3/candidates/production-island-river-delta-inhabited/thumbnail.png",
       "collisionDraftFile": "assets-src/gr3/candidates/production-island-river-delta-inhabited/collision-draft.json"
+    },
+    {
+      "id": "production.island.tropical.mangrove-forks",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "4cfcdc46eda6c57fa5b2aa7d9854669204dc2fda16d62a2fc3b28902011cafe7",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-tropical-mangrove-forks-source.png",
+        "assets-src/gr3/candidate-masks/production-island-tropical-mangrove-forks-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-tropical-mangrove-forks/base.png",
+          "width": 576,
+          "height": 640,
+          "sha256": "28a4959d3aeca12d509b3a05f314ebcac885f2d1728de981001547aecfc98c5c"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-tropical-mangrove-forks/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-tropical-mangrove-forks/collision-draft.json"
+    },
+    {
+      "id": "production.island.tropical.moonhook-cay",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "578b803a108be07fe3211b224652a8fc2c3c73a692fd7353215f6fdf09ce4cc6",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-tropical-moonhook-cay-source.png",
+        "assets-src/gr3/candidate-masks/production-island-tropical-moonhook-cay-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-tropical-moonhook-cay/base.png",
+          "width": 448,
+          "height": 384,
+          "sha256": "e56da8047de6e842127b68a8e18af29875832be76f9557184049ce518bc96358"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-tropical-moonhook-cay/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-tropical-moonhook-cay/collision-draft.json"
+    },
+    {
+      "id": "production.island.tropical.sunweave-lagoon",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "abbf151d03ee1364f1b3ace8f06c258c36eaa5cd295c7c7374cfc1890197563a",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-tropical-sunweave-lagoon-source.png",
+        "assets-src/gr3/candidate-masks/production-island-tropical-sunweave-lagoon-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-tropical-sunweave-lagoon/base.png",
+          "width": 640,
+          "height": 576,
+          "sha256": "e4af817b7e787b30d68b1942a1f14d4143e9d9645ec883f6761ed45712172194"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-tropical-sunweave-lagoon/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-tropical-sunweave-lagoon/collision-draft.json"
+    },
+    {
+      "id": "production.island.tropical.three-fin-atoll",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "eb10cf2bed07d63636734e636f827011b3d8258be28af201a965f0e82a5235c1",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-tropical-three-fin-atoll-source.png",
+        "assets-src/gr3/candidate-masks/production-island-tropical-three-fin-atoll-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-tropical-three-fin-atoll/base.png",
+          "width": 512,
+          "height": 512,
+          "sha256": "cd88268be36fc4e624c4e20f6dead019f60fa06aa9ecf6471f4bce2dd9502483"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-tropical-three-fin-atoll/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-tropical-three-fin-atoll/collision-draft.json"
+    },
+    {
+      "id": "production.island.winter.blueglass-atoll",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "783362fe0567883d2a4b972a2d0ff3b38c7b9fb598ac4f4846e32eb2e7652bc6",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-winter-blueglass-atoll-source.png",
+        "assets-src/gr3/candidate-masks/production-island-winter-blueglass-atoll-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-winter-blueglass-atoll/base.png",
+          "width": 512,
+          "height": 512,
+          "sha256": "b719398b9d3c82a49cfd1499a581a49ab7ecb7f841b964d506481dc95fd6bbc8"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-winter-blueglass-atoll/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-winter-blueglass-atoll/collision-draft.json"
+    },
+    {
+      "id": "production.island.winter.emberhearth-isle",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "8f066fc2b4038c39545077d6b53166345e33fa504fa8b2a6c99c2c535a44cf0f",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-winter-emberhearth-isle-source.png",
+        "assets-src/gr3/candidate-masks/production-island-winter-emberhearth-isle-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-winter-emberhearth-isle/base.png",
+          "width": 576,
+          "height": 512,
+          "sha256": "148fb77c485d19e4055b52901ec0884147bca889102e8842d9361fbafc70701b"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-winter-emberhearth-isle/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-winter-emberhearth-isle/collision-draft.json"
+    },
+    {
+      "id": "production.island.winter.frostharbor",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "24b71cb467f12f1543dcedb18db7cf1c31776ab11cb4e6f665ac2343dcbbd7e3",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-winter-frostharbor-source.png",
+        "assets-src/gr3/candidate-masks/production-island-winter-frostharbor-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-winter-frostharbor/base.png",
+          "width": 640,
+          "height": 576,
+          "sha256": "225cf4ac6c9fb7d568e4c39a23b11656c5775c289a9c18a58ae61428e8dd002d"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-winter-frostharbor/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-winter-frostharbor/collision-draft.json"
+    },
+    {
+      "id": "production.island.winter.whitefang-skerry",
+      "family": "island",
+      "lifecycle": "candidate",
+      "jobKey": "851d33f256395b2232947da7e0b3d6d3957c82743d7005be4e1566dea6a91efa",
+      "sourceFiles": [
+        "assets-src/gr3/intake/production-island-winter-whitefang-skerry-source.png",
+        "assets-src/gr3/candidate-masks/production-island-winter-whitefang-skerry-mask.png"
+      ],
+      "layers": [
+        {
+          "id": "base",
+          "file": "assets-src/gr3/candidates/production-island-winter-whitefang-skerry/base.png",
+          "width": 384,
+          "height": 576,
+          "sha256": "6c4902fcbd898f908905814f53f3b4337ca6d17abf29ed06462bbe56c918a247"
+        }
+      ],
+      "thumbnailFile": "assets-src/gr3/candidates/production-island-winter-whitefang-skerry/thumbnail.png",
+      "collisionDraftFile": "assets-src/gr3/candidates/production-island-winter-whitefang-skerry/collision-draft.json"
     }
   ]
 }

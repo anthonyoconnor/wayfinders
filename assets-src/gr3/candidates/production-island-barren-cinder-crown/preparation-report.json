@@ -1,0 +1,55 @@
+{
+  "formatVersion": 1,
+  "pipelineVersion": 2,
+  "recipeId": "production.island.barren.cinder-crown",
+  "family": "island",
+  "lifecycle": "candidate",
+  "recipeHash": "c9411979f1411113a9ec5dfa7178022fad7f9f9b19bb99ef3355c86deb9fc2bc",
+  "jobKey": "6bc00b77db5f5a6d5a42e7f33f0c3d00f58e6f4712df57d66ef9df83d6f1eda2",
+  "sources": [
+    {
+      "layerId": "base",
+      "file": "assets-src/gr3/intake/production-island-barren-cinder-crown-source.png",
+      "sha256": "1a137f1c3a3e6b3a5bdb096659877154dbf789fbc5af11e6cac056afb1b4cc49"
+    },
+    {
+      "layerId": "collision-mask",
+      "file": "assets-src/gr3/candidate-masks/production-island-barren-cinder-crown-mask.png",
+      "sha256": "16701804eb44bba7239d48058f73919f5089cbfe50deae3549d420b619dbe484"
+    }
+  ],
+  "outputs": {
+    "layers": [
+      {
+        "id": "base",
+        "file": "assets-src/gr3/candidates/production-island-barren-cinder-crown/base.png",
+        "width": 576,
+        "height": 576,
+        "sha256": "12d0e910474032883adf648f915ca7346fa0c7af4cb3d92693808dabe1cdf7a8",
+        "sourceBounds": {
+          "x": 79,
+          "y": 80,
+          "width": 1111,
+          "height": 1152
+        },
+        "placement": {
+          "x": 10,
+          "y": 0,
+          "width": 556,
+          "height": 576
+        }
+      }
+    ],
+    "thumbnail": {
+      "file": "assets-src/gr3/candidates/production-island-barren-cinder-crown/thumbnail.png",
+      "width": 192,
+      "height": 192,
+      "sha256": "0ecf2efccc8dfb6f29c8cf714aaa32e530231157910b99a6e10635aca2e45a58"
+    },
+    "collisionDraft": {
+      "file": "assets-src/gr3/candidates/production-island-barren-cinder-crown/collision-draft.json",
+      "kind": "hybrid-grid-draft",
+      "sha256": "56bb0438286b38045555ef2740ea186c83dda7de93be1fb8cff9b760d4a5ffe7"
+    }
+  }
+}
