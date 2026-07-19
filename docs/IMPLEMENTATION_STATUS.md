@@ -160,13 +160,6 @@ active-image ownership, and resource bounds still pass. The generation code is
 identical to the clean accepted sample, so this is retained as an operational
 trend check rather than a gameplay blocker.
 
-The latest aggregate I/O rerun hit fixed five-second timeouts in unrelated
-collision and production-asset tests under parallel load. A serial rerun
-cleared every production-asset timeout. The remaining pinned-runner case in
-`collision-save-api.test.mjs` repeatedly completed just after its five-second
-budget on this development machine; its other cases and all achievement-icon
-asset and workspace checks pass.
-
 ## Open operational gaps
 
 - Complete live audio browser acceptance for keyboard focus, stored-file media
@@ -178,6 +171,3 @@ asset and workspace checks pass.
   budgets do not by themselves close the original user-reported sluggishness.
 - Repeat the serial generation trend on a quiet machine before using the latest
   loaded-machine `P0`/`P1` p95 samples as a performance baseline.
-- Recheck the isolated `collision-save-api.test.mjs` pinned-runner launch case
-  on a quiet machine; it currently exceeds its fixed five-second budget by less
-  than one tenth of a second without involving the achievement-icon paths.

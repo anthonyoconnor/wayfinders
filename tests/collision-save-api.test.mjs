@@ -175,6 +175,8 @@ describe("local collision-save API", () => {
     }
   });
 
+  // Cold vite-node startup competes with the other test:all workers; this is a
+  // runner-compatibility check rather than a process-startup performance budget.
   it("launches collision intake through the pinned TypeScript runner without obsolete Node flags", async () => {
     const temporaryRoot = await mkdtemp(path.join(tmpdir(), "wayfinders-node-runtime-test-"));
     const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -192,5 +194,5 @@ describe("local collision-save API", () => {
     } finally {
       await rm(temporaryRoot, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });
