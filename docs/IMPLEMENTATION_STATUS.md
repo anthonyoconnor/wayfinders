@@ -42,7 +42,7 @@ Current inspection reports `8.409 MiB` stored audio; ocean measures `0.055` RMS
 with a `0.2152` peak and wake measures `0.060` RMS with a `0.1938` peak before
 catalog and mixer gains. The asset gate passes.
 
-All ten navigator-achievement kinds now use one checked-in animated sprite
+All eight navigator-achievement kinds now use one checked-in animated sprite
 sheet in both the Great Hall and a dedicated read-only Icons workspace. The
 workspace presents every animation together with pause/play and review-speed
 controls. Desktop, responsive, lifecycle, shared-renderer, reduced-motion, and
@@ -117,7 +117,7 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
   controls. Water is a read-only production inspection surface over the same
   generated layouts and runtime assets as the game, with seed, profile, zoom,
   overlay, pause, and comparison controls and no Production tooling sidebar.
-  Icons is a read-only simultaneous animation-review surface for the ten
+  Icons is a read-only simultaneous animation-review surface for the eight
   navigator-achievement kinds, with synchronized pause and playback-speed
   controls over the same sheet used in the Great Hall.
   Great Hall is a view-only host for the validated V1 fixture and the

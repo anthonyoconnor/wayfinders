@@ -64,7 +64,6 @@ form.
 | --- | --- | --- |
 | Idol locations found / total | Prominent gold shell-idol count | Focus/click label |
 | Navigators, safe journeys, completed tenures, lost navigators | Counting-cord symbols and numbers | Tally glossary |
-| Supported route tiles and mapped enclosed water tiles | Wake and lagoon symbols with counts | Tally glossary |
 | Island leads and dossiers | Outline and inlaid island symbols with counts | Tally glossary |
 | Site leads and reports | Outline and filled marker symbols with counts | Tally glossary |
 | Fishing leads and surveys | Outline and filled fish-ripple symbols with counts | Tally glossary |
