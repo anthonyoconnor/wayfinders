@@ -189,13 +189,16 @@ describe("GameSimulation island-dossier integration", () => {
     expect(simulation.returnedIslandDossiers
       .filter(({ state }) => state === "dossier")
       .map(({ islandId }) => islandId)).toEqual(expectedIds);
-    expect(simulation.currentNavigator.successfulVoyages[0].islandLeadIds).toEqual([]);
+    expect(simulation.currentNavigator.successfulVoyages[0].islandLeadIds).toEqual(expectedIds);
     expect(simulation.currentNavigator.successfulVoyages[0].islandDossierIds).toEqual(expectedIds);
 
     const voyage = chronicleFor(simulation).navigators[0].voyages[0];
     expect(voyage.outcome).toBe("returned");
     expect(voyage.achievements
       .flatMap((achievement) => achievement.kind === "island-dossier" ? [achievement.islandId] : [])
+      .sort((left, right) => left - right)).toEqual(expectedIds);
+    expect(voyage.achievements
+      .flatMap((achievement) => achievement.kind === "island-lead" ? [achievement.islandId] : [])
       .sort((left, right) => left - right)).toEqual(expectedIds);
   });
 

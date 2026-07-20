@@ -15,8 +15,6 @@ export type GreatHallPresentationVoyageState =
   | "unsailed"
   | "closed";
 export type GreatHallPresentationAchievementKind =
-  | "supported-route"
-  | "mapped-water"
   | "island-lead"
   | "island-dossier"
   | "survey-lead"
@@ -68,7 +66,7 @@ const VOYAGE_STATES = new Set<GreatHallPresentationVoyageState>([
   "returned", "lost", "awaiting", "unsailed", "closed",
 ]);
 const ACHIEVEMENT_KINDS = new Set<GreatHallPresentationAchievementKind>([
-  "supported-route", "mapped-water", "island-lead", "island-dossier", "survey-lead",
+  "island-lead", "island-dossier", "survey-lead",
   "survey-report", "fishing-lead", "fishing-survey", "wreck-report", "idol-location",
 ]);
 

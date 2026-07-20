@@ -13,10 +13,8 @@ import {
 } from "../src/wayfinders/assets/achievementIcons";
 
 describe("achievement icon catalog", () => {
-  it("covers the ten presentation kinds once in canonical row order", () => {
+  it("covers the eight active presentation kinds once in canonical row order", () => {
     expect(ACHIEVEMENT_ICON_KINDS).toEqual([
-      "supported-route",
-      "mapped-water",
       "island-lead",
       "island-dossier",
       "survey-lead",
@@ -28,7 +26,7 @@ describe("achievement icon catalog", () => {
     ]);
     expect(Object.keys(ACHIEVEMENT_ICON_CATALOG)).toEqual(ACHIEVEMENT_ICON_KINDS);
     expect(ACHIEVEMENT_ICON_KINDS.map((kind) => ACHIEVEMENT_ICON_CATALOG[kind].row))
-      .toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+      .toEqual([2, 3, 4, 5, 6, 7, 8, 9]);
     for (const kind of ACHIEVEMENT_ICON_KINDS) {
       const metadata = ACHIEVEMENT_ICON_CATALOG[kind];
       expect(metadata.kind).toBe(kind);
@@ -48,9 +46,9 @@ describe("achievement icon catalog", () => {
   });
 
   it("maps validated frames to exact source rectangles", () => {
-    expect(achievementIconSourceRect("supported-route", 0)).toEqual({
+    expect(achievementIconSourceRect("island-lead", 0)).toEqual({
       x: 0,
-      y: 0,
+      y: 256,
       width: 128,
       height: 128,
     });
@@ -60,13 +58,13 @@ describe("achievement icon catalog", () => {
       width: 128,
       height: 128,
     });
-    expect(() => achievementIconSourceRect("mapped-water", -1)).toThrow(RangeError);
-    expect(() => achievementIconSourceRect("mapped-water", 1.5)).toThrow(RangeError);
-    expect(() => achievementIconSourceRect("mapped-water", 16)).toThrow(RangeError);
+    expect(() => achievementIconSourceRect("island-lead", -1)).toThrow(RangeError);
+    expect(() => achievementIconSourceRect("island-lead", 1.5)).toThrow(RangeError);
+    expect(() => achievementIconSourceRect("island-lead", 16)).toThrow(RangeError);
   });
 
   it("maps catalog rows to exact CSS background positions", () => {
-    expect(achievementIconRowPositionPercent("supported-route")).toBe(0);
+    expect(achievementIconRowPositionPercent("island-lead")).toBeCloseTo(200 / 9);
     expect(achievementIconRowPositionPercent("island-dossier")).toBeCloseTo(100 / 3);
     expect(achievementIconRowPositionPercent("idol-location")).toBe(100);
   });

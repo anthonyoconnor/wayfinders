@@ -33,6 +33,7 @@ function emptyVoyage(expeditionId: number): NavigatorVoyageAchievementInputV3 {
     fishingLeadIds: [],
     fishingSurveyIds: [],
     wreckIds: [],
+    achievementOrder: [],
   };
 }
 
@@ -255,6 +256,7 @@ describe("NavigatorLineageSystem", () => {
       fishingLeadIds: [createFishingShoalId(0)],
       fishingSurveyIds: [createFishingShoalId(1), createFishingShoalId(2)],
       wreckIds: [9],
+      achievementOrder: [],
     };
 
     const result = lineage.completeSuccessfulVoyage(input);
@@ -352,6 +354,39 @@ describe("NavigatorLineageSystem", () => {
     expect(lineage.currentNavigator.completedVoyages).toBe(2);
   });
 
+  it("credits lead and completed knowledge transitions in the same voyage", () => {
+    const lineage = new NavigatorLineageSystem();
+    const siteId = createSurveySiteId("historic-wreck", 0);
+    const fishingId = createFishingShoalId(0);
+
+    expect(lineage.completeSuccessfulVoyage({
+      ...emptyVoyage(1),
+      islandLeadIds: [7],
+      islandDossierIds: [7],
+      surveySiteLeadIds: [siteId],
+      surveySiteReportIds: [siteId],
+      fishingLeadIds: [fishingId],
+      fishingSurveyIds: [fishingId],
+    }).voyage).toMatchObject({
+      islandLeadIds: [7],
+      islandDossierIds: [7],
+      surveySiteLeadIds: [siteId],
+      surveySiteReportIds: [siteId],
+      fishingLeadIds: [fishingId],
+      fishingSurveyIds: [fishingId],
+    });
+
+    expect(NavigatorLineageSystem.fromSnapshot(jsonClone(lineage.snapshot()))
+      .currentNavigator.successfulVoyages[0]).toMatchObject({
+      islandLeadIds: [7],
+      islandDossierIds: [7],
+      surveySiteLeadIds: [siteId],
+      surveySiteReportIds: [siteId],
+      fishingLeadIds: [fishingId],
+      fishingSurveyIds: [fishingId],
+    });
+  });
+
   it("credits each survey-site transition once while allowing a later report to resolve its lead", () => {
     const lineage = new NavigatorLineageSystem();
     const siteId = createSurveySiteId("historic-wreck", 0);
@@ -444,13 +479,6 @@ describe("NavigatorLineageSystem", () => {
       },
       {
         corrupt: (snapshot) => {
-          voyage(snapshot, 0).islandLeadIds = [2];
-          voyage(snapshot, 0).islandDossierIds = [2];
-        },
-        message: /cannot also be recorded as an island lead/,
-      },
-      {
-        corrupt: (snapshot) => {
           voyage(snapshot, 0).islandLeadIds = [3];
           voyage(snapshot, 1).islandLeadIds = [3];
         },
@@ -485,13 +513,6 @@ describe("NavigatorLineageSystem", () => {
       {
         corrupt: (snapshot) => {
           voyage(snapshot, 0).surveySiteLeadIds = [surveySiteId];
-          voyage(snapshot, 0).surveySiteReportIds = [surveySiteId];
-        },
-        message: /cannot also be recorded as a survey-site lead/,
-      },
-      {
-        corrupt: (snapshot) => {
-          voyage(snapshot, 0).surveySiteLeadIds = [surveySiteId];
           voyage(snapshot, 1).surveySiteLeadIds = [surveySiteId];
         },
         message: /must not repeat a survey-site lead/,
@@ -521,13 +542,6 @@ describe("NavigatorLineageSystem", () => {
       {
         corrupt: (snapshot) => { voyage(snapshot, 0).supportedTileCount = -1; },
         message: /non-negative safe integer/,
-      },
-      {
-        corrupt: (snapshot) => {
-          voyage(snapshot, 0).fishingLeadIds = [fishingId];
-          voyage(snapshot, 0).fishingSurveyIds = [fishingId];
-        },
-        message: /cannot also be recorded as a fishing lead/,
       },
     ];
 

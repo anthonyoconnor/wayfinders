@@ -103,6 +103,7 @@ import {
   createNavigatorId,
   type NavigatorGenerationHandoverV1,
   type NavigatorRecordV6,
+  type NavigatorVoyageAchievementOrderEntryV1,
   type NavigatorVoyageAchievementInputV3,
 } from "../lineage/NavigatorLineageSystem";
 import type { GeneratedWorld } from "../world/WorldGenerator";
@@ -319,6 +320,7 @@ export class GameSimulation {
   private readonly generator: WorldGenerator;
   private expeditionId = 1;
   private activeExpedition = false;
+  private voyageAchievementOrder: NavigatorVoyageAchievementOrderEntryV1[] = [];
   private lineage = new NavigatorLineageSystem();
   private readonly shipwrecks: ShipwreckState[] = [];
   private pendingRespawn?: PendingRespawnState;
@@ -447,6 +449,58 @@ export class GameSimulation {
 
   get expeditionActive(): boolean {
     return this.activeExpedition;
+  }
+
+  /** Provisional credits that would be committed by returning this voyage now. */
+  get currentVoyageAchievements(): Readonly<NavigatorVoyageAchievementInputV3> {
+    const expeditionId = this.expeditionId;
+    const islandRecords = this.provisionalIslandDossiers
+      .filter((record) => record.expeditionId === expeditionId);
+    const surveySiteRecords = this.provisionalSurveySites
+      .filter((record) => record.expeditionId === expeditionId);
+    const fishingRecords = this.provisionalFishingShoals
+      .filter((record) => record.expeditionId === expeditionId);
+    const returnedIslandIds = new Set(this.returnedIslandDossiers.map(({ islandId }) => islandId));
+    const returnedSurveySiteIds = new Set(this.returnedSurveySites.map(({ id }) => id));
+    const returnedFishingIds = new Set(this.returnedFishingShoals.map(({ id }) => id));
+    return Object.freeze({
+      expeditionId,
+      supportedTileCount: this.currentVoyageSupportedTileCount,
+      closedUnknownTileCount: 0,
+      islandLeadIds: Object.freeze(islandRecords
+        .filter(({ state, islandId }) => state === "sighted" || !returnedIslandIds.has(islandId))
+        .map(({ islandId }) => islandId)
+        .sort((left, right) => left - right)),
+      islandDossierIds: Object.freeze(islandRecords
+        .filter(({ state }) => state === "surveyed")
+        .map(({ islandId }) => islandId)
+        .sort((left, right) => left - right)),
+      surveySiteLeadIds: Object.freeze(surveySiteRecords
+        .filter(({ state, id }) => state === "sighted" || !returnedSurveySiteIds.has(id))
+        .map(({ id }) => id)
+        .sort()),
+      surveySiteReportIds: Object.freeze(surveySiteRecords
+        .filter(({ state }) => state === "surveyed")
+        .map(({ id }) => id)
+        .sort()),
+      fishingLeadIds: Object.freeze(fishingRecords
+        .filter(({ state, id }) => state === "sighted" || !returnedFishingIds.has(id))
+        .map(({ id }) => id)
+        .sort()),
+      fishingSurveyIds: Object.freeze(fishingRecords
+        .filter(({ state }) => state === "surveyed")
+        .map(({ id }) => id)
+        .sort()),
+      wreckIds: Object.freeze(this.shipwrecks
+        .filter(({ survey }) => survey.state === "provisional" && survey.expeditionId === expeditionId)
+        .map(({ id }) => id)
+        .sort((left, right) => left - right)),
+      achievementOrder: Object.freeze([...this.voyageAchievementOrder]),
+    });
+  }
+
+  get currentVoyageSupportedTileCount(): number {
+    return this.knowledge.expeditionPersonalCount(this.expeditionId);
   }
 
   get generation(): number {
@@ -841,6 +895,7 @@ export class GameSimulation {
     );
     this.expeditionId = 1;
     this.activeExpedition = false;
+    this.voyageAchievementOrder = [];
     this.lineage = new NavigatorLineageSystem();
     this.shipwrecks.length = 0;
     this.wrecksRevision++;
@@ -1059,6 +1114,7 @@ export class GameSimulation {
           generation: this.generation,
         });
       }
+      this.recordVoyageAchievement({ kind: "island-dossier", sourceId: result.islandId });
       this.events.emit("islandDossierSurveyed", {
         ...result,
         canonicalApproach: definition.canonicalApproach,
@@ -1068,6 +1124,7 @@ export class GameSimulation {
         islandId: result.islandId,
       });
       if (idolLocation) {
+        this.recordVoyageAchievement({ kind: "idol-location", sourceId: idolLocation.id });
         this.events.emit("idolLocationDiscovered", {
           expeditionId: this.expeditionId,
           generation: this.generation,
@@ -1119,6 +1176,7 @@ export class GameSimulation {
           generation: this.generation,
         });
       }
+      this.recordVoyageAchievement({ kind: "survey-site-report", sourceId: result.id });
       this.events.emit("surveySiteSurveyed", {
         ...result,
         tile: definition.tile,
@@ -1129,6 +1187,7 @@ export class GameSimulation {
         surveySiteId: result.id,
       });
       if (idolLocation) {
+        this.recordVoyageAchievement({ kind: "idol-location", sourceId: idolLocation.id });
         this.events.emit("idolLocationDiscovered", {
           expeditionId: this.expeditionId,
           generation: this.generation,
@@ -1200,6 +1259,7 @@ export class GameSimulation {
           generation: this.generation,
         });
       }
+      this.recordVoyageAchievement({ kind: "fishing-survey", sourceId: result.id });
       this.events.emit("fishingShoalSurveyed", {
         ...result,
         tile: definition.tile,
@@ -1274,6 +1334,7 @@ export class GameSimulation {
           generation: this.generation,
         });
       }
+      this.recordVoyageAchievement({ kind: "wreck-report", sourceId: wreck.id });
       this.events.emit("wreckSurveyed", {
         ...result,
         tile: { x: wreck.tileX, y: wreck.tileY },
@@ -1559,6 +1620,7 @@ export class GameSimulation {
     const expeditionId = this.expeditionId;
     const generation = this.generation;
     const navigatorId = this.currentNavigator.id;
+    const prospectiveAchievements = this.currentVoyageAchievements;
     const committed = this.knowledge.commitExpedition(expeditionId);
     const returnedIslandDossiers = this.islandDossierSystem.commitExpedition(expeditionId);
     const returnedSurveySites = this.surveySiteSystem.commitExpedition(expeditionId);
@@ -1574,13 +1636,14 @@ export class GameSimulation {
       expeditionId,
       supportedTileCount: committed.changedCount - (committed.closedUnknownCount ?? 0),
       closedUnknownTileCount: committed.closedUnknownCount ?? 0,
-      islandLeadIds: returnedIslandDossiers.leads.map(({ islandId }) => islandId).sort((left, right) => left - right),
+      islandLeadIds: prospectiveAchievements.islandLeadIds,
       islandDossierIds: returnedIslandDossiers.dossiers.map(({ islandId }) => islandId).sort((left, right) => left - right),
-      surveySiteLeadIds: returnedSurveySites.leads.map(({ id }) => id).sort(),
+      surveySiteLeadIds: prospectiveAchievements.surveySiteLeadIds,
       surveySiteReportIds: returnedSurveySites.reports.map(({ id }) => id).sort(),
-      fishingLeadIds: returnedFishingShoals.leads.map(({ id }) => id).sort(),
+      fishingLeadIds: prospectiveAchievements.fishingLeadIds,
       fishingSurveyIds: returnedFishingShoals.surveys.map(({ id }) => id).sort(),
       wreckIds: returnedWreckSurveys.map(({ wreckId }) => wreckId).sort((left, right) => left - right),
+      achievementOrder: prospectiveAchievements.achievementOrder,
     };
     this.activeExpedition = false;
     this.advanceExpeditionId();
@@ -1970,6 +2033,15 @@ export class GameSimulation {
 
   private advanceExpeditionId(): void {
     this.expeditionId = this.expeditionId === 0xffff_ffff ? 1 : this.expeditionId + 1;
+    this.voyageAchievementOrder = [];
+  }
+
+  private recordVoyageAchievement(entry: NavigatorVoyageAchievementOrderEntryV1): void {
+    const key = `${entry.kind}:${"sourceId" in entry ? entry.sourceId : ""}`;
+    const alreadyRecorded = this.voyageAchievementOrder.some((candidate) => (
+      `${candidate.kind}:${"sourceId" in candidate ? candidate.sourceId : ""}` === key
+    ));
+    if (!alreadyRecorded) this.voyageAchievementOrder.push(Object.freeze(entry));
   }
 
   private isDockTile(x: number, y: number): boolean {
@@ -2169,6 +2241,7 @@ export class GameSimulation {
     for (const record of observation.found) {
       const definition = this.islandDossierSystem.definitionFor(record.islandId);
       if (!definition) continue;
+      this.recordVoyageAchievement({ kind: "island-lead", sourceId: definition.islandId });
       this.events.emit("islandSighted", {
         islandId: definition.islandId,
         name: definition.name,
@@ -2189,6 +2262,7 @@ export class GameSimulation {
     for (const record of observation.found) {
       const definition = this.surveySiteSystem.definitionFor(record.id);
       if (!definition) continue;
+      this.recordVoyageAchievement({ kind: "survey-site-lead", sourceId: definition.id });
       this.events.emit("surveySiteSighted", {
         id: definition.id,
         type: definition.type,
@@ -2212,6 +2286,7 @@ export class GameSimulation {
     for (const record of observation.found) {
       const definition = this.fishingFeature.definitionFor(record.id);
       if (!definition) continue;
+      this.recordVoyageAchievement({ kind: "fishing-leads" });
       this.events.emit("fishingShoalSighted", {
         id: definition.id,
         tile: definition.tile,

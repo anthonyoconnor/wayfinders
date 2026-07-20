@@ -23,6 +23,8 @@ import {
   type NavigatorId,
   type NavigatorLifecycleState,
   type NavigatorRecordV6,
+  type NavigatorVoyageAchievementOrderEntryV1,
+  type NavigatorVoyageAchievementInputV3,
   type NavigatorVoyageAchievementRecordV3,
 } from "./NavigatorLineageSystem";
 
@@ -65,19 +67,16 @@ export interface GreatHallChronicleSources {
   readonly idols: Readonly<GreatHallIdolSources>;
 }
 
+export interface GreatHallVoyagePreviewSources extends Omit<GreatHallChronicleSources, "idols"> {
+  /** Safe count-only world goal used to validate provisional idol ordinals. */
+  readonly idolTotal: number;
+  /** Only idol locations whose host finding belongs to this provisional voyage. */
+  readonly idolLocations: readonly GreatHallReturnedIdolLocationSource[];
+}
+
 interface GreatHallAchievementBase {
   readonly key: GreatHallAchievementKey;
   readonly label: string;
-}
-
-export interface GreatHallSupportedRouteAchievement extends GreatHallAchievementBase {
-  readonly kind: "supported-route-tiles";
-  readonly tileCount: number;
-}
-
-export interface GreatHallMappedWaterAchievement extends GreatHallAchievementBase {
-  readonly kind: "mapped-enclosed-water-tiles";
-  readonly tileCount: number;
 }
 
 export interface GreatHallIslandLeadAchievement extends GreatHallAchievementBase {
@@ -139,8 +138,6 @@ export interface GreatHallIdolLocationAchievement extends GreatHallAchievementBa
 }
 
 export type GreatHallAchievement =
-  | GreatHallSupportedRouteAchievement
-  | GreatHallMappedWaterAchievement
   | GreatHallIslandLeadAchievement
   | GreatHallIslandDossierAchievement
   | GreatHallSurveySiteLeadAchievement
@@ -173,8 +170,6 @@ export type GreatHallVoyage = GreatHallReturnedVoyage | GreatHallLostVoyage;
 export interface GreatHallVoyageTotals {
   readonly returnedVoyages: number;
   readonly lostVoyages: number;
-  readonly supportedRouteTiles: number;
-  readonly mappedEnclosedWaterTiles: number;
   readonly islandLeads: number;
   readonly islandDossiers: number;
   readonly surveySiteLeads: number;
@@ -370,6 +365,40 @@ export function createGreatHallVoyageKey(
   return `great-hall:v${GREAT_HALL_CHRONICLE_READ_MODEL_VERSION}:${navigatorId}:voyage:${voyageNumber}` as GreatHallVoyageKey;
 }
 
+/**
+ * Projects current expedition credits through the same semantic achievement
+ * builder used by returned Great Hall voyages. It owns no gameplay state.
+ */
+export function buildGreatHallVoyageAchievementPreview(
+  navigators: readonly Readonly<NavigatorRecordV6>[],
+  navigator: Readonly<NavigatorRecordV6>,
+  voyageNumber: number,
+  voyage: Readonly<NavigatorVoyageAchievementInputV3>,
+  sources: Readonly<GreatHallVoyagePreviewSources>,
+): readonly Readonly<GreatHallAchievement>[] {
+  const voyageKey = createGreatHallVoyageKey(navigator.id, voyageNumber);
+  const indexes = createSourceIndexes(navigators, {
+    islandDossiers: sources.islandDossiers,
+    surveySites: sources.surveySites,
+    fishingShoals: sources.fishingShoals,
+    wrecks: sources.wrecks,
+    idols: {
+      total: sources.idolTotal,
+      returned: sources.idolLocations,
+    },
+  });
+  return buildReturnedAchievements(
+    navigator,
+    { ...voyage, voyageNumber },
+    voyageKey,
+    indexes,
+    new Set<string>(),
+    new Map<number, Readonly<WreckReportCredit>>(),
+    new Set<IdolLocationId>(),
+    "provisional",
+  );
+}
+
 function buildReturnedAchievements(
   navigator: Readonly<NavigatorRecordV6>,
   voyage: Readonly<NavigatorVoyageAchievementRecordV3>,
@@ -378,6 +407,7 @@ function buildReturnedAchievements(
   usedAchievementKeys: Set<string>,
   wreckReportCredits: Map<number, Readonly<WreckReportCredit>>,
   creditedIdolLocationIds: Set<IdolLocationId>,
+  creditState: "provisional" | "returned" = "returned",
 ): readonly Readonly<GreatHallAchievement>[] {
   const achievements: Readonly<GreatHallAchievement>[] = [];
   const add = <T extends GreatHallAchievement>(achievement: T): void => {
@@ -405,23 +435,6 @@ function buildReturnedAchievements(
     });
     creditedIdolLocationIds.add(idol.id);
   };
-
-  if (voyage.supportedTileCount > 0) {
-    add({
-      key: createAchievementKey(voyageKey, "supported-route-tiles"),
-      kind: "supported-route-tiles",
-      tileCount: voyage.supportedTileCount,
-      label: `Supported ${voyage.supportedTileCount} route tile${voyage.supportedTileCount === 1 ? "" : "s"}`,
-    });
-  }
-  if (voyage.closedUnknownTileCount > 0) {
-    add({
-      key: createAchievementKey(voyageKey, "mapped-enclosed-water-tiles"),
-      kind: "mapped-enclosed-water-tiles",
-      tileCount: voyage.closedUnknownTileCount,
-      label: `Mapped ${voyage.closedUnknownTileCount} enclosed water tile${voyage.closedUnknownTileCount === 1 ? "" : "s"}`,
-    });
-  }
 
   for (const islandId of voyage.islandLeadIds) {
     const definition = indexes.islandDossierById.get(islandId);
@@ -523,11 +536,11 @@ function buildReturnedAchievements(
     const wreck = indexes.wreckById.get(wreckId);
     if (!wreck) throw new RangeError(`Voyage ${voyage.voyageNumber} references unknown wreck ${wreckId}`);
     if (
-      wreck.survey.state !== "returned"
+      wreck.survey.state !== creditState
       || wreck.survey.expeditionId !== voyage.expeditionId
       || wreck.survey.generation !== navigator.generation
     ) {
-      throw new RangeError(`Voyage ${voyage.voyageNumber} references wreck report ${wreckId} that was not returned by it`);
+      throw new RangeError(`Voyage ${voyage.voyageNumber} references wreck report ${wreckId} that was not ${creditState} by it`);
     }
     const lostNavigator = indexes.navigatorByGeneration.get(wreck.generation);
     if (lostNavigator?.state !== "lost" || terminalWreckId(lostNavigator) !== wreckId) {
@@ -554,7 +567,33 @@ function buildReturnedAchievements(
     }));
   }
 
-  return Object.freeze(achievements);
+  if (voyage.achievementOrder.length === 0) return Object.freeze(achievements);
+  const order = new Map(voyage.achievementOrder.map((entry, index) => [achievementOrderEntryKey(entry), index]));
+  return Object.freeze(achievements
+    .map((achievement, originalIndex) => ({ achievement, originalIndex }))
+    .sort((left, right) => (
+      (order.get(greatHallAchievementOrderKey(left.achievement)) ?? Number.MAX_SAFE_INTEGER)
+      - (order.get(greatHallAchievementOrderKey(right.achievement)) ?? Number.MAX_SAFE_INTEGER)
+      || left.originalIndex - right.originalIndex
+    ))
+    .map(({ achievement }) => achievement));
+}
+
+function achievementOrderEntryKey(entry: NavigatorVoyageAchievementOrderEntryV1): string {
+  return `${entry.kind}:${"sourceId" in entry ? entry.sourceId : ""}`;
+}
+
+function greatHallAchievementOrderKey(achievement: GreatHallAchievement): string {
+  switch (achievement.kind) {
+    case "island-lead": return `${achievement.kind}:${achievement.islandId}`;
+    case "island-dossier": return `${achievement.kind}:${achievement.islandId}`;
+    case "survey-site-lead": return `${achievement.kind}:${achievement.surveySiteId}`;
+    case "survey-site-report": return `${achievement.kind}:${achievement.surveySiteId}`;
+    case "fishing-leads": return `${achievement.kind}:`;
+    case "fishing-survey": return `${achievement.kind}:${achievement.fishingShoalId}`;
+    case "wreck-report": return `${achievement.kind}:${achievement.wreckId}`;
+    case "idol-location": return `${achievement.kind}:${achievement.idolLocationId}`;
+  }
 }
 
 function resolveLostNavigatorFate(
@@ -761,12 +800,6 @@ function totalVoyages(voyages: readonly Readonly<GreatHallVoyage>[]): Readonly<G
     totals.returnedVoyages++;
     for (const achievement of voyage.achievements) {
       switch (achievement.kind) {
-        case "supported-route-tiles":
-          totals.supportedRouteTiles += achievement.tileCount;
-          break;
-        case "mapped-enclosed-water-tiles":
-          totals.mappedEnclosedWaterTiles += achievement.tileCount;
-          break;
         case "island-lead":
           totals.islandLeads++;
           break;
@@ -831,8 +864,6 @@ function mutableVoyageTotals(): MutableGreatHallVoyageTotals {
   return {
     returnedVoyages: 0,
     lostVoyages: 0,
-    supportedRouteTiles: 0,
-    mappedEnclosedWaterTiles: 0,
     islandLeads: 0,
     islandDossiers: 0,
     surveySiteLeads: 0,
@@ -850,8 +881,6 @@ function addVoyageTotals(
 ): void {
   target.returnedVoyages += source.returnedVoyages;
   target.lostVoyages += source.lostVoyages;
-  target.supportedRouteTiles += source.supportedRouteTiles;
-  target.mappedEnclosedWaterTiles += source.mappedEnclosedWaterTiles;
   target.islandLeads += source.islandLeads;
   target.islandDossiers += source.islandDossiers;
   target.surveySiteLeads += source.surveySiteLeads;

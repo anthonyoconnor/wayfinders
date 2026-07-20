@@ -52,6 +52,12 @@ export class GreatHallRenderer {
     this.root.querySelector<HTMLButtonElement>("[data-gh-generation][aria-pressed='true']")?.focus();
   }
 
+  showVoyageLogging(generation: number, voyagePosition: number): void {
+    if (generation !== this.selectedGeneration) return;
+    const voyage = this.root.querySelector<HTMLElement>(`[data-gh-voyage-position="${voyagePosition}"]`);
+    voyage?.classList.add("gh-voyage--logging");
+  }
+
   destroy(): void {
     this.abort.abort();
     this.root.replaceChildren();
@@ -193,16 +199,16 @@ function voyageMarkup(voyage: Readonly<GreatHallPresentationVoyage>): string {
     : voyage.state === "lost" ? "Lost at sea"
       : voyage.state === "awaiting" ? "Next voyage awaits"
         : voyage.state === "unsailed" ? "Not yet sailed" : "Closed after loss";
-  return `<section class="gh-voyage gh-voyage--${voyage.state}" aria-label="Voyage ${voyage.position}: ${stateCopy}">
+  return `<section class="gh-voyage gh-voyage--${voyage.state}" data-gh-voyage-position="${voyage.position}" aria-label="Voyage ${voyage.position}: ${stateCopy}">
     <img class="gh-voyage__icon" src="/assets/gr1/images/player-boat.png" alt="" aria-hidden="true" draggable="false">
     <span class="gh-voyage__achievements">${voyage.achievements.map(achievementMarkup).join("")}</span>
   </section>`;
 }
 
-function achievementMarkup(achievement: Readonly<GreatHallPresentationAchievement>): string {
+function achievementMarkup(achievement: Readonly<GreatHallPresentationAchievement>, index: number): string {
   const label = escapeHtml(achievement.label);
   const rowPosition = achievementIconRowPositionPercent(achievement.kind);
-  return `<button class="gh-achievement gh-achievement--${achievement.kind}" type="button" data-gh-achievement="${label}" aria-label="${label}"><span class="achievement-icon gh-symbol" data-achievement-icon-kind="${achievement.kind}" style="--achievement-icon-row-position:${rowPosition}%" aria-hidden="true"></span></button>`;
+  return `<button class="gh-achievement gh-achievement--${achievement.kind}" style="--gh-log-index:${index}" type="button" data-gh-achievement="${label}" aria-label="${label}"><span class="achievement-icon gh-symbol" data-achievement-icon-kind="${achievement.kind}" style="--achievement-icon-row-position:${rowPosition}%" aria-hidden="true"></span></button>`;
 }
 
 function stateLabel(navigator: Readonly<GreatHallPresentationNavigator>): string {

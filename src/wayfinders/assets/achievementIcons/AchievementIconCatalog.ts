@@ -8,8 +8,6 @@ export const ACHIEVEMENT_ICON_ROW_COUNT = 10 as const;
 export const ACHIEVEMENT_ICON_FRAMES_PER_SECOND = 12 as const;
 
 export const ACHIEVEMENT_ICON_KINDS = Object.freeze([
-  "supported-route",
-  "mapped-water",
   "island-lead",
   "island-dossier",
   "survey-lead",
@@ -40,18 +38,6 @@ export const ACHIEVEMENT_ICON_CATALOG: Readonly<Record<
   GreatHallPresentationAchievementKind,
   Readonly<AchievementIconMetadata>
 >> = Object.freeze({
-  "supported-route": Object.freeze({
-    kind: "supported-route",
-    row: 0,
-    shortLabel: "Supported route",
-    visualDescription: "A canoe follows a dotted, curving wake whose marks flow gently behind it.",
-  }),
-  "mapped-water": Object.freeze({
-    kind: "mapped-water",
-    row: 1,
-    shortLabel: "Mapped enclosed water",
-    visualDescription: "A closed lagoon ring ripples around a small map notch.",
-  }),
   "island-lead": Object.freeze({
     kind: "island-lead",
     row: 2,

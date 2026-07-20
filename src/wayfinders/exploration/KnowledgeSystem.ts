@@ -117,6 +117,14 @@ export class KnowledgeSystem {
     return this.resolveExpedition(expeditionId, KnowledgeState.Unknown);
   }
 
+  /** Sparse current-voyage count used by presentation without scanning the world. */
+  expeditionPersonalCount(expeditionId: number): number {
+    if (!Number.isInteger(expeditionId) || expeditionId <= 0 || expeditionId > 0xffff_ffff) {
+      throw new RangeError("expeditionId must be a non-zero unsigned 32-bit integer");
+    }
+    return this.indicesByExpedition.get(expeditionId)?.size ?? 0;
+  }
+
   private resolveExpedition(
     expeditionId: number,
     target: KnowledgeState.Supported | KnowledgeState.Unknown,

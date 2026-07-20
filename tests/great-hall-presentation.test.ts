@@ -42,7 +42,7 @@ describe("GR-5.3 Great Hall presentation contract", () => {
     expect(new Set(GREAT_HALL_FIXTURE.navigators.flatMap(({ voyages }) => voyages.flatMap(
       ({ achievements }) => achievements.map(({ kind }) => kind),
     )))).toEqual(new Set([
-      "supported-route", "mapped-water", "island-lead", "island-dossier", "survey-lead",
+      "island-lead", "island-dossier", "survey-lead",
       "survey-report", "fishing-lead", "fishing-survey", "wreck-report", "idol-location",
     ]));
   });
@@ -71,6 +71,8 @@ describe("GR-5.3 Great Hall presentation contract", () => {
         + `style="--achievement-icon-row-position:${achievementIconRowPositionPercent(kind)}%"`,
       );
     }
+    expect(renderedMarkup).toContain("data-gh-voyage-position=\"1\"");
+    expect(renderedMarkup).toContain("--gh-log-index:0");
   });
 
   it("rejects malformed fixture data before rendering", () => {

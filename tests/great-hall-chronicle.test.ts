@@ -5,6 +5,7 @@ import { createIdolLocationId } from "../src/wayfinders/exploration/IdolLocation
 import { createSurveySiteId } from "../src/wayfinders/exploration/SurveySiteContracts.ts";
 import {
   buildGreatHallChronicle,
+  buildGreatHallVoyageAchievementPreview,
   type GreatHallChronicleSources,
 } from "../src/wayfinders/lineage/GreatHallChronicle.ts";
 import {
@@ -19,6 +20,7 @@ const SECOND_FISHING_LEAD_ID = createFishingShoalId(2);
 const SURVEY_SITE_ID = createSurveySiteId("historic-wreck", 0);
 const ISLAND_IDOL_ID = createIdolLocationId(1);
 const SURVEY_SITE_IDOL_ID = createIdolLocationId(2);
+const THIRD_IDOL_ID = createIdolLocationId(3);
 const NO_RETURNED_IDOLS = {
   total: 3,
   returned: [],
@@ -60,6 +62,7 @@ function voyage(
     fishingLeadIds: [],
     fishingSurveyIds: [],
     wreckIds: [],
+    achievementOrder: [],
     ...overrides,
   };
 }
@@ -142,6 +145,113 @@ function allStableKeys(chronicle: ReturnType<typeof buildGreatHallChronicle>): s
 }
 
 describe("Great Hall chronicle read model", () => {
+  it("preserves the order in which voyage achievements were found", () => {
+    const lineage = new NavigatorLineageSystem();
+    lineage.completeSuccessfulVoyage(voyage(1, {
+      islandLeadIds: [ISLAND_DOSSIER.islandId],
+      surveySiteLeadIds: [SURVEY_SITE_ID],
+      achievementOrder: [
+        { kind: "survey-site-lead", sourceId: SURVEY_SITE_ID },
+        { kind: "island-lead", sourceId: ISLAND_DOSSIER.islandId },
+      ],
+    }));
+
+    const chronicle = buildGreatHallChronicle(lineage.navigators, {
+      islandDossiers: [ISLAND_DOSSIER],
+      surveySites: [SURVEY_SITE],
+      fishingShoals: [],
+      wrecks: [],
+      idols: NO_RETURNED_IDOLS,
+    });
+
+    expect(chronicle.navigators[0].voyages[0].achievements.map(({ kind }) => kind)).toEqual([
+      "survey-site-lead",
+      "island-lead",
+    ]);
+  });
+
+  it("validates a provisional idol against the world total rather than this voyage's idol count", () => {
+    const lineage = new NavigatorLineageSystem();
+    const preview = buildGreatHallVoyageAchievementPreview(
+      lineage.navigators,
+      lineage.currentNavigator,
+      1,
+      voyage(1, { islandDossierIds: [ISLAND_DOSSIER.islandId] }),
+      {
+        islandDossiers: [ISLAND_DOSSIER],
+        surveySites: [],
+        fishingShoals: [],
+        wrecks: [],
+        idolTotal: 3,
+        idolLocations: [{
+          id: THIRD_IDOL_ID,
+          ordinal: 3,
+          displayLabel: "Lost Idol 3",
+          host: { kind: "island-dossier", islandId: ISLAND_DOSSIER.islandId },
+        }],
+      },
+    );
+
+    expect(preview.at(-1)).toMatchObject({
+      kind: "idol-location",
+      ordinal: 3,
+      label: "Lost Idol 3 located — Amber Haven",
+    });
+  });
+
+  it("projects provisional voyage credits through the exact returned achievement language", () => {
+    const lineage = new NavigatorLineageSystem();
+    const credits = voyage(1, {
+      supportedTileCount: 5,
+      islandDossierIds: [ISLAND_DOSSIER.islandId],
+      surveySiteReportIds: [SURVEY_SITE_ID],
+      fishingLeadIds: [FISHING_LEAD_ID, SECOND_FISHING_LEAD_ID],
+      fishingSurveyIds: [FISHING_SURVEY_ID],
+    });
+    const idolLocations = [
+      {
+        id: ISLAND_IDOL_ID,
+        ordinal: 1,
+        displayLabel: "Lost Idol 1",
+        host: { kind: "island-dossier" as const, islandId: ISLAND_DOSSIER.islandId },
+      },
+      {
+        id: SURVEY_SITE_IDOL_ID,
+        ordinal: 2,
+        displayLabel: "Lost Idol 2",
+        host: { kind: "survey-site" as const, surveySiteId: SURVEY_SITE_ID },
+      },
+    ];
+    const sharedSources = {
+      islandDossiers: [ISLAND_DOSSIER],
+      surveySites: [SURVEY_SITE],
+      fishingShoals: [
+        { id: FISHING_LEAD_ID, quality: "steady" as const },
+        { id: FISHING_SURVEY_ID, quality: "rich" as const },
+        { id: SECOND_FISHING_LEAD_ID, quality: "lean" as const },
+      ],
+      wrecks: [],
+    };
+    const preview = buildGreatHallVoyageAchievementPreview(
+      lineage.navigators,
+      lineage.currentNavigator,
+      1,
+      credits,
+      { ...sharedSources, idolTotal: 3, idolLocations },
+    );
+
+    lineage.completeSuccessfulVoyage(credits);
+    const returned = buildGreatHallChronicle(lineage.navigators, {
+      ...sharedSources,
+      idols: { total: 3, returned: idolLocations },
+    }).navigators[0].voyages[0];
+
+    expect(returned.outcome).toBe("returned");
+    expect(preview.map(({ kind, label }) => ({ kind, label }))).toEqual(
+      returned.achievements.map(({ kind, label }) => ({ kind, label })),
+    );
+  });
+
   it("adapts structured chronicle fields into the shared four-band graphical contract", () => {
     const { lineage, sources } = threeGenerationHistory();
     const chronicle = buildGreatHallChronicle(lineage.navigators, sources);
@@ -161,10 +271,7 @@ describe("Great Hall chronicle read model", () => {
     expect(model.navigators[1].voyages.map(({ state }) => state)).toEqual(["returned", "lost", "closed", "closed"]);
     expect(model.navigators[1].voyages[1].achievements).toEqual([]);
     expect(model.navigators[2].voyages.map(({ state }) => state)).toEqual(["returned", "awaiting", "unsailed", "unsailed"]);
-    expect(model.navigators[0].voyages[0].achievements.map(({ kind, label }) => ({ kind, label }))).toEqual([
-      { kind: "supported-route", label: "Supported 5 route tiles" },
-      { kind: "mapped-water", label: "Mapped 2 enclosed water tiles" },
-    ]);
+    expect(model.navigators[0].voyages[0].achievements).toEqual([]);
   });
 
   it("accepts a death handover after the successor is already the current navigator", () => {
@@ -220,20 +327,7 @@ describe("Great Hall chronicle read model", () => {
       outcome,
     }))).toEqual([{ voyageNumber: 1, outcome: "returned" }]);
 
-    expect(chronicle.navigators[0].voyages[0].achievements).toEqual([
-      {
-        key: "great-hall:v4:navigator:v1:g1:voyage:1:achievement:supported-route-tiles",
-        kind: "supported-route-tiles",
-        tileCount: 5,
-        label: "Supported 5 route tiles",
-      },
-      {
-        key: "great-hall:v4:navigator:v1:g1:voyage:1:achievement:mapped-enclosed-water-tiles",
-        kind: "mapped-enclosed-water-tiles",
-        tileCount: 2,
-        label: "Mapped 2 enclosed water tiles",
-      },
-    ]);
+    expect(chronicle.navigators[0].voyages[0].achievements).toEqual([]);
     expect(chronicle.navigators[0].voyages[1].achievements).toEqual([
       expect.objectContaining({
         key: "great-hall:v4:navigator:v1:g1:voyage:2:achievement:island-lead:7",
@@ -416,8 +510,6 @@ describe("Great Hall chronicle read model", () => {
     expect(chronicle.totals).toEqual({
       returnedVoyages: 6,
       lostVoyages: 1,
-      supportedRouteTiles: 5,
-      mappedEnclosedWaterTiles: 2,
       islandLeads: 1,
       islandDossiers: 1,
       surveySiteLeads: 1,
@@ -441,8 +533,6 @@ describe("Great Hall chronicle read model", () => {
     for (const field of [
       "returnedVoyages",
       "lostVoyages",
-      "supportedRouteTiles",
-      "mappedEnclosedWaterTiles",
       "islandLeads",
       "islandDossiers",
       "surveySiteLeads",

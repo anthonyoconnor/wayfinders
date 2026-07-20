@@ -6,6 +6,10 @@ import {
   isCurrentSurveySiteId,
   type SurveySiteId,
 } from "../exploration/SurveySiteContracts";
+import {
+  isCurrentIdolLocationId,
+  type IdolLocationId,
+} from "../exploration/IdolLocationContracts";
 
 export const NAVIGATOR_LINEAGE_CONTRACT_VERSION = 6 as const;
 export const NAVIGATOR_ID_VERSION = 1 as const;
@@ -27,6 +31,14 @@ export type NavigatorLifecycleState = (typeof NAVIGATOR_LIFECYCLE_STATES)[number
 
 export const NAVIGATOR_SUCCESSION_REASONS = ["wreck", "tenure"] as const;
 export type NavigatorSuccessionReason = (typeof NAVIGATOR_SUCCESSION_REASONS)[number];
+
+export type NavigatorVoyageAchievementOrderEntryV1 =
+  | Readonly<{ kind: "island-lead" | "island-dossier"; sourceId: number }>
+  | Readonly<{ kind: "survey-site-lead" | "survey-site-report"; sourceId: SurveySiteId }>
+  | Readonly<{ kind: "fishing-leads" }>
+  | Readonly<{ kind: "fishing-survey"; sourceId: FishingShoalId }>
+  | Readonly<{ kind: "wreck-report"; sourceId: number }>
+  | Readonly<{ kind: "idol-location"; sourceId: IdolLocationId }>;
 
 export interface ParsedNavigatorId {
   version: number;
@@ -50,6 +62,8 @@ export interface NavigatorVoyageAchievementInputV3 {
   readonly fishingLeadIds: readonly FishingShoalId[];
   readonly fishingSurveyIds: readonly FishingShoalId[];
   readonly wreckIds: readonly number[];
+  /** Achievement symbols in the order their knowledge transitions occurred. */
+  readonly achievementOrder: readonly NavigatorVoyageAchievementOrderEntryV1[];
 }
 
 export interface NavigatorVoyageAchievementRecordV3 extends NavigatorVoyageAchievementInputV3 {
@@ -677,22 +691,7 @@ function parseVoyageAchievement(
   const fishingLeadIds = fishingShoalIdArray(item.fishingLeadIds, `${path}.fishingLeadIds`);
   const fishingSurveyIds = fishingShoalIdArray(item.fishingSurveyIds, `${path}.fishingSurveyIds`);
   const wreckIds = positiveIntegerArray(item.wreckIds, `${path}.wreckIds`);
-  const islandLeads = new Set<number>(islandLeadIds);
-  for (const id of islandDossierIds) {
-    if (islandLeads.has(id)) {
-      fail("cannot also be recorded as an island lead", `${path}.islandDossierIds`);
-    }
-  }
-  const surveySiteLeads = new Set<SurveySiteId>(surveySiteLeadIds);
-  for (const id of surveySiteReportIds) {
-    if (surveySiteLeads.has(id)) {
-      fail("cannot also be recorded as a survey-site lead", `${path}.surveySiteReportIds`);
-    }
-  }
-  const leadIds = new Set<string>(fishingLeadIds);
-  for (const id of fishingSurveyIds) {
-    if (leadIds.has(id)) fail("cannot also be recorded as a fishing lead", `${path}.fishingSurveyIds`);
-  }
+  const achievementOrder = voyageAchievementOrder(item.achievementOrder, `${path}.achievementOrder`);
   return Object.freeze({
     expeditionId,
     voyageNumber,
@@ -705,7 +704,45 @@ function parseVoyageAchievement(
     fishingLeadIds,
     fishingSurveyIds,
     wreckIds,
+    achievementOrder,
   });
+}
+
+function voyageAchievementOrder(
+  value: unknown,
+  path: string,
+): readonly NavigatorVoyageAchievementOrderEntryV1[] {
+  if (!Array.isArray(value)) fail("must be an array", path);
+  const seen = new Set<string>();
+  return Object.freeze(value.map((raw, index) => {
+    const entryPath = `${path}[${index}]`;
+    const item = record(raw, entryPath);
+    const kind = item.kind;
+    let entry: NavigatorVoyageAchievementOrderEntryV1;
+    if (kind === "fishing-leads") {
+      entry = Object.freeze({ kind });
+    } else if (kind === "island-lead" || kind === "island-dossier" || kind === "wreck-report") {
+      entry = Object.freeze({ kind, sourceId: positiveSafeInteger(item.sourceId, `${entryPath}.sourceId`) });
+    } else if (kind === "survey-site-lead" || kind === "survey-site-report") {
+      const sourceId = item.sourceId;
+      if (!isCurrentSurveySiteId(sourceId)) fail("must use a current survey-site ID", `${entryPath}.sourceId`);
+      entry = Object.freeze({ kind, sourceId });
+    } else if (kind === "fishing-survey") {
+      const sourceId = item.sourceId;
+      if (!isCurrentFishingShoalId(sourceId)) fail("must use a current fishing-shoal ID", `${entryPath}.sourceId`);
+      entry = Object.freeze({ kind, sourceId });
+    } else if (kind === "idol-location") {
+      const sourceId = item.sourceId;
+      if (!isCurrentIdolLocationId(sourceId)) fail("must use a current idol-location ID", `${entryPath}.sourceId`);
+      entry = Object.freeze({ kind, sourceId });
+    } else {
+      fail("has an invalid achievement kind", `${entryPath}.kind`);
+    }
+    const key = `${entry.kind}:${"sourceId" in entry ? entry.sourceId : ""}`;
+    if (seen.has(key)) fail("must not contain duplicate achievements", entryPath);
+    seen.add(key);
+    return entry;
+  }));
 }
 
 function freezeVoyageAchievementInput(

@@ -16,9 +16,7 @@ import {
   type GreatHallPresentationVoyage,
 } from "./GreatHallPresentationModel";
 
-const ACHIEVEMENT_KIND = Object.freeze({
-  "supported-route-tiles": "supported-route",
-  "mapped-enclosed-water-tiles": "mapped-water",
+export const GREAT_HALL_PRESENTATION_ACHIEVEMENT_KIND = Object.freeze({
   "island-lead": "island-lead",
   "island-dossier": "island-dossier",
   "survey-site-lead": "survey-lead",
@@ -63,7 +61,7 @@ function adaptNavigator(entry: Readonly<GreatHallNavigatorEntry>): GreatHallPres
     position: voyage.voyageNumber as 1 | 2 | 3 | 4,
     state: voyage.outcome === "returned" ? "returned" : "lost",
     achievements: voyage.achievements.map((achievement) => ({
-      kind: ACHIEVEMENT_KIND[achievement.kind],
+      kind: GREAT_HALL_PRESENTATION_ACHIEVEMENT_KIND[achievement.kind],
       label: achievement.label,
     })),
   }));

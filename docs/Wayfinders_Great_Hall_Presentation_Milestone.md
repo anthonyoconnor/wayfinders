@@ -81,18 +81,16 @@ The implementation must map those fields rather than parse display strings.
 
 ### Achievement kinds
 
-The current read model has ten structured achievement kinds:
+The current read model has eight structured achievement kinds:
 
-1. supported route tiles;
-2. mapped enclosed water tiles;
-3. island lead;
-4. island dossier;
-5. survey-site lead;
-6. survey-site report;
-7. fishing leads;
-8. fishing survey;
-9. wreck report; and
-10. idol location.
+1. island lead;
+2. island dossier;
+3. survey-site lead;
+4. survey-site report;
+5. fishing leads;
+6. fishing survey;
+7. wreck report; and
+8. idol location.
 
 Fatal voyages contain no provisional achievements. Undiscovered idol hosts are
 structurally absent. Those are data-safety rules, not visual choices.
@@ -255,9 +253,9 @@ insufficient.
 ### Infographic language
 
 The canonical set is defined in
-`Wayfinders_Great_Hall_Infographic_Lexicon.md`. It covers the fourteen lineage
+`Wayfinders_Great_Hall_Infographic_Lexicon.md`. It covers the twelve lineage
 totals, twelve-generation era rail, navigator plaque states, six voyage-slot
-states, ten achievement kinds, three current survey-site insets, three fishing
+states, eight achievement kinds, three current survey-site insets, three fishing
 qualities, wreck-fate relationship, idol completion medallion, and exact-detail
 plaque.
 
@@ -441,7 +439,7 @@ Status: implemented and accepted by product-owner **Go** on 2026-07-16.
 Depends on `GR-5.1`.
 
 Create twenty complete pixel-art navigator portraits as fixed image assets.
-Also create the ten achievement symbols, fourteen lineage tally symbols,
+Also create the eight active achievement symbols, twelve lineage tally symbols,
 voyage-band states, era controls, lifecycle and wreck-fate frame treatments,
 idol medallion, detail plaque, and restrained Hall-interior pieces required by
 the selected composition. Work at the pixel scale and nearest-neighbor rules
@@ -471,7 +469,7 @@ frames. The counting cord and lineage totals are not displayed in this review
 version. Their reference art and infographic definitions remain available for
 a later product decision.
 
-For visual review, the default current-navigator fixture displays all ten
+For visual review, the default current-navigator fixture displays all eight
 achievement symbols across three returned voyages, with multiple achievements
 per band, while retaining one awaiting voyage state.
 The portrait wall and voyage bands omit visible position numerals; generation
@@ -485,7 +483,7 @@ Acceptance gate:
   directly to generations one through twenty;
 - rebuild, responsive relayout, repeated selection, and preview-count changes
   never alter a generation's portrait assignment;
-- all ten achievement kinds have a unique visual and accessible mapping;
+- all eight achievement kinds have a unique visual and accessible mapping;
 - lead/report and safe/lost states remain distinguishable without color;
 - gold remains reserved for idol-location progress and shell repairs; and
 - reviewed source/contact sheets contain no text artifacts, watermark,

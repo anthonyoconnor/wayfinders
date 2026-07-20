@@ -147,7 +147,7 @@ describe("GameSimulation survey-site integration", () => {
     }));
   });
 
-  it("commits a surveyed result as one report only at the exact home dock", () => {
+  it("credits both discovery and report when one voyage sights and surveys a site", () => {
     const simulation = new GameSimulation();
     const target = siteOfType(simulation, "tidal-cave");
 
@@ -161,7 +161,7 @@ describe("GameSimulation survey-site integration", () => {
       id: target.id,
       state: "report",
     }));
-    expect(simulation.currentNavigator.successfulVoyages[0].surveySiteLeadIds).not.toContain(target.id);
+    expect(simulation.currentNavigator.successfulVoyages[0].surveySiteLeadIds).toContain(target.id);
     expect(simulation.currentNavigator.successfulVoyages[0].surveySiteReportIds).toContain(target.id);
 
     const returnedBefore = structuredClone(simulation.returnedSurveySites);

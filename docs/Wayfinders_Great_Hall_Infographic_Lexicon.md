@@ -39,7 +39,7 @@ review guidance without replacing the exact symbol mappings in this lexicon.
 
 ### 1. Lineage counting cord
 
-A shell-and-rope strip summarizes the fourteen facts displayed by the current
+A shell-and-rope strip summarizes the twelve facts displayed by the current
 Hall. It is not a generic score bar: it appears only inside the Great Hall.
 
 | Token ID | Current source | Compact visual | Value format |
@@ -49,8 +49,6 @@ Hall. It is not a generic score bar: it appears only inside the Great Hall.
 | `tally-safe-journeys` | `totals.returnedVoyages` | Canoe bow entering a two-post home harbor | Integer |
 | `tally-completed-tenures` | `totals.completedNavigators` | Portrait plaque above four closed voyage notches | Integer |
 | `tally-lost-navigators` | `totals.lostNavigators` | Broken canoe beneath one wave | Integer |
-| `tally-supported-route-tiles` | `totals.supportedRouteTiles` | Dotted wake connecting two safe-water marks | Integer |
-| `tally-mapped-water-tiles` | `totals.mappedEnclosedWaterTiles` | Closed lagoon ring | Integer |
 | `tally-island-leads` | `totals.islandLeads` | Outline island with two sight rays | Integer |
 | `tally-island-dossiers` | `totals.islandDossiers` | Inlaid island inside a closed survey ring | Integer |
 | `tally-site-leads` | `totals.surveySiteLeads` | Open coastal survey marker | Integer |
@@ -60,8 +58,8 @@ Hall. It is not a generic score bar: it appears only inside the Great Hall.
 | `tally-confirmed-wrecks` | `totals.confirmedWreckFates` | Broken mast joined by a bright shell knot | Integer |
 
 Default presentation may emphasize idol progress, navigators, safe journeys,
-and loss while placing the other ten tokens in a second line or expandable
-counting mat. All fourteen remain directly available without navigating to a
+and loss while placing the other eight tokens in a second line or expandable
+counting mat. All twelve remain directly available without navigating to a
 different screen.
 
 The read model contains additional aggregates that the current Hall does not
@@ -126,14 +124,20 @@ greyed-out achievements.
 
 ### 5. Voyage achievement tokens
 
-These ten tokens map one-to-one to the current `GreatHallAchievement` union.
+These eight tokens map one-to-one to the current `GreatHallAchievement` union.
 Lead/report pairs share a base silhouette and change outline versus inlay so
 their relationship is learnable.
 
+Credits record knowledge transitions rather than only the target's final state.
+When one navigator first sights and then surveys a target during the same
+voyage, both its lead and completed-result tokens appear. When a later
+navigator completes a lead already returned by an ancestor, only the new
+completed-result token belongs to that later voyage; the original lead remains
+with its discoverer. This rule applies equally to islands, survey sites, and
+fishing grounds.
+
 | Chronicle `kind` | Required visual | Visible modifier | Exact detail retained |
 | --- | --- | --- | --- |
-| `supported-route-tiles` | Dotted canoe wake | `tileCount` | Existing `label` |
-| `mapped-enclosed-water-tiles` | Closed lagoon ring with a small map notch | `tileCount` | Existing `label` |
 | `island-lead` | Outline island with sight rays | None | `name`, existing `label` |
 | `island-dossier` | Inlaid island inside a closed ring | None | `name`, `findingLabel`, existing `label` |
 | `survey-site-lead` | Open survey marker with optional site-type inset | None | `typeLabel`, `clueLabel`, existing `label` |
@@ -178,8 +182,7 @@ to resolve.
 
 #### Token aggregation
 
-- Route tiles, enclosed-water tiles, and fishing leads are already count-based
-  achievements; render one token with the current exact count.
+- Fishing leads are count-based; render one token with the current exact count.
 - Island leads, island dossiers, site leads, site reports, fishing surveys,
   wreck reports, and idol locations are distinct records. Render individual
   tokens while they fit.
@@ -298,8 +301,8 @@ portrait artwork, achievement quantity, or decorative material.
 
 ## Acceptance checklist
 
-- [ ] All fourteen current Hall totals map to exactly one counting-cord token.
-- [ ] All ten `GreatHallAchievement` kinds map from the discriminant, not text.
+- [ ] All twelve current Hall totals map to exactly one counting-cord token.
+- [ ] All eight `GreatHallAchievement` kinds map from the discriminant, not text.
 - [ ] The three current survey-site types have reviewed optional insets and a
       generic fallback exists.
 - [ ] `lean`, `steady`, and `rich` fishing quality remain distinguishable with
