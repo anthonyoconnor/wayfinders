@@ -51,16 +51,22 @@ path. Current module ownership and import direction are defined in
 
 ## 3. Configuration, timing, and scale profiles
 
-`prototypeConfig` is one validated live tuning store. Complete patches validate
-before mutation. Test helpers create isolated values; world-profile helpers
-supply benchmark and scale-fixture configurations. World-shape changes take
-effect through explicit regeneration.
+`DEFAULT_GAME_SETTINGS` is the single typed, deeply frozen owner of normal
+new-game defaults, divided into `world`, `audio`, `overlays`, `gameplay`, and
+`presentation`. `prototypeConfig` is a derived mutable session/developer tuning
+view. Complete patches validate before mutation, and world-shape changes take
+effect through explicit regeneration. The setting inventory, validation class,
+and change scope are indexed in `Wayfinders_Settings_Guide.md`.
 
-Default prototype values:
+`WORLD_GENERATION_PROFILES` does not derive from either settings object. Each
+named profile supplies its stable benchmark configuration explicitly so normal
+gameplay-default changes cannot silently move performance fixtures.
+
+Selected normal-game defaults (verified by `tests/game-settings.test.ts`):
 
 | Setting | Value |
 | --- | ---: |
-| World | `96 x 96` navigation tiles |
+| World | `192 x 192` navigation tiles |
 | Gameplay topology | wrap west/east and north/south |
 | Navigation tile | `32` world pixels |
 | Art lattice | `16` world pixels |
@@ -78,7 +84,7 @@ production, tests, and benchmarks:
 
 | Profile | World | Islands | Purpose |
 | --- | ---: | ---: | --- |
-| `P0` | `96 x 96` | `8` | playable prototype |
+| `P0` | `96 x 96` | `8` | original benchmark baseline |
 | `P1` | `192 x 192` | `32` | four-times-area integration |
 | `P2` | `384 x 384` | `300` | four-times-width-and-height target |
 | `P2-500` | `384 x 384` | `500` | bounded placement stress |
@@ -446,17 +452,21 @@ and the affected sound surface reports the failure in place.
 With a valid catalog, game mode queues every catalog WAV during
 `WayfindersScene.preload()`. `GameAudioController` then owns a Phaser playback
 port, all sound instances it creates, and a renderer-neutral `AudioMixer`.
-Playback begins disabled behind an explicit **Enable sound** action. That exact
-activation resumes a suspended Web Audio context, reconciles a stale initial
-Phaser focus flag, and completes enablement without requiring a blur/focus
-cycle; the HTML5 fallback retains its pre-armed touch unlock. A cue attempted
-while disabled, locked,
+The catalog owns only asset metadata: category and asset labels, file paths,
+base gains, loop flags, descriptions, and voice limits. Starting enable, mute,
+master, and category gain state comes from `DEFAULT_GAME_SETTINGS.audio`.
+Playback is on by default and begins after the browser's required first
+interaction releases its audio lock. The explicit **Enable sound** action
+remains as a fallback that resumes a suspended Web Audio context, reconciles a
+stale initial Phaser focus flag, and completes enablement without requiring a
+blur/focus cycle; the HTML5 fallback retains its pre-armed touch unlock. A cue
+attempted while disabled, locked,
 suspended, unavailable, or destroyed is rejected immediately and is never
 queued for replay. On blur/suspension, owned one-shots are discarded while
 Phaser pauses retained loops; focus only reconciles those current loops.
 
 Mixer state is in memory only. Initial master gain is `0.80`; initial category
-gains are music `0.42`, ambience `0.275`, sound effects `0.75`, and interface
+gains are music `0.42`, ambience `0.275`, sound effects `0.10`, and interface
 `0.60`. Effective instance gain is master by category by catalog base gain by
 transition gain, with every control clamped to `[0, 1]`. Category voice limits
 are respectively `2`, `3`, `8`, and `2`, with a hard total limit of `15`.
@@ -886,6 +896,10 @@ The developer UI can regenerate by seed, inspect island approaches, move to
 survey anchors, teleport to water, adjust provisions, force a wreck, toggle
 navigation/visibility/guidance diagnostics, independently enable or disable
 cloud atmosphere, enter map review, and tune supported configuration. Map
+overlay visibility is initialized from `DEFAULT_GAME_SETTINGS.overlays` and is
+owned entirely by `WayfindersScene`; toggling navigation grid, collision boxes,
+current sight, forward reach, or return viability never mutates or appears in
+`GameSimulation`. Map
 review is session-only presentation state: it hides the knowledge fog, allows
 all cloud pairs to render independently of fog, pauses sailing input, detaches
 the camera from the ship, and enables pointer-drag or WASD/arrow panning plus a

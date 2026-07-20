@@ -13,7 +13,6 @@ export const AUDIO_CATALOG_URL = "/assets/audio/audio-catalog.json" as const;
 
 export interface AudioCategoryDefinition {
   readonly displayName: string;
-  readonly defaultVolume: number;
   readonly voiceLimit: number;
 }
 
@@ -31,7 +30,6 @@ export interface AudioAssetDefinition {
 export interface AudioCatalog {
   readonly schemaVersion: typeof AUDIO_CATALOG_SCHEMA_VERSION;
   readonly libraryId: typeof AUDIO_LIBRARY_ID;
-  readonly masterVolume: number;
   readonly categories: Readonly<Record<AudioCategory, Readonly<AudioCategoryDefinition>>>;
   readonly assets: readonly Readonly<AudioAssetDefinition>[];
 }
@@ -51,13 +49,11 @@ export type AudioCatalogLoadResult =
 const EXACT_CATALOG_FIELDS = Object.freeze([
   "schemaVersion",
   "libraryId",
-  "masterVolume",
   "categories",
   "assets",
 ] as const);
 const EXACT_CATEGORY_FIELDS = Object.freeze([
   "displayName",
-  "defaultVolume",
   "voiceLimit",
 ] as const);
 const EXACT_ASSET_FIELDS = Object.freeze([
@@ -143,7 +139,6 @@ export function validateAudioCatalog(value: unknown): Readonly<AudioCatalog> {
   return Object.freeze({
     schemaVersion: AUDIO_CATALOG_SCHEMA_VERSION,
     libraryId: AUDIO_LIBRARY_ID,
-    masterVolume: unitInterval(input.masterVolume, "Audio catalog masterVolume"),
     categories,
     assets: Object.freeze(assets),
   });
@@ -198,7 +193,6 @@ function validateCategory(value: unknown, category: AudioCategory): Readonly<Aud
   const input = exactRecord(value, label, EXACT_CATEGORY_FIELDS);
   return Object.freeze({
     displayName: displayString(input.displayName, `${label}.displayName`),
-    defaultVolume: unitInterval(input.defaultVolume, `${label}.defaultVolume`),
     voiceLimit: integer(input.voiceLimit, `${label}.voiceLimit`, 1, MAX_CATEGORY_VOICE_LIMIT),
   });
 }

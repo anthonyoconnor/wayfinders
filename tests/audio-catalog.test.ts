@@ -79,6 +79,14 @@ describe("audio catalog V1", () => {
     mutableCategories(unknownCategoryField).music!.editable = false;
     expect(() => validateAudioCatalog(unknownCategoryField)).toThrow(/unknown field editable/u);
 
+    const gameMixerField = mutableCatalog();
+    gameMixerField.masterVolume = 0.8;
+    expect(() => validateAudioCatalog(gameMixerField)).toThrow(/unknown field masterVolume/u);
+
+    const categoryMixerField = mutableCatalog();
+    mutableCategories(categoryMixerField).music!.defaultVolume = 0.42;
+    expect(() => validateAudioCatalog(categoryMixerField)).toThrow(/unknown field defaultVolume/u);
+
     const unknownAssetField = mutableCatalog();
     mutableAssets(unknownAssetField)[0]!.duration = 10;
     expect(() => validateAudioCatalog(unknownAssetField)).toThrow(/unknown field duration/u);
@@ -137,17 +145,12 @@ describe("audio catalog V1", () => {
   });
 
   it.each([
-    ["masterVolume", -0.1],
-    ["masterVolume", Number.NaN],
-    ["categoryVolume", 1.1],
     ["assetVolume", Number.POSITIVE_INFINITY],
     ["voiceLimit", 0],
     ["voiceLimit", 1.5],
     ["voiceLimit", 16],
   ] as const)("rejects invalid %s value %s", (field, value) => {
     const candidate = mutableCatalog();
-    if (field === "masterVolume") candidate.masterVolume = value;
-    if (field === "categoryVolume") mutableCategories(candidate).music!.defaultVolume = value;
     if (field === "assetVolume") mutableAssets(candidate)[0]!.baseVolume = value;
     if (field === "voiceLimit") mutableCategories(candidate).music!.voiceLimit = value;
     expect(() => validateAudioCatalog(candidate)).toThrow(/between 0 and 1|integer between/u);

@@ -9,6 +9,7 @@ afterEach(() => resetPrototypeConfig());
 describe("GameSimulation exploration integration", () => {
   it("creates a broad Personal corridor while retaining a bounded current sight area", () => {
     const simulation = new GameSimulation();
+    expect(simulation.snapshot()).not.toHaveProperty("debug");
     const centerY = simulation.generated.landmarks.homeCenter.y;
 
     let firstUnknownX = simulation.generated.landmarks.dock.x;
@@ -178,14 +179,18 @@ describe("GameSimulation exploration integration", () => {
 
   it("charges the outward Unknown leg at roughly twice the Personal return leg", () => {
     // Keep this ratio-focused scenario independent of the lower gameplay defaults.
-    patchPrototypeConfig({ provisions: { personalCost: 0.5, unknownCost: 1 } });
+    patchPrototypeConfig({
+      world: { width: 96, height: 96 },
+      provisions: { personalCost: 0.5, unknownCost: 1 },
+    });
     const simulation = new GameSimulation();
     const startingCapacity = simulation.ship.provisions - simulation.ship.provisionAccumulator;
+    const outwardTargetX = simulation.ship.currentTileX + 15;
 
-    for (let step = 0; step < 600 && simulation.ship.currentTileX < 68; step++) {
+    for (let step = 0; step < 600 && simulation.ship.currentTileX < outwardTargetX; step++) {
       simulation.update({ turn: 0, throttle: 1 }, 1 / 30);
     }
-    expect(simulation.ship.currentTileX).toBe(68);
+    expect(simulation.ship.currentTileX).toBe(outwardTargetX);
     const capacityAtTurn = simulation.ship.provisions - simulation.ship.provisionAccumulator;
     const outwardCost = startingCapacity - capacityAtTurn;
     expect(outwardCost).toBeGreaterThanOrEqual(4);

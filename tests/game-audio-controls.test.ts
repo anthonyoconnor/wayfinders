@@ -53,12 +53,11 @@ describe("AUD-1 game audio controls binding", () => {
     const catalog = validateAudioCatalog({
       schemaVersion: 1,
       libraryId: "wayfinders.audio.v1",
-      masterVolume: 0.8,
       categories: {
-        music: { displayName: "Music", defaultVolume: 0.42, voiceLimit: 2 },
-        ambience: { displayName: "Ambience", defaultVolume: 0.275, voiceLimit: 3 },
-        sfx: { displayName: "Sound effects", defaultVolume: 0.75, voiceLimit: 8 },
-        ui: { displayName: "Interface", defaultVolume: 0.6, voiceLimit: 2 },
+        music: { displayName: "Music", voiceLimit: 2 },
+        ambience: { displayName: "Ambience", voiceLimit: 3 },
+        sfx: { displayName: "Sound effects", voiceLimit: 8 },
+        ui: { displayName: "Interface", voiceLimit: 2 },
       },
       assets: [
         { id: "music.home", displayName: "Home", category: "music", file: "./v1/music/home.wav", loop: true, baseVolume: 1, description: "Home" },
@@ -70,7 +69,10 @@ describe("AUD-1 game audio controls binding", () => {
     const port = new ControlsPlaybackPort();
     const controller = new GameAudioController({
       catalog,
-      mixer: new AudioMixer(catalog),
+      mixer: new AudioMixer(catalog, {
+        masterVolume: 0.8,
+        categoryVolumes: { music: 0.42, ambience: 0.275, sfx: 0.75, ui: 0.6 },
+      }),
       playback: port,
     });
     const view = new FakeControlsView();

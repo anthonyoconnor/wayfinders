@@ -123,7 +123,7 @@ The mixer has four categories:
 | --- | --- | ---: | ---: |
 | Music | score loops and lifecycle music transitions | `0.42` | `2` during a crossfade |
 | Ambience | ocean bed and speed-controlled wake | `0.275` | `3` |
-| SFX | discoveries, surveys, returns, wrecks, and completion accents | `0.75` | `8` |
+| SFX | discoveries, surveys, returns, wrecks, and completion accents | `0.10` | `8` |
 | UI | confirm, cancel, toggle, and dialog actions | `0.60` | `2` |
 
 Initial master gain is `0.80`. A sound's effective gain is:
@@ -132,9 +132,10 @@ Initial master gain is `0.80`. A sound's effective gain is:
 master gain × category gain × catalog base gain × transition gain
 ```
 
-All values are presentation configuration, clamped to `[0, 1]`, and have no
-place in `prototypeConfig`, which owns gameplay tuning. These numbers are a
-starting mix for acceptance, not loudness certification.
+All values are presentation configuration, clamped to `[0, 1]`, and are owned
+by `DEFAULT_GAME_SETTINGS.audio`, not the asset catalog or gameplay session
+tuning. These numbers are a starting mix for acceptance, not loudness
+certification.
 
 The controller owns at most fifteen simultaneous voices across all categories.
 When a category reaches its limit, policy rejects the newest low-priority cue
@@ -144,11 +145,11 @@ helpers may self-destroy only after the controller has accounted for them.
 
 ### Unlock and user control
 
-- The game begins in a visible `sound unavailable until enabled` state when the
-  browser reports the Sound Manager as locked.
-- **Enable sound** is an explicit DOM button in the game controls. Activating it
-  attempts unlock. `AUD-2` and `AUD-4` reconcile their current ambience/music
-  layers only after a successful unlock.
+- Sound is on by default. When the browser reports the Sound Manager as locked,
+  playback begins after the first interaction releases that lock.
+- **Enable sound** remains an explicit fallback button in the game controls.
+  Activating it attempts unlock. `AUD-2` and `AUD-4` reconcile their current
+  ambience/music layers only after a successful unlock.
 - Events that occurred while locked are not queued or replayed. After unlock,
   continuous layers reconcile to current state and the next eligible one-shot
   plays normally.

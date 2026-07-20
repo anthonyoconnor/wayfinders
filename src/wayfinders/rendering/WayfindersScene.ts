@@ -24,6 +24,12 @@ import {
   type DeepPartial,
   type PrototypeConfig,
 } from "../config/prototypeConfig";
+import {
+  DEFAULT_GAME_SETTINGS,
+  type DeepReadonly as DeepReadonlyGameSettings,
+  type GameSettings,
+  type OverlayVisibilitySettings,
+} from "../config/gameSettings";
 import { GameSimulation } from "../core/GameSimulation";
 import { FrameTimingMonitor } from "../core/FrameTimingMonitor";
 import { PresentationWorkMonitor, type PresentationWorkCounters } from "../core/PresentationWorkCounters";
@@ -164,7 +170,7 @@ interface BrowserDebugApi {
   addProvisions: (delta: number) => ReturnType<GameSimulation["snapshot"]>;
   forceWreck: () => boolean;
   regenerate: (seed?: number) => ReturnType<GameSimulation["snapshot"]>;
-  setOverlay: (name: keyof GameSimulation["debug"], visible: boolean) => void;
+  setOverlay: (name: keyof OverlayVisibilitySettings, visible: boolean) => void;
   setMapReviewMode: (enabled: boolean) => boolean;
   setCloudAtmosphere: (visible: boolean) => boolean;
   setCloudFrequency: (cloudsPerChunk: number) => boolean;
@@ -314,6 +320,8 @@ export class WayfindersScene extends Phaser.Scene {
   private cameraFitZoom = 1;
   private cameraZoomRatio = 1;
   private mapReviewMode = false;
+  private readonly overlayVisibility: OverlayVisibilitySettings;
+  private overlayVisibilityRevision = 0;
   private mapReviewPanGesture?: Readonly<MapReviewPanGesture>;
   private browserDebugApi?: BrowserDebugApi;
   private activeLifecycleCue?: HTMLElement;
@@ -354,9 +362,11 @@ export class WayfindersScene extends Phaser.Scene {
     private readonly authoredIslandPresentationCatalog: Readonly<AuthoredIslandPresentationCatalog> =
       EMPTY_AUTHORED_ISLAND_PRESENTATION_CATALOG,
     private readonly audioCatalogResult?: AudioCatalogLoadResult,
+    private readonly gameSettings: DeepReadonlyGameSettings<GameSettings> = DEFAULT_GAME_SETTINGS,
   ) {
     super({ key: "WayfindersScene" });
     this.simulation = simulation;
+    this.overlayVisibility = { ...gameSettings.overlays };
   }
 
   preload(): void {
@@ -682,7 +692,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.gridGraphics.clear();
     this.debugGraphics.clear();
 
-    if (this.simulation.debug.navigationGrid) {
+    if (this.overlayVisibility.navigationGrid) {
       this.gridGraphics.lineStyle(1, PALETTE.grid, 0.18);
       for (const entry of this.activeChunkEntries) {
         const startX = entry.canonicalChunk.x * world.chunkSize;
@@ -704,7 +714,7 @@ export class WayfindersScene extends Phaser.Scene {
       }
     }
 
-    if (this.simulation.debug.collisionBoxes) {
+    if (this.overlayVisibility.collisionBoxes) {
       this.debugGraphics.fillStyle(PALETTE.collision, 0.2);
       this.debugGraphics.lineStyle(1.5, PALETTE.collision, 0.9);
       this.forEachActiveChunkTile((entry, x, y) => {
@@ -730,7 +740,7 @@ export class WayfindersScene extends Phaser.Scene {
       });
     }
 
-    if (this.simulation.debug.currentSight) {
+    if (this.overlayVisibility.currentSight) {
       this.debugGraphics.fillStyle(PALETTE.sight, 0.12);
       this.debugGraphics.lineStyle(1, PALETTE.sight, 0.38);
       this.forEachActiveChunkTile((entry, x, y) => {
@@ -762,7 +772,7 @@ export class WayfindersScene extends Phaser.Scene {
   private renderEntityDebug(): void {
     const graphics = this.entityDebugGraphics;
     graphics.clear();
-    if (!this.simulation.debug.collisionBoxes) return;
+    if (!this.overlayVisibility.collisionBoxes) return;
 
     const size = this.simulation.config.navigation.tileSize;
     const bounds = collectDebugEntityBounds({
@@ -904,7 +914,7 @@ export class WayfindersScene extends Phaser.Scene {
       this.simulation.world,
       this.simulation.forwardRange,
       this.simulation.returnPaths,
-      this.simulation.debug,
+      this.overlayVisibility,
       this.simulation.overlaysRevision,
       force,
     );
@@ -1027,16 +1037,16 @@ export class WayfindersScene extends Phaser.Scene {
 
     const debugChanged = force
       || this.lastDebugRevision !== this.simulation.revision
-      || this.lastDebugOverlayRevision !== this.simulation.overlaysRevision;
-    const debugVisible = this.simulation.debug.navigationGrid
-      || this.simulation.debug.collisionBoxes
-      || this.simulation.debug.currentSight;
+      || this.lastDebugOverlayRevision !== this.overlayVisibilityRevision;
+    const debugVisible = this.overlayVisibility.navigationGrid
+      || this.overlayVisibility.collisionBoxes
+      || this.overlayVisibility.currentSight;
     if (debugChanged && (debugVisible || this.lastDebugVisible)) {
       this.renderDebug();
     }
     if (debugChanged) {
       this.lastDebugRevision = this.simulation.revision;
-      this.lastDebugOverlayRevision = this.simulation.overlaysRevision;
+      this.lastDebugOverlayRevision = this.overlayVisibilityRevision;
       this.lastDebugVisible = debugVisible;
       this.syncRiskLegend();
     }
@@ -1310,8 +1320,8 @@ export class WayfindersScene extends Phaser.Scene {
 
     slot.querySelectorAll<HTMLInputElement>("input[data-overlay]").forEach((input) => {
       input.addEventListener("change", () => {
-        const name = input.dataset.overlay as keyof GameSimulation["debug"];
-        this.simulation.setDebugVisibility(name, input.checked);
+        const name = input.dataset.overlay as keyof OverlayVisibilitySettings;
+        this.setOverlayVisibility(name, input.checked);
         this.syncRiskLegend();
       }, { signal });
     });
@@ -1822,8 +1832,8 @@ export class WayfindersScene extends Phaser.Scene {
     action.dataset.updated = String(this.greatHallUpdated);
   }
 
-  private toggleMarkup(name: keyof GameSimulation["debug"], label: string): string {
-    return `<label class="tool-check"><input data-overlay="${name}" type="checkbox" ${this.simulation.debug[name] ? "checked" : ""}> ${label}</label>`;
+  private toggleMarkup(name: keyof OverlayVisibilitySettings, label: string): string {
+    return `<label class="tool-check"><input data-overlay="${name}" type="checkbox" ${this.overlayVisibility[name] ? "checked" : ""}> ${label}</label>`;
   }
 
   private cloudToggleMarkup(): string {
@@ -2000,9 +2010,16 @@ export class WayfindersScene extends Phaser.Scene {
 
   private syncRiskLegend(): void {
     document.querySelectorAll<HTMLInputElement>("#scene-tools-slot input[data-overlay]").forEach((input) => {
-      const name = input.dataset.overlay as keyof GameSimulation["debug"];
-      input.checked = this.simulation.debug[name];
+      const name = input.dataset.overlay as keyof OverlayVisibilitySettings;
+      input.checked = this.overlayVisibility[name];
     });
+  }
+
+  private setOverlayVisibility<K extends keyof OverlayVisibilitySettings>(name: K, visible: boolean): void {
+    if (this.overlayVisibility[name] === visible) return;
+    this.overlayVisibility[name] = visible;
+    this.overlayVisibilityRevision++;
+    this.syncRiskLegend();
   }
 
   private setCloudAtmosphereEnabled(enabled: boolean): boolean {
@@ -2329,7 +2346,7 @@ export class WayfindersScene extends Phaser.Scene {
         this.afterWorldChanged();
         return this.simulation.snapshot();
       },
-      setOverlay: (name, visible) => this.simulation.setDebugVisibility(name, visible),
+      setOverlay: (name, visible) => this.setOverlayVisibility(name, visible),
       setMapReviewMode: (enabled) => this.setMapReviewMode(enabled),
       setCloudAtmosphere: (visible) => this.setCloudAtmosphereEnabled(visible),
       setCloudFrequency: (cloudsPerChunk) => this.setCloudFrequency(cloudsPerChunk),
@@ -2404,10 +2421,16 @@ export class WayfindersScene extends Phaser.Scene {
       return;
     }
     const catalog = this.audioCatalogResult.catalog;
+    const audioSettings = this.gameSettings.audio;
     this.audioController = new GameAudioController({
       catalog,
-      mixer: new AudioMixer(catalog),
+      mixer: new AudioMixer(catalog, {
+        muted: audioSettings.muted,
+        masterVolume: audioSettings.masterVolume,
+        categoryVolumes: audioSettings.categoryVolumes,
+      }),
       playback: createPhaserAudioPlaybackPort(this),
+      enabledByDefault: audioSettings.enabled,
     });
     this.audioCueController = new GameAudioCueController(
       this.audioController,

@@ -63,6 +63,9 @@ export type AudioVoiceDecision =
   }>;
 
 export interface AudioMixerOptions {
+  readonly muted?: boolean;
+  readonly masterVolume: number;
+  readonly categoryVolumes: Readonly<Record<AudioCategory, number>>;
   readonly totalVoiceLimit?: number;
 }
 
@@ -86,11 +89,16 @@ export class AudioMixer {
   private nextVoiceSequence = 1;
   private snapshotCache: Readonly<AudioMixerSnapshot> | undefined;
 
-  constructor(catalog: Readonly<AudioCatalog>, options: Readonly<AudioMixerOptions> = {}) {
+  constructor(catalog: Readonly<AudioCatalog>, options: Readonly<AudioMixerOptions>) {
     this.catalog = catalog;
     this.assetsById = new Map(catalog.assets.map((asset) => [asset.id, asset]));
-    this.masterVolume = catalog.masterVolume;
-    this.categoryVolumes = categoryNumberRecord((category) => catalog.categories[category].defaultVolume);
+    this.muted = options.muted ?? false;
+    if (typeof this.muted !== "boolean") throw new TypeError("muted must be a boolean");
+    this.masterVolume = initialGain(options.masterVolume, "masterVolume");
+    this.categoryVolumes = categoryNumberRecord((category) => initialGain(
+      options.categoryVolumes[category],
+      `categoryVolumes.${category}`,
+    ));
     this.categoryVoiceLimits = Object.freeze(
       categoryNumberRecord((category) => catalog.categories[category].voiceLimit),
     );
@@ -257,6 +265,13 @@ function replacementCandidate(
 function clampedGain(value: number, label: string): number {
   if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
   return Math.min(1, Math.max(0, value));
+}
+
+function initialGain(value: number, label: string): number {
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new RangeError(`${label} must be between 0 and 1`);
+  }
+  return value;
 }
 
 function assertCategory(category: string): asserts category is AudioCategory {

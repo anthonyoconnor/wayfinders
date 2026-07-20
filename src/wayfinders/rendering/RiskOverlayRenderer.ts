@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { prototypeConfig } from "../config/prototypeConfig";
-import type { DebugVisibilityState } from "../core/GameSimulation";
+import type { OverlayVisibilitySettings } from "../config/gameSettings";
 import type { ForwardRangeResult } from "../exploration/ForwardRangeSystem";
 import { ReturnRiskLevel, type ReturnPathResult } from "../exploration/ReturnPathSystem";
 import type { WorldChunk } from "../world/WorldChunk";
@@ -157,7 +157,7 @@ export class RiskOverlayRenderer {
     world: WorldGrid,
     forward: ForwardRangeResult,
     returning: ReturnPathResult,
-    debug: Readonly<DebugVisibilityState>,
+    visibility: Readonly<OverlayVisibilitySettings>,
     revision: number,
     force = false,
   ): void {
@@ -185,9 +185,9 @@ export class RiskOverlayRenderer {
     const returnChanged = returnGeometryChanged
       || returning.riskLevel !== this.lastReturnRiskLevel;
     const chunksChanged = this.pendingResourceKeys.size > 0;
-    const debugChanged = debug.forwardRange !== this.lastForwardVisible
-      || debug.returnViability !== this.lastReturnVisible;
-    if (!force && !worldChanged && !styleChanged && !visibilityChanged && !dataChanged && !chunksChanged && !debugChanged) {
+    const overlayVisibilityChanged = visibility.forwardRange !== this.lastForwardVisible
+      || visibility.returnViability !== this.lastReturnVisible;
+    if (!force && !worldChanged && !styleChanged && !visibilityChanged && !dataChanged && !chunksChanged && !overlayVisibilityChanged) {
       return;
     }
 
@@ -196,10 +196,10 @@ export class RiskOverlayRenderer {
         this.getOrCreateChunkResource(world, chunk);
       }
     }
-    if (worldChanged || chunksChanged || debugChanged) {
+    if (worldChanged || chunksChanged || overlayVisibilityChanged) {
       for (const view of this.views.values()) {
-        view.forwardImage.setVisible(debug.forwardRange);
-        view.returnImage.setVisible(debug.returnViability);
+        view.forwardImage.setVisible(visibility.forwardRange);
+        view.returnImage.setVisible(visibility.returnViability);
       }
     }
 
@@ -276,8 +276,8 @@ export class RiskOverlayRenderer {
     this.lastReturnEdges = returning.pathEdges;
     this.lastReturnRiskLevel = returning.riskLevel;
     this.lastVisibleIndices = [...world.getVisibleIndices()];
-    this.lastForwardVisible = debug.forwardRange;
-    this.lastReturnVisible = debug.returnViability;
+    this.lastForwardVisible = visibility.forwardRange;
+    this.lastReturnVisible = visibility.returnViability;
     this.pendingResourceKeys.clear();
   }
 

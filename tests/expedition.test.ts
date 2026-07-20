@@ -7,8 +7,9 @@ import { GridGraph } from "../src/wayfinders/navigation/GridGraph";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology";
+import { configurePrototypeForTestProfile } from "./helpers";
 
-beforeEach(() => resetPrototypeConfig());
+beforeEach(() => configurePrototypeForTestProfile());
 afterEach(() => resetPrototypeConfig());
 
 function findUnknownWater(simulation: GameSimulation, farFrom: readonly GridPoint[] = []): GridPoint {

@@ -29,12 +29,12 @@ regeneration path.
 `public/assets/audio/audio-catalog.json` is the one catalog consumed by game
 mode and the play-only Audio asset workspace, and it is the executable authority
 for every stable replacement path. Its validated V1 root contains
-`schemaVersion`, `libraryId`, default `masterVolume`, `categories`, and `assets`.
-Each category contains its display name, default gain, and voice limit. Each
-asset contains its stable semantic ID, display name, description, category,
-safe catalog-relative WAV path, whole-file loop flag, and base gain. Runtime
-files live under `public/assets/audio/v1` in `music`, `ambience`, `sfx`, and `ui`
-directories.
+`schemaVersion`, `libraryId`, `categories`, and `assets`. Each category contains
+its display name and voice limit. Each asset contains its stable semantic ID,
+display name, description, category, safe catalog-relative WAV path, whole-file
+loop flag, and base gain. Initial enable, mute, master, and category gains are
+game settings, not asset metadata. Runtime files live under
+`public/assets/audio/v1` in `music`, `ambience`, `sfx`, and `ui` directories.
 
 An in-contract audio replacement overwrites an existing WAV at its current
 path while preserving its semantic purpose and whole-file loop behavior. It

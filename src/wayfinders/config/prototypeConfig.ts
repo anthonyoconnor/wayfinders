@@ -1,3 +1,11 @@
+import {
+  DEFAULT_GAME_SETTINGS,
+  prototypeConfigFromGameSettings,
+  type DeepReadonly,
+} from "./gameSettings";
+
+export type { DeepReadonly } from "./gameSettings";
+
 export interface PrototypeConfig {
   navigation: {
     tileSize: number;
@@ -88,10 +96,6 @@ export type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
 };
 
-export type DeepReadonly<T> = T extends object
-  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
-  : T;
-
 function deepFreeze<T extends object>(value: T): DeepReadonly<T> {
   for (const nested of Object.values(value)) {
     if (nested !== null && typeof nested === "object" && !Object.isFrozen(nested)) {
@@ -101,81 +105,10 @@ function deepFreeze<T extends object>(value: T): DeepReadonly<T> {
   return Object.freeze(value) as DeepReadonly<T>;
 }
 
-export const DEFAULT_PROTOTYPE_CONFIG: DeepReadonly<PrototypeConfig> = deepFreeze<PrototypeConfig>({
-  navigation: {
-    tileSize: 32,
-    artTileSize: 16,
-    sightRadius: 5,
-    chunkSize: 32,
-  },
-  world: {
-    width: 96,
-    height: 96,
-    seed: 13_371,
-    homeIslandRadius: 4,
-    supportedWaterRadius: 14,
-    supportedBoundaryNoise: 2.5,
-    supportedNoiseScale: 7,
-    shallowWaterRadius: 7,
-    hiddenObstacleRadius: 2,
-    hiddenObstacleDistance: 24,
-    maxEnclosedUnknownTiles: 2,
-    idolCount: 3,
-  },
-  islands: {
-    count: 8,
-    minRadius: 2,
-    maxRadius: 6,
-    apronWidth: 1.25,
-    minimumChannelWidth: 11,
-    homeClearance: 2,
-    placementAttempts: 64,
-    archipelagoClusters: 0,
-    archipelagoRadius: 24,
-    archipelagoBias: 0,
-    edgeNoise: 0.24,
-    safeCorridorHalfWidth: 2,
-    highIslandWeight: 1,
-    lowCayWeight: 1,
-    atollWeight: 1,
-    rockySkerryWeight: 1,
-  },
-  provisions: {
-    startingBundles: 12,
-    surveyCost: 2,
-    supportedCost: 0,
-    // Zero disables provision consumption in Personal water, which is useful for testing.
-    personalCost: 0.1,
-    // Zero likewise makes Unknown travel free; range overlays then have no finite outer frontier.
-    unknownCost: 0.2,
-  },
-  returnRisk: {
-    comfortable: 3,
-    warning: 1,
-    critical: 0,
-  },
-  overlays: {
-    fogNoise: 0.18,
-    fogBlend: 0.12,
-    forwardOverlayOpacity: 0.55,
-    returnOverlayOpacity: 0.35,
-    returnThreadWidth: 5,
-    returnThreadCurveRadius: 10,
-    forwardConeHalfAngleDegrees: 60,
-    returnPathPadding: 1,
-  },
-  movement: {
-    shipSpeed: 2.5,
-    turnRate: 180,
-    shipCollisionHalfExtent: 14,
-    collisionEpsilon: 0.001,
-  },
-  simulation: {
-    fixedStepMs: 1000 / 30,
-    maxFrameDeltaMs: 100,
-    wreckPresentationSeconds: 4,
-  },
-});
+/** Internal derived template; DEFAULT_GAME_SETTINGS is the only exported default owner. */
+const normalGameConfigTemplate: DeepReadonly<PrototypeConfig> = deepFreeze(
+  prototypeConfigFromGameSettings(DEFAULT_GAME_SETTINGS),
+);
 
 function cloneConfig(config: DeepReadonly<PrototypeConfig>): PrototypeConfig {
   return {
@@ -191,7 +124,7 @@ function cloneConfig(config: DeepReadonly<PrototypeConfig>): PrototypeConfig {
 }
 
 function cloneDefaults(): PrototypeConfig {
-  return cloneConfig(DEFAULT_PROTOTYPE_CONFIG);
+  return cloneConfig(normalGameConfigTemplate);
 }
 
 /**
@@ -204,7 +137,7 @@ export const prototypeConfig: PrototypeConfig = cloneDefaults();
 export type ConfigChangeListener = (sections: ReadonlySet<PrototypeConfigSection>) => void;
 
 const listeners = new Set<ConfigChangeListener>();
-const configSections = Object.keys(DEFAULT_PROTOTYPE_CONFIG) as PrototypeConfigSection[];
+const configSections = Object.keys(normalGameConfigTemplate) as PrototypeConfigSection[];
 const configSectionSet = new Set<PrototypeConfigSection>(configSections);
 
 export function onPrototypeConfigChanged(listener: ConfigChangeListener): () => void {
@@ -228,7 +161,7 @@ export function patchPrototypeConfig(patch: DeepPartial<PrototypeConfig>): Reado
     const section = rawSection as PrototypeConfigSection;
     const candidateSection = candidate[section] as unknown as Record<string, number>;
     const currentSection = prototypeConfig[section] as unknown as Record<string, number>;
-    const defaultSection = DEFAULT_PROTOTYPE_CONFIG[section] as unknown as Readonly<Record<string, number>>;
+    const defaultSection = normalGameConfigTemplate[section] as unknown as Readonly<Record<string, number>>;
     let sectionChanged = false;
 
     for (const [key, value] of Object.entries(sectionPatch)) {

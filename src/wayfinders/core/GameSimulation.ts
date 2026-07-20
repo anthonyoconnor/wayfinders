@@ -124,14 +124,6 @@ import type {
   WorldPoint,
 } from "./types";
 
-export interface DebugVisibilityState {
-  navigationGrid: boolean;
-  collisionBoxes: boolean;
-  currentSight: boolean;
-  forwardRange: boolean;
-  returnViability: boolean;
-}
-
 export type GameCompletionState = "in-progress" | "awaiting-choice" | "continued";
 
 export interface IdolLocationProgress {
@@ -205,7 +197,6 @@ export interface SimulationSnapshot {
     records: readonly Readonly<FishingShoalReadModel>[];
   };
   idolLocations: Readonly<IdolLocationProgress>;
-  debug: Readonly<DebugVisibilityState>;
 }
 
 export interface GameSimulationOptions {
@@ -269,13 +260,6 @@ interface PendingRespawnState {
 export class GameSimulation {
   readonly events = new GameEvents();
   readonly config: PrototypeConfig;
-  readonly debug: DebugVisibilityState = {
-    navigationGrid: false,
-    collisionBoxes: false,
-    currentSight: false,
-    forwardRange: true,
-    returnViability: true,
-  };
 
   generated!: GeneratedWorld;
   ship!: ShipState;
@@ -1391,12 +1375,6 @@ export class GameSimulation {
     return true;
   }
 
-  setDebugVisibility<K extends keyof DebugVisibilityState>(name: K, visible: boolean): void {
-    if (this.debug[name] === visible) return;
-    this.debug[name] = visible;
-    this.revision++;
-  }
-
   snapshot(): SimulationSnapshot {
     const knowledge = {
       supported: this.world.getKnowledgeCount(KnowledgeState.Supported),
@@ -1488,7 +1466,6 @@ export class GameSimulation {
         })),
       },
       idolLocations: this.idolLocationProgress,
-      debug: { ...this.debug },
     };
   }
 

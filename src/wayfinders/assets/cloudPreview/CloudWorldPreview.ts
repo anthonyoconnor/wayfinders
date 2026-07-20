@@ -7,6 +7,7 @@ import {
 import type { ActiveChunkEntry } from "../../rendering/activation";
 import { TerrainType } from "../../world/TileData";
 import { WorldGenerator, type GeneratedWorld } from "../../world/WorldGenerator";
+import { createWorldGenerationProfileConfig } from "../../world/WorldGenerationProfiles";
 
 export const CLOUD_WORLD_PREVIEW_CELL_SIZE = 6;
 export const CLOUD_WORLD_PREVIEW_SPEEDS = Object.freeze([1, 4, 12, 24] as const);
@@ -38,7 +39,9 @@ export function generateCloudWorldPreview(seed: number): Readonly<CloudWorldPrev
   const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : 0;
   return Object.freeze({
     seed: normalizedSeed,
-    generated: new WorldGenerator().generate(normalizedSeed),
+    generated: new WorldGenerator(
+      createWorldGenerationProfileConfig("P0"),
+    ).generate(normalizedSeed),
   });
 }
 

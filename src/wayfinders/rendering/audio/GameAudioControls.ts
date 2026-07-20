@@ -304,9 +304,12 @@ function audioStatus(snapshot: Readonly<GameAudioSnapshot>): string {
   }
   if (snapshot.unlockState === "unlocking") return "Enabling sound…";
   if (snapshot.unlockState === "locked") {
-    return snapshot.browserLocked
-      ? "Sound is locked until you enable it."
-      : "Sound is ready. Enable it when you want to listen.";
+    if (snapshot.browserLocked) {
+      return snapshot.enabledOnUnlock
+        ? "Sound is on and will start after your first browser interaction."
+        : "Sound is locked until you enable it.";
+    }
+    return "Sound is ready. Enable it when you want to listen.";
   }
   if (snapshot.suspended) return "Sound is enabled and paused while the game is out of focus.";
   return snapshot.muted ? "Sound is enabled and muted." : "Sound is enabled.";

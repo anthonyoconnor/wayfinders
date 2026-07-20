@@ -11,6 +11,7 @@ import type {
   AudioPlaybackVoiceConfig,
 } from "../src/wayfinders/rendering/audio/AudioPlaybackPort";
 import { GameAudioController } from "../src/wayfinders/rendering/audio/GameAudioController";
+import { DEFAULT_GAME_SETTINGS } from "../src/wayfinders/config/gameSettings";
 import {
   phaserAudioCacheKey,
   queueGameAudioCatalog,
@@ -193,6 +194,30 @@ describe("AUD-1 game audio controller", () => {
     expect(port.voices[0]!.destroyCalls).toBe(1);
   });
 
+  it("enables default-on audio when the browser releases its gesture lock", () => {
+    const port = new FakePlaybackPort(true, true);
+    for (const asset of CATALOG.assets) port.assets.add(asset.id);
+    const controller = new GameAudioController({
+      catalog: CATALOG,
+      mixer: new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio),
+      playback: port,
+      enabledByDefault: true,
+    });
+
+    expect(controller.getSnapshot()).toMatchObject({
+      unlockState: "locked",
+      enabled: false,
+      enabledOnUnlock: true,
+      browserLocked: true,
+    });
+    port.emit("unlocked");
+    expect(controller.getSnapshot()).toMatchObject({
+      unlockState: "unlocked",
+      enabled: true,
+      browserLocked: false,
+    });
+  });
+
   it("reconciles mixer changes onto owned voices without restarting them", () => {
     const { controller, port } = unlockedFixture();
     expect(controller.play({
@@ -313,7 +338,7 @@ function fixture(port = new FakePlaybackPort()): {
   mixer: AudioMixer;
 } {
   for (const asset of CATALOG.assets) port.assets.add(asset.id);
-  const mixer = new AudioMixer(CATALOG);
+  const mixer = new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio);
   return {
     controller: new GameAudioController({ catalog: CATALOG, mixer, playback: port }),
     port,
@@ -331,12 +356,11 @@ function unlockedFixture(): ReturnType<typeof fixture> {
 const CATALOG: Readonly<AudioCatalog> = validateAudioCatalog({
   schemaVersion: 1,
   libraryId: "wayfinders.audio.v1",
-  masterVolume: 0.8,
   categories: {
-    music: { displayName: "Music", defaultVolume: 0.4, voiceLimit: 2 },
-    ambience: { displayName: "Ambience", defaultVolume: 0.5, voiceLimit: 2 },
-    sfx: { displayName: "Sound effects", defaultVolume: 0.6, voiceLimit: 2 },
-    ui: { displayName: "Interface", defaultVolume: 0.7, voiceLimit: 1 },
+    music: { displayName: "Music", voiceLimit: 2 },
+    ambience: { displayName: "Ambience", voiceLimit: 2 },
+    sfx: { displayName: "Sound effects", voiceLimit: 2 },
+    ui: { displayName: "Interface", voiceLimit: 1 },
   },
   assets: [
     {

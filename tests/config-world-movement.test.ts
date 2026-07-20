@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
-  DEFAULT_PROTOTYPE_CONFIG,
   onPrototypeConfigChanged,
   patchPrototypeConfig,
   prototypeConfig,
   resetPrototypeConfig,
   validatePrototypeConfig,
 } from "../src/wayfinders/config/prototypeConfig";
+import {
+  DEFAULT_GAME_SETTINGS,
+  prototypeConfigFromGameSettings,
+} from "../src/wayfinders/config/gameSettings";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import { dijkstra, DijkstraWorkspace, reconstructDijkstraPath } from "../src/wayfinders/navigation/Dijkstra";
 import { createShipStateAtGrid, MovementSystem } from "../src/wayfinders/navigation/MovementSystem";
@@ -20,6 +23,8 @@ import {
   WRAPPING_WORLD_TOPOLOGY,
 } from "../src/wayfinders/world/WorldTopology";
 import { makeConfig } from "./helpers";
+
+const normalGameConfig = prototypeConfigFromGameSettings(DEFAULT_GAME_SETTINGS);
 
 beforeEach(() => resetPrototypeConfig());
 afterEach(() => resetPrototypeConfig());
@@ -39,17 +44,17 @@ describe("prototype configuration", () => {
   });
 
   it("keeps defaults deeply frozen and resets the mutable live copy", () => {
-    expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG)).toBe(true);
-    expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG.navigation)).toBe(true);
-    expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG.islands)).toBe(true);
-    expect(Object.isFrozen(DEFAULT_PROTOTYPE_CONFIG.movement)).toBe(true);
+    expect(Object.isFrozen(DEFAULT_GAME_SETTINGS)).toBe(true);
+    expect(Object.isFrozen(DEFAULT_GAME_SETTINGS.world)).toBe(true);
+    expect(Object.isFrozen(DEFAULT_GAME_SETTINGS.audio)).toBe(true);
+    expect(Object.isFrozen(DEFAULT_GAME_SETTINGS.gameplay)).toBe(true);
 
-    const defaultSpeed = DEFAULT_PROTOTYPE_CONFIG.movement.shipSpeed;
+    const defaultSpeed = DEFAULT_GAME_SETTINGS.gameplay.movement.shipSpeed;
     prototypeConfig.movement.shipSpeed = defaultSpeed + 10;
     resetPrototypeConfig();
 
     expect(prototypeConfig.movement.shipSpeed).toBe(defaultSpeed);
-    expect(DEFAULT_PROTOTYPE_CONFIG.movement.shipSpeed).toBe(defaultSpeed);
+    expect(DEFAULT_GAME_SETTINGS.gameplay.movement.shipSpeed).toBe(defaultSpeed);
   });
 
   it("applies valid patches atomically and rejects invalid patches without notifying", () => {
@@ -70,7 +75,7 @@ describe("prototype configuration", () => {
         provisions: { startingBundles: startingBundles + 3 },
       })).toThrow(RangeError);
 
-      expect(prototypeConfig.navigation.tileSize).toBe(DEFAULT_PROTOTYPE_CONFIG.navigation.tileSize);
+      expect(prototypeConfig.navigation.tileSize).toBe(normalGameConfig.navigation.tileSize);
       expect(prototypeConfig.provisions.startingBundles).toBe(startingBundles);
       expect(notifications).toEqual([["movement"]]);
     } finally {
@@ -87,7 +92,7 @@ describe("prototype configuration", () => {
     expect(() => patchPrototypeConfig({ islands: { maxRadius: 1 } })).toThrow(
       "islands.maxRadius must be at least islands.minRadius",
     );
-    expect(prototypeConfig.islands.maxRadius).toBe(DEFAULT_PROTOTYPE_CONFIG.islands.maxRadius);
+    expect(prototypeConfig.islands.maxRadius).toBe(normalGameConfig.islands.maxRadius);
 
     const periodicFootprintOverlapsItsOwnImage = makeConfig({
       world: { width: 27, height: 27, hiddenObstacleRadius: 10 },
@@ -106,7 +111,7 @@ describe("prototype configuration", () => {
   });
 
   it("keeps the ship collision footprint smaller than a passable navigation tile", () => {
-    expect(DEFAULT_PROTOTYPE_CONFIG.movement.shipCollisionHalfExtent).toBe(14);
+    expect(DEFAULT_GAME_SETTINGS.gameplay.movement.shipCollisionHalfExtent).toBe(14);
     expect(() => patchPrototypeConfig({ movement: { shipCollisionHalfExtent: 16 } })).toThrow(
       "movement.shipCollisionHalfExtent must be smaller than half navigation.tileSize",
     );
@@ -127,12 +132,12 @@ describe("prototype configuration", () => {
       "provision travel costs must use at most four decimal places",
     );
     expect(prototypeConfig.provisions.unknownCost).toBe(
-      DEFAULT_PROTOTYPE_CONFIG.provisions.unknownCost,
+      DEFAULT_GAME_SETTINGS.gameplay.provisions.unknownCost,
     );
   });
 
   it("uses a configurable positive-integer two-bundle survey cost", () => {
-    expect(DEFAULT_PROTOTYPE_CONFIG.provisions.surveyCost).toBe(2);
+    expect(DEFAULT_GAME_SETTINGS.gameplay.provisions.surveyCost).toBe(2);
     patchPrototypeConfig({ provisions: { surveyCost: 3 } });
     expect(prototypeConfig.provisions.surveyCost).toBe(3);
 
@@ -144,8 +149,13 @@ describe("prototype configuration", () => {
     }
   });
 
+  it("uses a 192 by 192 default world", () => {
+    expect(DEFAULT_GAME_SETTINGS.world.width).toBe(192);
+    expect(DEFAULT_GAME_SETTINGS.world.height).toBe(192);
+  });
+
   it("uses three configurable idol locations by default and requires a positive integer", () => {
-    expect(DEFAULT_PROTOTYPE_CONFIG.world.idolCount).toBe(3);
+    expect(DEFAULT_GAME_SETTINGS.world.idolCount).toBe(3);
     patchPrototypeConfig({ world: { idolCount: 5 } });
     expect(prototypeConfig.world.idolCount).toBe(5);
 

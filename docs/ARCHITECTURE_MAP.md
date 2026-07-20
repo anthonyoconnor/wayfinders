@@ -35,7 +35,7 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 
 | Area | Owns | Must not own |
 | --- | --- | --- |
-| `config` | validated prototype tuning values and change notification | live gameplay state |
+| `config` | canonical normal-game defaults, validated session tuning values, overlay defaults, and change notification | live gameplay state or benchmark profiles |
 | `world` | explicit topology, canonical/lifted coordinate primitives, named scale profiles, manifests, generation, logical tiles, analysis, and spatial indexes | Phaser objects |
 | `navigation` | collision topology, movement authority, and route/range mechanics | feature rewards or UI |
 | `exploration` / `features` | feature state, commands, selectors, and mutation results | scene lifecycle |
@@ -72,9 +72,13 @@ adapter may own Phaser sound instances.
 - `GameSimulation` is the gameplay composition root and the public command and
   read-model surface. Cross-feature ordering belongs there; feature rules do
   not.
-- `prototypeConfig` is the validated live tuning store. Test helpers supply
-  isolated values, while named world-profile helpers supply benchmarks and
-  scale fixtures. World-shape changes take effect only by explicit regeneration.
+- `DEFAULT_GAME_SETTINGS` is the typed, deeply frozen normal-new-game entry
+  point for world, audio, overlay, gameplay, and presentation defaults.
+  `prototypeConfig` is its derived mutable session/developer tuning view; it is
+  not another default owner. Named world profiles own explicit benchmark and
+  scale-fixture configs independently. World-shape changes take effect only by
+  explicit regeneration. The complete setting inventory is indexed in
+  `Wayfinders_Settings_Guide.md`.
 - `WorldTopology` owns per-axis boundary behavior, canonicalization,
   minimum-image displacement, direction-preserving cardinal steps, wrapped
   bounds decomposition, and periodic chunk-image enumeration. Generated game
@@ -139,8 +143,8 @@ adapter may own Phaser sound instances.
   backdrop and the periodic authored island planes; it does not draw generic
   water or waves.
 - `src/wayfinders/audio/index.ts` is the public stored-audio and mixer seam. It
-  validates the canonical catalog, resolves catalog-relative runtime URLs, and
-  owns in-memory master/category gain, bounded deterministic voice decisions,
+  validates the canonical asset-metadata catalog, resolves catalog-relative
+  runtime URLs, and owns in-memory master/category gain, bounded deterministic voice decisions,
   the allocation-free-on-stable-input wake smoothing and music crossfade/duck
   policies, and the pure event-batch cue priority, cooldown, voice-cap, and
   replacement policy.
@@ -153,8 +157,10 @@ adapter may own Phaser sound instances.
   interaction, and accepted presentation actions. Cue and music adapters
   subscribe to the existing `GameEvents`; they do not introduce another event
   bus.
-  Neither audio seam imports or mutates `GameSimulation`, scans the world, or
-  reads hidden terrain.
+  The catalog owns file paths, labels, base gains, loop flags, and voice limits;
+  starting enable, mute, master, and category gains come only from
+  `DEFAULT_GAME_SETTINGS.audio`. Neither audio seam imports or mutates
+  `GameSimulation`, scans the world, or reads hidden terrain.
 - `scripts/generate-audio-assets.mjs` is an offline, deterministic production
   renderer for the complete stored WAV set. It has no runtime imports or
   browser surface and verifies its output paths against the canonical catalog
@@ -229,12 +235,13 @@ adapter may own Phaser sound instances.
   graphics; it never changes world or navigation authority.
 
 Diagnostics are distributed with their owner: simulation traces and counters
-live in `core`, presentation/resource counters in `WayfindersScene` and its
-renderers, and output adaptation in `src/developerLog.ts`. Diagnostics never own
-authoritative mutation. The cloud enable switch, map-review camera/fog switch,
-and telemetry are scene-owned presentation diagnostics and never enter
-`GameSimulation.debug`. Map review detaches the camera without moving the ship
-or changing authoritative knowledge.
+live in `core`, while overlay visibility, presentation/resource counters, and
+temporary presentation overrides live in `WayfindersScene` and its renderers;
+output adaptation lives in `src/developerLog.ts`. Diagnostics never own
+authoritative mutation. Overlay visibility, the cloud enable switch, the
+map-review camera/fog switch, and telemetry never enter `GameSimulation`. Map
+review detaches the camera without moving the ship or changing authoritative
+knowledge.
 
 ## Feature folder convention
 

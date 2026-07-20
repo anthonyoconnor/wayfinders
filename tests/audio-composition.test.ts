@@ -27,6 +27,10 @@ describe("audio application composition", () => {
     expect(scene).toContain("if (this.audioCatalogResult?.ok)");
     expect(scene).toContain("preloadGameAudioCatalog(this, this.audioCatalogResult.catalog)");
     expect(scene).toContain("new GameAudioController({");
+    expect(scene).toContain("const audioSettings = this.gameSettings.audio");
+    expect(scene).toContain("masterVolume: audioSettings.masterVolume");
+    expect(scene).toContain("categoryVolumes: audioSettings.categoryVolumes");
+    expect(scene).toContain("enabledByDefault: audioSettings.enabled");
     expect(scene).toContain("new GameAudioCueController(");
     expect(scene).toContain("new GameMusicController(");
     expect(scene).toContain("this.simulation.events");

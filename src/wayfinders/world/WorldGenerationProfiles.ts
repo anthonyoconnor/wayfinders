@@ -1,5 +1,4 @@
 import {
-  DEFAULT_PROTOTYPE_CONFIG,
   type DeepPartial,
   type PrototypeConfig,
   type PrototypeConfigSection,
@@ -23,19 +22,74 @@ export interface WorldGenerationProfile {
   readonly minimumChannel: Readonly<{ width: number; homeClearance: number }>;
   readonly placementAttemptLimit: number;
   readonly config: PrototypeConfig;
-  readonly nonDefaultSettings: DeepPartial<PrototypeConfig>;
+  readonly profileOverrides: DeepPartial<PrototypeConfig>;
 }
 
-function cloneDefaults(): PrototypeConfig {
+/** Stable benchmark baseline. It deliberately does not consume normal game defaults. */
+function createBenchmarkBaseConfig(): PrototypeConfig {
   return {
-    navigation: { ...DEFAULT_PROTOTYPE_CONFIG.navigation },
-    world: { ...DEFAULT_PROTOTYPE_CONFIG.world },
-    islands: { ...DEFAULT_PROTOTYPE_CONFIG.islands },
-    provisions: { ...DEFAULT_PROTOTYPE_CONFIG.provisions },
-    returnRisk: { ...DEFAULT_PROTOTYPE_CONFIG.returnRisk },
-    overlays: { ...DEFAULT_PROTOTYPE_CONFIG.overlays },
-    movement: { ...DEFAULT_PROTOTYPE_CONFIG.movement },
-    simulation: { ...DEFAULT_PROTOTYPE_CONFIG.simulation },
+    navigation: { tileSize: 32, artTileSize: 16, sightRadius: 5, chunkSize: 32 },
+    world: {
+      width: 96,
+      height: 96,
+      seed: 13_371,
+      homeIslandRadius: 4,
+      supportedWaterRadius: 14,
+      supportedBoundaryNoise: 2.5,
+      supportedNoiseScale: 7,
+      shallowWaterRadius: 7,
+      hiddenObstacleRadius: 2,
+      hiddenObstacleDistance: 24,
+      maxEnclosedUnknownTiles: 2,
+      idolCount: 3,
+    },
+    islands: {
+      count: 8,
+      minRadius: 2,
+      maxRadius: 6,
+      apronWidth: 1.25,
+      minimumChannelWidth: 11,
+      homeClearance: 2,
+      placementAttempts: 64,
+      archipelagoClusters: 0,
+      archipelagoRadius: 24,
+      archipelagoBias: 0,
+      edgeNoise: 0.24,
+      safeCorridorHalfWidth: 2,
+      highIslandWeight: 1,
+      lowCayWeight: 1,
+      atollWeight: 1,
+      rockySkerryWeight: 1,
+    },
+    provisions: {
+      startingBundles: 12,
+      surveyCost: 2,
+      supportedCost: 0,
+      personalCost: 0.1,
+      unknownCost: 0.2,
+    },
+    returnRisk: { comfortable: 3, warning: 1, critical: 0 },
+    overlays: {
+      fogNoise: 0.18,
+      fogBlend: 0.12,
+      forwardOverlayOpacity: 0.55,
+      returnOverlayOpacity: 0.35,
+      returnThreadWidth: 5,
+      returnThreadCurveRadius: 10,
+      forwardConeHalfAngleDegrees: 60,
+      returnPathPadding: 1,
+    },
+    movement: {
+      shipSpeed: 2.5,
+      turnRate: 180,
+      shipCollisionHalfExtent: 14,
+      collisionEpsilon: 0.001,
+    },
+    simulation: {
+      fixedStepMs: 1000 / 30,
+      maxFrameDeltaMs: 100,
+      wreckPresentationSeconds: 4,
+    },
   };
 }
 
@@ -43,11 +97,11 @@ function createProfile(
   id: WorldGenerationProfileId,
   purpose: string,
   areaMultiplier: number,
-  nonDefaultSettings: DeepPartial<PrototypeConfig>,
+  profileOverrides: DeepPartial<PrototypeConfig>,
 ): WorldGenerationProfile {
-  const config = cloneDefaults();
-  for (const section of Object.keys(nonDefaultSettings) as PrototypeConfigSection[]) {
-    const patch = nonDefaultSettings[section];
+  const config = createBenchmarkBaseConfig();
+  for (const section of Object.keys(profileOverrides) as PrototypeConfigSection[]) {
+    const patch = profileOverrides[section];
     if (patch !== undefined) Object.assign(config[section], patch);
   }
   const tileCount = config.world.width * config.world.height;
@@ -76,12 +130,14 @@ function createProfile(
     }),
     placementAttemptLimit: config.islands.placementAttempts,
     config,
-    nonDefaultSettings,
+    profileOverrides,
   });
 }
 
 export const WORLD_GENERATION_PROFILES: Readonly<Record<WorldGenerationProfileId, WorldGenerationProfile>> = Object.freeze({
-  P0: createProfile("P0", "Current 96 by 96 prototype baseline.", 1, {}),
+  P0: createProfile("P0", "Original 96 by 96 benchmark baseline.", 1, {
+    world: { width: 96, height: 96 },
+  }),
   P1: createProfile("P1", "Four-times-area integration profile.", 4, {
     world: { width: 192, height: 192 },
     islands: {

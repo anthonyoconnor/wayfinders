@@ -3,20 +3,21 @@ import {
   AudioMixer,
   validateAudioCatalog,
 } from "../src/wayfinders/audio";
+import { DEFAULT_GAME_SETTINGS } from "../src/wayfinders/config/gameSettings";
 import { testAudioCatalogInput } from "./fixtures/audioCatalog";
 
 const CATALOG = validateAudioCatalog(testAudioCatalogInput());
 
 describe("audio mixer", () => {
-  it("starts from catalog defaults and multiplies the complete effective gain", () => {
-    const mixer = new AudioMixer(CATALOG);
+  it("starts from game settings and multiplies the complete effective gain", () => {
+    const mixer = new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio);
     const snapshot = mixer.getSnapshot();
 
     expect(snapshot).toMatchObject({
       revision: 0,
       muted: false,
       masterVolume: 0.8,
-      categoryVolumes: { music: 0.42, ambience: 0.275, sfx: 0.75, ui: 0.6 },
+      categoryVolumes: { music: 0.42, ambience: 0.275, sfx: 0.1, ui: 0.6 },
       categoryVoiceLimits: { music: 2, ambience: 3, sfx: 8, ui: 2 },
       totalVoiceLimit: 15,
       activeVoiceCount: 0,
@@ -29,7 +30,7 @@ describe("audio mixer", () => {
   });
 
   it("clamps finite controls, mutes every category, and rejects non-finite gains", () => {
-    const mixer = new AudioMixer(CATALOG);
+    const mixer = new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio);
 
     expect(mixer.setMasterVolume(2)).toMatchObject({ kind: "changed", revision: 1 });
     expect(mixer.setCategoryVolume("sfx", -1)).toMatchObject({ kind: "changed", revision: 2 });
@@ -49,7 +50,7 @@ describe("audio mixer", () => {
   });
 
   it("preserves revision and snapshot identity for stable-state no-op updates", () => {
-    const mixer = new AudioMixer(CATALOG);
+    const mixer = new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio);
     const initial = mixer.getSnapshot();
 
     expect(mixer.setMuted(false)).toEqual({ kind: "none", previousRevision: 0, revision: 0 });
@@ -68,7 +69,7 @@ describe("audio mixer", () => {
   });
 
   it("accounts for voices and rejects a lower-priority voice at a category limit", () => {
-    const mixer = new AudioMixer(CATALOG);
+    const mixer = new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio);
     for (let index = 0; index < 8; index++) {
       expect(mixer.requestVoice({
         voiceId: `discovery-${index}`,
@@ -96,7 +97,7 @@ describe("audio mixer", () => {
   });
 
   it("replaces the oldest lowest-priority eligible voice without exceeding a limit", () => {
-    const mixer = new AudioMixer(CATALOG, { totalVoiceLimit: 2 });
+    const mixer = new AudioMixer(CATALOG, { ...DEFAULT_GAME_SETTINGS.audio, totalVoiceLimit: 2 });
     mixer.requestVoice({ voiceId: "music", assetId: "music.home-harbor", priority: 20 });
     mixer.requestVoice({ voiceId: "ordinary", assetId: "sfx.discovery", priority: 5 });
 
@@ -122,7 +123,7 @@ describe("audio mixer", () => {
   });
 
   it("uses registration order to replace an equal-priority category voice", () => {
-    const mixer = new AudioMixer(CATALOG);
+    const mixer = new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio);
     mixer.requestVoice({ voiceId: "first", assetId: "ui.confirm", priority: 4 });
     mixer.requestVoice({ voiceId: "second", assetId: "ui.confirm", priority: 4 });
     const decision = mixer.requestVoice({ voiceId: "third", assetId: "ui.confirm", priority: 4 });
@@ -132,7 +133,7 @@ describe("audio mixer", () => {
   });
 
   it("rejects duplicate voice IDs and releases or clears accounted voices exactly once", () => {
-    const mixer = new AudioMixer(CATALOG);
+    const mixer = new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio);
     mixer.requestVoice({ voiceId: "cue", assetId: "ui.confirm", priority: 1 });
     expect(mixer.requestVoice({ voiceId: "cue", assetId: "ui.confirm", priority: 100 })).toMatchObject({
       kind: "rejected",
@@ -149,12 +150,13 @@ describe("audio mixer", () => {
   });
 
   it("rejects invalid program inputs before mutating the ledger", () => {
-    const mixer = new AudioMixer(CATALOG);
+    const mixer = new AudioMixer(CATALOG, DEFAULT_GAME_SETTINGS.audio);
     expect(() => mixer.requestVoice({ voiceId: "cue", assetId: "missing", priority: 1 }))
       .toThrow(/Unknown audio asset ID/u);
     expect(() => mixer.requestVoice({ voiceId: "cue", assetId: "ui.confirm", priority: -1 }))
       .toThrow(/priority/u);
-    expect(() => new AudioMixer(CATALOG, { totalVoiceLimit: 16 })).toThrow(/no greater than 15/u);
+    expect(() => new AudioMixer(CATALOG, { ...DEFAULT_GAME_SETTINGS.audio, totalVoiceLimit: 16 }))
+      .toThrow(/no greater than 15/u);
     expect(mixer.getSnapshot().revision).toBe(0);
   });
 });

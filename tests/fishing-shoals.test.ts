@@ -15,9 +15,9 @@ import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import { BOUNDED_WORLD_TOPOLOGY } from "../src/wayfinders/world/WorldTopology";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
-import { drainForwardGuidance } from "./helpers";
+import { configurePrototypeForTestProfile, drainForwardGuidance } from "./helpers";
 
-beforeEach(() => resetPrototypeConfig());
+beforeEach(() => configurePrototypeForTestProfile());
 afterEach(() => resetPrototypeConfig());
 
 function terrainSignature(simulation: GameSimulation): number[] {

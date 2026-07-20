@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_PROTOTYPE_CONFIG } from "../src/wayfinders/config/prototypeConfig";
+import { DEFAULT_GAME_SETTINGS } from "../src/wayfinders/config/gameSettings";
 import {
   generateIdolLocationCatalog,
 } from "../src/wayfinders/exploration/IdolLocationCatalog";
@@ -15,7 +15,7 @@ import {
 import { createSurveySiteId } from "../src/wayfinders/exploration/SurveySiteContracts";
 
 const ISLAND_DOSSIERS = Object.freeze(
-  Array.from({ length: DEFAULT_PROTOTYPE_CONFIG.islands.count }, (_, index) => (
+  Array.from({ length: DEFAULT_GAME_SETTINGS.world.islands.count }, (_, index) => (
     Object.freeze({ islandId: index + 1 })
   )),
 );
@@ -48,8 +48,8 @@ describe("idol-location contracts", () => {
 
 describe("deterministic idol-location catalog", () => {
   it("places the default world's three idols reproducibly and independently of input order", () => {
-    const seed = DEFAULT_PROTOTYPE_CONFIG.world.seed;
-    const count = DEFAULT_PROTOTYPE_CONFIG.world.idolCount;
+    const seed = DEFAULT_GAME_SETTINGS.world.seed;
+    const count = DEFAULT_GAME_SETTINGS.world.idolCount;
     const first = generateIdolLocationCatalog(seed, count, ISLAND_DOSSIERS, SURVEY_SITES);
     const replay = generateIdolLocationCatalog(seed, count, ISLAND_DOSSIERS, SURVEY_SITES);
     const reordered = generateIdolLocationCatalog(
@@ -83,7 +83,7 @@ describe("deterministic idol-location catalog", () => {
   it("uses only unique island-dossier and generic survey-site hosts", () => {
     const capacity = ISLAND_DOSSIERS.length + SURVEY_SITES.length;
     const catalog = generateIdolLocationCatalog(
-      DEFAULT_PROTOTYPE_CONFIG.world.seed,
+      DEFAULT_GAME_SETTINGS.world.seed,
       capacity,
       ISLAND_DOSSIERS,
       SURVEY_SITES,
@@ -103,7 +103,7 @@ describe("deterministic idol-location catalog", () => {
   it("rejects impossible counts, invalid inputs, duplicate hosts, and unsupported content", () => {
     const capacity = ISLAND_DOSSIERS.length + SURVEY_SITES.length;
     const generate = (count: number) => generateIdolLocationCatalog(
-      DEFAULT_PROTOTYPE_CONFIG.world.seed,
+      DEFAULT_GAME_SETTINGS.world.seed,
       count,
       ISLAND_DOSSIERS,
       SURVEY_SITES,
@@ -116,19 +116,19 @@ describe("deterministic idol-location catalog", () => {
       expect(() => generate(count)).toThrow("Idol-location count must be a positive integer");
     }
     expect(() => generateIdolLocationCatalog(
-      DEFAULT_PROTOTYPE_CONFIG.world.seed,
+      DEFAULT_GAME_SETTINGS.world.seed,
       1,
       [ISLAND_DOSSIERS[0], ISLAND_DOSSIERS[0]],
       SURVEY_SITES,
     )).toThrow("Duplicate eligible idol-location host island-dossier:1");
     expect(() => generateIdolLocationCatalog(
-      DEFAULT_PROTOTYPE_CONFIG.world.seed,
+      DEFAULT_GAME_SETTINGS.world.seed,
       1,
       ISLAND_DOSSIERS,
       [SURVEY_SITES[0], SURVEY_SITES[0]],
     )).toThrow("Duplicate eligible idol-location host survey-site:");
     expect(() => generateIdolLocationCatalog(
-      DEFAULT_PROTOTYPE_CONFIG.world.seed,
+      DEFAULT_GAME_SETTINGS.world.seed,
       1,
       ISLAND_DOSSIERS,
       SURVEY_SITES,

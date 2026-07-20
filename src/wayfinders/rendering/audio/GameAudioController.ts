@@ -91,6 +91,7 @@ export interface GameAudioDiagnostics {
 export interface GameAudioSnapshot {
   readonly unlockState: GameAudioUnlockState;
   readonly enabled: boolean;
+  readonly enabledOnUnlock: boolean;
   readonly available: boolean;
   readonly browserLocked: boolean;
   readonly suspended: boolean;
@@ -105,6 +106,8 @@ export interface GameAudioControllerOptions {
   readonly catalog: Readonly<AudioCatalog>;
   readonly mixer: AudioMixer;
   readonly playback: AudioPlaybackPort;
+  /** Enables playback as soon as the browser's gesture lock is released. */
+  readonly enabledByDefault?: boolean;
 }
 
 interface OwnedVoice {
@@ -134,6 +137,7 @@ export class GameAudioController {
   private removePlaybackListener: () => void;
 
   private enabled = false;
+  private enableWhenUnlocked: boolean;
   private unlockPending = false;
   private suspended: boolean;
   private destroyed = false;
@@ -150,6 +154,8 @@ export class GameAudioController {
     this.catalog = options.catalog;
     this.mixer = options.mixer;
     this.playback = options.playback;
+    this.enableWhenUnlocked = options.enabledByDefault ?? false;
+    this.enabled = this.enableWhenUnlocked && !options.playback.locked;
     this.assetsById = new Map(options.catalog.assets.map((asset) => [asset.id, asset]));
     this.suspended = options.playback.suspended;
     this.removePlaybackListener = options.playback.subscribe(this.handlePlaybackEvent);
@@ -177,6 +183,7 @@ export class GameAudioController {
     return Object.freeze({
       unlockState: this.unlockState(),
       enabled: this.enabled,
+      enabledOnUnlock: this.enableWhenUnlocked,
       available: this.playback.available,
       browserLocked: this.playback.locked,
       suspended: this.suspended,
@@ -209,6 +216,7 @@ export class GameAudioController {
   /** Must be invoked from an explicit player action. */
   enableSound(): void {
     if (this.destroyed || !this.playback.available || this.enabled || this.unlockPending) return;
+    this.enableWhenUnlocked = true;
     this.unlockPending = true;
     if (!this.playback.locked) {
       this.completeUnlock();
@@ -388,6 +396,7 @@ export class GameAudioController {
     if (this.destroyed) return;
     if (event === "unlocked") {
       if (this.unlockPending) this.completeUnlock();
+      else if (this.enableWhenUnlocked) this.completeUnlock();
       else this.notify();
       return;
     }

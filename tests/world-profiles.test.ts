@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_PROTOTYPE_CONFIG, prototypeConfig } from "../src/wayfinders/config/prototypeConfig";
+import { DEFAULT_GAME_SETTINGS } from "../src/wayfinders/config/gameSettings";
+import { prototypeConfig } from "../src/wayfinders/config/prototypeConfig";
 import {
   worldGenerationProfileIdForConfig,
   worldGenerationSettingsFingerprint,
@@ -41,13 +42,13 @@ describe("architecture world profiles", () => {
       first.islands.count += 1;
 
       expect(second).toEqual(WORLD_PROFILES[name].config);
-      expect(prototypeConfig.world.seed).toBe(DEFAULT_PROTOTYPE_CONFIG.world.seed);
-      expect(prototypeConfig.islands.count).toBe(DEFAULT_PROTOTYPE_CONFIG.islands.count);
+      expect(prototypeConfig.world.seed).toBe(DEFAULT_GAME_SETTINGS.world.seed);
+      expect(prototypeConfig.islands.count).toBe(DEFAULT_GAME_SETTINGS.world.islands.count);
     },
   );
 
-  it("records every P2 non-default setting explicitly", () => {
-    expect(WORLD_PROFILES.P2.nonDefaultSettings).toEqual({
+  it("records every P2 profile override explicitly", () => {
+    expect(WORLD_PROFILES.P2.profileOverrides).toEqual({
       world: {
         width: 384,
         height: 384,
