@@ -321,7 +321,10 @@ export class WayfindersScene extends Phaser.Scene {
   private cameraZoomRatio = 1;
   private mapReviewMode = false;
   private readonly overlayVisibility: OverlayVisibilitySettings;
+  private readonly renderedOverlayVisibility: OverlayVisibilitySettings;
   private overlayVisibilityRevision = 0;
+  private revealedIslandIdsSource: readonly number[] = Object.freeze([]);
+  private readonly revealedIslandIdSet = new Set<number>();
   private mapReviewPanGesture?: Readonly<MapReviewPanGesture>;
   private browserDebugApi?: BrowserDebugApi;
   private activeLifecycleCue?: HTMLElement;
@@ -358,15 +361,19 @@ export class WayfindersScene extends Phaser.Scene {
     lifecycleDuckReason: "none",
   };
   constructor(
-    simulation = new GameSimulation(),
+    simulation: GameSimulation | undefined = undefined,
     private readonly authoredIslandPresentationCatalog: Readonly<AuthoredIslandPresentationCatalog> =
       EMPTY_AUTHORED_ISLAND_PRESENTATION_CATALOG,
     private readonly audioCatalogResult?: AudioCatalogLoadResult,
     private readonly gameSettings: DeepReadonlyGameSettings<GameSettings> = DEFAULT_GAME_SETTINGS,
   ) {
     super({ key: "WayfindersScene" });
-    this.simulation = simulation;
+    this.simulation = simulation ?? new GameSimulation(prototypeConfig, undefined, {
+      forwardGuidanceEnabled: gameSettings.overlays.forwardRange,
+    });
     this.overlayVisibility = { ...gameSettings.overlays };
+    this.renderedOverlayVisibility = { ...this.overlayVisibility };
+    this.simulation.setForwardGuidanceEnabled(this.overlayVisibility.forwardRange);
   }
 
   preload(): void {
@@ -491,7 +498,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.fishingShoalRenderer.updatePresentation(_time, this.prefersReducedMotion);
     // Derived guidance requested by the prior authoritative tick is applied
     // before this frame's movement. Requests are coalesced by revision.
-    this.simulation.advanceForwardGuidance();
+    if (this.overlayVisibility.forwardRange) this.simulation.advanceForwardGuidance();
     const activeElement = document.activeElement;
     const developerToolsOpen = document.documentElement.dataset.developerTools === "open";
     const textInputFocused = this.isTextEntryElement(activeElement);
@@ -896,25 +903,32 @@ export class WayfindersScene extends Phaser.Scene {
       this.lastViewportZoom = camera.zoom;
     }
     this.renderEntityDebug();
-    const revealedIslandIds = new Set(this.simulation.revealedIslandIds);
+    const revealedIslandIds = this.simulation.revealedIslandIds;
+    if (revealedIslandIds !== this.revealedIslandIdsSource) {
+      this.revealedIslandIdSet.clear();
+      for (const islandId of revealedIslandIds) this.revealedIslandIdSet.add(islandId);
+      this.revealedIslandIdsSource = revealedIslandIds;
+    }
     this.knowledgeOverlay.sync(
       this.simulation.world,
       this.simulation.generated.seed,
       force,
-      revealedIslandIds,
+      this.revealedIslandIdSet,
       this.simulation.islandFogRevealRevision,
     );
     this.cloudLayer.sync(
       this.simulation.world,
-      revealedIslandIds,
+      this.revealedIslandIdSet,
       this.simulation.islandFogRevealRevision,
       this.time.now,
     );
+    this.renderedOverlayVisibility.forwardRange = this.overlayVisibility.forwardRange
+      && this.simulation.forwardGuidancePresentationAvailable;
     this.riskOverlay.sync(
       this.simulation.world,
       this.simulation.forwardRange,
       this.simulation.returnPaths,
-      this.overlayVisibility,
+      this.renderedOverlayVisibility,
       this.simulation.overlaysRevision,
       force,
     );
@@ -2018,6 +2032,12 @@ export class WayfindersScene extends Phaser.Scene {
   private setOverlayVisibility<K extends keyof OverlayVisibilitySettings>(name: K, visible: boolean): void {
     if (this.overlayVisibility[name] === visible) return;
     this.overlayVisibility[name] = visible;
+    this.renderedOverlayVisibility[name] = visible;
+    if (name === "forwardRange") {
+      this.simulation.setForwardGuidanceEnabled(visible);
+      this.renderedOverlayVisibility.forwardRange = visible
+        && this.simulation.forwardGuidancePresentationAvailable;
+    }
     this.overlayVisibilityRevision++;
     this.syncRiskLegend();
   }

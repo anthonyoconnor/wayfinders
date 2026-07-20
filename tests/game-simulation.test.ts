@@ -38,7 +38,9 @@ describe("GameSimulation exploration integration", () => {
   });
 
   it("presents one forward frontier and one padded return route that clears at the dock", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(undefined, undefined, {
+      forwardGuidanceEnabled: true,
+    });
     const centerY = simulation.generated.landmarks.homeCenter.y;
     let firstUnknownX = simulation.generated.landmarks.dock.x;
     while (
@@ -88,7 +90,9 @@ describe("GameSimulation exploration integration", () => {
   });
 
   it("rotates the forward presentation while turning in place without recalculating logical reach", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(undefined, undefined, {
+      forwardGuidanceEnabled: true,
+    });
     const range = simulation.forwardRange;
     const logicalMask = range.mask.slice();
     const candidates = range.candidateIndices;

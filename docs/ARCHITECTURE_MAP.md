@@ -111,7 +111,10 @@ adapter may own Phaser sound instances.
   direction-preserving topology edges. Return paths retain edge image offsets
   for presentation while return queries remain synchronous authority.
   `ForwardRangeSystem` owns exact forward-range mechanics; `GameSimulation`
-  owns cooperative scheduling and publication of derived guidance.
+  owns cooperative scheduling and publication of derived guidance while it is
+  explicitly demanded by presentation. `WayfindersScene` translates its
+  scene-owned forward-overlay visibility into that enable/disable command;
+  return-route authority remains continuously independent.
 - `WayfindersScene` owns Phaser lifecycle, one `LiftedViewAnchor`, and one
   `ActiveChunkSet`. The view anchor consumes accepted movement displacement;
   canonical endpoints never infer wrap direction. Each active entry has a
@@ -242,8 +245,11 @@ Diagnostics are distributed with their owner: simulation traces and counters
 live in `core`, while overlay visibility, presentation/resource counters, and
 temporary presentation overrides live in `WayfindersScene` and its renderers;
 output adaptation lives in `src/developerLog.ts`. Diagnostics never own
-authoritative mutation. Overlay visibility, the cloud enable switch, the
-map-review camera/fog switch, and telemetry never enter `GameSimulation`. Map
+authoritative mutation. Overlay visibility remains scene-owned; only its
+forward-range value is translated into an explicit command that suspends or
+reactivates optional derived guidance work in `GameSimulation`. The cloud
+enable switch, the map-review camera/fog switch, and telemetry never enter
+`GameSimulation`. Map
 review detaches the camera without moving the ship or changing authoritative
 knowledge.
 

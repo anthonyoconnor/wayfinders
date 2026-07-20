@@ -50,7 +50,17 @@ interface CloudView {
   readonly imageOffset: Readonly<{ x: number; y: number }>;
   readonly sprite: Phaser.GameObjects.Sprite;
   readonly shadow: Phaser.GameObjects.Sprite;
-  coverageRevision: string;
+  readonly motion: { x: number; y: number; routeFade: number };
+  readonly envelope: { minX: number; minY: number; maxX: number; maxY: number };
+  readonly coverageRevision: {
+    knowledge: number;
+    visibility: number;
+    islands: number;
+    minTileX: number;
+    minTileY: number;
+    maxTileX: number;
+    maxTileY: number;
+  };
   clearOfFog: boolean;
   visibilityStartedAt: number | undefined;
 }
@@ -73,11 +83,6 @@ export interface CloudLayerResourceTelemetry {
   readonly totalShadowAllocations: number;
   readonly totalShadowReleases: number;
   readonly stableFrameAllocations: number;
-}
-
-interface VisualFootprint {
-  readonly center: Readonly<{ x: number; y: number }>;
-  readonly displaySize: Readonly<{ width: number; height: number }>;
 }
 
 function lerp(minimum: number, maximum: number, amount: number): number {
@@ -199,31 +204,6 @@ export function isCloudFootprintFullyClear(
   }, revealedIslandIds, paddingTiles);
 }
 
-function resolveVisualFootprint(
-  spritePosition: Readonly<{ x: number; y: number }>,
-  opaqueBounds: Readonly<{ x: number; y: number; width: number; height: number }>,
-  frameSize: Readonly<{ width: number; height: number }>,
-  scale: Readonly<{ x: number; y: number }>,
-  flipX: boolean,
-): Readonly<VisualFootprint> {
-  const horizontalOffset = (
-    opaqueBounds.x + opaqueBounds.width / 2 - frameSize.width / 2
-  ) * scale.x * (flipX ? -1 : 1);
-  const verticalOffset = (
-    opaqueBounds.y + opaqueBounds.height / 2 - frameSize.height / 2
-  ) * scale.y;
-  return {
-    center: {
-      x: spritePosition.x + horizontalOffset,
-      y: spritePosition.y + verticalOffset,
-    },
-    displaySize: {
-      width: opaqueBounds.width * scale.x,
-      height: opaqueBounds.height * scale.y,
-    },
-  };
-}
-
 function rgbTint(rgb: Readonly<{ red: number; green: number; blue: number }>): number {
   return (rgb.red << 16) | (rgb.green << 8) | rgb.blue;
 }
@@ -233,47 +213,42 @@ export function resolveCloudEnvelopeAtPosition(
   position: Readonly<{ x: number; y: number }>,
   cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
 ): Readonly<CloudFootprintEnvelope> {
+  const envelope = { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+  writeCloudEnvelopeAtPosition(descriptor, position.x, position.y, cloudPackage, envelope);
+  return Object.freeze(envelope);
+}
+
+function writeCloudEnvelopeAtPosition(
+  descriptor: Readonly<CloudDescriptor>,
+  positionX: number,
+  positionY: number,
+  cloudPackage: Readonly<CloudAssetPackage>,
+  target: { minX: number; minY: number; maxX: number; maxY: number },
+): void {
   const { image, presentation } = cloudPackage;
   const opaqueBounds = image.opaqueBounds[descriptor.frame];
   if (!opaqueBounds) throw new RangeError(`Missing opaque bounds for cloud frame ${descriptor.frame}`);
-  const cloud = resolveVisualFootprint(
-    position,
-    opaqueBounds,
-    image.frameSize,
-    { x: descriptor.scale, y: descriptor.scale },
-    descriptor.flipX,
-  );
-  const shadow = resolveVisualFootprint(
-    {
-      x: position.x + presentation.shadow.offsetPixels.x,
-      y: position.y + presentation.shadow.offsetPixels.y,
-    },
-    opaqueBounds,
-    image.frameSize,
-    {
-      x: descriptor.scale * presentation.shadow.scale.x,
-      y: descriptor.scale * presentation.shadow.scale.y,
-    },
-    descriptor.flipX,
-  );
-  return Object.freeze({
-    minX: Math.min(
-      cloud.center.x - cloud.displaySize.width / 2,
-      shadow.center.x - shadow.displaySize.width / 2,
-    ),
-    minY: Math.min(
-      cloud.center.y - cloud.displaySize.height / 2,
-      shadow.center.y - shadow.displaySize.height / 2,
-    ),
-    maxX: Math.max(
-      cloud.center.x + cloud.displaySize.width / 2,
-      shadow.center.x + shadow.displaySize.width / 2,
-    ),
-    maxY: Math.max(
-      cloud.center.y + cloud.displaySize.height / 2,
-      shadow.center.y + shadow.displaySize.height / 2,
-    ),
-  });
+  const flip = descriptor.flipX ? -1 : 1;
+  const opaqueCenterX = opaqueBounds.x + opaqueBounds.width / 2 - image.frameSize.width / 2;
+  const opaqueCenterY = opaqueBounds.y + opaqueBounds.height / 2 - image.frameSize.height / 2;
+  const cloudScaleX = descriptor.scale;
+  const cloudScaleY = descriptor.scale;
+  const shadowScaleX = descriptor.scale * presentation.shadow.scale.x;
+  const shadowScaleY = descriptor.scale * presentation.shadow.scale.y;
+  const cloudCenterX = positionX + opaqueCenterX * cloudScaleX * flip;
+  const cloudCenterY = positionY + opaqueCenterY * cloudScaleY;
+  const shadowCenterX = positionX + presentation.shadow.offsetPixels.x
+    + opaqueCenterX * shadowScaleX * flip;
+  const shadowCenterY = positionY + presentation.shadow.offsetPixels.y
+    + opaqueCenterY * shadowScaleY;
+  const cloudHalfWidth = opaqueBounds.width * cloudScaleX / 2;
+  const cloudHalfHeight = opaqueBounds.height * cloudScaleY / 2;
+  const shadowHalfWidth = opaqueBounds.width * shadowScaleX / 2;
+  const shadowHalfHeight = opaqueBounds.height * shadowScaleY / 2;
+  target.minX = Math.min(cloudCenterX - cloudHalfWidth, shadowCenterX - shadowHalfWidth);
+  target.minY = Math.min(cloudCenterY - cloudHalfHeight, shadowCenterY - shadowHalfHeight);
+  target.maxX = Math.max(cloudCenterX + cloudHalfWidth, shadowCenterX + shadowHalfWidth);
+  target.maxY = Math.max(cloudCenterY + cloudHalfHeight, shadowCenterY + shadowHalfHeight);
 }
 
 export function isCloudEnvelopeFullyClear(
@@ -291,22 +266,36 @@ export function isCloudEnvelopeFullyClear(
   }, revealedIslandIds, paddingTiles);
 }
 
-function cloudCoverageRevision(
+function updateCloudCoverageRevision(
+  revision: CloudView["coverageRevision"],
   world: WorldGrid,
   revealedIslandsRevision: number,
   envelope: Readonly<CloudFootprintEnvelope>,
   tileSize: number,
   paddingTiles: number,
-): string {
-  return [
-    world.knowledgeVersion,
-    world.visibilityVersion,
-    revealedIslandsRevision,
-    Math.floor(envelope.minX / tileSize) - paddingTiles,
-    Math.floor(envelope.minY / tileSize) - paddingTiles,
-    Math.ceil(envelope.maxX / tileSize) + paddingTiles,
-    Math.ceil(envelope.maxY / tileSize) + paddingTiles,
-  ].join(":");
+): boolean {
+  const knowledge = world.knowledgeVersion;
+  const visibility = world.visibilityVersion;
+  const minTileX = Math.floor(envelope.minX / tileSize) - paddingTiles;
+  const minTileY = Math.floor(envelope.minY / tileSize) - paddingTiles;
+  const maxTileX = Math.ceil(envelope.maxX / tileSize) + paddingTiles;
+  const maxTileY = Math.ceil(envelope.maxY / tileSize) + paddingTiles;
+  const changed = revision.knowledge !== knowledge
+    || revision.visibility !== visibility
+    || revision.islands !== revealedIslandsRevision
+    || revision.minTileX !== minTileX
+    || revision.minTileY !== minTileY
+    || revision.maxTileX !== maxTileX
+    || revision.maxTileY !== maxTileY;
+  if (!changed) return false;
+  revision.knowledge = knowledge;
+  revision.visibility = visibility;
+  revision.islands = revealedIslandsRevision;
+  revision.minTileX = minTileX;
+  revision.minTileY = minTileY;
+  revision.maxTileX = maxTileX;
+  revision.maxTileY = maxTileY;
+  return true;
 }
 
 function smoothstep(value: number): number {
@@ -320,6 +309,18 @@ export function resolveCloudMotion(
   reducedMotion: boolean,
   cloudPackage: Readonly<CloudAssetPackage> = CLOUD_ASSET_PACKAGE,
 ): Readonly<CloudMotionSample> {
+  const motion = { x: 0, y: 0, routeFade: 0 };
+  writeCloudMotion(descriptor, timeMs, reducedMotion, cloudPackage, motion);
+  return Object.freeze(motion);
+}
+
+function writeCloudMotion(
+  descriptor: Readonly<CloudDescriptor>,
+  timeMs: number,
+  reducedMotion: boolean,
+  cloudPackage: Readonly<CloudAssetPackage>,
+  target: { x: number; y: number; routeFade: number },
+): void {
   const phaseFraction = descriptor.phase / TWO_PI;
   const rawCycle = reducedMotion ? phaseFraction : phaseFraction + timeMs / descriptor.driftPeriodMs;
   const cycle = ((rawCycle % 1) + 1) % 1;
@@ -328,11 +329,9 @@ export function resolveCloudMotion(
   const routeFade = reducedMotion || fadeFraction === 0
     ? 1
     : smoothstep(Math.min(cycle, 1 - cycle) / fadeFraction);
-  return Object.freeze({
-    x: descriptor.baseX + routePosition * descriptor.driftAmplitudeX,
-    y: descriptor.baseY + routePosition * descriptor.driftAmplitudeY,
-    routeFade,
-  });
+  target.x = descriptor.baseX + routePosition * descriptor.driftAmplitudeX;
+  target.y = descriptor.baseY + routePosition * descriptor.driftAmplitudeY;
+  target.routeFade = routeFade;
 }
 
 /** Independent, deterministic, chunk-bounded atmosphere presentation. */
@@ -382,7 +381,7 @@ export class CloudLayerRenderer {
   setIgnoreFog(ignoreFog: boolean): boolean {
     if (this.ignoreFog === ignoreFog) return false;
     this.ignoreFog = ignoreFog;
-    for (const view of this.views.values()) view.coverageRevision = "";
+    for (const view of this.views.values()) view.coverageRevision.knowledge = -1;
     return true;
   }
 
@@ -440,37 +439,39 @@ export class CloudLayerRenderer {
     const tileSize = this.chunkSizePixels / world.chunkSize;
     for (const view of this.views.values()) {
       if (worldChanged) {
-        view.coverageRevision = "";
+        view.coverageRevision.knowledge = -1;
         view.clearOfFog = false;
         view.visibilityStartedAt = undefined;
       }
       const descriptor = view.descriptor;
-      const motion = resolveCloudMotion(descriptor, motionTimeMs, this.reducedMotion, this.cloudPackage);
-      const imageMotion = {
-        x: motion.x + view.imageOffset.x,
-        y: motion.y + view.imageOffset.y,
-      };
-      const currentEnvelope = resolveCloudEnvelopeAtPosition(descriptor, imageMotion, this.cloudPackage);
-      const coverageRevision = cloudCoverageRevision(
+      writeCloudMotion(
+        descriptor,
+        motionTimeMs,
+        this.reducedMotion,
+        this.cloudPackage,
+        view.motion,
+      );
+      const x = view.motion.x + view.imageOffset.x;
+      const y = view.motion.y + view.imageOffset.y;
+      writeCloudEnvelopeAtPosition(descriptor, x, y, this.cloudPackage, view.envelope);
+      if (updateCloudCoverageRevision(
+        view.coverageRevision,
         world,
         revealedIslandsRevision,
-        currentEnvelope,
+        view.envelope,
         tileSize,
         presentation.clearPaddingTiles,
-      );
-      if (view.coverageRevision !== coverageRevision) {
+      )) {
         view.clearOfFog = this.ignoreFog || isCloudEnvelopeFullyClear(
           world,
-          currentEnvelope,
+          view.envelope,
           revealedIslandIds,
           tileSize,
           presentation.clearPaddingTiles,
         );
-        view.coverageRevision = coverageRevision;
         if (!view.clearOfFog) view.visibilityStartedAt = undefined;
       }
 
-      const { x, y } = imageMotion;
       view.sprite.setPosition(x, y);
       view.shadow.setPosition(
         x + presentation.shadow.offsetPixels.x,
@@ -489,7 +490,7 @@ export class CloudLayerRenderer {
       const activationFade = fadeDurationMs === 0
         ? 1
         : Math.min(1, Math.max(0, (timeMs - view.visibilityStartedAt) / fadeDurationMs));
-      const fade = activationFade * motion.routeFade;
+      const fade = activationFade * view.motion.routeFade;
       view.sprite.setAlpha(descriptor.alpha * fade).setVisible(fade > 0);
       view.shadow
         .setAlpha(descriptor.alpha * presentation.shadow.opacityMultiplier * fade)
@@ -598,7 +599,17 @@ export class CloudLayerRenderer {
       imageOffset: Object.freeze({ ...entry.imageOffset }),
       sprite,
       shadow,
-      coverageRevision: "",
+      motion: { x: descriptor.baseX, y: descriptor.baseY, routeFade: 0 },
+      envelope: { minX: 0, minY: 0, maxX: 0, maxY: 0 },
+      coverageRevision: {
+        knowledge: -1,
+        visibility: -1,
+        islands: -1,
+        minTileX: 0,
+        minTileY: 0,
+        maxTileX: 0,
+        maxTileY: 0,
+      },
       clearOfFog: false,
       visibilityStartedAt: undefined,
     });

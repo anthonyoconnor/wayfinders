@@ -409,7 +409,9 @@ describe("provision-funded fishing-shoal survey action", () => {
   });
 
   it("uses fractional availability, rejects insufficient supply atomically, and refreshes range budgets", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(undefined, undefined, {
+      forwardGuidanceEnabled: true,
+    });
     const target = simulation.fishingShoalDefinitions[0];
     expect(simulation.teleport(target.tile)).toBe(true);
     simulation.ship.provisionAccumulator = 0.375;

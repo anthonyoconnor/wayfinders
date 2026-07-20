@@ -121,6 +121,7 @@ function journeyConfig(diagonal: boolean) {
 
 function createSimulation(diagonal: boolean): GameSimulation {
   return new GameSimulation(journeyConfig(diagonal), undefined, {
+    forwardGuidanceEnabled: true,
     forwardGuidanceNow: () => 0,
     forwardGuidanceSliceBudgetMs: 1_000,
     forwardGuidanceWorkUnitsPerSlice: 1_000_000,

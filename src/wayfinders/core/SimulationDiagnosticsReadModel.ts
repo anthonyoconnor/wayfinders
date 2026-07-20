@@ -18,6 +18,7 @@ export interface SimulationDiagnosticsReadModel {
     visibleNow: number;
   }>;
   readonly risk: Readonly<{
+    forwardAvailable: boolean;
     forwardReachable: number;
     forwardFrontier: number;
     forwardHeading: number;
@@ -36,6 +37,7 @@ export interface SimulationDiagnosticsReadModel {
 
 export interface SimulationDiagnosticsSource {
   readonly overlaysRevision: number;
+  readonly forwardGuidancePresentationAvailable: boolean;
   readonly world: Pick<
     WorldGrid,
     "knowledgeVersion" | "visibilityVersion" | "currentVisibleCount" | "getKnowledgeCount"
@@ -80,11 +82,13 @@ export class SimulationDiagnosticsAdapter {
       unknown: source.world.getKnowledgeCount(KnowledgeState.Unknown),
       visibleNow: source.world.currentVisibleCount,
     });
+    const forwardAvailable = source.forwardGuidancePresentationAvailable;
     const risk = Object.freeze({
-      forwardReachable: source.forwardRange.reachableCount,
-      forwardFrontier: source.forwardRange.frontierCount,
-      forwardHeading: source.forwardRange.presentationHeading,
-      forwardConeHalfAngleDegrees: source.forwardRange.coneHalfAngleDegrees,
+      forwardAvailable,
+      forwardReachable: forwardAvailable ? source.forwardRange.reachableCount : 0,
+      forwardFrontier: forwardAvailable ? source.forwardRange.frontierCount : 0,
+      forwardHeading: forwardAvailable ? source.forwardRange.presentationHeading : 0,
+      forwardConeHalfAngleDegrees: forwardAvailable ? source.forwardRange.coneHalfAngleDegrees : 0,
       comfortable: source.returnPaths.riskCounts.comfortable,
       warning: source.returnPaths.riskCounts.warning,
       critical: source.returnPaths.riskCounts.critical,

@@ -37,6 +37,10 @@ export interface ForwardGuidanceSource {
 }
 
 export interface ForwardGuidanceStatus {
+  /** Whether presentation currently demands forward-guidance work. */
+  readonly enabled: boolean;
+  /** Whether a result from the current enabled lifetime is safe to present. */
+  readonly available: boolean;
   readonly pending: boolean;
   readonly requestedId: number;
   readonly appliedId: number;

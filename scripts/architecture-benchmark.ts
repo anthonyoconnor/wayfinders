@@ -18,11 +18,15 @@ import {
   type WorldProfileName,
 } from "../tests/fixtures/worldProfiles.ts";
 
-const RESULT_VERSION = 4;
+const RESULT_VERSION = 5;
 const DEFAULT_UPDATE_SAMPLES = 25;
 const DEFAULT_CONSTRUCTION_SAMPLES = 3;
 const DEFAULT_WARMUP_CROSSINGS = 5;
 const DEFAULT_GUIDANCE_WARMUPS = 20;
+const PROFILE_MEASUREMENT_MODES = Object.freeze({
+  defaultRuntime: "forward-guidance-disabled",
+  guidance: "forward-guidance-enabled",
+} as const);
 
 interface Distribution {
   readonly samples: number;
@@ -42,6 +46,7 @@ interface CountDistribution {
 
 interface ProfileResult {
   readonly profile: WorldProfileName;
+  readonly measurementModes: typeof PROFILE_MEASUREMENT_MODES;
   readonly config: {
     readonly seed: number;
     readonly width: number;
@@ -60,6 +65,7 @@ interface ProfileResult {
     readonly sliceP95BudgetMs: number;
     readonly sliceBudgetPassed: boolean;
     readonly telemetry: Readonly<ForwardGuidanceTelemetry>;
+    readonly phases: Partial<Record<SimulationPhase, Distribution>>;
   };
   readonly phases: Partial<Record<SimulationPhase, Distribution>>;
   readonly resources?: {
@@ -300,19 +306,11 @@ function benchmarkProfile(
     const guidanceRequestCpuDurations: number[] = [];
     const guidanceSlicesPerRequest: number[] = [];
     const tileTrace = new TraceCollector();
-    const baselineGuidance = new ForwardRangeSystem(simulation.world, simulation.config);
-    let baselineResult = baselineGuidance.calculate(simulation.ship);
     const start = findEastboundRun(simulation, warmupCrossings + updateSamples + 1);
     if (!simulation.teleport(start)) throw new Error("Tile-entry fixture teleport was rejected");
-    baselineResult = baselineGuidance.calculate(simulation.ship);
-    drainForwardGuidance(simulation);
-    assertEquivalentGuidance(simulation, baselineResult);
     for (let warmup = 0; warmup < warmupCrossings; warmup++) {
       const movement = simulation.update({ turn: 0, throttle: 1 }, 0.4);
       if (!movement.tileChanged) throw new Error("Tile-entry warmup did not cross a tile");
-      baselineResult = baselineGuidance.calculate(simulation.ship);
-      drainForwardGuidance(simulation);
-      assertEquivalentGuidance(simulation, baselineResult);
     }
     trace.clear();
     for (let sample = 0; sample < updateSamples; sample++) {
@@ -322,12 +320,16 @@ function benchmarkProfile(
       if (!movement.tileChanged) throw new Error("Tile-entry fixture did not cross a tile");
       tileTrace.appendFrom(trace);
       trace.clear();
-      baselineResult = baselineGuidance.calculate(simulation.ship);
-      drainForwardGuidance(simulation);
-      assertEquivalentGuidance(simulation, baselineResult);
-      tileTrace.appendFrom(trace);
-      trace.clear();
     }
+
+    const defaultHeapDeltaBytes = process.memoryUsage().heapUsed - heapBefore;
+    const guidanceTrace = new TraceCollector();
+    simulation.setForwardGuidanceEnabled(true);
+    const baselineGuidance = new ForwardRangeSystem(simulation.world, simulation.config);
+    let baselineResult = baselineGuidance.calculate(simulation.ship);
+    drainForwardGuidance(simulation);
+    assertEquivalentGuidance(simulation, baselineResult);
+    trace.clear();
 
     for (let requestIndex = 0; requestIndex < guidanceWarmups + guidanceSamples; requestIndex++) {
       simulation.refreshRiskOverlays();
@@ -349,14 +351,14 @@ function benchmarkProfile(
       ) {
         assertEquivalentGuidance(simulation, baselineResult);
       }
-      tileTrace.appendFrom(trace);
+      guidanceTrace.appendFrom(trace);
       trace.clear();
     }
-    const tilePhases = tileTrace.snapshot();
-    const phases = { ...constructionPhases, ...ordinaryPhases, ...tilePhases };
+    const phases = { ...constructionPhases, ...ordinaryPhases, ...tileTrace.snapshot() };
 
     return {
       profile: profileName,
+      measurementModes: PROFILE_MEASUREMENT_MODES,
       config: configSummary,
       construction: distribution(constructionDurations),
       ordinaryUpdate: distribution(ordinaryDurations),
@@ -369,15 +371,17 @@ function benchmarkProfile(
         sliceP95BudgetMs: 4,
         sliceBudgetPassed: distribution(guidanceSliceDurations).p95Ms < 4,
         telemetry: simulation.forwardGuidanceStatus.telemetry,
+        phases: guidanceTrace.snapshot(),
       },
       phases,
       resources,
-      heapDeltaBytes: process.memoryUsage().heapUsed - heapBefore,
+      heapDeltaBytes: defaultHeapDeltaBytes,
     };
   } catch (error) {
     const cause = error instanceof Error ? error : new Error(String(error));
     return {
       profile: profileName,
+      measurementModes: PROFILE_MEASUREMENT_MODES,
       config: configSummary,
       construction: constructionDurations.length > 0
         ? distribution(constructionDurations)

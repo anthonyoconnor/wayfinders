@@ -42,7 +42,9 @@ describe("cooperative ForwardGuidance budget", () => {
     const profile = "P2";
     const warmups = 20;
     const samples = 100;
-    const simulation = new GameSimulation(createWorldProfileConfig(profile));
+    const simulation = new GameSimulation(createWorldProfileConfig(profile), undefined, {
+      forwardGuidanceEnabled: true,
+    });
     const oracle = new ForwardRangeSystem(simulation.world, simulation.config);
     const expected = oracle.calculate(simulation.ship);
     const sliceDurations: number[] = [];

@@ -68,10 +68,12 @@ per-session visibility state.
 | Setting path(s) | Validation | Change scope |
 | --- | --- | --- |
 | `navigationGrid`, `collisionBoxes`, `currentSight` | boolean | initial presentation/debug visibility only |
-| `forwardRange`, `returnViability` | boolean | initial guidance presentation only; route authority is unchanged |
+| `forwardRange`, `returnViability` | boolean | initial guidance presentation; hidden forward range also suspends its optional derived search, while route authority is unchanged |
 
 These values initialize scene-owned state. Developer controls and
-`window.__WAYFINDERS__.setOverlay` mutate only the current scene.
+`window.__WAYFINDERS__.setOverlay` affect only the current session; the
+forward-range switch also sends its derived-work demand command to that
+session's `GameSimulation`.
 
 ## `gameplay`
 

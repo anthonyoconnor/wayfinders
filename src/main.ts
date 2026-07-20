@@ -7,6 +7,7 @@ import {
 import {
   prototypeConfig,
 } from "./wayfinders/config/prototypeConfig";
+import { DEFAULT_GAME_SETTINGS } from "./wayfinders/config/gameSettings";
 import {
   applicationModeHref,
   resolveAssetTrialApplicationRequest,
@@ -222,6 +223,7 @@ async function startApplication(): Promise<void> {
       createGameScene: (audioCatalogResult) => new WayfindersScene(
         new GameSimulation(prototypeConfig, undefined, {
           authoredIslandCatalog: AVAILABLE_AUTHORED_ISLAND_CATALOG,
+          forwardGuidanceEnabled: DEFAULT_GAME_SETTINGS.overlays.forwardRange,
         }),
         AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
         audioCatalogResult,

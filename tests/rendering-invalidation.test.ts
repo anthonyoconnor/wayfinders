@@ -270,6 +270,54 @@ function keys(chunks: ReadonlySet<WorldChunk>): string[] {
 }
 
 describe("overlay chunk invalidation", () => {
+  it("does not read or draw unavailable forward data while its overlay is hidden", () => {
+    const world = new WorldGrid(3, 3, 3, BOUNDED_WORLD_TOPOLOGY);
+    world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
+    const { renderer, texture } = makeRendererHarness("disabled-forward-test");
+    activateAllChunks(renderer, world);
+    const presentationChunks = vi.spyOn(
+      renderer as unknown as { presentationChunks: (value: WorldGrid) => readonly WorldChunk[] },
+      "presentationChunks",
+    );
+    const unavailable: ForwardRangeResult = {
+      ...makeForward(world, [], []),
+      mask: new Uint8Array(0),
+      presentationMask: new Uint8Array(0),
+      costs: new Float64Array(0),
+    };
+    const returning = emptyReturn(world);
+
+    renderer.sync(
+      world,
+      unavailable,
+      returning,
+      { ...debugVisibility, forwardRange: false },
+      1,
+      true,
+    );
+    expect(texture(0, 0).calls).toEqual([]);
+    presentationChunks.mockClear();
+
+    renderer.sync(
+      world,
+      unavailable,
+      returning,
+      { ...debugVisibility, forwardRange: false },
+      1,
+    );
+    expect(presentationChunks).not.toHaveBeenCalled();
+
+    const center = world.index(1, 1);
+    renderer.sync(
+      world,
+      makeForward(world, [center], [center]),
+      returning,
+      debugVisibility,
+      2,
+    );
+    expect(texture(0, 0).calls.length).toBeGreaterThan(0);
+  });
+
   it("invalidates every chunk sampled by a padded knowledge-mask chunk", () => {
     const world = new WorldGrid(12, 12, 4, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);

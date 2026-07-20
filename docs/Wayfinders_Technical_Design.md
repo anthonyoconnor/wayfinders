@@ -281,6 +281,9 @@ than filled tiles.
 Forward guidance is derived, not movement authority. `GameSimulation` is its
 only scheduler and publisher:
 
+- scheduling is demand-driven by the scene-owned forward-overlay switch;
+- the normal hidden default constructs no forward-range system and issues no
+  guidance requests while sailing;
 - a request captures world epoch, collision, knowledge and visibility
   revisions, origin, and provision budget;
 - repeated invalidations coalesce and cancel obsolete work;
@@ -292,10 +295,15 @@ only scheduler and publisher:
   otherwise current search.
 
 `ForwardRangeSystem` owns the resumable exact task and two reusable inactive
-result buffers. `BucketedCostSearch` owns resumable queue mechanics. Initial
-world setup and explicit regeneration synchronously seed a complete guidance
-result; ordinary post-initialization refreshes publish only through cooperative
-tasks.
+result buffers. `BucketedCostSearch` owns resumable queue mechanics. When
+guidance is enabled during world setup or explicit regeneration, setup
+synchronously seeds a complete result. Enabling it later constructs the system
+lazily, keeps the overlay hidden while the first current request advances
+cooperatively, and exposes the result only after atomic publication. Disabling
+it cancels active work and subsequent movement continues to refresh only return
+authority. Snapshots and diagnostics expose forward availability explicitly
+and suppress unavailable forward scalars rather than retaining stale contours.
+Ordinary enabled refreshes publish only through cooperative tasks.
 
 Return guidance remains synchronous authority. `ReturnPathSystem` finds one
 minimum-provision route from the ship to reachable Supported water. It may cross
@@ -897,9 +905,11 @@ survey anchors, teleport to water, adjust provisions, force a wreck, toggle
 navigation/visibility/guidance diagnostics, independently enable or disable
 cloud atmosphere, enter map review, and tune supported configuration. Map
 overlay visibility is initialized from `DEFAULT_GAME_SETTINGS.overlays` and is
-owned entirely by `WayfindersScene`; toggling navigation grid, collision boxes,
-current sight, forward reach, or return viability never mutates or appears in
-`GameSimulation`. Map
+owned entirely by `WayfindersScene`. Toggling navigation grid, collision boxes,
+current sight, or return viability never mutates or appears in
+`GameSimulation`. Forward-reach visibility also remains scene-owned, but the
+scene translates it into the derived-work demand command so hidden guidance
+consumes no search time. Map
 review is session-only presentation state: it hides the knowledge fog, allows
 all cloud pairs to render independently of fog, pauses sailing input, detaches
 the camera from the ship, and enables pointer-drag or WASD/arrow panning plus a
@@ -924,7 +934,8 @@ Normal sailing avoids work proportional to total world or island count:
 - collision visits the swept coarse AABB and cached cardinal topology;
 - interaction and marker queries split only the local periodic buckets and
   deduplicate candidates before exact filtering;
-- forward guidance is cooperative, cancellable, and atomically published;
+- forward guidance performs no search while hidden and is cooperative,
+  cancellable, and atomically published when demanded;
 - return rendering follows one sparse, chunk-indexed Voyage Sense thread;
 - clouds retain six cloud/shadow descriptors per referenced canonical chunk by
   default and at most twelve under live debug tuning, compute one bounded

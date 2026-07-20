@@ -166,7 +166,6 @@ export class RiskOverlayRenderer {
     }
     const worldChanged = this.prepareWorld(world);
 
-    const chunks = this.presentationChunks(world);
     const signature = `${prototypeConfig.overlays.forwardOverlayOpacity}:`
       + `${prototypeConfig.overlays.returnOverlayOpacity}:`
       + `${prototypeConfig.overlays.returnThreadWidth}:`
@@ -176,8 +175,10 @@ export class RiskOverlayRenderer {
     const dataChanged = revision !== this.lastRevision
       || forward !== this.lastForward
       || returning !== this.lastReturning;
-    const logicalForwardChanged = forward !== this.lastForward
-      || forward.logicalRevision !== this.lastForwardLogicalRevision;
+    const logicalForwardChanged = visibility.forwardRange && (
+      forward !== this.lastForward
+      || forward.logicalRevision !== this.lastForwardLogicalRevision
+    );
     const returnGeometryChanged = worldChanged
       || styleChanged
       || returning !== this.lastReturning
@@ -190,6 +191,7 @@ export class RiskOverlayRenderer {
     if (!force && !worldChanged && !styleChanged && !visibilityChanged && !dataChanged && !chunksChanged && !overlayVisibilityChanged) {
       return;
     }
+    const chunks = this.presentationChunks(world);
 
     if (worldChanged || chunksChanged) {
       for (const chunk of chunks) {
@@ -217,14 +219,14 @@ export class RiskOverlayRenderer {
       );
     }
 
-    if (force || worldChanged || dataChanged || chunksChanged) {
+    if (visibility.forwardRange && (force || worldChanged || dataChanged || chunksChanged)) {
       if (force || worldChanged || logicalForwardChanged) {
         this.updateForwardReachableIndices(world, forward, this.lastForwardCandidates, dirtyForward);
         this.updateForwardReachableIndices(world, forward, forward.candidateIndices, dirtyForward);
       }
       this.updateForwardIndices(world, forward, this.lastForwardPresentationCandidates, dirtyForward);
       this.updateForwardIndices(world, forward, forward.presentationCandidateIndices, dirtyForward);
-    } else if (visibilityChanged) {
+    } else if (visibility.forwardRange && visibilityChanged) {
       this.updateForwardIndices(world, forward, this.lastVisibleIndices, dirtyForward);
       this.updateForwardIndices(world, forward, world.getVisibleIndices(), dirtyForward);
     }
@@ -235,7 +237,7 @@ export class RiskOverlayRenderer {
 
     if (redrawAll) {
       for (const chunk of chunks) {
-        dirtyForward.add(chunk);
+        if (visibility.forwardRange) dirtyForward.add(chunk);
         dirtyReturn.add(chunk);
       }
     } else if (chunksChanged) {
@@ -244,7 +246,7 @@ export class RiskOverlayRenderer {
       for (const key of this.pendingResourceKeys) {
         const viewChunk = this.chunkForCanonicalKey(world, key);
         if (!viewChunk) continue;
-        dirtyForward.add(viewChunk);
+        if (visibility.forwardRange) dirtyForward.add(viewChunk);
         dirtyReturn.add(viewChunk);
       }
     }
@@ -266,16 +268,18 @@ export class RiskOverlayRenderer {
     this.lastVisibilityVersion = world.visibilityVersion;
     this.lastSignature = signature;
     this.lastForward = forward;
-    this.lastReturning = returning;
     // Guidance results use reusable buffers. Keep renderer-owned sparse
     // snapshots so a released result cannot lose the indices whose pixels
-    // must be cleared when the next result publishes.
-    this.lastForwardCandidates = [...forward.candidateIndices];
-    this.lastForwardLogicalRevision = forward.logicalRevision;
-    this.lastForwardPresentationCandidates = [...forward.presentationCandidateIndices];
+    // must be cleared when the next visible result publishes.
+    if (visibility.forwardRange) {
+      this.lastForwardCandidates = [...forward.candidateIndices];
+      this.lastForwardLogicalRevision = forward.logicalRevision;
+      this.lastForwardPresentationCandidates = [...forward.presentationCandidateIndices];
+      this.lastVisibleIndices = [...world.getVisibleIndices()];
+    }
+    this.lastReturning = returning;
     this.lastReturnEdges = returning.pathEdges;
     this.lastReturnRiskLevel = returning.riskLevel;
-    this.lastVisibleIndices = [...world.getVisibleIndices()];
     this.lastForwardVisible = visibility.forwardRange;
     this.lastReturnVisible = visibility.returnViability;
     this.pendingResourceKeys.clear();

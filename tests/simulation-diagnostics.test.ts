@@ -8,6 +8,7 @@ import { KnowledgeState } from "../src/wayfinders/world/TileData";
 
 const source = (): SimulationDiagnosticsSource => ({
   overlaysRevision: 4,
+  forwardGuidancePresentationAvailable: true,
   world: {
     knowledgeVersion: 2,
     visibilityVersion: 3,
@@ -41,6 +42,7 @@ describe("SimulationDiagnosticsAdapter", () => {
 
     expect(model.knowledge).toEqual({ supported: 19, personal: 11, unknown: 70, visibleNow: 9 });
     expect(model.risk).toMatchObject({
+      forwardAvailable: true,
       forwardReachable: 8,
       forwardFrontier: 5,
       comfortable: 4,
@@ -75,5 +77,21 @@ describe("SimulationDiagnosticsAdapter", () => {
 
     expect(model.risk.returnCost).toBeNull();
     expect(model.risk.returnMargin).toBeNull();
+  });
+
+  it("marks unavailable forward guidance and suppresses its stale scalar projection", () => {
+    const adapter = new SimulationDiagnosticsAdapter();
+    const model = adapter.read({
+      ...source(),
+      forwardGuidancePresentationAvailable: false,
+    });
+
+    expect(model.risk).toMatchObject({
+      forwardAvailable: false,
+      forwardReachable: 0,
+      forwardFrontier: 0,
+      forwardHeading: 0,
+      forwardConeHalfAngleDegrees: 0,
+    });
   });
 });

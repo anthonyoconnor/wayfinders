@@ -33,8 +33,118 @@ function passableDestinations(simulation: GameSimulation, count: number) {
 }
 
 describe("ForwardGuidance boundary", () => {
+  it("does no forward work while disabled and publishes current guidance after reactivation", () => {
+    const phases: string[] = [];
+    const simulation = new GameSimulation(
+      makeConfig(),
+      { record: (phase) => phases.push(phase) },
+      {
+        forwardGuidanceWorkUnitsPerSlice: 64,
+        forwardGuidanceNow: () => 0,
+      },
+    );
+
+    expect(simulation.forwardGuidanceStatus).toMatchObject({
+      enabled: false,
+      available: false,
+      pending: false,
+      telemetry: { requests: 0, jobsStarted: 0, slices: 0 },
+    });
+    expect(simulation.forwardRange.mask).toHaveLength(0);
+    expect(phases).not.toContain("forward-guidance");
+    expect(simulation.returnPaths.pathIndices.length).toBeGreaterThan(0);
+
+    const [destination] = passableDestinations(simulation, 1);
+    expect(simulation.teleport(destination)).toBe(true);
+    expect(simulation.advanceForwardGuidance()).toBe(false);
+    expect(simulation.forwardGuidanceStatus.telemetry).toMatchObject({
+      requests: 0,
+      jobsStarted: 0,
+      slices: 0,
+    });
+
+    expect(simulation.setForwardGuidanceEnabled(true)).toBe(true);
+    expect(simulation.forwardGuidanceStatus).toMatchObject({
+      enabled: true,
+      available: false,
+      pending: true,
+      source: { originX: destination.x, originY: destination.y },
+    });
+    drainForwardGuidance(simulation);
+    expect(simulation.forwardGuidanceStatus).toMatchObject({
+      enabled: true,
+      available: true,
+      pending: false,
+    });
+    expect(simulation.forwardRange.mask).toHaveLength(simulation.world.tileCount);
+  });
+
+  it("cancels hidden work and recomputes from current revisions when shown again", () => {
+    const simulation = new GameSimulation(makeConfig(), undefined, {
+      forwardGuidanceEnabled: true,
+      forwardGuidanceWorkUnitsPerSlice: 64,
+      forwardGuidanceNow: () => 0,
+    });
+    const [first, second] = passableDestinations(simulation, 2);
+    expect(simulation.teleport(first)).toBe(true);
+    expect(simulation.advanceForwardGuidance()).toBe(false);
+    expect(simulation.forwardGuidanceStatus.activeId).toBeDefined();
+    const publishedBeforeDisable = simulation.forwardRange;
+
+    expect(simulation.setForwardGuidanceEnabled(false)).toBe(true);
+    expect(simulation.forwardGuidanceStatus).toMatchObject({
+      enabled: false,
+      available: false,
+      pending: false,
+      activeId: undefined,
+      telemetry: { jobsCancelled: 1 },
+    });
+    expect(simulation.forwardRange).not.toBe(publishedBeforeDisable);
+    expect(simulation.forwardRange).toMatchObject({
+      reachableCount: 0,
+      frontierCount: 0,
+    });
+    expect(simulation.forwardRange.mask).toHaveLength(0);
+    expect(simulation.snapshot().risk.forwardAvailable).toBe(false);
+
+    expect(simulation.teleport(second)).toBe(true);
+    simulation.setProvisions(7);
+    expect(simulation.forwardGuidanceStatus.telemetry.requests).toBe(1);
+    expect(simulation.forwardRange).toMatchObject({
+      budget: 7,
+      reachableCount: 0,
+      frontierCount: 0,
+      presentationHeading: simulation.ship.heading,
+    });
+    expect(simulation.returnPaths.originIndex).toBe(simulation.world.index(second.x, second.y));
+    expect(simulation.snapshot().risk).toMatchObject({
+      forwardAvailable: false,
+      forwardReachable: 0,
+      forwardFrontier: 0,
+      returnPathTiles: simulation.returnPaths.pathIndices.length,
+      returnLevel: simulation.returnPaths.riskLevel,
+    });
+
+    expect(simulation.setForwardGuidanceEnabled(true)).toBe(true);
+    drainForwardGuidance(simulation);
+    expect(simulation.forwardGuidanceStatus).toMatchObject({
+      enabled: true,
+      available: true,
+      source: {
+        originX: second.x,
+        originY: second.y,
+        worldRevision: simulation.world.collisionVersion,
+        knowledgeRevision: simulation.world.knowledgeVersion,
+        visibilityRevision: simulation.world.visibilityVersion,
+      },
+    });
+    expect(simulation.snapshot().risk.forwardAvailable).toBe(true);
+  });
+
   it("coalesces requests, rejects stale sources, and applies only the newest origin", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig(), undefined, {
+      forwardGuidanceEnabled: true,
+    });
     const [first, second] = passableDestinations(simulation, 2);
 
     expect(simulation.teleport(first)).toBe(true);
@@ -72,7 +182,8 @@ describe("ForwardGuidance boundary", () => {
   });
 
   it("invalidates visibility-only work and publishes the newest revision", () => {
-    const simulation = new GameSimulation(undefined, undefined, {
+    const simulation = new GameSimulation(makeConfig(), undefined, {
+      forwardGuidanceEnabled: true,
       forwardGuidanceWorkUnitsPerSlice: 64,
       forwardGuidanceNow: () => 0,
     });
@@ -105,7 +216,8 @@ describe("ForwardGuidance boundary", () => {
   });
 
   it("does not let steering starve a task and clips the result to the latest heading", () => {
-    const simulation = new GameSimulation(undefined, undefined, {
+    const simulation = new GameSimulation(makeConfig(), undefined, {
+      forwardGuidanceEnabled: true,
       forwardGuidanceWorkUnitsPerSlice: 64,
       forwardGuidanceNow: () => 0,
     });
@@ -124,7 +236,8 @@ describe("ForwardGuidance boundary", () => {
   });
 
   it("uses a monotonic world epoch across same-seed regeneration", () => {
-    const simulation = new GameSimulation(undefined, undefined, {
+    const simulation = new GameSimulation(makeConfig(), undefined, {
+      forwardGuidanceEnabled: true,
       forwardGuidanceWorkUnitsPerSlice: 64,
       forwardGuidanceNow: () => 0,
     });
@@ -150,6 +263,7 @@ describe("ForwardGuidance boundary", () => {
       provisions: { supportedCost: 0, personalCost: 0.5, unknownCost: 1 },
     });
     const simulation = new GameSimulation(config, undefined, {
+      forwardGuidanceEnabled: true,
       forwardGuidanceWorkUnitsPerSlice: 64,
       forwardGuidanceNow: () => 0,
     });

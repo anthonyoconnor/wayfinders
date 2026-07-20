@@ -141,6 +141,7 @@ export interface SimulationSnapshot {
   world: { width: number; height: number };
   knowledge: { supported: number; personal: number; unknown: number; visibleNow: number };
   risk: {
+    forwardAvailable: boolean;
     budget: number;
     forwardReachable: number;
     forwardFrontier: number;
@@ -202,6 +203,8 @@ export interface SimulationSnapshot {
 export interface GameSimulationOptions {
   /** Snapshot used only when creating or regenerating a world. */
   readonly authoredIslandCatalog?: Readonly<AuthoredIslandCatalog>;
+  /** Enables the optional, derived forward-range scheduler. */
+  readonly forwardGuidanceEnabled?: boolean;
   /** Main-thread wall-clock target for one cooperative guidance slice. */
   readonly forwardGuidanceSliceBudgetMs?: number;
   /** Deterministic safety cap in addition to the wall-clock target. */
@@ -212,6 +215,25 @@ export interface GameSimulationOptions {
 
 const DEFAULT_FORWARD_GUIDANCE_SLICE_BUDGET_MS = 3;
 const DEFAULT_FORWARD_GUIDANCE_WORK_UNITS = 49_152;
+
+function emptyForwardRange(
+  ship: Pick<ShipState, "heading" | "provisions" | "provisionAccumulator">,
+  config: PrototypeConfig,
+): ForwardRangeResult {
+  return {
+    mask: new Uint8Array(0),
+    presentationMask: new Uint8Array(0),
+    costs: new Float64Array(0),
+    budget: availableProvisionUnits(ship),
+    reachableCount: 0,
+    frontierCount: 0,
+    presentationHeading: ship.heading,
+    coneHalfAngleDegrees: config.overlays.forwardConeHalfAngleDegrees,
+    candidateIndices: Object.freeze([]),
+    presentationCandidateIndices: Object.freeze([]),
+    logicalRevision: 0,
+  };
+}
 
 const NO_MOVEMENT: MovementResult = {
   movedDistancePixels: 0,
@@ -276,7 +298,7 @@ export class GameSimulation {
   private visibility!: VisibilitySystem;
   private knowledge!: KnowledgeSystem;
   private provisions!: ProvisionSystem;
-  private forwardRanges!: ForwardGuidance;
+  private forwardRanges?: ForwardGuidance;
   private returnPathing!: ReturnQuery;
   private islandDossierSystem!: IslandDossierSystem;
   private surveySiteSystem!: SurveySiteSystem;
@@ -308,6 +330,8 @@ export class GameSimulation {
   private readonly forwardGuidanceSliceBudgetMs: number;
   private readonly forwardGuidanceWorkUnitsPerSlice: number;
   private readonly forwardGuidanceNow: () => number;
+  private forwardGuidanceEnabledValue: boolean;
+  private forwardGuidanceAvailable = false;
   private forwardGuidancePending = false;
   private forwardGuidanceRequestId = 0;
   private forwardGuidanceAppliedRequestId = 0;
@@ -348,6 +372,7 @@ export class GameSimulation {
     options: Readonly<GameSimulationOptions> = {},
   ) {
     this.trace = trace;
+    this.forwardGuidanceEnabledValue = options.forwardGuidanceEnabled ?? false;
     this.forwardGuidanceSliceBudgetMs = options.forwardGuidanceSliceBudgetMs
       ?? DEFAULT_FORWARD_GUIDANCE_SLICE_BUDGET_MS;
     if (
@@ -382,6 +407,8 @@ export class GameSimulation {
 
   get forwardGuidanceStatus(): ForwardGuidanceStatus {
     return {
+      enabled: this.forwardGuidanceEnabledValue,
+      available: this.forwardGuidanceAvailable,
       pending: this.forwardGuidancePending,
       requestedId: this.forwardGuidanceRequestId,
       appliedId: this.forwardGuidanceAppliedRequestId,
@@ -389,6 +416,29 @@ export class GameSimulation {
       telemetry: { ...this.forwardGuidanceTelemetryValue },
       source: this.forwardGuidanceSourceValue,
     };
+  }
+
+  get forwardGuidancePresentationAvailable(): boolean {
+    return this.forwardGuidanceAvailable;
+  }
+
+  /** Enables optional derived forward guidance only while its presentation is requested. */
+  setForwardGuidanceEnabled(enabled: boolean): boolean {
+    if (this.forwardGuidanceEnabledValue === enabled) return false;
+    this.forwardGuidanceEnabledValue = enabled;
+    if (!enabled) {
+      this.cancelForwardGuidanceTask();
+      this.forwardGuidancePending = false;
+      this.forwardGuidanceAvailable = false;
+      if (this.riskResultsInitialized) this.replaceForwardRangeWithEmpty();
+    } else if (this.riskResultsInitialized) {
+      this.forwardRanges ??= new ForwardRangeSystem(this.world, this.config);
+      this.forwardGuidanceAvailable = false;
+      this.requestForwardGuidance();
+    }
+    this.overlaysRevision++;
+    this.events.emit("returnStateChanged", undefined);
+    return true;
   }
 
   get currentExpeditionId(): number {
@@ -803,6 +853,7 @@ export class GameSimulation {
       this.config,
     );
     this.forwardGuidancePending = false;
+    this.forwardGuidanceAvailable = false;
     this.forwardGuidanceRequestId = 0;
     this.forwardGuidanceAppliedRequestId = 0;
     this.forwardGuidanceTask = undefined;
@@ -811,7 +862,9 @@ export class GameSimulation {
     this.visibility = new VisibilitySystem(this.world, this.config);
     this.knowledge = new KnowledgeSystem(this.world, this.config);
     this.provisions = new ProvisionSystem(this.world, this.config);
-    this.forwardRanges = new ForwardRangeSystem(this.world, this.config);
+    this.forwardRanges = this.forwardGuidanceEnabledValue
+      ? new ForwardRangeSystem(this.world, this.config)
+      : undefined;
     this.returnPathing = new ReturnPathSystem(this.world, this.config);
     this.descriptorRegistry = new WorldDescriptorRegistry(this.world.topology);
     this.interactionCandidateCache = undefined;
@@ -1291,7 +1344,11 @@ export class GameSimulation {
    * invoke this once per frame, before authoritative simulation updates.
    */
   advanceForwardGuidance(): boolean {
-    if (!this.forwardGuidancePending || !this.riskResultsInitialized) {
+    if (
+      !this.forwardGuidanceEnabledValue
+      || !this.forwardGuidancePending
+      || !this.riskResultsInitialized
+    ) {
       return false;
     }
 
@@ -1307,7 +1364,7 @@ export class GameSimulation {
       this.forwardGuidanceTask = {
         requestId: source.requestId,
         source,
-        task: this.forwardRanges.beginTask(this.forwardRange, this.ship),
+        task: this.requireForwardRanges().beginTask(this.forwardRange, this.ship),
         slices: 0,
       };
       this.forwardGuidanceTelemetryValue.jobsStarted++;
@@ -1346,7 +1403,7 @@ export class GameSimulation {
       || !this.sameForwardGuidanceSource(active.source, this.forwardGuidanceSourceValue)
       || !this.isCurrentForwardGuidanceSource(active.source)
     ) {
-      this.forwardRanges.releaseResult(step.result);
+      this.requireForwardRanges().releaseResult(step.result);
       this.forwardGuidanceTelemetryValue.staleResultsDiscarded++;
       if (this.forwardGuidanceTask === active) this.forwardGuidanceTask = undefined;
       if (!this.isCurrentForwardGuidanceSource(this.forwardGuidanceSourceValue)) {
@@ -1358,12 +1415,14 @@ export class GameSimulation {
     // Heading is deliberately not a cancellation input: continuous steering
     // cannot starve the logical search. Reclip the sparse terminal band just
     // before atomic publication instead.
-    this.forwardRanges.updateHeading(step.result, this.ship);
+    const forwardRanges = this.requireForwardRanges();
+    forwardRanges.updateHeading(step.result, this.ship);
     const previous = this.forwardRange;
     this.forwardRange = step.result;
-    this.forwardRanges.releaseResult(previous);
+    forwardRanges.releaseResult(previous);
     this.forwardGuidanceAppliedRequestId = active.requestId;
     this.forwardGuidancePending = false;
+    this.forwardGuidanceAvailable = true;
     this.forwardGuidanceTask = undefined;
     this.forwardGuidanceTelemetryValue.lastRequestSlices = active.slices;
     this.forwardGuidanceTelemetryValue.maxRequestSlices = Math.max(
@@ -1383,6 +1442,7 @@ export class GameSimulation {
       visibleNow: this.world.currentVisibleCount,
     };
     const risk = {
+      forwardAvailable: this.forwardGuidanceAvailable,
       budget: this.forwardRange.budget,
       forwardReachable: this.forwardRange.reachableCount,
       forwardFrontier: this.forwardRange.frontierCount,
@@ -2163,18 +2223,25 @@ export class GameSimulation {
 
   private recalculateRiskOverlays(): void {
     if (this.riskResultsInitialized) {
-      this.requestForwardGuidance();
+      if (this.forwardGuidanceEnabledValue) this.requestForwardGuidance();
+      else this.refreshEmptyForwardRange();
       this.returnPaths = measureSimulationPhase(
         this.trace,
         "return-query",
         () => this.returnPathing.recalculate(this.returnPaths, this.ship),
       );
     } else {
-      this.forwardRange = measureSimulationPhase(
-        this.trace,
-        "forward-guidance",
-        () => this.forwardRanges.calculate(this.ship),
-      );
+      if (this.forwardGuidanceEnabledValue) {
+        this.forwardRange = measureSimulationPhase(
+          this.trace,
+          "forward-guidance",
+          () => this.requireForwardRanges().calculate(this.ship),
+        );
+        this.forwardGuidanceAvailable = true;
+      } else {
+        this.forwardRange = emptyForwardRange(this.ship, this.config);
+        this.forwardGuidanceAvailable = false;
+      }
       this.returnPaths = measureSimulationPhase(
         this.trace,
         "return-query",
@@ -2192,7 +2259,10 @@ export class GameSimulation {
   }
 
   private updateRiskOverlayBudgets(): void {
-    const forwardChanged = this.forwardRanges.updateBudget(this.forwardRange, this.ship);
+    const forwardChanged = this.forwardGuidanceEnabledValue
+      ? this.forwardGuidanceAvailable
+        && this.requireForwardRanges().updateBudget(this.forwardRange, this.ship)
+      : this.refreshEmptyForwardRange();
     const returnChanged = this.returnPathing.updateBudget(this.returnPaths, this.ship);
     if (!forwardChanged && !returnChanged) return;
     this.overlaysRevision++;
@@ -2200,12 +2270,23 @@ export class GameSimulation {
   }
 
   private updateRiskOverlayHeading(): void {
-    if (!this.forwardRanges.updateHeading(this.forwardRange, this.ship)) return;
+    if (!this.forwardGuidanceEnabledValue) {
+      if (!this.refreshEmptyForwardRange()) return;
+      this.overlaysRevision++;
+      this.events.emit("returnStateChanged", undefined);
+      return;
+    }
+    if (
+      !this.forwardGuidanceAvailable
+      || !this.requireForwardRanges().updateHeading(this.forwardRange, this.ship)
+    ) return;
     this.overlaysRevision++;
     this.events.emit("returnStateChanged", undefined);
   }
 
   private requestForwardGuidance(): void {
+    if (!this.forwardGuidanceEnabledValue) return;
+    this.forwardRanges ??= new ForwardRangeSystem(this.world, this.config);
     if (this.forwardGuidancePending) {
       this.forwardGuidanceTelemetryValue.requestsCoalesced++;
     }
@@ -2261,5 +2342,31 @@ export class GameSimulation {
     active.task.cancel();
     this.forwardGuidanceTask = undefined;
     this.forwardGuidanceTelemetryValue.jobsCancelled++;
+  }
+
+  private replaceForwardRangeWithEmpty(): void {
+    const previous = this.forwardRange;
+    this.forwardRange = emptyForwardRange(this.ship, this.config);
+    this.forwardRanges?.releaseResult(previous);
+  }
+
+  private refreshEmptyForwardRange(): boolean {
+    const budget = availableProvisionUnits(this.ship);
+    const heading = this.ship.heading;
+    const coneHalfAngleDegrees = this.config.overlays.forwardConeHalfAngleDegrees;
+    const changed = this.forwardRange.budget !== budget
+      || this.forwardRange.presentationHeading !== heading
+      || this.forwardRange.coneHalfAngleDegrees !== coneHalfAngleDegrees;
+    this.forwardRange.budget = budget;
+    this.forwardRange.presentationHeading = heading;
+    this.forwardRange.coneHalfAngleDegrees = coneHalfAngleDegrees;
+    return changed;
+  }
+
+  private requireForwardRanges(): ForwardGuidance {
+    if (!this.forwardRanges) {
+      throw new Error("Forward guidance is not enabled");
+    }
+    return this.forwardRanges;
   }
 }
