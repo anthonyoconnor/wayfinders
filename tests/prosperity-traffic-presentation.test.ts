@@ -13,7 +13,6 @@ import {
   PROSPERITY_TRAFFIC_DESTINATION_DWELL_SECONDS,
   PROSPERITY_TRAFFIC_SPEED_TILES_PER_SECOND,
   ProsperityTrafficPresentationScheduler,
-  prosperityTrafficPlayerFadeAlpha,
   prosperityTrafficRouteTiming,
   sampleProsperityTrafficRoute,
 } from "../src/wayfinders/rendering/prosperity/index.ts";
@@ -348,16 +347,5 @@ describe("Prosperity traffic presentation policy", () => {
       wakeVisible: false,
       distanceFromHomeTiles: 0,
     });
-  });
-
-  it("smoothly fades traffic between the declared player-distance bounds", () => {
-    expect(prosperityTrafficPlayerFadeAlpha(0)).toBe(0);
-    expect(prosperityTrafficPlayerFadeAlpha(1.25)).toBe(0);
-    expect(prosperityTrafficPlayerFadeAlpha(1.5)).toBeCloseTo(0.15625);
-    expect(prosperityTrafficPlayerFadeAlpha(1.75)).toBe(0.5);
-    expect(prosperityTrafficPlayerFadeAlpha(2)).toBeCloseTo(0.84375);
-    expect(prosperityTrafficPlayerFadeAlpha(2.25)).toBe(1);
-    expect(prosperityTrafficPlayerFadeAlpha(10)).toBe(1);
-    expect(() => prosperityTrafficPlayerFadeAlpha(-0.01)).toThrow(RangeError);
   });
 });

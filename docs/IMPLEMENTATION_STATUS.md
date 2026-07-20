@@ -85,8 +85,11 @@ the hidden weighted Prosperity ledger, and one shared Supported-connectivity
 authority publishes safe routes for returned surveyed fishing shoals and
 returned community dossiers. The fixed-pool presentation uses the selected
 Quiet outriggers direction, endpoint-only service rotation, restrained density,
-player-clearance fading, periodic projection, shoreline occlusion, and a static
-reduced-motion mode. Focused score, route, integration, scheduler, renderer,
+fixed family opacity independent of player proximity, periodic projection,
+shoreline occlusion, and a static reduced-motion mode. Independent default-hidden
+turquoise fishing and ochre trade route diagnostics reuse the published safe
+paths, and the Ship Traffic asset workspace previews both runtime craft through
+their shared factory. Focused score, route, integration, scheduler, renderer,
 seam, and performance checks pass with both typechecks and architecture
 validation. Browser acceptance exercised separate fishing lead/survey returns
 and the Great Hall, then inspected the actual production fishing and trade

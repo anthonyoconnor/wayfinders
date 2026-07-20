@@ -244,6 +244,8 @@ const debugVisibility = {
   currentSight: false,
   forwardRange: true,
   returnViability: true,
+  fishingTrafficRoutes: false,
+  tradeTrafficRoutes: false,
 };
 
 describe("camera-culled chunk images", () => {

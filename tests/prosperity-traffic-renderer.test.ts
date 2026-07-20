@@ -242,7 +242,7 @@ describe("ProsperityTrafficRenderer", () => {
     expect(fake.containers).toHaveLength(PROSPERITY_TRAFFIC_MAX_PERIODIC_VIEWS);
     expect(fake.graphics).toHaveLength(PROSPERITY_TRAFFIC_MAX_PERIODIC_VIEWS * 3);
     expect(fake.containers.every(({ depth }) => depth === PROSPERITY_TRAFFIC_DEPTH)).toBe(true);
-    renderer.sync(model, topology, 32, 0, { x: 15.5 * 32, y: 7.5 * 32 });
+    renderer.sync(model, topology, 32, 0);
 
     expect(renderer.getTelemetry()).toMatchObject({
       capacity: PROSPERITY_TRAFFIC_MAX_PERIODIC_VIEWS,
@@ -263,7 +263,7 @@ describe("ProsperityTrafficRenderer", () => {
     expect(firstAdmission.some((name) => name.includes(model.tradeRoutes[1]!.id))).toBe(false);
 
     for (let frame = 1; frame <= 20; frame++) {
-      renderer.sync(model, topology, 32, frame * 16, { x: 15.5 * 32, y: 7.5 * 32 });
+      renderer.sync(model, topology, 32, frame * 16);
     }
     expect(fake.containers).toHaveLength(PROSPERITY_TRAFFIC_MAX_PERIODIC_VIEWS);
     expect(fake.graphics).toHaveLength(PROSPERITY_TRAFFIC_MAX_PERIODIC_VIEWS * 3);
@@ -282,7 +282,6 @@ describe("ProsperityTrafficRenderer", () => {
       topology,
       32,
       (firstRoundSeconds + 3) * 1_000,
-      { x: 15.5 * 32, y: 7.5 * 32 },
     );
     const secondAdmission = fake.containers
       .filter(({ visible }) => visible)
@@ -297,16 +296,14 @@ describe("ProsperityTrafficRenderer", () => {
     expect(renderer.getTelemetry().activeViews).toBe(0);
   });
 
-  it("holds a static no-wake craft for reduced motion and truly suppresses it near the player", () => {
+  it("holds a static no-wake craft for reduced motion without suppressing it near the player", () => {
     const fake = fakeScene();
     const renderer = new ProsperityTrafficRenderer(fake.scene);
     const topology = new WorldTopology(16, 8, 32, 8, BOUNDED_WORLD_TOPOLOGY);
     const model = readModel([fishingRoute(0, 0)]);
     renderer.applyActiveChunks([ACTIVE_CHUNK]);
 
-    renderer.sync(model, topology, 32, 5_000, { x: 4.25 * 32, y: 0.5 * 32 }, true);
-    expect(renderer.getTelemetry()).toMatchObject({ reducedMotion: true, activeViews: 0 });
-    renderer.sync(model, topology, 32, 50_000, { x: 12.5 * 32, y: 7.5 * 32 }, true);
+    renderer.sync(model, topology, 32, 5_000, true);
     expect(renderer.getTelemetry()).toMatchObject({
       reducedMotion: true,
       selectionEpoch: 0,
@@ -317,6 +314,10 @@ describe("ProsperityTrafficRenderer", () => {
     expect(fake.graphics[activeIndex * 3]!.visible).toBe(false);
     expect(fake.graphics[activeIndex * 3 + 1]!.visible).toBe(true);
     expect(fake.graphics[activeIndex * 3 + 2]!.visible).toBe(false);
+    expect(fake.containers[activeIndex]!.alpha).toBe(0.66);
+
+    renderer.sync(model, topology, 32, 50_000, true);
+    expect(renderer.getTelemetry()).toMatchObject({ reducedMotion: true, activeViews: 1 });
 
     renderer.destroy();
   });
@@ -335,7 +336,7 @@ describe("ProsperityTrafficRenderer", () => {
     }) satisfies Readonly<ActiveChunkEntry>;
     renderer.applyActiveChunks([ACTIVE_CHUNK, alias]);
 
-    renderer.sync(model, topology, 32, 0, { x: 8.5 * 32, y: 4.5 * 32 });
+    renderer.sync(model, topology, 32, 0);
 
     expect(renderer.getTelemetry()).toMatchObject({
       scheduledVessels: 2,

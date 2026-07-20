@@ -69,11 +69,13 @@ per-session visibility state.
 | --- | --- | --- |
 | `navigationGrid`, `collisionBoxes`, `currentSight` | boolean | initial presentation/debug visibility only |
 | `forwardRange`, `returnViability` | boolean | initial guidance presentation; hidden forward range also suspends its optional derived search, while route authority is unchanged |
+| `fishingTrafficRoutes`, `tradeTrafficRoutes` | boolean | initial presentation/debug visibility only; both consume existing published routes and default to hidden |
 
 These values initialize scene-owned state. Developer controls and
 `window.__WAYFINDERS__.setOverlay` affect only the current session; the
 forward-range switch also sends its derived-work demand command to that
-session's `GameSimulation`.
+session's `GameSimulation`. Traffic-route switches never request simulation
+work or recalculate a path.
 
 ## `gameplay`
 

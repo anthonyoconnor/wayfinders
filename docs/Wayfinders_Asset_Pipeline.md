@@ -152,6 +152,15 @@ factories, and collision descriptors as the game. Its clean baseline contains
 the home island, player boat, and fishing shoal runtime packages. Uploaded PNGs
 add prepared production candidates without creating a second simulation.
 
+`?mode=assets&workspace=traffic` is a separate view-only workspace for the
+Prosperity fishing workboat and trade canoe. These two visuals and their shared
+wake are code-native presentation geometry rather than stored PNG packages, so
+they do not enter intake, preparation, review, promotion, collision, or
+availability lifecycles. The workspace renders the same shared craft factory as
+the game at runtime scale and at an enlarged inspection scale, with local wake
+and heading controls. It never loads the reference-only concept studies and
+exposes no repository-write operation.
+
 **Add PNG** starts guided intake for a new local image. In the Islands
 workspace, family, layer role, solid collision semantics, and runtime category
 are fixed island defaults rather than operator fields. Intake treats the PNG's

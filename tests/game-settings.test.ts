@@ -24,13 +24,15 @@ describe("default game settings contract", () => {
     expect(() => validateGameSettings(DEFAULT_GAME_SETTINGS)).not.toThrow();
   });
 
-  it("starts a 192 by 192 world with sound on, SFX at 10%, and forward reach hidden", () => {
+  it("starts a 192 by 192 world with sound on and developer route overlays hidden", () => {
     expect(DEFAULT_GAME_SETTINGS.world).toMatchObject({ width: 192, height: 192 });
     expect(prototypeConfig.world).toMatchObject({ width: 192, height: 192 });
     expect(DEFAULT_GAME_SETTINGS.audio.enabled).toBe(true);
     expect(DEFAULT_GAME_SETTINGS.audio.muted).toBe(false);
     expect(DEFAULT_GAME_SETTINGS.audio.categoryVolumes.sfx).toBe(0.1);
     expect(DEFAULT_GAME_SETTINGS.overlays.forwardRange).toBe(false);
+    expect(DEFAULT_GAME_SETTINGS.overlays.fishingTrafficRoutes).toBe(false);
+    expect(DEFAULT_GAME_SETTINGS.overlays.tradeTrafficRoutes).toBe(false);
   });
 
   it("derives normal simulation defaults without giving benchmark profiles ownership", () => {
@@ -53,6 +55,12 @@ describe("default game settings contract", () => {
     const invalidOverlay = JSON.parse(JSON.stringify(DEFAULT_GAME_SETTINGS)) as GameSettings;
     invalidOverlay.overlays.forwardRange = "visible" as unknown as boolean;
     expect(() => validateGameSettings(invalidOverlay)).toThrow("overlays.forwardRange must be a boolean");
+
+    const invalidTrafficOverlay = JSON.parse(JSON.stringify(DEFAULT_GAME_SETTINGS)) as GameSettings;
+    invalidTrafficOverlay.overlays.fishingTrafficRoutes = "visible" as unknown as boolean;
+    expect(() => validateGameSettings(invalidTrafficOverlay)).toThrow(
+      "overlays.fishingTrafficRoutes must be a boolean",
+    );
   });
 
   it("preserves settings-specific paths for shared simulation tuning validation", () => {

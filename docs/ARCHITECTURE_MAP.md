@@ -17,7 +17,7 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
 4. The asset-library mode resolves a typed asset-workspace registry and starts
-   one workspace-scoped library, Icons, Great Hall, Audio, Water, or Clouds preview scene
+   one workspace-scoped library, Ship Traffic, Icons, Great Hall, Audio, Water, or Clouds preview scene
    without gameplay simulation. The Water workspace starts `WaterPreviewScene`
    over the validated water package
    and real seeded generated-water facts, without creating gameplay simulation.
@@ -128,12 +128,16 @@ adapter may own Phaser sound instances.
   diagnostics, and the presentation capability surface; rendering consumes
   only traffic routes caused by returned facts.
 - `ProsperityTrafficRenderer` owns the presentation-only route scheduler,
-  code-native fishing/trade craft, player-clearance fade, periodic projection,
-  and its fixed eight-view Phaser pool. It consumes only the public route read
-  model, topology, tile scale, player presentation position, reduced-motion
-  preference, and the shared active-chunk entries. It cannot query the hidden
-  score, create gameplay authority, or allocate Phaser objects on stable
-  frames.
+  shared code-native fishing/trade craft factory, fixed family opacity,
+  periodic projection, and its fixed eight-view Phaser pool. It consumes only
+  the public route read model, topology, tile scale, reduced-motion preference,
+  and the shared active-chunk entries. It cannot query the hidden score, create
+  gameplay authority, or allocate Phaser objects on stable frames.
+  `ProsperityTrafficRouteDebugRenderer` separately projects every published
+  route as default-hidden, active-chunk-bounded threads. Its independent
+  fishing and trade visibility switches remain scene-owned diagnostics and
+  never request another path search; periodic copies and exact shared segments
+  are deduplicated within each route family before drawing.
 - `WayfindersScene` owns Phaser lifecycle, one `LiftedViewAnchor`, and one
   `ActiveChunkSet`. The view anchor consumes accepted movement displacement;
   canonical endpoints never infer wrap direction. Each active entry has a
@@ -233,6 +237,10 @@ adapter may own Phaser sound instances.
   its DOM listeners, cancels
   its preview-local animation frame, and removes its Phaser bindings before
   another workspace starts.
+- The view-only Ship Traffic workspace lists the fishing workboat and trade
+  canoe and renders both through the same code-native craft factory as the
+  game. It exposes inspection heading and wake state but no simulation,
+  concept-art loading, authoring, package, or repository-write seam.
 - The Audio workspace adapts the same validated catalog used by game mode and
   creates one browser media element only for the selected stored file. It owns
   playback, pause/resume, stop, browser-reported timing, and teardown only; it
@@ -271,6 +279,9 @@ enable switch, the map-review camera/fog switch, and telemetry never enter
 `GameSimulation`. Map
 review detaches the camera without moving the ship or changing authoritative
 knowledge.
+The fishing-traffic and island-trade route switches expose only already
+published Supported-water paths, use distinct thread colours, and remain
+default hidden.
 
 ## Feature folder convention
 

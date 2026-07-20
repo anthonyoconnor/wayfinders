@@ -496,8 +496,10 @@ Traffic is presentation only. It owns no physics body, collision, input target,
 prompt, gameplay event, sound, provision effect, production output, or world
 mutation. Fishing uses the selected low unsailed outrigger with a turquoise net;
 trade uses the broader low-sail outrigger with ochre cargo. Both are subdued,
-code-native developer graphics derived from the checked-in Direction A concept;
-the concept PNGs are references rather than runtime assets.
+code-native developer graphics created by one shared craft factory and derived
+from the checked-in Direction A concept; the concept PNGs are references rather
+than runtime assets. The same factory supplies the view-only **Ship Traffic**
+asset workspace.
 
 The presentation scheduler selects at most two fishing and two trade routes.
 One selected set remains stable for a complete shared service round; shorter
@@ -513,10 +515,20 @@ tiles along the quiet departure edge from Home, dwell for `9` seconds at the
 destination and `12` seconds at Home, and retain lifted edge positions and
 headings across periodic seams. A newly published route begins in its
 destination dwell so its returned-world consequence is immediately visible.
-Traffic fades completely at or inside `1.25` minimum-image tiles from the
-player and reaches full subdued opacity at `2.25` tiles. Reduced motion freezes
-selection and progress, removes wakes, and uses one static pose three quarters
-along the destination edge.
+Fishing and trade craft retain fixed subdued opacities of `0.66` and `0.72`;
+player proximity neither hides a craft nor changes its opacity. Reduced motion
+freezes selection and progress, removes wakes, and uses one static pose three
+quarters along the destination edge.
+
+Two default-hidden developer switches independently show fishing and island
+trade routes. `ProsperityTrafficRouteDebugRenderer` consumes every immutable
+published route, reuses its direction-preserving edges, and draws rounded
+active-chunk thread projections without recalculating paths. Trade is a wider
+ochre thread beneath a narrower turquoise fishing thread, so a shared Home stem
+retains both colours. Geometry is cached by world and route-model identity,
+periodic aliases preserve seam direction, and padded-chunk copies plus exact
+same-family shared segments are removed before drawing so overlapping routes
+do not intensify the diagnostic thread.
 
 `ProsperityTrafficRenderer` draws at depth `1.8`, above the water surface at
 `1.6` and below terrain/coast presentation at `2`, so shorelines occlude craft
@@ -1001,7 +1013,7 @@ needed by adapters; listeners cannot mutate simulation state through the bus.
 
 The developer UI can regenerate by seed, inspect island approaches, move to
 survey anchors, teleport to water, adjust provisions, force a wreck, toggle
-navigation/visibility/guidance diagnostics, independently enable or disable
+navigation/visibility/guidance and fishing/trade route diagnostics, independently enable or disable
 cloud atmosphere, enter map review, and tune supported configuration. Map
 overlay visibility is initialized from `DEFAULT_GAME_SETTINGS.overlays` and is
 owned entirely by `WayfindersScene`. Toggling navigation grid, collision boxes,

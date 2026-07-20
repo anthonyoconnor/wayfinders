@@ -4,6 +4,7 @@ import { CLOUD_ASSET_WORKSPACE } from "./workspaces/CloudAssetWorkspace";
 import { FISHING_SHOAL_ASSET_WORKSPACE } from "./workspaces/FishingShoalAssetWorkspace";
 import { GREAT_HALL_ASSET_WORKSPACE } from "./workspaces/GreatHallAssetWorkspace";
 import { ISLAND_ASSET_WORKSPACE } from "./workspaces/IslandAssetWorkspace";
+import { PROSPERITY_TRAFFIC_ASSET_WORKSPACE } from "./workspaces/ProsperityTrafficAssetWorkspace";
 import { SHIP_ASSET_WORKSPACE } from "./workspaces/ShipAssetWorkspace";
 import { WATER_ASSET_WORKSPACE } from "./workspaces/WaterAssetWorkspace";
 import type { AssetWorkspaceModule } from "./workspaces/AssetWorkspace";
@@ -11,6 +12,7 @@ import type { AssetWorkspaceModule } from "./workspaces/AssetWorkspace";
 export const ASSET_WORKSPACES = Object.freeze([
   ISLAND_ASSET_WORKSPACE,
   SHIP_ASSET_WORKSPACE,
+  PROSPERITY_TRAFFIC_ASSET_WORKSPACE,
   FISHING_SHOAL_ASSET_WORKSPACE,
   WATER_ASSET_WORKSPACE,
   CLOUD_ASSET_WORKSPACE,

@@ -5,17 +5,18 @@ import type { WorldTopology } from "../world/WorldTopology";
 import type { ActiveChunkEntry } from "./activation";
 import {
   ProsperityTrafficPresentationScheduler,
-  prosperityTrafficPlayerFadeAlpha,
   type ProsperityTrafficVesselPresentation,
 } from "./prosperity";
+import {
+  createProsperityTrafficCraftGraphics,
+  prosperityTrafficCraftAlpha,
+  setProsperityTrafficCraftState,
+} from "./prosperity/ProsperityTrafficCraft";
 
 export const PROSPERITY_TRAFFIC_MAX_VISIBLE_VESSELS = 3 as const;
 export const PROSPERITY_TRAFFIC_MAX_PERIODIC_VIEWS = 8 as const;
 export const PROSPERITY_TRAFFIC_HOME_AREA_TILES = 2.25 as const;
 export const PROSPERITY_TRAFFIC_DEPTH = 1.8 as const;
-
-const FISHING_ALPHA = 0.66;
-const TRADE_ALPHA = 0.72;
 
 interface ProsperityTrafficView {
   readonly container: Phaser.GameObjects.Container;
@@ -27,7 +28,6 @@ interface ProsperityTrafficView {
 interface TrafficCandidate {
   readonly vessel: Readonly<ProsperityTrafficVesselPresentation>;
   readonly canonicalWorld: Readonly<WorldPoint>;
-  readonly alpha: number;
   readonly entries: readonly Readonly<ActiveChunkEntry>[];
   readonly visible: boolean;
 }
@@ -89,7 +89,6 @@ export class ProsperityTrafficRenderer {
     topology: WorldTopology,
     tileSize: number,
     elapsedMilliseconds: number,
-    playerWorld: Readonly<WorldPoint>,
     reducedMotion = false,
   ): void {
     if (!Number.isFinite(tileSize) || tileSize <= 0) {
@@ -108,7 +107,6 @@ export class ProsperityTrafficRenderer {
       fairAdmissionOrder(frame.vessels, frame.selectionEpoch),
       topology,
       tileSize,
-      playerWorld,
     );
     const requests = this.viewRequests(candidates);
 
@@ -163,7 +161,6 @@ export class ProsperityTrafficRenderer {
     vessels: readonly Readonly<ProsperityTrafficVesselPresentation>[],
     topology: WorldTopology,
     tileSize: number,
-    playerWorld: Readonly<WorldPoint>,
   ): readonly Readonly<TrafficCandidate>[] {
     const candidates: TrafficCandidate[] = [];
     let homeAreaOccupied = false;
@@ -174,12 +171,6 @@ export class ProsperityTrafficRenderer {
         vessel.liftedTileY * tileSize,
       );
       if (!canonicalWorld) continue;
-      const playerDistanceTiles = Math.sqrt(topology.minimumImageWorldDistanceSquared(
-        playerWorld,
-        canonicalWorld,
-      )) / tileSize;
-      const alpha = prosperityTrafficPlayerFadeAlpha(playerDistanceTiles);
-      if (alpha <= 0) continue;
 
       const canonicalHomeWorld = topology.canonicalizeWorld(
         vessel.homeCanonicalTileX * tileSize,
@@ -208,7 +199,6 @@ export class ProsperityTrafficRenderer {
       candidates.push(Object.freeze({
         vessel,
         canonicalWorld: Object.freeze({ ...canonicalWorld }),
-        alpha,
         entries,
         visible,
       }));
@@ -245,7 +235,6 @@ export class ProsperityTrafficRenderer {
   ): void {
     const { candidate, entry } = request;
     const { vessel } = candidate;
-    const baseAlpha = vessel.kind === "fishing" ? FISHING_ALPHA : TRADE_ALPHA;
     view.container
       .setActive(true)
       .setVisible(true)
@@ -256,57 +245,12 @@ export class ProsperityTrafficRenderer {
       )
       .setRotation(Phaser.Math.DegToRad(vessel.headingDegrees))
       .setScale(tileSize / 32)
-      .setAlpha(baseAlpha * candidate.alpha);
-    view.wake.setVisible(vessel.wakeVisible);
-    view.fishingCraft.setVisible(vessel.kind === "fishing");
-    view.tradeCraft.setVisible(vessel.kind === "trade");
+      .setAlpha(prosperityTrafficCraftAlpha(vessel.kind));
+    setProsperityTrafficCraftState(view, vessel.kind, vessel.wakeVisible);
   }
 
   private createView(): ProsperityTrafficView {
-    const wake = this.scene.add.graphics();
-    wake.lineStyle(1, 0xa8e4e4, 0.3);
-    wake.beginPath();
-    wake.moveTo(-7, -2.5);
-    wake.lineTo(-15, -5);
-    wake.moveTo(-7, 2.5);
-    wake.lineTo(-15, 5);
-    wake.strokePath();
-
-    const fishingCraft = this.scene.add.graphics();
-    fishingCraft.fillStyle(0x3a2922, 1);
-    fishingCraft.fillTriangle(10, 0, -8, -4, -8, 4);
-    fishingCraft.lineStyle(1.25, 0x9b7247, 1);
-    fishingCraft.strokeTriangle(10, 0, -8, -4, -8, 4);
-    fishingCraft.lineStyle(1, 0x8c7755, 0.9);
-    fishingCraft.lineBetween(-4, 3, -4, 8);
-    fishingCraft.lineBetween(4, 2.5, 4, 8);
-    fishingCraft.lineStyle(2, 0x6c5438, 1);
-    fishingCraft.lineBetween(-7, 8, 7, 8);
-    fishingCraft.fillStyle(0x4faaa5, 0.9);
-    fishingCraft.fillCircle(-1, 0, 2.5);
-    fishingCraft.lineStyle(1, 0xb9d8b6, 0.7);
-    fishingCraft.strokeCircle(-1, 0, 3.5);
-    fishingCraft.lineStyle(1.2, 0xc7b078, 0.9);
-    fishingCraft.lineBetween(-7, -3, -11, -8);
-
-    const tradeCraft = this.scene.add.graphics();
-    tradeCraft.fillStyle(0x39271f, 1);
-    tradeCraft.fillTriangle(12, 0, -10, -5, -10, 5);
-    tradeCraft.lineStyle(1.4, 0xa07745, 1);
-    tradeCraft.strokeTriangle(12, 0, -10, -5, -10, 5);
-    tradeCraft.lineStyle(1, 0x8c7755, 0.86);
-    tradeCraft.lineBetween(-5, 4, -5, 9);
-    tradeCraft.lineBetween(5, 3, 5, 9);
-    tradeCraft.lineStyle(2, 0x6c5438, 1);
-    tradeCraft.lineBetween(-8, 9, 8, 9);
-    tradeCraft.fillStyle(0xb7793f, 0.95);
-    tradeCraft.fillRect(-7, -3, 5, 3);
-    tradeCraft.fillRect(-1, 1, 5, 3);
-    tradeCraft.fillStyle(0xd8c99e, 0.94);
-    tradeCraft.fillTriangle(-1, -2, -1, -12, 7, -2);
-    tradeCraft.lineStyle(1, 0x9b7247, 1);
-    tradeCraft.lineBetween(-1, -12, -1, 4);
-    tradeCraft.lineBetween(-1, -12, 7, -2);
+    const { wake, fishingCraft, tradeCraft } = createProsperityTrafficCraftGraphics(this.scene);
 
     const container = this.scene.add.container(0, 0, [wake, fishingCraft, tradeCraft])
       .setDepth(PROSPERITY_TRAFFIC_DEPTH)

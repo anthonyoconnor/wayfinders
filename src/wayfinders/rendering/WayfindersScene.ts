@@ -90,6 +90,7 @@ import { IslandDossierRenderer } from "./IslandDossierRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { LiftedViewAnchor } from "./LiftedViewAnchor";
 import { ProsperityTrafficRenderer } from "./ProsperityTrafficRenderer";
+import { ProsperityTrafficRouteDebugRenderer } from "./prosperity/ProsperityTrafficRouteDebugRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
 import { canVisitGreatHall } from "./GreatHallAccess";
 import { GreatHallView } from "./GreatHallView";
@@ -160,6 +161,7 @@ interface PresentationResourceSnapshot {
   readonly clouds: ReturnType<CloudLayerRenderer["getResourceTelemetry"]>;
   readonly risk: ReturnType<RiskOverlayRenderer["getResourceTelemetry"]>;
   readonly prosperityTraffic: ReturnType<ProsperityTrafficRenderer["getTelemetry"]>;
+  readonly prosperityTrafficRoutes: ReturnType<ProsperityTrafficRouteDebugRenderer["getTelemetry"]>;
   readonly markers: Readonly<{
     wrecks: ReturnType<WreckRenderer["getLifetimeTelemetry"]>;
     islandDossiers: ReturnType<IslandDossierRenderer["getLifetimeTelemetry"]>;
@@ -270,6 +272,7 @@ export class WayfindersScene extends Phaser.Scene {
   private surveySiteRenderer!: SurveySiteRenderer;
   private fishingShoalRenderer!: FishingShoalRenderer;
   private prosperityTrafficRenderer!: ProsperityTrafficRenderer;
+  private prosperityTrafficRouteDebugRenderer!: ProsperityTrafficRouteDebugRenderer;
   private shipRenderer!: ShipRenderer;
   private wreckRenderer!: WreckRenderer;
   private activeChunkSet!: ActiveChunkSet;
@@ -434,6 +437,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveySiteRenderer = new SurveySiteRenderer(this);
     this.fishingShoalRenderer = new FishingShoalRenderer(this, this.pilotAssets);
     this.prosperityTrafficRenderer = new ProsperityTrafficRenderer(this);
+    this.prosperityTrafficRouteDebugRenderer = new ProsperityTrafficRouteDebugRenderer(this);
     this.shipRenderer = new ShipRenderer(this, this.pilotAssets);
     this.liftedViewAnchor = new LiftedViewAnchor(this.simulation.world.topology, {
       x: this.simulation.ship.worldX,
@@ -706,6 +710,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveySiteRenderer.applyActiveChunks(delta.active);
     this.fishingShoalRenderer.applyActiveChunks(delta.active);
     this.prosperityTrafficRenderer.applyActiveChunks(delta.active);
+    this.prosperityTrafficRouteDebugRenderer.applyActiveChunks(delta.active);
     this.activeChunkEntries = delta.active;
     this.lastDebugRevision = -1;
     this.lastActiveChunkRevision = delta.revision;
@@ -860,11 +865,14 @@ export class WayfindersScene extends Phaser.Scene {
       this.simulation.world.topology,
       this.simulation.config.navigation.tileSize,
       this.time.now,
-      {
-        x: this.simulation.ship.worldX,
-        y: this.simulation.ship.worldY,
-      },
       this.prefersReducedMotion,
+    );
+    this.prosperityTrafficRouteDebugRenderer.sync(
+      this.simulation.prosperityTrafficRoutes,
+      this.simulation.world,
+      this.simulation.config.navigation.tileSize,
+      this.overlayVisibility.fishingTrafficRoutes,
+      this.overlayVisibility.tradeTrafficRoutes,
     );
     if (
       force
@@ -1301,6 +1309,12 @@ export class WayfindersScene extends Phaser.Scene {
             ${this.toggleMarkup("currentSight", "Current line of sight")}
             ${this.toggleMarkup("forwardRange", "Forward reach limit")}
             ${this.toggleMarkup("returnViability", "Return route viability")}
+            ${this.toggleMarkup("fishingTrafficRoutes", "Fishing traffic routes")}
+            ${this.toggleMarkup("tradeTrafficRoutes", "Island trade routes")}
+            <p class="tool-route-key" aria-label="Traffic route colours">
+              <span><i data-route-kind="fishing" aria-hidden="true"></i> Turquoise: fishing</span>
+              <span><i data-route-kind="trade" aria-hidden="true"></i> Ochre: trade</span>
+            </p>
             <label class="tool-check"><input data-map-review type="checkbox" ${this.mapReviewMode ? "checked" : ""}> Map review mode (hide fog and free camera)</label>
             <p class="tool-live-note">In map review mode, drag the map or use WASD / arrows to pan; use the wheel or Q/E to zoom. Sailing is paused.</p>
             ${this.cloudToggleMarkup()}
@@ -2498,6 +2512,7 @@ export class WayfindersScene extends Phaser.Scene {
       clouds: this.cloudLayer.getResourceTelemetry(),
       risk: this.riskOverlay.getResourceTelemetry(),
       prosperityTraffic: this.prosperityTrafficRenderer.getTelemetry(),
+      prosperityTrafficRoutes: this.prosperityTrafficRouteDebugRenderer.getTelemetry(),
       markers: Object.freeze({
         wrecks: this.wreckRenderer.getLifetimeTelemetry(),
         islandDossiers: this.islandDossierRenderer.getLifetimeTelemetry(),
@@ -3059,6 +3074,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.surveySiteRenderer.destroy();
     this.fishingShoalRenderer.destroy();
     this.prosperityTrafficRenderer.destroy();
+    this.prosperityTrafficRouteDebugRenderer.destroy();
     this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);

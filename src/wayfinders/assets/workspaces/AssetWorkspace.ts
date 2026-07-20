@@ -11,6 +11,7 @@ export interface AssetWorkspaceBase {
     | "great-hall-preview"
     | "audio-preview"
     | "cloud-preview"
+    | "prosperity-traffic-preview"
     | "water-preview";
 }
 
@@ -41,12 +42,17 @@ export interface CloudAssetWorkspaceModule extends AssetWorkspaceBase {
   readonly kind: "cloud-preview";
 }
 
+export interface ProsperityTrafficAssetWorkspaceModule extends AssetWorkspaceBase {
+  readonly kind: "prosperity-traffic-preview";
+}
+
 export type AssetWorkspaceModule =
   | AssetLibraryWorkspaceModule
   | AchievementIconAssetWorkspaceModule
   | GreatHallAssetWorkspaceModule
   | AudioAssetWorkspaceModule
   | CloudAssetWorkspaceModule
+  | ProsperityTrafficAssetWorkspaceModule
   | WaterAssetWorkspaceModule;
 
 export function assetWorkspaceSelectionKey(workspaceId: string): string {

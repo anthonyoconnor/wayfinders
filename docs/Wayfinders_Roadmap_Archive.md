@@ -1583,6 +1583,12 @@ production fishing/trade renderer in a representative scene, both stationary
 and moving, with clean console output; the temporary inspection harness was
 removed.
 
+On 2026-07-20, a presentation-tooling refinement added independently toggled
+turquoise fishing and ochre trade route diagnostics plus a view-only Ship
+Traffic asset workspace backed by the runtime craft factory. Player-proximity
+fading was removed; the two-per-family scheduler, three-craft screen cap,
+one-craft Home cap, active-chunk gating, and fixed eight-view pool remain.
+
 Planning and concept selection were recorded in `242d09c` and `5652e26`. The
 hidden-score and safe-route foundation was implemented in `d1b8b01`; bounded
 traffic presentation was implemented in `360797d`.

@@ -2221,6 +2221,216 @@ html[data-application-mode="assets"] .asset-library-browser {
   background: rgba(3, 18, 24, 0.58);
 }
 
+.traffic-preview-browser {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.traffic-preview-browser__body {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 0.8rem;
+  overflow: auto;
+  color: var(--shell-muted);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.traffic-preview-browser__body > p {
+  margin: 0;
+}
+
+.traffic-preview-list {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.traffic-preview-list li,
+.traffic-preview-list button {
+  min-width: 0;
+}
+
+.traffic-preview-list button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 2.2rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem;
+  border: 1px solid rgba(124, 189, 184, 0.2);
+  border-radius: 0.45rem;
+  color: var(--shell-ink);
+  text-align: left;
+  background: rgba(3, 18, 24, 0.54);
+  cursor: pointer;
+}
+
+.traffic-preview-list button:hover,
+.traffic-preview-list button[aria-pressed="true"] {
+  border-color: rgba(83, 225, 141, 0.72);
+  background: rgba(21, 69, 68, 0.75);
+}
+
+.traffic-preview-list button:focus-visible {
+  outline: 2px solid var(--shell-accent-strong);
+  outline-offset: 1px;
+}
+
+.traffic-preview-list button > span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 0.12rem;
+}
+
+.traffic-preview-list strong,
+.traffic-preview-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.traffic-preview-list small {
+  color: var(--shell-muted);
+  font-size: 0.62rem;
+  white-space: normal;
+}
+
+.traffic-preview-glyph {
+  display: block;
+  position: relative;
+  width: 2rem;
+  height: 1rem;
+  border-bottom: 0.22rem solid #7d5b38;
+  border-radius: 0 0 60% 45%;
+  background: linear-gradient(165deg, transparent 40%, #a07745 42% 55%, #39271f 57%);
+}
+
+.traffic-preview-glyph[data-traffic-kind="fishing"]::after {
+  content: "";
+  position: absolute;
+  right: 0.35rem;
+  bottom: 0.08rem;
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 999px;
+  background: #4faaa5;
+}
+
+.traffic-preview-glyph[data-traffic-kind="trade"]::after {
+  content: "";
+  position: absolute;
+  right: 0.4rem;
+  bottom: 0.2rem;
+  width: 0;
+  height: 0;
+  border-right: 0.72rem solid transparent;
+  border-bottom: 0.82rem solid #d8c99e;
+}
+
+.traffic-preview-reference-note,
+.traffic-preview-readonly {
+  padding: 0.6rem;
+  border: 1px solid rgba(122, 183, 177, 0.26);
+  border-radius: 0.4rem;
+  background: rgba(3, 18, 24, 0.58);
+}
+
+.traffic-preview-workbench {
+  gap: 0.8rem;
+  padding: 0.85rem;
+  margin: 0;
+  border: 0;
+}
+
+.traffic-preview-workbench > header > span {
+  color: #d8c591;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+}
+
+.traffic-preview-workbench > p,
+.traffic-preview-workbench > ul {
+  margin: 0;
+  color: var(--shell-muted);
+  font-size: 0.68rem;
+  line-height: 1.45;
+}
+
+.traffic-preview-controls {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.traffic-preview-heading-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.3rem 0.55rem;
+  color: var(--shell-muted);
+  font-size: 0.68rem;
+}
+
+.traffic-preview-heading-control input {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.traffic-preview-metadata {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.traffic-preview-metadata > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+.traffic-preview-metadata dt {
+  color: var(--shell-muted);
+}
+
+.traffic-preview-metadata dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--shell-ink);
+  text-align: right;
+}
+
+.tool-route-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+  margin: 0.15rem 0 0;
+  color: var(--shell-muted);
+  font-size: 0.66rem;
+}
+
+.tool-route-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.tool-route-key i {
+  display: inline-block;
+  width: 1.25rem;
+  height: 0.22rem;
+  border-radius: 999px;
+  background: #43d6ce;
+  box-shadow: 0 0 0 0.12rem rgba(67, 214, 206, 0.18);
+}
+
+.tool-route-key i[data-route-kind="trade"] {
+  height: 0.32rem;
+  background: #e2a34b;
+  box-shadow: 0 0 0 0.14rem rgba(226, 163, 75, 0.18);
+}
+
 
 .audio-library-browser {
   grid-template-rows: auto minmax(0, 1fr);

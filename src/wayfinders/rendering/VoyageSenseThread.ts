@@ -1,5 +1,9 @@
-import type { ReturnPathEdge } from "../exploration/ReturnPathSystem";
 import type { WorldGrid } from "../world/WorldGrid";
+
+export interface RouteThreadEdge {
+  readonly liftedFrom: Readonly<{ x: number; y: number }>;
+  readonly liftedTo: Readonly<{ x: number; y: number }>;
+}
 
 export interface ThreadPoint {
   readonly x: number;
@@ -76,7 +80,7 @@ function segmentIdentity(segment: VoyageSenseThreadSegment): string {
  */
 export function buildVoyageSenseThread(
   world: WorldGrid,
-  pathEdges: readonly Readonly<ReturnPathEdge>[],
+  pathEdges: readonly Readonly<RouteThreadEdge>[],
   tileSize: number,
   curveRadius: number,
   strokePadding: number,

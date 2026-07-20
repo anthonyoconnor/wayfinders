@@ -5,6 +5,7 @@ import { AssetViewerScene } from "./AssetViewerScene";
 import { AudioAssetWorkspaceScene } from "./audioPreview/AudioAssetWorkspaceScene";
 import { CloudAssetWorkspaceScene } from "./cloudPreview/CloudAssetWorkspaceScene";
 import { GreatHallPreviewScene } from "./greatHall/GreatHallPreviewScene";
+import { ProsperityTrafficAssetPreviewScene } from "./prosperityTraffic/ProsperityTrafficAssetPreviewScene";
 import { audioWorkspaceCatalogSource } from "./workspaces/AudioWorkspaceCatalog";
 import type { AssetWorkspaceModule } from "./workspaces/AssetWorkspace";
 import { WaterPreviewScene } from "./water/WaterPreviewScene";
@@ -21,6 +22,7 @@ export function createAssetWorkspaceScene(
       audioWorkspaceCatalogSource(audioCatalogResult),
     );
     case "cloud-preview": return new CloudAssetWorkspaceScene(workspace);
+    case "prosperity-traffic-preview": return new ProsperityTrafficAssetPreviewScene(workspace);
     case "water-preview": return new WaterPreviewScene(workspace);
     case "library": return new AssetViewerScene(workspace);
   }

@@ -12,8 +12,6 @@ export const PROSPERITY_TRAFFIC_DESTINATION_DWELL_SECONDS = 9 as const;
 export const PROSPERITY_TRAFFIC_HOME_DWELL_SECONDS = 12 as const;
 export const PROSPERITY_TRAFFIC_HOME_DWELL_EDGE_PROGRESS = 0.65 as const;
 export const PROSPERITY_TRAFFIC_REDUCED_MOTION_EDGE_PROGRESS = 0.75 as const;
-export const PROSPERITY_TRAFFIC_PLAYER_FADE_START_TILES = 1.25 as const;
-export const PROSPERITY_TRAFFIC_PLAYER_FADE_END_TILES = 2.25 as const;
 
 const prosperityTrafficVesselIdBrand: unique symbol = Symbol("ProsperityTrafficVesselId");
 
@@ -411,16 +409,4 @@ export class ProsperityTrafficPresentationScheduler {
       );
     }
   }
-}
-
-/** Smoothstep proximity fade used by a renderer without feeding presentation into gameplay. */
-export function prosperityTrafficPlayerFadeAlpha(distanceTiles: number): number {
-  if (!Number.isFinite(distanceTiles) || distanceTiles < 0) {
-    throw new RangeError("Prosperity traffic player distance must be finite and non-negative");
-  }
-  if (distanceTiles <= PROSPERITY_TRAFFIC_PLAYER_FADE_START_TILES) return 0;
-  if (distanceTiles >= PROSPERITY_TRAFFIC_PLAYER_FADE_END_TILES) return 1;
-  const progress = (distanceTiles - PROSPERITY_TRAFFIC_PLAYER_FADE_START_TILES)
-    / (PROSPERITY_TRAFFIC_PLAYER_FADE_END_TILES - PROSPERITY_TRAFFIC_PLAYER_FADE_START_TILES);
-  return progress * progress * (3 - 2 * progress);
 }

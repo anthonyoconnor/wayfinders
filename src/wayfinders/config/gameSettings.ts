@@ -20,6 +20,8 @@ export interface OverlayVisibilitySettings {
   currentSight: boolean;
   forwardRange: boolean;
   returnViability: boolean;
+  fishingTrafficRoutes: boolean;
+  tradeTrafficRoutes: boolean;
 }
 
 export interface GameSettings {
@@ -135,6 +137,8 @@ export const DEFAULT_GAME_SETTINGS: DeepReadonly<GameSettings> = deepFreeze<Game
     currentSight: false,
     forwardRange: false,
     returnViability: true,
+    fishingTrafficRoutes: false,
+    tradeTrafficRoutes: false,
   },
   gameplay: {
     sightRadius: 5,
@@ -251,6 +255,8 @@ export function validateGameSettings(settings: DeepReadonly<GameSettings>): void
     "currentSight",
     "forwardRange",
     "returnViability",
+    "fishingTrafficRoutes",
+    "tradeTrafficRoutes",
   ] as const) if (typeof settings.overlays[name] !== "boolean") {
     throw new TypeError(`overlays.${name} must be a boolean`);
   }
