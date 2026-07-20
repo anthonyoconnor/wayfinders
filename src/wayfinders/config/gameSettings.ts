@@ -1,4 +1,18 @@
-import type { PrototypeConfig } from "./prototypeConfig";
+import type { DeepReadonly, PrototypeConfig } from "./configContracts";
+import {
+  assertNonNegative,
+  assertNonNegativeSafeInteger,
+  assertPositive,
+  assertPositiveSafeInteger,
+  assertUnitInterval,
+  validateIslandTuning,
+  validateMovementTuning,
+  validateProvisionTuning,
+  validateReturnRiskTuning,
+  validateWorldTuning,
+} from "./configValidation";
+
+export type { DeepReadonly } from "./configContracts";
 
 export interface OverlayVisibilitySettings {
   navigationGrid: boolean;
@@ -59,10 +73,6 @@ export interface GameSettings {
     returnPathPadding: number;
   };
 }
-
-export type DeepReadonly<T> = T extends object
-  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
-  : T;
 
 function deepFreeze<T extends object>(value: T): DeepReadonly<T> {
   for (const nested of Object.values(value)) {
@@ -212,71 +222,28 @@ export function prototypeConfigFromGameSettings(
 }
 
 export function validateGameSettings(settings: DeepReadonly<GameSettings>): void {
-  const positive = (value: number, label: string): void => {
-    if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${label} must be positive`);
-  };
-  const nonNegative = (value: number, label: string): void => {
-    if (!Number.isFinite(value) || value < 0) throw new RangeError(`${label} must be non-negative`);
-  };
-  const positiveInteger = (value: number, label: string): void => {
-    if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${label} must be a positive integer`);
-  };
-  const nonNegativeInteger = (value: number, label: string): void => {
-    if (!Number.isSafeInteger(value) || value < 0) {
-      throw new RangeError(`${label} must be a non-negative integer`);
-    }
-  };
-  const unitInterval = (value: number, label: string): void => {
-    if (!Number.isFinite(value) || value < 0 || value > 1) {
-      throw new RangeError(`${label} must be between 0 and 1`);
-    }
-  };
-
-  positiveInteger(settings.world.width, "world.width");
-  positiveInteger(settings.world.height, "world.height");
-  positiveInteger(settings.world.chunkSize, "world.chunkSize");
-  if (!Number.isSafeInteger(settings.world.seed)) throw new RangeError("world.seed must be a safe integer");
-  positiveInteger(settings.world.homeIslandRadius, "world.homeIslandRadius");
-  nonNegative(settings.world.supportedWaterRadius, "world.supportedWaterRadius");
-  nonNegative(settings.world.supportedBoundaryNoise, "world.supportedBoundaryNoise");
-  positive(settings.world.supportedNoiseScale, "world.supportedNoiseScale");
-  positiveInteger(settings.world.shallowWaterRadius, "world.shallowWaterRadius");
-  positiveInteger(settings.world.hiddenObstacleRadius, "world.hiddenObstacleRadius");
-  nonNegative(settings.world.hiddenObstacleDistance, "world.hiddenObstacleDistance");
-  nonNegativeInteger(settings.world.maxEnclosedUnknownTiles, "world.maxEnclosedUnknownTiles");
-  positiveInteger(settings.world.idolCount, "world.idolCount");
+  assertPositiveSafeInteger(settings.world.width, "world.width");
+  assertPositiveSafeInteger(settings.world.height, "world.height");
+  assertPositiveSafeInteger(settings.world.chunkSize, "world.chunkSize");
+  validateWorldTuning(
+    settings.world,
+    assertPositiveSafeInteger,
+    assertNonNegativeSafeInteger,
+  );
   const islands = settings.world.islands;
-  positiveInteger(islands.count, "world.islands.count");
-  positive(islands.minRadius, "world.islands.minRadius");
-  positive(islands.maxRadius, "world.islands.maxRadius");
-  positive(islands.apronWidth, "world.islands.apronWidth");
-  nonNegative(islands.minimumChannelWidth, "world.islands.minimumChannelWidth");
-  nonNegative(islands.homeClearance, "world.islands.homeClearance");
-  positiveInteger(islands.placementAttempts, "world.islands.placementAttempts");
-  nonNegativeInteger(islands.archipelagoClusters, "world.islands.archipelagoClusters");
-  positive(islands.archipelagoRadius, "world.islands.archipelagoRadius");
-  unitInterval(islands.archipelagoBias, "world.islands.archipelagoBias");
-  unitInterval(islands.edgeNoise, "world.islands.edgeNoise");
-  nonNegative(islands.safeCorridorHalfWidth, "world.islands.safeCorridorHalfWidth");
-  for (const [name, weight] of Object.entries({
-    highIslandWeight: islands.highIslandWeight,
-    lowCayWeight: islands.lowCayWeight,
-    atollWeight: islands.atollWeight,
-    rockySkerryWeight: islands.rockySkerryWeight,
-  })) nonNegative(weight, `world.islands.${name}`);
-  if (islands.maxRadius < islands.minRadius) {
-    throw new RangeError("world.islands.maxRadius must be at least world.islands.minRadius");
-  }
-  if (
-    islands.highIslandWeight + islands.lowCayWeight
-    + islands.atollWeight + islands.rockySkerryWeight <= 0
-  ) throw new RangeError("at least one world island weight must be positive");
+  validateIslandTuning(islands, {
+    prefix: "world.islands",
+    radiusOrderMessage: "world.islands.maxRadius must be at least world.islands.minRadius",
+    positiveWeightMessage: "at least one world island weight must be positive",
+    positiveInteger: assertPositiveSafeInteger,
+    nonNegativeInteger: assertNonNegativeSafeInteger,
+  });
 
   if (typeof settings.audio.enabled !== "boolean") throw new TypeError("audio.enabled must be a boolean");
   if (typeof settings.audio.muted !== "boolean") throw new TypeError("audio.muted must be a boolean");
-  unitInterval(settings.audio.masterVolume, "audio.masterVolume");
+  assertUnitInterval(settings.audio.masterVolume, "audio.masterVolume");
   for (const category of ["music", "ambience", "sfx", "ui"] as const) {
-    unitInterval(settings.audio.categoryVolumes[category], `audio.categoryVolumes.${category}`);
+    assertUnitInterval(settings.audio.categoryVolumes[category], `audio.categoryVolumes.${category}`);
   }
   for (const name of [
     "navigationGrid",
@@ -288,46 +255,38 @@ export function validateGameSettings(settings: DeepReadonly<GameSettings>): void
     throw new TypeError(`overlays.${name} must be a boolean`);
   }
 
-  nonNegativeInteger(settings.gameplay.sightRadius, "gameplay.sightRadius");
+  assertNonNegativeSafeInteger(settings.gameplay.sightRadius, "gameplay.sightRadius");
   const provisions = settings.gameplay.provisions;
-  nonNegativeInteger(provisions.startingBundles, "gameplay.provisions.startingBundles");
-  positiveInteger(provisions.surveyCost, "gameplay.provisions.surveyCost");
-  nonNegative(provisions.supportedCost, "gameplay.provisions.supportedCost");
-  nonNegative(provisions.personalCost, "gameplay.provisions.personalCost");
-  nonNegative(provisions.unknownCost, "gameplay.provisions.unknownCost");
-  const exactCostScale = [1, 10, 100, 1_000, 10_000].some((scale) => (
-    [provisions.supportedCost, provisions.personalCost, provisions.unknownCost]
-      .every((cost) => Math.abs(cost * scale - Math.round(cost * scale)) <= 1e-9)
-  ));
-  if (!exactCostScale) throw new RangeError("gameplay travel costs must use at most four decimal places");
+  validateProvisionTuning(provisions, {
+    prefix: "gameplay.provisions",
+    exactScaleMessage: "gameplay travel costs must use at most four decimal places",
+    positiveInteger: assertPositiveSafeInteger,
+    nonNegativeInteger: assertNonNegativeSafeInteger,
+  });
   const risk = settings.gameplay.returnRisk;
-  nonNegative(risk.comfortable, "gameplay.returnRisk.comfortable");
-  nonNegative(risk.warning, "gameplay.returnRisk.warning");
-  nonNegative(risk.critical, "gameplay.returnRisk.critical");
-  if (risk.comfortable < risk.warning || risk.warning < risk.critical) {
-    throw new RangeError("gameplay return-risk thresholds must be ordered comfortable >= warning >= critical");
-  }
+  validateReturnRiskTuning(
+    risk,
+    "gameplay.returnRisk",
+    "gameplay return-risk thresholds must be ordered comfortable >= warning >= critical",
+  );
   const movement = settings.gameplay.movement;
-  nonNegative(movement.shipSpeed, "gameplay.movement.shipSpeed");
-  nonNegative(movement.turnRate, "gameplay.movement.turnRate");
-  positive(movement.shipCollisionHalfExtent, "gameplay.movement.shipCollisionHalfExtent");
-  positive(movement.collisionEpsilon, "gameplay.movement.collisionEpsilon");
-  positive(settings.presentation.navigationTileSize, "presentation.navigationTileSize");
-  positive(settings.presentation.artTileSize, "presentation.artTileSize");
-  positive(settings.gameplay.fixedStepMs, "gameplay.fixedStepMs");
-  positive(settings.gameplay.maxFrameDeltaMs, "gameplay.maxFrameDeltaMs");
-  positive(settings.presentation.wreckPresentationSeconds, "presentation.wreckPresentationSeconds");
-  unitInterval(settings.presentation.fogNoise, "presentation.fogNoise");
-  unitInterval(settings.presentation.fogBlend, "presentation.fogBlend");
-  unitInterval(settings.presentation.forwardOverlayOpacity, "presentation.forwardOverlayOpacity");
-  unitInterval(settings.presentation.returnOverlayOpacity, "presentation.returnOverlayOpacity");
-  positive(settings.presentation.returnThreadWidth, "presentation.returnThreadWidth");
-  nonNegative(settings.presentation.returnThreadCurveRadius, "presentation.returnThreadCurveRadius");
-  positive(settings.presentation.forwardConeHalfAngleDegrees, "presentation.forwardConeHalfAngleDegrees");
+  validateMovementTuning(movement, "gameplay.movement");
+  assertPositive(settings.presentation.navigationTileSize, "presentation.navigationTileSize");
+  assertPositive(settings.presentation.artTileSize, "presentation.artTileSize");
+  assertPositive(settings.gameplay.fixedStepMs, "gameplay.fixedStepMs");
+  assertPositive(settings.gameplay.maxFrameDeltaMs, "gameplay.maxFrameDeltaMs");
+  assertPositive(settings.presentation.wreckPresentationSeconds, "presentation.wreckPresentationSeconds");
+  assertUnitInterval(settings.presentation.fogNoise, "presentation.fogNoise");
+  assertUnitInterval(settings.presentation.fogBlend, "presentation.fogBlend");
+  assertUnitInterval(settings.presentation.forwardOverlayOpacity, "presentation.forwardOverlayOpacity");
+  assertUnitInterval(settings.presentation.returnOverlayOpacity, "presentation.returnOverlayOpacity");
+  assertPositive(settings.presentation.returnThreadWidth, "presentation.returnThreadWidth");
+  assertNonNegative(settings.presentation.returnThreadCurveRadius, "presentation.returnThreadCurveRadius");
+  assertPositive(settings.presentation.forwardConeHalfAngleDegrees, "presentation.forwardConeHalfAngleDegrees");
   if (settings.presentation.forwardConeHalfAngleDegrees > 180) {
     throw new RangeError("presentation.forwardConeHalfAngleDegrees must be at most 180");
   }
-  nonNegativeInteger(settings.presentation.returnPathPadding, "presentation.returnPathPadding");
+  assertNonNegativeSafeInteger(settings.presentation.returnPathPadding, "presentation.returnPathPadding");
 
   if (settings.world.shallowWaterRadius < settings.world.homeIslandRadius) {
     throw new RangeError("world.shallowWaterRadius must be at least world.homeIslandRadius");

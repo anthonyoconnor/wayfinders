@@ -1,100 +1,33 @@
 import {
   DEFAULT_GAME_SETTINGS,
   prototypeConfigFromGameSettings,
-  type DeepReadonly,
 } from "./gameSettings";
+import type {
+  DeepPartial,
+  DeepReadonly,
+  PrototypeConfig,
+  PrototypeConfigSection,
+} from "./configContracts";
+import {
+  assertFinite,
+  assertNonNegative,
+  assertNonNegativeInteger,
+  assertPositive,
+  assertPositiveInteger,
+  assertUnitInterval,
+  validateIslandTuning,
+  validateMovementTuning,
+  validateProvisionTuning,
+  validateReturnRiskTuning,
+  validateWorldTuning,
+} from "./configValidation";
 
-export type { DeepReadonly } from "./gameSettings";
-
-export interface PrototypeConfig {
-  navigation: {
-    tileSize: number;
-    artTileSize: number;
-    sightRadius: number;
-    chunkSize: number;
-  };
-  world: {
-    width: number;
-    height: number;
-    seed: number;
-    homeIslandRadius: number;
-    supportedWaterRadius: number;
-    supportedBoundaryNoise: number;
-    supportedNoiseScale: number;
-    shallowWaterRadius: number;
-    hiddenObstacleRadius: number;
-    hiddenObstacleDistance: number;
-    /** Maximum eight-connected Unknown pocket filled after a successful return. */
-    maxEnclosedUnknownTiles: number;
-    /** Lost idol locations hidden among the world's eligible survey locations. */
-    idolCount: number;
-  };
-  islands: {
-    count: number;
-    minRadius: number;
-    maxRadius: number;
-    apronWidth: number;
-    minimumChannelWidth: number;
-    homeClearance: number;
-    placementAttempts: number;
-    /** Number of deterministic scatter centres; zero selects fully dispersed placement. */
-    archipelagoClusters: number;
-    /** Maximum tile radius used when sampling around an archipelago centre. */
-    archipelagoRadius: number;
-    /** Fraction of bounded placement attempts that prefer an archipelago centre. */
-    archipelagoBias: number;
-    edgeNoise: number;
-    safeCorridorHalfWidth: number;
-    highIslandWeight: number;
-    lowCayWeight: number;
-    atollWeight: number;
-    rockySkerryWeight: number;
-  };
-  provisions: {
-    startingBundles: number;
-    surveyCost: number;
-    supportedCost: number;
-    personalCost: number;
-    unknownCost: number;
-  };
-  returnRisk: {
-    comfortable: number;
-    warning: number;
-    critical: number;
-  };
-  overlays: {
-    fogNoise: number;
-    fogBlend: number;
-    forwardOverlayOpacity: number;
-    returnOverlayOpacity: number;
-    /** Voyage Sense thread width in world pixels. */
-    returnThreadWidth: number;
-    /** Maximum world-pixel radius used to round each return-path turn. */
-    returnThreadCurveRadius: number;
-    /** Half-angle of the heading-centred forward presentation cone. */
-    forwardConeHalfAngleDegrees: number;
-    /** Cardinal passable-water padding around the minimum-cost return path. */
-    returnPathPadding: number;
-  };
-  movement: {
-    shipSpeed: number;
-    turnRate: number;
-    /** Axis-aligned half-size of the ship's square gameplay collision footprint, in world pixels. */
-    shipCollisionHalfExtent: number;
-    collisionEpsilon: number;
-  };
-  simulation: {
-    fixedStepMs: number;
-    maxFrameDeltaMs: number;
-    wreckPresentationSeconds: number;
-  };
-}
-
-export type PrototypeConfigSection = keyof PrototypeConfig;
-
-export type DeepPartial<T> = {
-  [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];
-};
+export type {
+  DeepPartial,
+  DeepReadonly,
+  PrototypeConfig,
+  PrototypeConfigSection,
+} from "./configContracts";
 
 function deepFreeze<T extends object>(value: T): DeepReadonly<T> {
   for (const nested of Object.values(value)) {
@@ -215,117 +148,55 @@ export function resetPrototypeConfig(): void {
 }
 
 export function validatePrototypeConfig(config: PrototypeConfig = prototypeConfig): void {
-  const finite = (value: number, label: string): void => {
-    if (!Number.isFinite(value)) throw new RangeError(`${label} must be finite`);
-  };
-  const positive = (value: number, label: string): void => {
-    if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${label} must be positive`);
-  };
-  const nonNegative = (value: number, label: string): void => {
-    if (!Number.isFinite(value) || value < 0) throw new RangeError(`${label} must be non-negative`);
-  };
-  const positiveInteger = (value: number, label: string): void => {
-    if (!Number.isInteger(value) || value <= 0) throw new RangeError(`${label} must be a positive integer`);
-  };
-  const nonNegativeInteger = (value: number, label: string): void => {
-    if (!Number.isInteger(value) || value < 0) throw new RangeError(`${label} must be a non-negative integer`);
-  };
-  const unitInterval = (value: number, label: string): void => {
-    if (!Number.isFinite(value) || value < 0 || value > 1) throw new RangeError(`${label} must be between 0 and 1`);
-  };
+  assertPositive(config.navigation.tileSize, "navigation.tileSize");
+  assertPositive(config.navigation.artTileSize, "navigation.artTileSize");
+  assertNonNegativeInteger(config.navigation.sightRadius, "navigation.sightRadius");
+  assertPositiveInteger(config.navigation.chunkSize, "navigation.chunkSize");
 
-  positive(config.navigation.tileSize, "navigation.tileSize");
-  positive(config.navigation.artTileSize, "navigation.artTileSize");
-  nonNegativeInteger(config.navigation.sightRadius, "navigation.sightRadius");
-  positiveInteger(config.navigation.chunkSize, "navigation.chunkSize");
+  assertPositiveInteger(config.world.width, "world.width");
+  assertPositiveInteger(config.world.height, "world.height");
+  validateWorldTuning(config.world, assertPositiveInteger, assertNonNegativeInteger);
+  validateIslandTuning(config.islands, {
+    prefix: "islands",
+    radiusOrderMessage: "islands.maxRadius must be at least islands.minRadius",
+    positiveWeightMessage: "at least one island archetype weight must be positive",
+    positiveInteger: assertPositiveInteger,
+    nonNegativeInteger: assertNonNegativeInteger,
+  });
 
-  positiveInteger(config.world.width, "world.width");
-  positiveInteger(config.world.height, "world.height");
-  if (!Number.isSafeInteger(config.world.seed)) throw new RangeError("world.seed must be a safe integer");
-  positiveInteger(config.world.homeIslandRadius, "world.homeIslandRadius");
-  nonNegative(config.world.supportedWaterRadius, "world.supportedWaterRadius");
-  nonNegative(config.world.supportedBoundaryNoise, "world.supportedBoundaryNoise");
-  positive(config.world.supportedNoiseScale, "world.supportedNoiseScale");
-  positiveInteger(config.world.shallowWaterRadius, "world.shallowWaterRadius");
-  positiveInteger(config.world.hiddenObstacleRadius, "world.hiddenObstacleRadius");
-  nonNegative(config.world.hiddenObstacleDistance, "world.hiddenObstacleDistance");
-  nonNegativeInteger(config.world.maxEnclosedUnknownTiles, "world.maxEnclosedUnknownTiles");
-  positiveInteger(config.world.idolCount, "world.idolCount");
-  positiveInteger(config.islands.count, "islands.count");
-  positive(config.islands.minRadius, "islands.minRadius");
-  positive(config.islands.maxRadius, "islands.maxRadius");
-  positive(config.islands.apronWidth, "islands.apronWidth");
-  nonNegative(config.islands.minimumChannelWidth, "islands.minimumChannelWidth");
-  nonNegative(config.islands.homeClearance, "islands.homeClearance");
-  positiveInteger(config.islands.placementAttempts, "islands.placementAttempts");
-  nonNegativeInteger(config.islands.archipelagoClusters, "islands.archipelagoClusters");
-  positive(config.islands.archipelagoRadius, "islands.archipelagoRadius");
-  unitInterval(config.islands.archipelagoBias, "islands.archipelagoBias");
-  unitInterval(config.islands.edgeNoise, "islands.edgeNoise");
-  nonNegative(config.islands.safeCorridorHalfWidth, "islands.safeCorridorHalfWidth");
-  nonNegative(config.islands.highIslandWeight, "islands.highIslandWeight");
-  nonNegative(config.islands.lowCayWeight, "islands.lowCayWeight");
-  nonNegative(config.islands.atollWeight, "islands.atollWeight");
-  nonNegative(config.islands.rockySkerryWeight, "islands.rockySkerryWeight");
-  if (config.islands.maxRadius < config.islands.minRadius) {
-    throw new RangeError("islands.maxRadius must be at least islands.minRadius");
-  }
-  if (
-    config.islands.highIslandWeight
-    + config.islands.lowCayWeight
-    + config.islands.atollWeight
-    + config.islands.rockySkerryWeight <= 0
-  ) {
-    throw new RangeError("at least one island archetype weight must be positive");
-  }
-
-  nonNegativeInteger(config.provisions.startingBundles, "provisions.startingBundles");
-  positiveInteger(config.provisions.surveyCost, "provisions.surveyCost");
-  nonNegative(config.provisions.supportedCost, "provisions.supportedCost");
-  nonNegative(config.provisions.personalCost, "provisions.personalCost");
   // All travel costs may be zero for developer testing sessions.
-  nonNegative(config.provisions.unknownCost, "provisions.unknownCost");
-  const travelCosts = [
-    config.provisions.supportedCost,
-    config.provisions.personalCost,
-    config.provisions.unknownCost,
-  ];
-  const hasExactGuidanceScale = [1, 10, 100, 1_000, 10_000].some((scale) => (
-    travelCosts.every((cost) => Math.abs(cost * scale - Math.round(cost * scale)) <= 1e-9)
-  ));
-  if (!hasExactGuidanceScale) {
-    throw new RangeError("provision travel costs must use at most four decimal places");
-  }
+  validateProvisionTuning(config.provisions, {
+    prefix: "provisions",
+    exactScaleMessage: "provision travel costs must use at most four decimal places",
+    positiveInteger: assertPositiveInteger,
+    nonNegativeInteger: assertNonNegativeInteger,
+  });
 
-  nonNegative(config.returnRisk.comfortable, "returnRisk.comfortable");
-  nonNegative(config.returnRisk.warning, "returnRisk.warning");
-  nonNegative(config.returnRisk.critical, "returnRisk.critical");
-  if (config.returnRisk.comfortable < config.returnRisk.warning || config.returnRisk.warning < config.returnRisk.critical) {
-    throw new RangeError("return-risk thresholds must be ordered comfortable >= warning >= critical");
-  }
+  validateReturnRiskTuning(
+    config.returnRisk,
+    "returnRisk",
+    "return-risk thresholds must be ordered comfortable >= warning >= critical",
+  );
 
-  unitInterval(config.overlays.fogNoise, "overlays.fogNoise");
-  unitInterval(config.overlays.fogBlend, "overlays.fogBlend");
-  unitInterval(config.overlays.forwardOverlayOpacity, "overlays.forwardOverlayOpacity");
-  unitInterval(config.overlays.returnOverlayOpacity, "overlays.returnOverlayOpacity");
-  positive(config.overlays.returnThreadWidth, "overlays.returnThreadWidth");
-  nonNegative(config.overlays.returnThreadCurveRadius, "overlays.returnThreadCurveRadius");
-  positive(config.overlays.forwardConeHalfAngleDegrees, "overlays.forwardConeHalfAngleDegrees");
+  assertUnitInterval(config.overlays.fogNoise, "overlays.fogNoise");
+  assertUnitInterval(config.overlays.fogBlend, "overlays.fogBlend");
+  assertUnitInterval(config.overlays.forwardOverlayOpacity, "overlays.forwardOverlayOpacity");
+  assertUnitInterval(config.overlays.returnOverlayOpacity, "overlays.returnOverlayOpacity");
+  assertPositive(config.overlays.returnThreadWidth, "overlays.returnThreadWidth");
+  assertNonNegative(config.overlays.returnThreadCurveRadius, "overlays.returnThreadCurveRadius");
+  assertPositive(config.overlays.forwardConeHalfAngleDegrees, "overlays.forwardConeHalfAngleDegrees");
   if (config.overlays.forwardConeHalfAngleDegrees > 180) {
     throw new RangeError("overlays.forwardConeHalfAngleDegrees must be at most 180");
   }
-  nonNegativeInteger(config.overlays.returnPathPadding, "overlays.returnPathPadding");
+  assertNonNegativeInteger(config.overlays.returnPathPadding, "overlays.returnPathPadding");
 
-  nonNegative(config.movement.shipSpeed, "movement.shipSpeed");
-  nonNegative(config.movement.turnRate, "movement.turnRate");
-  positive(config.movement.shipCollisionHalfExtent, "movement.shipCollisionHalfExtent");
-  positive(config.movement.collisionEpsilon, "movement.collisionEpsilon");
+  validateMovementTuning(config.movement, "movement");
 
-  positive(config.simulation.fixedStepMs, "simulation.fixedStepMs");
-  positive(config.simulation.maxFrameDeltaMs, "simulation.maxFrameDeltaMs");
-  positive(config.simulation.wreckPresentationSeconds, "simulation.wreckPresentationSeconds");
+  assertPositive(config.simulation.fixedStepMs, "simulation.fixedStepMs");
+  assertPositive(config.simulation.maxFrameDeltaMs, "simulation.maxFrameDeltaMs");
+  assertPositive(config.simulation.wreckPresentationSeconds, "simulation.wreckPresentationSeconds");
 
-  finite(config.world.seed, "world.seed");
+  assertFinite(config.world.seed, "world.seed");
 
   if (config.world.shallowWaterRadius < config.world.homeIslandRadius) {
     throw new RangeError("world.shallowWaterRadius must be at least world.homeIslandRadius");

@@ -5,7 +5,10 @@ import {
   validateGameSettings,
   type GameSettings,
 } from "../src/wayfinders/config/gameSettings";
-import { prototypeConfig } from "../src/wayfinders/config/prototypeConfig";
+import {
+  prototypeConfig,
+  validatePrototypeConfig,
+} from "../src/wayfinders/config/prototypeConfig";
 import { WORLD_GENERATION_PROFILES } from "../src/wayfinders/world/WorldGenerationProfiles";
 
 describe("default game settings contract", () => {
@@ -50,5 +53,19 @@ describe("default game settings contract", () => {
     const invalidOverlay = JSON.parse(JSON.stringify(DEFAULT_GAME_SETTINGS)) as GameSettings;
     invalidOverlay.overlays.forwardRange = "visible" as unknown as boolean;
     expect(() => validateGameSettings(invalidOverlay)).toThrow("overlays.forwardRange must be a boolean");
+  });
+
+  it("preserves settings-specific paths for shared simulation tuning validation", () => {
+    const invalidSettings = JSON.parse(JSON.stringify(DEFAULT_GAME_SETTINGS)) as GameSettings;
+    invalidSettings.world.islands.minRadius = 0;
+    expect(() => validateGameSettings(invalidSettings)).toThrow(
+      "world.islands.minRadius must be positive",
+    );
+
+    const invalidPrototype = prototypeConfigFromGameSettings(DEFAULT_GAME_SETTINGS);
+    invalidPrototype.islands.minRadius = 0;
+    expect(() => validatePrototypeConfig(invalidPrototype)).toThrow(
+      "islands.minRadius must be positive",
+    );
   });
 });
