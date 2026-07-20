@@ -72,6 +72,10 @@ adapter may own Phaser sound instances.
 - `GameSimulation` is the gameplay composition root and the public command and
   read-model surface. Cross-feature ordering belongs there; feature rules do
   not.
+- `ApplicationSceneComposition` owns mode-specific initial scene selection,
+  the single validated audio-catalog lifetime, and catalog reuse when asset
+  workspaces switch. It remains Phaser-free; `main.ts` supplies the concrete
+  browser scene factories.
 - `DEFAULT_GAME_SETTINGS` is the typed, deeply frozen normal-new-game entry
   point for world, audio, overlay, gameplay, and presentation defaults.
   `prototypeConfig` is its derived mutable session/developer tuning view; it is

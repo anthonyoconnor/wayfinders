@@ -27,10 +27,8 @@ import {
   type AssetWorkspaceTabs,
 } from "./wayfinders/assets/AssetWorkspaceTabs";
 import { assetWorkspaceSceneKey } from "./wayfinders/assets/workspaces/AssetWorkspace";
-import {
-  tryLoadAudioCatalog,
-  type AudioCatalogLoadResult,
-} from "./wayfinders/audio";
+import { composeApplicationScenes } from "./wayfinders/app/ApplicationSceneComposition";
+import { tryLoadAudioCatalog } from "./wayfinders/audio";
 import { GameSimulation } from "./wayfinders/core/GameSimulation";
 import { WayfindersScene } from "./wayfinders/rendering/WayfindersScene";
 import "./styles.css";
@@ -209,26 +207,32 @@ let assetWorkspaceTabs: AssetWorkspaceTabs | undefined;
 
 async function startApplication(): Promise<void> {
   try {
-    const audioCatalogResult: AudioCatalogLoadResult | undefined = applicationMode === "asset-trial"
-      ? undefined
-      : await tryLoadAudioCatalog();
-    if (audioCatalogResult && !audioCatalogResult.ok) {
-      log(`Audio unavailable: ${audioCatalogResult.error.message}`);
+    const compositionRequest = applicationMode === "assets"
+      ? { mode: applicationMode, initialWorkspace: initialAssetWorkspace } as const
+      : applicationMode === "asset-trial"
+        ? {
+          mode: applicationMode,
+          trialRequest: resolveAssetTrialApplicationRequest(window.location.search)!,
+        } as const
+        : { mode: applicationMode } as const;
+    const sceneComposition = await composeApplicationScenes(compositionRequest, {
+      loadAudioCatalog: tryLoadAudioCatalog,
+      createAssetWorkspaceScene,
+      createAssetTrialScene: (request) => new AssetTrialScene(request),
+      createGameScene: (audioCatalogResult) => new WayfindersScene(
+        new GameSimulation(prototypeConfig, undefined, {
+          authoredIslandCatalog: AVAILABLE_AUTHORED_ISLAND_CATALOG,
+        }),
+        AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+        audioCatalogResult,
+      ),
+    });
+    if ("audioCatalogResult" in sceneComposition && !sceneComposition.audioCatalogResult.ok) {
+      log(`Audio unavailable: ${sceneComposition.audioCatalogResult.error.message}`);
     }
 
-    const scenes = applicationMode === "assets"
-      ? [createAssetWorkspaceScene(initialAssetWorkspace, audioCatalogResult)]
-      : applicationMode === "asset-trial"
-        ? [new AssetTrialScene(resolveAssetTrialApplicationRequest(window.location.search)!)]
-        : [new WayfindersScene(
-          new GameSimulation(prototypeConfig, undefined, {
-            authoredIslandCatalog: AVAILABLE_AUTHORED_ISLAND_CATALOG,
-          }),
-          AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
-          audioCatalogResult,
-        )];
-    wayfindersGame = createWayfindersGame(scenes);
-    if (applicationMode === "assets") {
+    wayfindersGame = createWayfindersGame([sceneComposition.initialScene]);
+    if (sceneComposition.mode === "assets") {
       let activeWorkspace = initialAssetWorkspace;
       const registeredWorkspaceIds = new Set<AssetWorkspaceId>([
         initialAssetWorkspace.id as AssetWorkspaceId,
@@ -244,7 +248,7 @@ async function startApplication(): Promise<void> {
           if (!registeredWorkspaceIds.has(workspace.id as AssetWorkspaceId)) {
             wayfindersGame!.scene.add(
               nextKey,
-              createAssetWorkspaceScene(workspace, audioCatalogResult),
+              sceneComposition.createWorkspaceScene(workspace),
               false,
             );
             registeredWorkspaceIds.add(workspace.id as AssetWorkspaceId);
