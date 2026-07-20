@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildGreatHallFixture, GREAT_HALL_FIXTURE } from "../src/wayfinders/assets/greatHall/GreatHallFixture";
+import { buildGreatHallPreviewWorkbenchMarkup } from "../src/wayfinders/assets/greatHall/GreatHallPreviewWorkbench";
 import {
   ACHIEVEMENT_ICON_KINDS,
   achievementIconRowPositionPercent,
@@ -97,5 +98,37 @@ describe("GR-5.3 Great Hall presentation contract", () => {
     expect(selected.state).not.toBe("active");
     expect(model.nextGeneration).toBe(model.selectedGeneration + 1);
     expect([model.currentGeneration, model.currentGeneration + 1]).toContain(model.nextGeneration);
+  });
+
+  it.each([3, 12, 20].flatMap((navigatorCount) =>
+    Array.from({ length: navigatorCount }, (_, index) => ({
+      navigatorCount,
+      requestedSelection: index + 1,
+    }))))(
+    "normalizes handover selection $requestedSelection at count $navigatorCount to the immediate predecessor",
+    ({ navigatorCount, requestedSelection }) => {
+      const model = buildGreatHallFixture({
+        navigatorCount,
+        selectedGeneration: requestedSelection,
+        mode: "handover",
+      });
+
+      expect(model.selectedGeneration).toBe(navigatorCount - 1);
+      expect(model.nextGeneration).toBe(navigatorCount);
+      expect(model.navigators[model.selectedGeneration - 1]?.state).not.toBe("active");
+    },
+  );
+
+  it("uses the normalized handover memorial in the preview workbench", () => {
+    const model = buildGreatHallFixture({
+      navigatorCount: 12,
+      selectedGeneration: 2,
+      mode: "handover",
+    });
+
+    const markup = buildGreatHallPreviewWorkbenchMarkup(model, "desktop");
+    expect(markup).toContain("Generation 11");
+    expect(markup).toContain("navigator-11.png");
+    expect(markup).not.toContain("Generation 2<");
   });
 });

@@ -3,8 +3,10 @@ import { assetWorkspaceSceneKey, type GreatHallAssetWorkspaceModule } from "../w
 import { GREAT_HALL_MAX_GENERATIONS, type GreatHallPresentationMode } from "../../rendering/greatHall/GreatHallPresentationModel";
 import { GreatHallRenderer } from "../../rendering/greatHall/GreatHallRenderer";
 import { buildGreatHallFixture } from "./GreatHallFixture";
-
-type GreatHallPreviewViewport = "desktop" | "narrow";
+import {
+  buildGreatHallPreviewWorkbenchMarkup,
+  type GreatHallPreviewViewport,
+} from "./GreatHallPreviewWorkbench";
 
 export class GreatHallPreviewScene extends Phaser.Scene {
   private controlsAbort?: AbortController;
@@ -109,13 +111,7 @@ export class GreatHallPreviewScene extends Phaser.Scene {
     const slot = document.querySelector<HTMLElement>("#scene-tools-slot");
     if (!slot) return;
     const model = this.model();
-    const selected = model.navigators[this.selectedGeneration - 1]!;
-    slot.innerHTML = `<section class="gh-preview-workbench">
-      <header><div><p class="eyebrow">Selected memorial</p><h3>Generation ${selected.generation}</h3></div><span>${selected.state}</span></header>
-      <label>Preview width <select data-gh-control="viewport"><option value="desktop" ${this.viewport === "desktop" ? "selected" : ""}>Desktop</option><option value="narrow" ${this.viewport === "narrow" ? "selected" : ""}>Narrow</option></select></label>
-      <dl><div><dt>Contract</dt><dd>V${model.version}</dd></div><div><dt>Visible ceiling</dt><dd>12 portraits</dd></div><div><dt>Portrait asset</dt><dd><code>${selected.portraitUrl.split("/").at(-1)}</code></dd></div></dl>
-      <p class="gh-preview-readonly">View-only fixture host. Selection, era paging, voyages, symbols, exact detail, and ceremony markup belong to the shared renderer.</p>
-    </section>`;
+    slot.innerHTML = buildGreatHallPreviewWorkbenchMarkup(model, this.viewport);
   }
 
   private destroyBindings(): void {

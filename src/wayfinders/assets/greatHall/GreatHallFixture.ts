@@ -18,8 +18,8 @@ export function buildGreatHallFixture(options: Readonly<{
   const count = clamp(options.navigatorCount, 1, GREAT_HALL_MAX_GENERATIONS);
   const mode = options.mode ?? "home";
   const requestedSelection = clamp(options.selectedGeneration ?? count, 1, count);
-  const selectedGeneration = mode === "handover" && count > 1
-    ? Math.min(requestedSelection, count - 1)
+  const selectedGeneration = mode === "handover"
+    ? Math.max(1, count - 1)
     : requestedSelection;
   const navigators = GREAT_HALL_FIXTURE.navigators.slice(0, count).map((navigator) =>
     projectNavigator(navigator, count, mode));
