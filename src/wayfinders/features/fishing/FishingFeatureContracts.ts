@@ -6,6 +6,7 @@ import type {
   FishingShoalInteractionCommandV1,
   FishingShoalInteractionResultV1,
 } from "../../exploration/FishingShoalContracts";
+import type { SupportedConnectivitySystem } from "../../exploration/SupportedConnectivitySystem";
 import type { SurveyBudgetReadModel } from "../../exploration/SurveyContracts";
 import type { WorldGrid } from "../../world/WorldGrid";
 
@@ -15,6 +16,8 @@ export interface FishingFeatureDependencies {
   readonly definitions: readonly Readonly<FishingShoalDefinition>[];
   readonly homeReturnTile: Readonly<GridPoint>;
   readonly config: Pick<PrototypeConfig, "navigation" | "movement">;
+  /** Shared world-scoped Supported-water authority supplied by GameSimulation. */
+  readonly supportedConnectivity?: SupportedConnectivitySystem;
 }
 
 /** Inputs that are authoritative at the instant a player command is handled. */

@@ -21,15 +21,90 @@ describe("SupportedConnectivitySystem", () => {
 
     const result = system.connectivityTo(serviceAnchor, 1);
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       topologyRevision: 1,
       homeReturnIndex: world.index(0, 0),
       serviceAnchorIndex: world.index(3, 0),
       pathIndices: [0, 1, 2, 3].map((x) => world.index(x, 0)),
       connected: true,
     });
+    expect(result.pathEdges).toEqual([
+      {
+        fromIndex: world.index(0, 0),
+        toIndex: world.index(1, 0),
+        direction: 1,
+        imageOffset: { x: 0, y: 0 },
+        destinationImageOffset: { x: 0, y: 0 },
+        liftedFrom: { x: 0, y: 0 },
+        liftedTo: { x: 1, y: 0 },
+      },
+      {
+        fromIndex: world.index(1, 0),
+        toIndex: world.index(2, 0),
+        direction: 1,
+        imageOffset: { x: 0, y: 0 },
+        destinationImageOffset: { x: 0, y: 0 },
+        liftedFrom: { x: 1, y: 0 },
+        liftedTo: { x: 2, y: 0 },
+      },
+      {
+        fromIndex: world.index(2, 0),
+        toIndex: world.index(3, 0),
+        direction: 1,
+        imageOffset: { x: 0, y: 0 },
+        destinationImageOffset: { x: 0, y: 0 },
+        liftedFrom: { x: 2, y: 0 },
+        liftedTo: { x: 3, y: 0 },
+      },
+    ]);
+    expect(Object.isFrozen(result.pathIndices)).toBe(true);
+    expect(Object.isFrozen(result.pathEdges)).toBe(true);
+    expect(Object.isFrozen(result.pathEdges[0])).toBe(true);
+    expect(Object.isFrozen(result.pathEdges[0]?.imageOffset)).toBe(true);
     expect(system.isConnected(serviceAnchor, 1)).toBe(true);
     expect(system.pathTo(serviceAnchor, 1)).toBe(result.pathIndices);
+    expect(system.pathEdgesTo(serviceAnchor, 1)).toBe(result.pathEdges);
+    expect(system.buildCount).toBe(1);
+  });
+
+  it("selects the shortest connected candidate then the lowest world index without another flood", () => {
+    const world = supportedWorld(5, 3);
+    const system = new SupportedConnectivitySystem(world, { x: 2, y: 1 });
+    const revision = world.supportedTopologyVersion;
+    const fartherLowerIndex = { x: 0, y: 0 };
+    const tiedHigherIndex = { x: 1, y: 1 };
+    const tiedLowerIndex = { x: 2, y: 0 };
+
+    const selected = system.connectivityToAny([
+      tiedHigherIndex,
+      fartherLowerIndex,
+      tiedLowerIndex,
+      tiedHigherIndex,
+    ], revision);
+
+    expect(selected?.serviceAnchorIndex).toBe(world.index(tiedLowerIndex.x, tiedLowerIndex.y));
+    expect(selected?.pathIndices).toEqual([
+      world.index(2, 1),
+      world.index(2, 0),
+    ]);
+    expect(system.connectivityToAny([
+      tiedLowerIndex,
+      tiedHigherIndex,
+    ], revision)).toBe(selected);
+    expect(system.buildCount).toBe(1);
+  });
+
+  it("returns no multi-target route when every exact candidate is unsupported or blocked", () => {
+    const world = supportedWorld(4, 2);
+    world.setKnowledge(2, 0, KnowledgeState.Personal, 1);
+    world.setMovementBlocked(3, 0, true);
+    const system = new SupportedConnectivitySystem(world, { x: 0, y: 0 });
+
+    expect(system.connectivityToAny([
+      { x: 2, y: 0 },
+      { x: 3, y: 0 },
+    ], world.supportedTopologyVersion)).toBeUndefined();
+    expect(system.connectivityToAny([], world.supportedTopologyVersion)).toBeUndefined();
     expect(system.buildCount).toBe(1);
   });
 

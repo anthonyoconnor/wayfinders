@@ -14,6 +14,7 @@ import {
   type FishingShoalCommitResult,
   type FishingShoalObservation,
 } from "../../exploration/FishingShoalSystem";
+import type { SupportedConnectivitySystem } from "../../exploration/SupportedConnectivitySystem";
 import type { SurveyBudgetReadModel } from "../../exploration/SurveyContracts";
 import type { WorldGrid } from "../../world/WorldGrid";
 import type { WorldAnalysisIndex } from "../../world/analysis";
@@ -37,8 +38,15 @@ export class FishingFeatureSystem {
     readonly definitions: readonly Readonly<FishingShoalDefinition>[],
     homeReturnTile: Readonly<GridPoint>,
     config: Pick<PrototypeConfig, "navigation" | "movement">,
+    supportedConnectivity?: SupportedConnectivitySystem,
   ) {
-    this.system = new FishingShoalSystem(world, definitions, homeReturnTile, config);
+    this.system = new FishingShoalSystem(
+      world,
+      definitions,
+      homeReturnTile,
+      config,
+      supportedConnectivity,
+    );
   }
 
   get provisional(): readonly Readonly<FishingShoalProvisionalRecordV1>[] {
@@ -129,6 +137,7 @@ export function createFishingFeature(dependencies: FishingFeatureDependencies): 
     dependencies.definitions,
     dependencies.homeReturnTile,
     dependencies.config,
+    dependencies.supportedConnectivity,
   );
 }
 
@@ -138,6 +147,7 @@ export interface GeneratedFishingFeatureDependencies {
   readonly homeReturnTile: Readonly<GridPoint>;
   readonly config: Pick<PrototypeConfig, "navigation" | "movement">;
   readonly analysis?: WorldAnalysisIndex;
+  readonly supportedConnectivity?: SupportedConnectivitySystem;
 }
 
 /** Composition helper for production sessions; tests can inject tiny definitions directly. */
@@ -158,5 +168,6 @@ export function createGeneratedFishingFeature(
     definitions,
     dependencies.homeReturnTile,
     config,
+    dependencies.supportedConnectivity,
   );
 }

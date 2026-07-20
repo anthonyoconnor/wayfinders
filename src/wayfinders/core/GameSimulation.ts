@@ -47,6 +47,7 @@ import type {
   IdolLocationHostRef,
 } from "../exploration/IdolLocationContracts";
 import { KnowledgeSystem } from "../exploration/KnowledgeSystem";
+import { SupportedConnectivitySystem } from "../exploration/SupportedConnectivitySystem";
 import {
   ProvisionSystem,
   availableProvisionUnits,
@@ -111,6 +112,13 @@ import { WorldGenerator } from "../world/WorldGenerator";
 import type { WorldGrid } from "../world/WorldGrid";
 import { worldToGrid } from "../world/CoordinateSystem";
 import { KnowledgeState } from "../world/TileData";
+import {
+  PROSPERITY_SCORE_CONTRACT_VERSION,
+  ProsperityScoreSystem,
+  ProsperityTrafficRouteSystem,
+  type ProsperityScoreSnapshotV1,
+  type ProsperityTrafficRouteReadModelV1,
+} from "../features/prosperity";
 import { GameEvents, type ReplenishmentReason } from "./GameEvents";
 import {
   measureSimulationPhase,
@@ -304,6 +312,9 @@ export class GameSimulation {
   private islandDossierSystem!: IslandDossierSystem;
   private surveySiteSystem!: SurveySiteSystem;
   private fishingFeature!: FishingFeatureSystem;
+  private supportedConnectivity!: SupportedConnectivitySystem;
+  private prosperityScoreSystem!: ProsperityScoreSystem;
+  private prosperityTrafficRouteSystem!: ProsperityTrafficRouteSystem;
   private descriptorRegistry!: WorldDescriptorRegistry;
   private interactionCandidateCache?: {
     readonly x: number;
@@ -675,6 +686,16 @@ export class GameSimulation {
     return this.fishingFeature.recordsRevision;
   }
 
+  /** Hidden world authority. No player-facing snapshot or event includes this value. */
+  get prosperityScoreSnapshot(): Readonly<ProsperityScoreSnapshotV1> {
+    return this.prosperityScoreSystem.snapshot();
+  }
+
+  /** Renderer-neutral routes derived only from committed facts and Supported water. */
+  get prosperityTrafficRoutes(): Readonly<ProsperityTrafficRouteReadModelV1> {
+    return this.refreshProsperityTrafficRoutes();
+  }
+
   get descriptorSpatialQueryTotals() {
     return this.descriptorRegistry.queryTotals();
   }
@@ -959,13 +980,31 @@ export class GameSimulation {
           this.surveySiteSystem.definitions,
         );
         this.completionStateValue = "in-progress";
+        this.supportedConnectivity = new SupportedConnectivitySystem(
+          this.world,
+          this.generated.landmarks.homeReturnTile,
+          this.config,
+        );
         this.fishingFeature = createGeneratedFishingFeature({
           world: this.world,
           seed: this.generated.seed,
           homeReturnTile: this.generated.landmarks.homeReturnTile,
           config: this.config,
           analysis: this.generated.analysis,
+          supportedConnectivity: this.supportedConnectivity,
         });
+        this.prosperityScoreSystem = new ProsperityScoreSystem({
+          islandDossiers: this.islandDossierSystem.definitions,
+          surveySites: this.surveySiteSystem.definitions,
+          fishingShoals: this.fishingFeature.definitions,
+          idolLocations: this.idolLocationDefinitionsValue,
+        });
+        this.prosperityTrafficRouteSystem = new ProsperityTrafficRouteSystem(
+          this.world,
+          this.supportedConnectivity,
+          this.fishingFeature.definitions,
+          this.islandDossierSystem.definitions,
+        );
         this.rebuildDescriptorRegistry();
     });
     measureSimulationPhase(this.trace, "playable-region", () => {
@@ -1621,6 +1660,17 @@ export class GameSimulation {
     const generation = this.generation;
     const navigatorId = this.currentNavigator.id;
     const prospectiveAchievements = this.currentVoyageAchievements;
+    const prosperitySettlement = this.prosperityScoreSystem.prepareSettlement({
+      contractVersion: PROSPERITY_SCORE_CONTRACT_VERSION,
+      islandLeadIds: prospectiveAchievements.islandLeadIds,
+      islandDossierIds: prospectiveAchievements.islandDossierIds,
+      surveySiteLeadIds: prospectiveAchievements.surveySiteLeadIds,
+      surveySiteReportIds: prospectiveAchievements.surveySiteReportIds,
+      fishingLeadIds: prospectiveAchievements.fishingLeadIds,
+      fishingSurveyIds: prospectiveAchievements.fishingSurveyIds,
+      confirmedWreckIds: prospectiveAchievements.wreckIds,
+      idolLocationIds: this.provisionalIdolLocations.map(({ id }) => id),
+    });
     const committed = this.knowledge.commitExpedition(expeditionId);
     const returnedIslandDossiers = this.islandDossierSystem.commitExpedition(expeditionId);
     const returnedSurveySites = this.surveySiteSystem.commitExpedition(expeditionId);
@@ -1648,6 +1698,8 @@ export class GameSimulation {
     this.activeExpedition = false;
     this.advanceExpeditionId();
     const voyage = this.lineage.completeSuccessfulVoyage(achievements);
+    this.prosperityScoreSystem.commitSettlement(prosperitySettlement);
+    this.refreshProsperityTrafficRoutes();
     const previousProvisions = this.ship.provisions;
     const previousAccumulator = this.ship.provisionAccumulator;
     this.ship.provisions = this.config.provisions.startingBundles;
@@ -1750,6 +1802,14 @@ export class GameSimulation {
       });
     }
     return committed.changedCount;
+  }
+
+  private refreshProsperityTrafficRoutes(): Readonly<ProsperityTrafficRouteReadModelV1> {
+    return this.prosperityTrafficRouteSystem.refresh({
+      fishingRecordsRevision: this.fishingFeature.recordsRevision,
+      islandDossierRecordsRevision: this.islandDossierSystem.recordsRevision,
+      supportedTopologyRevision: this.world.supportedTopologyVersion,
+    }, this.fishingFeature.returned, this.islandDossierSystem.returned);
   }
 
   private failExpedition(): number {

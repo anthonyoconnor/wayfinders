@@ -28,6 +28,30 @@ describe("periodic navigation guidance", () => {
       supportedWorld.index(0, 1),
       supportedWorld.index(4, 1),
     ]);
+    expect(system.pathEdgesTo({ x: 4, y: 1 }, supportedWorld.supportedTopologyVersion)).toEqual([{
+      fromIndex: supportedWorld.index(0, 1),
+      toIndex: supportedWorld.index(4, 1),
+      direction: 0,
+      imageOffset: { x: -5, y: 0 },
+      destinationImageOffset: { x: -5, y: 0 },
+      liftedFrom: { x: 0, y: 1 },
+      liftedTo: { x: -1, y: 1 },
+    }]);
+  });
+
+  it("retains the selected width-two Supported direction and adjacent lifted image", () => {
+    const world = wrappingOcean(2, 3, KnowledgeState.Supported);
+    const system = new SupportedConnectivitySystem(world, { x: 1, y: 1 });
+
+    expect(system.pathEdgesTo({ x: 0, y: 1 }, world.supportedTopologyVersion)).toEqual([{
+      fromIndex: world.index(1, 1),
+      toIndex: world.index(0, 1),
+      direction: 1,
+      imageOffset: { x: 2, y: 0 },
+      destinationImageOffset: { x: 2, y: 0 },
+      liftedFrom: { x: 1, y: 1 },
+      liftedTo: { x: 2, y: 1 },
+    }]);
   });
 
   it("clips the forward cone with the minimum-image vector across a seam", () => {

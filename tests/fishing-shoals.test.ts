@@ -8,6 +8,7 @@ import {
 } from "../src/wayfinders/exploration/FishingShoalContracts";
 import { FishingShoalSystem } from "../src/wayfinders/exploration/FishingShoalSystem";
 import { generateIslandDossierCatalog } from "../src/wayfinders/exploration/IslandDossierCatalog";
+import { SupportedConnectivitySystem } from "../src/wayfinders/exploration/SupportedConnectivitySystem";
 import { createSurveyBudget } from "../src/wayfinders/exploration/SurveyContracts";
 import { GridGraph } from "../src/wayfinders/navigation/GridGraph";
 import { solidRowsToCollisionMask } from "../src/wayfinders/world/CollisionMask";
@@ -626,6 +627,7 @@ describe("returned-ground Supported connectivity", () => {
     const world = new WorldGrid(5, 2, 5, BOUNDED_WORLD_TOPOLOGY);
     world.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const id = createFishingShoalId(0);
+    const supportedConnectivity = new SupportedConnectivitySystem(world, { x: 0, y: 0 });
     const system = new FishingShoalSystem(
       world,
       [{
@@ -637,6 +639,8 @@ describe("returned-ground Supported connectivity", () => {
         clue: { kind: "seabirds", intensity: 2, label: "Circling seabirds" },
       }],
       { x: 0, y: 0 },
+      undefined,
+      supportedConnectivity,
     );
     system.observeCurrentSight(1, 1, [world.index(4, 0)]);
     expect(system.applyInteraction({
@@ -651,6 +655,7 @@ describe("returned-ground Supported connectivity", () => {
     ]);
     expect(system.activationEligible).toEqual([]);
     expect(system.connectivityBuildCount).toBe(1);
+    expect(system.connectivityBuildCount).toBe(supportedConnectivity.buildCount);
 
     world.setVisibleNow(4, 0, true);
     world.setKnowledge(0, 1, KnowledgeState.Personal, 2);
@@ -660,6 +665,11 @@ describe("returned-ground Supported connectivity", () => {
     for (let x = 0; x <= 4; x++) world.setKnowledge(x, 0, KnowledgeState.Supported);
     expect(system.readModels()[0]).toMatchObject({ homeConnected: true });
     expect(system.activationEligible).toEqual([expect.objectContaining({ id, state: "survey" })]);
+    expect(system.connectivityBuildCount).toBe(2);
+    expect(supportedConnectivity.pathTo(
+      { x: 4, y: 0 },
+      world.supportedTopologyVersion,
+    )).toHaveLength(5);
     expect(system.connectivityBuildCount).toBe(2);
 
     world.setKnowledge(2, 0, KnowledgeState.Personal, 3);

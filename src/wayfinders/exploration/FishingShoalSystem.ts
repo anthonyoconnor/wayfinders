@@ -53,8 +53,13 @@ export class FishingShoalSystem {
     readonly definitions: readonly Readonly<FishingShoalDefinition>[],
     homeReturnTile: Readonly<GridPoint>,
     config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
+    supportedConnectivity?: SupportedConnectivitySystem,
   ) {
-    this.supportedConnectivity = new SupportedConnectivitySystem(world, homeReturnTile, config);
+    if (supportedConnectivity && !supportedConnectivity.isCompatibleWith(world, homeReturnTile)) {
+      throw new RangeError("Fishing-shoal Supported connectivity must use the same world and home return tile");
+    }
+    this.supportedConnectivity = supportedConnectivity
+      ?? new SupportedConnectivitySystem(world, homeReturnTile, config);
     for (const [order, definition] of definitions.entries()) {
       if (this.definitionById.has(definition.id)) throw new RangeError(`Duplicate fishing shoal ${definition.id}`);
       this.definitionById.set(definition.id, definition);
