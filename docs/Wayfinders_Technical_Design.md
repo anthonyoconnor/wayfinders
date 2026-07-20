@@ -1020,18 +1020,19 @@ The developer UI can inspect the live hidden Prosperity score, regenerate by
 seed, inspect island approaches, move to survey anchors, teleport to water,
 adjust provisions, force a wreck, toggle
 navigation/visibility/guidance and fishing/trade route diagnostics, independently enable or disable
-cloud atmosphere, enter map review, and tune supported configuration. Map
+cloud atmosphere, enter map review or hide fog, and tune supported configuration. Map
 overlay visibility is initialized from `DEFAULT_GAME_SETTINGS.overlays` and is
 owned entirely by `WayfindersScene`. Toggling navigation grid, collision boxes,
 current sight, or return viability never mutates or appears in
 `GameSimulation`. Forward-reach visibility also remains scene-owned, but the
 scene translates it into the derived-work demand command so hidden guidance
-consumes no search time. Map
-review is session-only presentation state: it hides the knowledge fog, allows
-all cloud pairs to render independently of fog, pauses sailing input, detaches
-the camera from the ship, and enables pointer-drag or WASD/arrow panning plus a
-wider wheel or Q/E zoom range. Leaving map review restores the fog and the
-smoothed ship-follow camera without changing knowledge or ship state. The
+consumes no search time. Map review is session-only presentation state: it
+pauses sailing input, detaches the camera from the ship, and enables pointer-drag
+or WASD/arrow panning plus a wider wheel or Q/E zoom range. Leaving map review
+restores the smoothed ship-follow camera without changing knowledge or ship
+state. The independent session-only hide-fog switch hides the knowledge overlay
+and allows all cloud pairs to render independently of fog. Either switch can be
+used alone or together, and neither changes authoritative knowledge. The
 checked-by-default cloud switch is session-only and scene-owned; it is not a
 simulation debug or configuration value. Opening the drawer does not pause
 sailing. Lifecycle gates still suppress input.

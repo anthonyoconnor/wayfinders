@@ -277,10 +277,10 @@ output adaptation lives in `src/developerLog.ts`. Diagnostics never own
 authoritative mutation. Overlay visibility remains scene-owned; only its
 forward-range value is translated into an explicit command that suspends or
 reactivates optional derived guidance work in `GameSimulation`. The cloud
-enable switch, the map-review camera/fog switch, and telemetry never enter
-`GameSimulation`. Map
-review detaches the camera without moving the ship or changing authoritative
-knowledge.
+enable switch, the independent map-review camera and hide-fog switches, and
+telemetry never enter `GameSimulation`. Map review detaches the camera without
+moving the ship or changing authoritative knowledge. Hiding fog changes only
+presentation and can be used with or without map review.
 The fishing-traffic and island-trade route switches expose only already
 published Supported-water paths, use distinct thread colours, and remain
 default hidden.

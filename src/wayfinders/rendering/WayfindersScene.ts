@@ -184,6 +184,7 @@ interface BrowserDebugApi {
   regenerate: (seed?: number) => ReturnType<GameSimulation["snapshot"]>;
   setOverlay: (name: keyof OverlayVisibilitySettings, visible: boolean) => void;
   setMapReviewMode: (enabled: boolean) => boolean;
+  setFogHidden: (hidden: boolean) => boolean;
   setCloudAtmosphere: (visible: boolean) => boolean;
   setCloudFrequency: (cloudsPerChunk: number) => boolean;
   cloudAtmosphere: () => Readonly<{
@@ -343,6 +344,7 @@ export class WayfindersScene extends Phaser.Scene {
   private cameraFitZoom = 1;
   private cameraZoomRatio = 1;
   private mapReviewMode = false;
+  private fogHidden = false;
   private readonly overlayVisibility: OverlayVisibilitySettings;
   private readonly renderedOverlayVisibility: OverlayVisibilitySettings;
   private overlayVisibilityRevision = 0;
@@ -1322,8 +1324,9 @@ export class WayfindersScene extends Phaser.Scene {
               <span><i data-route-kind="fishing" aria-hidden="true"></i> Turquoise: fishing</span>
               <span><i data-route-kind="trade" aria-hidden="true"></i> Ochre: trade</span>
             </p>
-            <label class="tool-check"><input data-map-review type="checkbox" ${this.mapReviewMode ? "checked" : ""}> Map review mode (hide fog and free camera)</label>
+            <label class="tool-check"><input data-map-review type="checkbox" ${this.mapReviewMode ? "checked" : ""}> Map review mode (free camera)</label>
             <p class="tool-live-note">In map review mode, drag the map or use WASD / arrows to pan; use the wheel or Q/E to zoom. Sailing is paused.</p>
+            <label class="tool-check"><input data-hide-fog type="checkbox" ${this.fogHidden ? "checked" : ""}> Hide fog</label>
             ${this.cloudToggleMarkup()}
             ${this.numberMarkup(
               "cloud-frequency",
@@ -1394,6 +1397,9 @@ export class WayfindersScene extends Phaser.Scene {
     }, { signal });
     slot.querySelector<HTMLInputElement>("input[data-map-review]")?.addEventListener("change", (event) => {
       this.setMapReviewMode((event.currentTarget as HTMLInputElement).checked);
+    }, { signal });
+    slot.querySelector<HTMLInputElement>("input[data-hide-fog]")?.addEventListener("change", (event) => {
+      this.setFogHidden((event.currentTarget as HTMLInputElement).checked);
     }, { signal });
     slot.querySelectorAll<HTMLInputElement>("input[data-config]").forEach((input) => {
       input.addEventListener("change", () => {
@@ -2153,8 +2159,6 @@ export class WayfindersScene extends Phaser.Scene {
     if (this.mapReviewMode === enabled) return false;
     this.mapReviewMode = enabled;
     this.mapReviewPanGesture = undefined;
-    this.knowledgeOverlay.setVisible(!enabled);
-    this.cloudLayer.setIgnoreFog(enabled);
     const camera = this.cameras.main;
     if (enabled) {
       camera.stopFollow();
@@ -2172,6 +2176,18 @@ export class WayfindersScene extends Phaser.Scene {
     const input = document.querySelector<HTMLInputElement>("#scene-tools-slot input[data-map-review]");
     if (input) input.checked = enabled;
     this.lastDiagnosticsRevision = -1;
+    this.syncPresentation(true);
+    return true;
+  }
+
+  private setFogHidden(hidden: boolean): boolean {
+    if (this.fogHidden === hidden) return false;
+    this.fogHidden = hidden;
+    this.knowledgeOverlay.setVisible(!hidden);
+    this.cloudLayer.setIgnoreFog(hidden);
+    if (this.gameHost) this.gameHost.dataset.fogHidden = String(hidden);
+    const input = document.querySelector<HTMLInputElement>("#scene-tools-slot input[data-hide-fog]");
+    if (input) input.checked = hidden;
     this.syncPresentation(true);
     return true;
   }
@@ -2467,6 +2483,7 @@ export class WayfindersScene extends Phaser.Scene {
       },
       setOverlay: (name, visible) => this.setOverlayVisibility(name, visible),
       setMapReviewMode: (enabled) => this.setMapReviewMode(enabled),
+      setFogHidden: (hidden) => this.setFogHidden(hidden),
       setCloudAtmosphere: (visible) => this.setCloudAtmosphereEnabled(visible),
       setCloudFrequency: (cloudsPerChunk) => this.setCloudFrequency(cloudsPerChunk),
       cloudAtmosphere: () => Object.freeze({
