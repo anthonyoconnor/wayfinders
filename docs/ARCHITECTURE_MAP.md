@@ -125,8 +125,10 @@ adapter may own Phaser sound instances.
   the session-scoped hidden score ledger and immutable traffic-route read
   model. `GameSimulation` alone composes exact-return settlement and route
   refresh. The numeric score is absent from player snapshots, events, browser
-  diagnostics, and the presentation capability surface; rendering consumes
-  only traffic routes caused by returned facts.
+  diagnostics, and normal presentation capability. A separate narrow,
+  read-only scene capability supplies only the developer drawer's live
+  Prosperity value; gameplay rendering still consumes only traffic routes
+  caused by returned facts.
 - `ProsperityTrafficRenderer` owns the presentation-only route scheduler,
   shared code-native fishing/trade craft factory, fixed family opacity,
   periodic projection, and its fixed eight-view Phaser pool. It consumes only

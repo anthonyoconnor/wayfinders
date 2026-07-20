@@ -170,8 +170,11 @@ interface PresentationResourceSnapshot {
   }>;
 }
 
-/** Presentation can consume traffic routes, but the hidden score is not in its capability surface. */
+/** Normal presentation can consume traffic routes, but not the hidden score. */
 type WayfindersPresentationSimulation = Omit<GameSimulation, "prosperityScoreSnapshot">;
+
+/** The developer drawer alone receives this narrow, read-only score selector. */
+type WayfindersDeveloperProsperitySource = Pick<GameSimulation, "prosperityScoreSnapshot">;
 
 interface BrowserDebugApi {
   snapshot: () => ReturnType<GameSimulation["snapshot"]>;
@@ -238,6 +241,7 @@ const PALETTE = {
 export class WayfindersScene extends Phaser.Scene {
   readonly simulation: WayfindersPresentationSimulation;
 
+  private readonly developerProsperitySource: WayfindersDeveloperProsperitySource;
   private readonly clock = new SimulationClock();
   private readonly frameTiming = new FrameTimingMonitor();
   private readonly presentationWork = new PresentationWorkMonitor();
@@ -386,9 +390,11 @@ export class WayfindersScene extends Phaser.Scene {
     private readonly gameSettings: DeepReadonlyGameSettings<GameSettings> = DEFAULT_GAME_SETTINGS,
   ) {
     super({ key: "WayfindersScene" });
-    this.simulation = simulation ?? new GameSimulation(prototypeConfig, undefined, {
+    const resolvedSimulation = simulation ?? new GameSimulation(prototypeConfig, undefined, {
       forwardGuidanceEnabled: gameSettings.overlays.forwardRange,
     });
+    this.simulation = resolvedSimulation;
+    this.developerProsperitySource = resolvedSimulation;
     this.overlayVisibility = { ...gameSettings.overlays };
     this.renderedOverlayVisibility = { ...this.overlayVisibility };
     this.simulation.setForwardGuidanceEnabled(this.overlayVisibility.forwardRange);
@@ -1258,6 +1264,7 @@ export class WayfindersScene extends Phaser.Scene {
             <div><dt>Voyage</dt><dd data-state="voyage"></dd></div>
             <div><dt>Lifecycle</dt><dd data-state="lifecycle"></dd></div>
             <div><dt>Lineage</dt><dd data-state="lineage"></dd></div>
+            <div><dt>Prosperity score</dt><dd data-state="prosperity"></dd></div>
             <div><dt>Wreck reports</dt><dd data-state="wreck-reports"></dd></div>
             <div><dt>Survey cost</dt><dd data-state="survey-cost"></dd></div>
           </dl>
@@ -2006,6 +2013,7 @@ export class WayfindersScene extends Phaser.Scene {
     };
     const navigator = this.simulation.currentNavigator;
     const handover = this.simulation.pendingGenerationHandover;
+    const prosperity = this.developerProsperitySource.prosperityScoreSnapshot;
 
     if (this.simulation.wreckPresentationActive) {
       set("generation", String(navigator.generation));
@@ -2037,6 +2045,7 @@ export class WayfindersScene extends Phaser.Scene {
       );
     }
     set("lineage", `${this.simulation.navigatorLineage.length} navigator${this.simulation.navigatorLineage.length === 1 ? "" : "s"}`);
+    set("prosperity", String(prosperity.score));
     set(
       "wreck-reports",
       `${this.simulation.provisionalWreckSurveys.length} provisional · ${this.simulation.returnedWreckSurveys.length} returned`,

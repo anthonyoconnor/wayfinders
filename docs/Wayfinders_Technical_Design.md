@@ -478,8 +478,10 @@ mapped tile counts, map coverage, provisions, and traffic contribute nothing.
 The score survives navigator succession and resets with world regeneration or
 **Start new game**. It is not saved and is absent from player snapshots, events,
 browser diagnostics, the Great Hall, HUD, prompts, audio, and presentation read
-models. `WayfindersScene` receives a simulation capability type that omits the
-internal score selector.
+models. `WayfindersScene` keeps the normal presentation simulation capability
+free of the internal score selector and holds a separate read-only developer
+capability that writes the current numeric score only into the developer
+drawer's **Current expedition** facts.
 
 Returned surveyed fishing shoals and returned `community` island dossiers are
 the only traffic causes. Each eligible target receives a deterministic shortest
@@ -1011,8 +1013,9 @@ gameplay saving.
 typed lifecycle events. Event payloads contain stable IDs and committed results
 needed by adapters; listeners cannot mutate simulation state through the bus.
 
-The developer UI can regenerate by seed, inspect island approaches, move to
-survey anchors, teleport to water, adjust provisions, force a wreck, toggle
+The developer UI can inspect the live hidden Prosperity score, regenerate by
+seed, inspect island approaches, move to survey anchors, teleport to water,
+adjust provisions, force a wreck, toggle
 navigation/visibility/guidance and fishing/trade route diagnostics, independently enable or disable
 cloud atmosphere, enter map review, and tune supported configuration. Map
 overlay visibility is initialized from `DEFAULT_GAME_SETTINGS.overlays` and is
