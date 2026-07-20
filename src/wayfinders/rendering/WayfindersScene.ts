@@ -89,6 +89,7 @@ import { FishingShoalRenderer } from "./FishingShoalRenderer";
 import { IslandDossierRenderer } from "./IslandDossierRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { LiftedViewAnchor } from "./LiftedViewAnchor";
+import { ProsperityTrafficRenderer } from "./ProsperityTrafficRenderer";
 import { RiskOverlayRenderer } from "./RiskOverlayRenderer";
 import { canVisitGreatHall } from "./GreatHallAccess";
 import { GreatHallView } from "./GreatHallView";
@@ -158,6 +159,7 @@ interface PresentationResourceSnapshot {
   readonly knowledge: ReturnType<KnowledgeOverlayRenderer["getResourceTelemetry"]>;
   readonly clouds: ReturnType<CloudLayerRenderer["getResourceTelemetry"]>;
   readonly risk: ReturnType<RiskOverlayRenderer["getResourceTelemetry"]>;
+  readonly prosperityTraffic: ReturnType<ProsperityTrafficRenderer["getTelemetry"]>;
   readonly markers: Readonly<{
     wrecks: ReturnType<WreckRenderer["getLifetimeTelemetry"]>;
     islandDossiers: ReturnType<IslandDossierRenderer["getLifetimeTelemetry"]>;
@@ -165,6 +167,9 @@ interface PresentationResourceSnapshot {
     fishingShoals: ReturnType<FishingShoalRenderer["getLifetimeTelemetry"]>;
   }>;
 }
+
+/** Presentation can consume traffic routes, but the hidden score is not in its capability surface. */
+type WayfindersPresentationSimulation = Omit<GameSimulation, "prosperityScoreSnapshot">;
 
 interface BrowserDebugApi {
   snapshot: () => ReturnType<GameSimulation["snapshot"]>;
@@ -229,7 +234,7 @@ const PALETTE = {
 } as const;
 
 export class WayfindersScene extends Phaser.Scene {
-  readonly simulation: GameSimulation;
+  readonly simulation: WayfindersPresentationSimulation;
 
   private readonly clock = new SimulationClock();
   private readonly frameTiming = new FrameTimingMonitor();
@@ -264,6 +269,7 @@ export class WayfindersScene extends Phaser.Scene {
   private islandDossierRenderer!: IslandDossierRenderer;
   private surveySiteRenderer!: SurveySiteRenderer;
   private fishingShoalRenderer!: FishingShoalRenderer;
+  private prosperityTrafficRenderer!: ProsperityTrafficRenderer;
   private shipRenderer!: ShipRenderer;
   private wreckRenderer!: WreckRenderer;
   private activeChunkSet!: ActiveChunkSet;
@@ -427,6 +433,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.islandDossierRenderer = new IslandDossierRenderer(this);
     this.surveySiteRenderer = new SurveySiteRenderer(this);
     this.fishingShoalRenderer = new FishingShoalRenderer(this, this.pilotAssets);
+    this.prosperityTrafficRenderer = new ProsperityTrafficRenderer(this);
     this.shipRenderer = new ShipRenderer(this, this.pilotAssets);
     this.liftedViewAnchor = new LiftedViewAnchor(this.simulation.world.topology, {
       x: this.simulation.ship.worldX,
@@ -698,6 +705,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.islandDossierRenderer.applyActiveChunks(delta.active);
     this.surveySiteRenderer.applyActiveChunks(delta.active);
     this.fishingShoalRenderer.applyActiveChunks(delta.active);
+    this.prosperityTrafficRenderer.applyActiveChunks(delta.active);
     this.activeChunkEntries = delta.active;
     this.lastDebugRevision = -1;
     this.lastActiveChunkRevision = delta.revision;
@@ -846,6 +854,17 @@ export class WayfindersScene extends Phaser.Scene {
       this.currentShipPose,
       this.clock.interpolationAlpha,
       !this.simulation.wreckPresentationActive,
+    );
+    this.prosperityTrafficRenderer.sync(
+      this.simulation.prosperityTrafficRoutes,
+      this.simulation.world.topology,
+      this.simulation.config.navigation.tileSize,
+      this.time.now,
+      {
+        x: this.simulation.ship.worldX,
+        y: this.simulation.ship.worldY,
+      },
+      this.prefersReducedMotion,
     );
     if (
       force
@@ -2478,6 +2497,7 @@ export class WayfindersScene extends Phaser.Scene {
       knowledge: this.knowledgeOverlay.getResourceTelemetry(),
       clouds: this.cloudLayer.getResourceTelemetry(),
       risk: this.riskOverlay.getResourceTelemetry(),
+      prosperityTraffic: this.prosperityTrafficRenderer.getTelemetry(),
       markers: Object.freeze({
         wrecks: this.wreckRenderer.getLifetimeTelemetry(),
         islandDossiers: this.islandDossierRenderer.getLifetimeTelemetry(),
@@ -3038,6 +3058,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.islandDossierRenderer.destroy();
     this.surveySiteRenderer.destroy();
     this.fishingShoalRenderer.destroy();
+    this.prosperityTrafficRenderer.destroy();
     this.wreckRenderer.destroy();
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onPointerDown, this);
     this.input.off(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove, this);

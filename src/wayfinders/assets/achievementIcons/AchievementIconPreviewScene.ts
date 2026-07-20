@@ -122,7 +122,7 @@ export class AchievementIconPreviewScene extends Phaser.Scene {
     this.stage.innerHTML = `
       <header class="achievement-icon-preview-heading">
         <div><p class="eyebrow">Full animated set</p><h2>Navigator achievement icons</h2></div>
-        <p>All ten loops play together so silhouette, cadence, registration, and loop seams can be compared directly.</p>
+        <p>All eight loops play together so silhouette, cadence, registration, and loop seams can be compared directly.</p>
       </header>
       <div class="achievement-icon-preview-grid" role="list" aria-label="Animated achievement icons">
         ${ACHIEVEMENT_ICON_KINDS.map((kind) => {
