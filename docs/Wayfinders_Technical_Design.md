@@ -334,6 +334,19 @@ numbers. A visually hidden live status owns exact usable, return, survey,
 uncommitted, safe/unknown, and shortfall text without announcing animation
 frames.
 
+Immediately above the rack, a screen-space current-voyage strip projects the
+expedition's provisional lead, survey, wreck, and idol credits through
+the same structured achievement builder and eight active icon kinds used by
+the Great Hall. The strip has no visible text; every exact prospective Hall
+label remains available to assistive technology and pointer tooltips. Symbols
+remain in the authoritative order their knowledge transitions occurred, making
+the strip a compact journey log rather than a kind-grouped tally. It remains a
+stable HUD fixture, updates from sparse expedition-owned records, and clears
+on return or wreck. Each newly added symbol plays its authored loop once and
+then holds static for the rest of the voyage; reduced motion uses the static
+frame throughout. The strip is presentation only and never preserves a failed
+voyage's provisional findings.
+
 ## 8. Expedition, wreck, and lineage lifecycle
 
 An expedition begins when ordinary movement crosses from Supported to
@@ -369,10 +382,20 @@ creates an in-session handover gate; sailing remains suppressed until it is
 acknowledged.
 
 `GreatHallChronicle` is a rebuilt read model over authoritative lineage and
-returned world records. It owns no mutable gameplay facts. The Hall is
-optionally browsable only at the exact home dock, and succession uses a focused
-non-dismissible mode. A fatal voyage exposes no provisional achievements; a
-later returned wreck survey may link identity and fate to the lost navigator.
+returned world records. It owns no mutable gameplay facts. Every successful
+return automatically opens the Hall at the returning navigator and reveals the
+new voyage's achievement symbols in journey order, replacing the separate
+returned-voyage message with a visible transfer from personal to tribal
+knowledge. The Hall remains optionally browsable at the exact home dock after
+that ceremony, and succession uses a focused non-dismissible mode. A fatal
+voyage exposes no provisional achievements; a later returned wreck survey may
+link identity and fate to the lost navigator.
+
+Lead and completed-result achievements credit separate knowledge transitions.
+A navigator who first sights and then surveys an island, survey site, or
+fishing ground within one voyage receives both credits. A navigator who
+completes a lead returned by an earlier voyage receives only the completed
+credit because the lead remains attributed to its original discoverer.
 
 The graphical Hall consumes a validated JSON-compatible presentation contract
 V1. A pure adapter maps each chronicle navigator to one of twenty fixed portrait
@@ -848,7 +871,7 @@ their save, validation, review, and promotion operations continue to use the
 narrow serialized repository seams until a dedicated workspace milestone
 replaces them.
 
-The Icons workspace is a view-only host for the closed ten-kind achievement
+The Icons workspace is a view-only host for the closed eight-kind achievement
 presentation vocabulary. One exhaustive typed catalog owns stable row order,
 short accessible names, visual descriptions, frame geometry, and deterministic
 time-to-frame selection. Every loop is visible together; preview-only controls
@@ -876,7 +899,7 @@ occupy the left mounting area; the right wall always presents twelve compact
 portrait positions, using covered placeholders for generations not yet present
 in that era. Lineage totals and their counting cord are intentionally omitted
 from this review version. The twenty existing portrait files remain unchanged.
-The default twentieth-generation memorial distributes all ten achievement
+The default twentieth-generation memorial distributes all eight achievement
 symbols across three dense returned voyages so the main Hall view exercises
 multi-achievement bands; its fourth voyage remains awaiting.
 Portraits and voyage bands carry no visible generation or voyage numerals in

@@ -202,7 +202,7 @@ adapter may own Phaser sound instances.
   layer depths, fog coverage, debug state, terrain, or gameplay state. A
   deleted slot remains `null` so physical frame identities never shift.
   The view-only Icons workspace consumes one exhaustive typed mapping from the
-  ten Great Hall presentation kinds to sprite-sheet rows. It presents every
+  eight Great Hall presentation kinds to sprite-sheet rows. It presents every
   loop together with preview-only pause and speed controls; the shared semantic
   Great Hall renderer consumes the same sheet and mapping. Neither surface may
   derive achievement identity from pixels. The view-only Great Hall workspace

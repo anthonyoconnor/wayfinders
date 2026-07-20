@@ -59,6 +59,7 @@ import { availableProvisionUnits } from "../exploration/ProvisionSystem";
 import { classifyReturnRiskMargin, ReturnRiskLevel } from "../exploration/ReturnPathSystem";
 import {
   buildGreatHallChronicle,
+  buildGreatHallVoyageAchievementPreview,
   type GreatHallChronicle,
   type GreatHallChronicleSources,
   type GreatHallReturnedVoyage,
@@ -73,6 +74,7 @@ import {
 import { KnowledgeState } from "../world/TileData";
 import { CargoRenderer } from "./CargoRenderer";
 import { buildCargoPresentation, type CargoPresentationModel } from "./CargoPresentation";
+import { CurrentVoyageAchievementsView } from "./CurrentVoyageAchievementsView";
 import {
   CLOUD_FREQUENCY_MAXIMUM,
   CLOUD_FREQUENCY_MINIMUM,
@@ -241,6 +243,14 @@ export class WayfindersScene extends Phaser.Scene {
   private cloudLayer!: CloudLayerRenderer;
   private riskOverlay!: RiskOverlayRenderer;
   private cargoRenderer!: CargoRenderer;
+  private currentVoyageAchievementsView?: CurrentVoyageAchievementsView;
+  private lastVoyageAchievementsActive = false;
+  private lastVoyageAchievementsExpeditionId = -1;
+  private lastVoyageAchievementsSupportedTiles = -1;
+  private lastVoyageAchievementsIslandRevision = -1;
+  private lastVoyageAchievementsSurveySiteRevision = -1;
+  private lastVoyageAchievementsFishingRevision = -1;
+  private lastVoyageAchievementsWreckRevision = -1;
   private cargoPresentation?: CargoPresentationModel;
   private lastCargoPhysicalBundles = -1;
   private lastCargoAvailableProvisionUnits = Number.NaN;
@@ -331,9 +341,8 @@ export class WayfindersScene extends Phaser.Scene {
   private activeLifecycleCueAnimation?: Animation;
   private activeLifecycleCueTimer?: number;
   private lifecycleCueSequence = 0;
-  private returnCueScheduled = false;
+  private returnCeremonyScheduled = false;
   private pendingReturnedVoyage?: Readonly<GreatHallReturnedVoyage>;
-  private pendingReturnVoyagesRemaining?: number;
   private pendingGenerationHandoverPresentation = false;
   private pendingCompletionNavigatorId?: NavigatorId;
   private previousShipPose!: ShipRenderPose;
@@ -484,6 +493,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.mountSurveyRibbon();
     this.mountHomeAction();
     this.mountGreatHall();
+    if (this.gameHost) this.currentVoyageAchievementsView = new CurrentVoyageAchievementsView(this.gameHost);
     this.installBrowserDebugApi();
     this.bindSimulationEvents();
     this.showPendingGenerationHandover();
@@ -1567,6 +1577,54 @@ export class WayfindersScene extends Phaser.Scene {
     const presentation = this.cargoPresentation;
     if (!presentation) throw new Error("Cargo presentation was not initialized");
     this.cargoRenderer.sync(presentation);
+    this.syncCurrentVoyageAchievements();
+  }
+
+  private syncCurrentVoyageAchievements(): void {
+    const view = this.currentVoyageAchievementsView;
+    if (!view) return;
+    const active = this.simulation.expeditionActive;
+    const expeditionId = this.simulation.currentExpeditionId;
+    const supportedTiles = this.simulation.currentVoyageSupportedTileCount;
+    const islandRevision = this.simulation.islandDossierRecordsRevision;
+    const surveySiteRevision = this.simulation.surveySiteRecordsRevision;
+    const fishingRevision = this.simulation.fishingShoalRecordsRevision;
+    const wreckRevision = this.simulation.wrecksRevision;
+    const changed = active !== this.lastVoyageAchievementsActive
+      || expeditionId !== this.lastVoyageAchievementsExpeditionId
+      || supportedTiles !== this.lastVoyageAchievementsSupportedTiles
+      || islandRevision !== this.lastVoyageAchievementsIslandRevision
+      || surveySiteRevision !== this.lastVoyageAchievementsSurveySiteRevision
+      || fishingRevision !== this.lastVoyageAchievementsFishingRevision
+      || wreckRevision !== this.lastVoyageAchievementsWreckRevision;
+    if (!changed) return;
+    this.lastVoyageAchievementsActive = active;
+    this.lastVoyageAchievementsExpeditionId = expeditionId;
+    this.lastVoyageAchievementsSupportedTiles = supportedTiles;
+    this.lastVoyageAchievementsIslandRevision = islandRevision;
+    this.lastVoyageAchievementsSurveySiteRevision = surveySiteRevision;
+    this.lastVoyageAchievementsFishingRevision = fishingRevision;
+    this.lastVoyageAchievementsWreckRevision = wreckRevision;
+    if (!active) {
+      view.sync(false, []);
+      return;
+    }
+    const voyage = this.simulation.currentVoyageAchievements;
+    const achievements = buildGreatHallVoyageAchievementPreview(
+      this.simulation.navigatorLineage,
+      this.simulation.currentNavigator,
+      this.simulation.navigatorVoyageNumber,
+      voyage,
+      {
+        islandDossiers: this.simulation.islandDossierDefinitions,
+        surveySites: this.simulation.surveySiteDefinitions,
+        fishingShoals: this.simulation.fishingShoalDefinitions,
+        wrecks: this.simulation.wrecks,
+        idolTotal: this.simulation.idolLocationProgress.total,
+        idolLocations: this.simulation.provisionalIdolLocations,
+      },
+    );
+    view.sync(true, achievements);
   }
 
   private performSurveyAction():
@@ -1725,10 +1783,10 @@ export class WayfindersScene extends Phaser.Scene {
     });
   }
 
-  private openGreatHallAtHome(): boolean {
+  private openGreatHallAtHome(loggedVoyage?: number): boolean {
     const view = this.greatHallView;
     if (!view || !this.canVisitGreatHall()) return false;
-    view.showHome(this.greatHallChronicle(), this.simulation.currentNavigator.id);
+    view.showHome(this.greatHallChronicle(), this.simulation.currentNavigator.id, loggedVoyage);
     this.greatHallUpdated = false;
     this.lastDiagnosticsRevision = -1;
     this.syncHomeAction();
@@ -1761,7 +1819,7 @@ export class WayfindersScene extends Phaser.Scene {
     return selected;
   }
 
-  private showPendingGenerationHandover(): boolean {
+  private showPendingGenerationHandover(loggedVoyage?: number): boolean {
     const handover = this.simulation.pendingGenerationHandover;
     const view = this.greatHallView;
     if (!handover || !view) return false;
@@ -1769,7 +1827,7 @@ export class WayfindersScene extends Phaser.Scene {
     if (!navigator || navigator.state === "active") {
       throw new Error(`Terminal navigator ${handover.fromNavigatorId} is missing from the lineage`);
     }
-    view.showHandover(this.greatHallChronicle(), handover.fromNavigatorId, handover.nextGeneration);
+    view.showHandover(this.greatHallChronicle(), handover.fromNavigatorId, handover.nextGeneration, loggedVoyage);
     this.greatHallUpdated = false;
     this.lastDiagnosticsRevision = -1;
     this.syncHomeAction();
@@ -1778,10 +1836,10 @@ export class WayfindersScene extends Phaser.Scene {
     return true;
   }
 
-  private showCompletedGreatHall(findingNavigatorId: NavigatorId): boolean {
+  private showCompletedGreatHall(findingNavigatorId: NavigatorId, loggedVoyage?: number): boolean {
     const view = this.greatHallView;
     if (!view) return false;
-    view.showCompletion(this.greatHallChronicle(), findingNavigatorId);
+    view.showCompletion(this.greatHallChronicle(), findingNavigatorId, loggedVoyage);
     this.greatHallUpdated = false;
     this.lastDiagnosticsRevision = -1;
     this.syncHomeAction();
@@ -2250,7 +2308,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.lastDiagnosticsOverlayRevision = -1;
     this.lastDiagnosticsAt = Number.NEGATIVE_INFINITY;
     this.pendingReturnedVoyage = undefined;
-    this.pendingReturnVoyagesRemaining = undefined;
     this.pendingGenerationHandoverPresentation = false;
     this.pendingCompletionNavigatorId = undefined;
     this.greatHallUpdated = false;
@@ -2549,9 +2606,8 @@ export class WayfindersScene extends Phaser.Scene {
           throw new Error(`Returned voyage ${navigatorId}:${voyageNumber} is missing from the Great Hall chronicle`);
         }
         this.pendingReturnedVoyage = voyage;
-        this.pendingReturnVoyagesRemaining = voyagesRemaining;
         this.greatHallUpdated = !tenureCompleted;
-        this.scheduleReturnCue();
+        this.scheduleReturnCeremony();
         this.log(
           `Voyage ${voyageNumber} of 4 returned: ${supportedTileCount} Personal tiles and `
           + `${closedUnknownTileCount} enclosed Unknown tiles became Supported; ${voyagesRemaining} remain.`,
@@ -2563,7 +2619,7 @@ export class WayfindersScene extends Phaser.Scene {
         nextGeneration,
       }) => {
         this.pendingGenerationHandoverPresentation = true;
-        this.scheduleReturnCue();
+        this.scheduleReturnCeremony();
         this.log(
           `Generation ${generation}'s navigator completed ${completedVoyages} successful voyages; `
           + `generation ${nextGeneration} took the helm.`,
@@ -2577,7 +2633,7 @@ export class WayfindersScene extends Phaser.Scene {
         totalIdolLocations,
       }) => {
         this.pendingCompletionNavigatorId = navigatorId;
-        this.scheduleReturnCue();
+        this.scheduleReturnCeremony();
         this.log(
           `Generation ${generation} returned the final idol location on voyage ${voyageNumber}; `
           + `all ${returnedIdolLocations} of ${totalIdolLocations} locations are preserved in the Great Hall.`,
@@ -2806,15 +2862,13 @@ export class WayfindersScene extends Phaser.Scene {
     );
   }
 
-  private scheduleReturnCue(): void {
-    if (this.returnCueScheduled) return;
-    this.returnCueScheduled = true;
+  private scheduleReturnCeremony(): void {
+    if (this.returnCeremonyScheduled) return;
+    this.returnCeremonyScheduled = true;
     queueMicrotask(() => {
-      this.returnCueScheduled = false;
+      this.returnCeremonyScheduled = false;
       const voyage = this.pendingReturnedVoyage;
       this.pendingReturnedVoyage = undefined;
-      const voyagesRemaining = this.pendingReturnVoyagesRemaining;
-      this.pendingReturnVoyagesRemaining = undefined;
       const generationHandover = this.pendingGenerationHandoverPresentation;
       this.pendingGenerationHandoverPresentation = false;
       const completionNavigatorId = this.pendingCompletionNavigatorId;
@@ -2825,33 +2879,16 @@ export class WayfindersScene extends Phaser.Scene {
       // ordinary return cue and a same-voyage tenure handover. The simulation's
       // pending handover remains intact and is presented only after Continue.
       if (completionNavigatorId) {
-        this.showCompletedGreatHall(completionNavigatorId);
+        this.showCompletedGreatHall(completionNavigatorId, voyage?.voyageNumber);
         return;
       }
 
       if (generationHandover) {
-        this.showPendingGenerationHandover();
+        this.showPendingGenerationHandover(voyage?.voyageNumber);
         return;
       }
       if (!voyage) return;
-
-      const voyageHeading = `VOYAGE ${voyage.voyageNumber} OF 4 RETURNED`;
-      const remainingLine = voyagesRemaining === undefined
-        ? ""
-        : `${voyagesRemaining} VOYAGE${voyagesRemaining === 1 ? "" : "S"} REMAIN · `;
-      const achievements = (voyage.achievements.length > 0
-        ? voyage.achievements.map(({ label }) => label)
-        : ["No new findings returned."]
-      ).map((achievement) => achievement.toUpperCase()).join("\n");
-      const hasNotableFindings = voyage.achievements.some(({ kind }) => (
-        kind !== "supported-route-tiles" && kind !== "mapped-enclosed-water-tiles"
-      ));
-      this.showLifecycleCue(
-        `${voyageHeading}\n${achievements}\nRECORDED IN THE GREAT HALL\n`
-        + `${remainingLine}PROVISIONS REPLENISHED`,
-        hasNotableFindings ? "#eadb9f" : "#d9fff5",
-        hasNotableFindings ? 5_000 : 3_500,
-      );
+      this.openGreatHallAtHome(voyage.voyageNumber);
     });
   }
 
@@ -2989,6 +3026,8 @@ export class WayfindersScene extends Phaser.Scene {
     this.homeActionButton = undefined;
     this.greatHallView?.destroy();
     this.greatHallView = undefined;
+    this.currentVoyageAchievementsView?.destroy();
+    this.currentVoyageAchievementsView = undefined;
     for (const unsubscribe of this.eventUnsubscribers.splice(0)) unsubscribe();
     this.waterRenderer.destroy();
     this.worldRenderer.destroy();

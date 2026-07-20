@@ -80,8 +80,9 @@ export class GreatHallView {
   get mode(): GreatHallViewMode | undefined { return this.modeValue; }
   get selectedGeneration(): number | undefined { return this.modeValue ? this.renderer.selected : undefined; }
 
-  showHome(chronicle: Readonly<GreatHallChronicle>, preferredNavigatorId?: NavigatorId): void {
+  showHome(chronicle: Readonly<GreatHallChronicle>, preferredNavigatorId?: NavigatorId, loggedVoyage?: number): void {
     this.show(chronicle, "home", preferredNavigatorId);
+    if (loggedVoyage !== undefined) this.renderer.showVoyageLogging(this.renderer.selected, loggedVoyage);
     this.renderer.focusSelection();
   }
 
@@ -89,6 +90,7 @@ export class GreatHallView {
     chronicle: Readonly<GreatHallChronicle>,
     outgoingNavigatorId: NavigatorId,
     nextGeneration: number,
+    loggedVoyage?: number,
   ): void {
     const outgoing = chronicle.navigators.find(({ navigatorId }) => navigatorId === outgoingNavigatorId);
     if (!outgoing || outgoing.state === "active") {
@@ -96,10 +98,11 @@ export class GreatHallView {
     }
     this.nextGeneration = nextGeneration;
     this.show(chronicle, "handover", outgoingNavigatorId);
+    if (loggedVoyage !== undefined) this.renderer.showVoyageLogging(outgoing.generation, loggedVoyage);
     this.primaryButton.focus();
   }
 
-  showCompletion(chronicle: Readonly<GreatHallChronicle>, findingNavigatorId: NavigatorId): void {
+  showCompletion(chronicle: Readonly<GreatHallChronicle>, findingNavigatorId: NavigatorId, loggedVoyage?: number): void {
     if (!chronicle.idolProgress.complete) {
       throw new RangeError("Great Hall completion requires every idol location to be returned");
     }
@@ -107,6 +110,7 @@ export class GreatHallView {
       throw new RangeError(`Great Hall completion requires finding navigator ${findingNavigatorId}`);
     }
     this.show(chronicle, "completion", findingNavigatorId);
+    if (loggedVoyage !== undefined) this.renderer.showVoyageLogging(this.renderer.selected, loggedVoyage);
     this.primaryButton.focus();
   }
 
