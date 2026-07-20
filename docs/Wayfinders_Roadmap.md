@@ -2,9 +2,9 @@
 
 Status: forward plan. Gameplay is complete through `GP-6.6`; the Great Hall
 track is complete through `GR-5.3`; cloud atmosphere is complete through
-`CLD-3`; and water presentation is complete through `WTR-2.6`. The ordered
-`PRS-1` through `PRS-2.4` Prosperity batch is explicitly authorized. `STM-1`
-is proposed; storm runtime implementation is not authorized.
+`CLD-3`; water presentation is complete through `WTR-2.6`; and Prosperity is
+complete through `PRS-2.4`. `STM-1` is proposed; storm runtime implementation
+is not authorized.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -61,9 +61,9 @@ cloud-world authoring preview, and production water system are implemented.
 They establish the presentation seams used by the proposed storm track.
 
 The Voyage Sense thread, its supply commitments, and the continuous global
-world are implemented through `GP-6.6`. `PRS-1` is the current implementation
-point in the authorized Prosperity batch. `STM-1` remains a separate proposed
-gameplay and presentation track and is not authorized. Remaining audio
+world are implemented through `GP-6.6`. Prosperity and returned-fact traffic
+are implemented through `PRS-2.4`. `STM-1` is the current proposed gameplay and
+presentation track and is not authorized. Remaining audio
 acceptance follow-up requires no new runtime scope; the production water
 system is complete through `WTR-2.6`.
 Great Hall concept and planning work is complete. The product owner accepted the
@@ -194,44 +194,11 @@ archived in `Wayfinders_Roadmap_Archive.md`.
 
 ### PRS — Hidden score and safe-water world feedback
 
-Status: `PRS-1` through `PRS-2.4` were explicitly authorized as one ordered
-implementation batch on 2026-07-19. `PRS-1` is current.
-
-`PRS-1` adds an authoritative session-scoped Prosperity score and source ledger
-without exposing the number to the player. Only committed returned feature
-facts contribute; fishing quality and island size retain explicit weighted
-values, while route length, mapped-water counts, provisional findings, failed
-voyages, and empty returns contribute nothing.
-
-`PRS-2` makes two returned facts visible without adding an economy. It first
-selects a restrained paired fishing/trade craft direction, then derives
-deterministic routes through passable Supported water, adds noninteractive
-fishing skiffs at returned surveyed shoals, adds noninteractive trade canoes
-between home and returned `community` islands, and closes with bounded-resource
-and live acceptance. Traffic is caused by returned semantic facts, not an
-invisible score threshold.
-
-The authorized dependency order is:
-
-1. `PRS-1` — hidden score foundation;
-2. `PRS-2.0` — paired traffic concepts and selection;
-3. `PRS-2.1` — shared returned-target safe-route model;
-4. `PRS-2.2` — fishing traffic presentation;
-5. `PRS-2.3` — trade traffic presentation; and
-6. `PRS-2.4` — scale, accessibility, acceptance, and documentation closure.
-
-```mermaid
-flowchart LR
-    P1["PRS-1 hidden score"] --> C["PRS-2.0 concepts"]
-    C --> R["PRS-2.1 safe routes"]
-    R --> F["PRS-2.2 fishing traffic"]
-    F --> T["PRS-2.3 trade traffic"]
-    T --> H["PRS-2.4 hardening"]
-```
-
-Exact values, safe-route authority, wrapping, visual selection, density caps,
-non-interaction rules, performance budgets, and acceptance criteria are defined
-in `Wayfinders_Prosperity_System_Milestone.md`.
+Status: implemented through `PRS-2.4` on 2026-07-19. Current behavior and
+numeric contracts are owned by `Wayfinders_Technical_Design.md`; ownership and
+dependency direction are owned by `ARCHITECTURE_MAP.md`; completion evidence is
+archived in `Wayfinders_Roadmap_Archive.md`. No economy, score-spending,
+settlement-growth, or later Prosperity milestone is proposed or authorized.
 
 ## Storm system
 
@@ -297,8 +264,8 @@ are defined in `Wayfinders_Storm_System_Milestone.md`.
 ## Authorization boundary
 
 WTR-1.0 through WTR-1.5 and WTR-2.0 through WTR-2.6 are complete. No later water
-milestone is authorized. Gameplay is complete through `GP-6.6`. The ordered
-`PRS-1` through `PRS-2.4` batch is authorized; no later Prosperity, economy, or
+milestone is authorized. Gameplay is complete through `GP-6.6`. `PRS-1`
+through `PRS-2.4` are complete; no later Prosperity, economy, or
 settlement-growth milestone is authorized. `STM-1` remains proposed but not
 authorized. Storm implementation, like any later gameplay or production-asset
 milestone, requires explicit user authorization.

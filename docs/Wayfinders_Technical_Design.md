@@ -356,15 +356,19 @@ water away from home does not settle it.
 Exact-home-dock return is one ordered transaction:
 
 1. place the ship at the dock centre;
-2. commit expedition-owned Personal water to Supported;
-3. close only tiny periodically enclosed Unknown pockets within the configured
+2. prepare and validate the hidden Prosperity settlement from the same
+   provisional returned-feature facts without mutating its authority;
+3. commit expedition-owned Personal water to Supported;
+4. close only tiny periodically enclosed Unknown pockets within the configured
    size bound;
-4. commit all expedition-owned feature leads, surveys, wreck reports, and idol
+5. commit all expedition-owned feature leads, surveys, wreck reports, and idol
    findings;
-5. close the expedition and advance its ID;
-6. append one immutable voyage achievement record and create one successor when
+6. close the expedition and advance its ID;
+7. append one immutable voyage achievement record and create one successor when
    the fourth voyage completes; and
-7. replenish provisions, clear fractional use, and publish settlement events.
+8. apply the prepared Prosperity settlement and refresh returned-fact traffic
+   routes; and
+9. replenish provisions, clear fractional use, and publish settlement events.
 
 Docking without an active expedition replenishes only supplies.
 
@@ -451,6 +455,78 @@ preserves the completed world and prevents another ending. **Start new game**
 uses a distinct deterministic seed and constructs a fresh world and lineage.
 If the final return also completes a fourth voyage, completion presentation has
 priority and the committed handover waits underneath it.
+
+### Prosperity and returned-route traffic
+
+Prosperity contract V1 is a hidden, session-scoped safe-integer score with a
+monotonic source ledger. Values are cumulative for each stable returned source:
+a lead establishes its first point and a later completed return raises that
+same source to its final value. Returning a lead and completed result together
+therefore equals returning them on separate voyages.
+
+| Returned source | Lead value | Completed cumulative value |
+| --- | ---: | ---: |
+| Small / medium / large island dossier | 1 | 5 / 7 / 9 |
+| Survey-site report | 1 | 7 |
+| Lean / steady / rich fishing-shoal survey | 1 | 5 / 7 / 9 |
+| Confirmed navigator-wreck report | — | 4 |
+| Idol location | — | 12 |
+
+Only facts committed at exact Home docking can change the ledger. Personal or
+provisional knowledge, failed voyages, idle docking, route length, Supported or
+mapped tile counts, map coverage, provisions, and traffic contribute nothing.
+The score survives navigator succession and resets with world regeneration or
+**Start new game**. It is not saved and is absent from player snapshots, events,
+browser diagnostics, the Great Hall, HUD, prompts, audio, and presentation read
+models. `WayfindersScene` receives a simulation capability type that omits the
+internal score selector.
+
+Returned surveyed fishing shoals and returned `community` island dossiers are
+the only traffic causes. Each eligible target receives a deterministic shortest
+route from the exact Home return tile through passable `Supported` water. Shoals
+use their exact service anchor; community islands choose the shortest connected
+approach and break equal-distance ties by canonical world index. One shared
+`SupportedConnectivitySystem` serves fishing eligibility and traffic, rebuilds
+at most once per Supported-topology revision, and preserves cardinal direction,
+edge image offsets, and lifted endpoints across world seams. Route projection
+is immutable, ordered by stable target identity, refreshed only by returned
+record or Supported-topology revisions, and resets with world regeneration.
+
+Traffic is presentation only. It owns no physics body, collision, input target,
+prompt, gameplay event, sound, provision effect, production output, or world
+mutation. Fishing uses the selected low unsailed outrigger with a turquoise net;
+trade uses the broader low-sail outrigger with ochre cargo. Both are subdued,
+code-native developer graphics derived from the checked-in Direction A concept;
+the concept PNGs are references rather than runtime assets.
+
+The presentation scheduler selects at most two fishing and two trade routes.
+One selected set remains stable for a complete shared service round; shorter
+routes wait at Home, and deterministic selection/fair-admission rotation occurs
+only when every selected craft has completed its route and Home dwell. This
+prevents mid-water replacement while eventually rotating every eligible route.
+The renderer admits at most three canonical craft on screen, at most one craft
+within `2.25` minimum-image tiles of Home, and at most eight periodic views.
+Unused fishing capacity is not reassigned to trade or vice versa.
+
+Craft move at `0.65` tiles per second, begin and finish their travel `0.65`
+tiles along the quiet departure edge from Home, dwell for `9` seconds at the
+destination and `12` seconds at Home, and retain lifted edge positions and
+headings across periodic seams. A newly published route begins in its
+destination dwell so its returned-world consequence is immediately visible.
+Traffic fades completely at or inside `1.25` minimum-image tiles from the
+player and reaches full subdued opacity at `2.25` tiles. Reduced motion freezes
+selection and progress, removes wakes, and uses one static pose three quarters
+along the destination edge.
+
+`ProsperityTrafficRenderer` draws at depth `1.8`, above the water surface at
+`1.6` and below terrain/coast presentation at `2`, so shorelines occlude craft
+without letting them compete with markers, prompts, Voyage Sense, fog, or the
+player. Its fixed pool contains eight containers and twenty-four code-native
+graphics children; stable frames allocate no textures or Phaser game objects.
+Active-chunk aliases share each canonical vessel identity, teardown destroys
+the complete pool, and telemetry records capacity, route revision, service
+epoch, canonical visibility, active periodic views, and peak use without
+exposing Prosperity.
 
 ## 10. Rendering and authored assets
 
@@ -960,6 +1036,9 @@ Normal sailing avoids work proportional to total world or island count:
 - forward guidance performs no search while hidden and is cooperative,
   cancellable, and atomically published when demanded;
 - return rendering follows one sparse, chunk-indexed Voyage Sense thread;
+- Prosperity traffic route rebuilding is revision-driven, shares one Supported
+  connectivity flood, and returns the identical immutable model on an unchanged
+  revision key;
 - clouds retain six cloud/shadow descriptors per referenced canonical chunk by
   default and at most twelve under live debug tuning, compute one bounded
   current footprint per descriptor, and give active images only translated
@@ -981,6 +1060,10 @@ Current automated budgets are:
   buckets and sixteen candidate descriptors examined;
 - presentation: no more than 25 active periodic image entries, including
   aliases of the same canonical chunk;
+- Prosperity traffic routing on `P2` with 32 returned records and 24 published
+  routes: sparse-route cold p95 below `80 ms`, fully Supported dense-ocean cold
+  p95 below `225 ms`, unchanged-key p95 below `2 ms`, and exactly one shared
+  connectivity build per cold refresh;
 - water: exactly two canvas textures per referenced canonical chunk, at most one
   surface redraw per visible canonical owner per presentation frame, and zero
   redraws attributable to aliases; and

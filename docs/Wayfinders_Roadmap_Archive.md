@@ -1539,9 +1539,58 @@ and repeated-presentation traversal checks. Current runtime behavior and numeric
 contracts are owned by `Wayfinders_Technical_Design.md`; volatile gate and
 browser state is recorded in `IMPLEMENTATION_STATUS.md`.
 
+## Prosperity and safe-water traffic
+
+### PRS-1 through PRS-2.4 — Hidden score and living-route feedback
+
+Status: implemented and verified on 2026-07-19.
+
+The batch established a hidden session-scoped Prosperity ledger whose
+cumulative source values settle atomically with exact-dock returned knowledge.
+Island size and fishing quality retain their existing ordered meaning; survey
+sites, confirmed navigator wrecks, and idol locations have explicit values.
+Mapped or Supported tile counts, route length, provisions, voyage completion,
+provisional findings, failed expeditions, and the removed Mapped-water and
+Supported-route achievements cannot contribute. The number is absent from
+player snapshots, events, browser diagnostics, the Great Hall, interface, and
+presentation capabilities.
+
+One world-scoped `SupportedConnectivitySystem` now serves fishing eligibility
+and the immutable Prosperity route projection. Returned surveyed fishing
+shoals route to their service anchors, while returned `community` dossiers
+route to the shortest connected island approach. Every edge is passable
+Supported water and retains direction-preserving lifted seam provenance. The
+projection is revision-cached, deterministic, activates a previously
+disconnected target after a later safe connection, and resets with the world.
+
+Three paired reference studies were created under
+`concept_art/prosperity-traffic`; **Direction A — Quiet outriggers** was selected.
+The runtime recreates that direction with a small unsailed fishing skiff and
+turquoise net plus a broader low-sail cargo canoe with ochre cargo. A shared
+endpoint scheduler, two-per-family limits, a three-canonical-craft screen cap,
+one-craft Home cap, player-clearance fade, reduced-motion pose, fixed eight-view
+pool, periodic alias projection, and shoreline occlusion keep the traffic
+subordinate and noninteractive.
+
+Focused score, settlement, route, periodic-seam, scheduling, renderer-pool,
+reduced-motion, and exact-return integration coverage passed with source/test
+typechecks and architecture validation. The `P2` route fixture measured sparse
+cold work at about `15.68 ms`, dense fully Supported cold work at about
+`134.09 ms`, and unchanged-key work below `0.01 ms`, within the declared
+`80 ms`, `225 ms`, and `2 ms` limits. Browser acceptance exercised separate
+lead and survey returns through the Great Hall and inspected the actual
+production fishing/trade renderer in a representative scene, both stationary
+and moving, with clean console output; the temporary inspection harness was
+removed.
+
+Planning and concept selection were recorded in `242d09c` and `5652e26`. The
+hidden-score and safe-route foundation was implemented in `d1b8b01`; bounded
+traffic presentation was implemented in `360797d`.
+
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-6.6`, graphics and asset
 work through `GR-5.3`, cloud atmosphere through `CLD-3`, water presentation
-through `WTR-2.6`, and architecture work through `AM-6`. Upcoming, proposed,
-and deferred work is maintained only in `Wayfinders_Roadmap.md`.
+through `WTR-2.6`, Prosperity through `PRS-2.4`, and architecture work through
+`AM-6`. Upcoming, proposed, and deferred work is maintained only in
+`Wayfinders_Roadmap.md`.

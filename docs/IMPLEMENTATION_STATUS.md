@@ -80,6 +80,18 @@ controls, and still omits the production-tooling sidebar. Asset validation,
 both typechecks, quick, contract, and I/O lanes, the production bundle, and live
 game and workspace browser checks pass.
 
+`PRS-1` through `PRS-2.4` are implemented. Exact-dock settlement now maintains
+the hidden weighted Prosperity ledger, and one shared Supported-connectivity
+authority publishes safe routes for returned surveyed fishing shoals and
+returned community dossiers. The fixed-pool presentation uses the selected
+Quiet outriggers direction, endpoint-only service rotation, restrained density,
+player-clearance fading, periodic projection, shoreline occlusion, and a static
+reduced-motion mode. Focused score, route, integration, scheduler, renderer,
+seam, and performance checks pass with both typechecks and architecture
+validation. Browser acceptance exercised separate fishing lead/survey returns
+and the Great Hall, then inspected the actual production fishing and trade
+graphics in a representative renderer scene with no warning or error output.
+
 The product owner accepted the GR-5.2 approval preview and authorized its
 shared-renderer game integration. Focused contract and
 repository-I/O verification covers native-dimension intake and padding,

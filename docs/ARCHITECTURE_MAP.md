@@ -115,6 +115,25 @@ adapter may own Phaser sound instances.
   explicitly demanded by presentation. `WayfindersScene` translates its
   scene-owned forward-overlay visibility into that enable/disable command;
   return-route authority remains continuously independent.
+- `SupportedConnectivitySystem` is the shared world-scoped authority for
+  passable Supported-water connectivity from the exact home return tile.
+  Fishing eligibility and Prosperity traffic reuse that same instance and
+  topology revision. Its public result carries deterministic shortest-path
+  indices plus direction-preserving lifted edges; consumers do not rebuild a
+  second flood or infer seam direction from canonical endpoints.
+- `src/wayfinders/features/prosperity/index.ts` is the public domain seam for
+  the session-scoped hidden score ledger and immutable traffic-route read
+  model. `GameSimulation` alone composes exact-return settlement and route
+  refresh. The numeric score is absent from player snapshots, events, browser
+  diagnostics, and the presentation capability surface; rendering consumes
+  only traffic routes caused by returned facts.
+- `ProsperityTrafficRenderer` owns the presentation-only route scheduler,
+  code-native fishing/trade craft, player-clearance fade, periodic projection,
+  and its fixed eight-view Phaser pool. It consumes only the public route read
+  model, topology, tile scale, player presentation position, reduced-motion
+  preference, and the shared active-chunk entries. It cannot query the hidden
+  score, create gameplay authority, or allocate Phaser objects on stable
+  frames.
 - `WayfindersScene` owns Phaser lifecycle, one `LiftedViewAnchor`, and one
   `ActiveChunkSet`. The view anchor consumes accepted movement displacement;
   canonical endpoints never infer wrap direction. Each active entry has a
