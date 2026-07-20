@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const MODULE_EXTENSIONS = new Set([".js", ".jsx", ".mjs", ".mts", ".ts", ".tsx"]);
 const PRIVATE_FEATURE_SUFFIXES = ["command", "commands", "selector", "selectors", "state", "system"];
+const PRESENTATION_OWNING_AREAS = new Set(["assets", "rendering"]);
 
 const normalizeSegment = (value) => value
   .replace(/\.(?:[cm]?[jt]sx?)$/i, "")
@@ -74,6 +75,11 @@ function featureLocation(candidate, featuresRoot) {
   return owner ? { owner, subpath } : undefined;
 }
 
+function sourceArea(candidate, sourceRoot) {
+  if (!inside(sourceRoot, candidate)) return undefined;
+  return path.relative(sourceRoot, candidate).split(path.sep).filter(Boolean)[0];
+}
+
 function targetFeatureLocation(importer, specifier, featuresRoot) {
   if (specifier.startsWith(".")) {
     return featureLocation(path.resolve(path.dirname(importer), specifier), featuresRoot);
@@ -113,13 +119,131 @@ function importsPhaser(specifier) {
   return normalized === "phaser" || normalized.startsWith("phaser/");
 }
 
-function importsRendering(importer, specifier, sourceRoot) {
+function importsSourceArea(importer, specifier, sourceRoot, area) {
   if (specifier.startsWith(".")) {
     const target = path.resolve(path.dirname(importer), specifier);
     const parts = path.relative(sourceRoot, target).split(path.sep);
-    return parts[0] === "rendering";
+    return normalizeSegment(parts[0] ?? "") === normalizeSegment(area);
   }
-  return normalizedParts(specifier).includes("rendering");
+  return normalizedParts(specifier).some((part) => normalizeSegment(part) === normalizeSegment(area));
+}
+
+function importsRendering(importer, specifier, sourceRoot) {
+  return importsSourceArea(importer, specifier, sourceRoot, "rendering");
+}
+
+function isSourceFile(file, sourceRoot, expectedParts) {
+  const actual = path.relative(sourceRoot, file)
+    .split(path.sep)
+    .filter(Boolean)
+    .map(normalizeSegment);
+  return actual.length === expectedParts.length
+    && actual.every((part, index) => part === normalizeSegment(expectedParts[index]));
+}
+
+function isWithinSourcePath(file, sourceRoot, expectedParts) {
+  const actual = path.relative(sourceRoot, file)
+    .split(path.sep)
+    .filter(Boolean)
+    .map(normalizeSegment);
+  return actual.length > expectedParts.length
+    && expectedParts.every((part, index) => actual[index] === normalizeSegment(part));
+}
+
+function importsMutationModule(specifier) {
+  const mutationOwners = ["authoring", "mutation", "repository", "transaction"];
+  return normalizedParts(specifier)
+    .map(normalizeSegment)
+    .some((part) => mutationOwners.some((owner) => part === owner || part.endsWith(owner)));
+}
+
+function importsGameplayComposition(importer, specifier, sourceRoot) {
+  if (importsSourceArea(importer, specifier, sourceRoot, "app")) return true;
+  const parts = normalizedParts(specifier).map(normalizeSegment);
+  if (parts.includes("gamesimulation")) return true;
+  const last = parts.at(-1);
+  if (last === "core" || (last === "index" && parts.at(-2) === "core")) return true;
+  if (specifier.startsWith(".")) {
+    const target = path.resolve(path.dirname(importer), specifier);
+    return path.dirname(target) === path.dirname(sourceRoot)
+      && normalizeSegment(path.basename(target)) === "main";
+  }
+  return false;
+}
+
+function codeWithoutCommentsOrStrings(source) {
+  let result = "";
+  let state = "code";
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+    if (state === "code") {
+      if (character === "/" && next === "/") {
+        result += "  ";
+        index += 1;
+        state = "line-comment";
+      } else if (character === "/" && next === "*") {
+        result += "  ";
+        index += 1;
+        state = "block-comment";
+      } else if (character === "'" || character === '"' || character === "`") {
+        result += " ";
+        state = character === "'" ? "single-string"
+          : character === '"' ? "double-string" : "template-string";
+      } else {
+        result += character;
+      }
+      continue;
+    }
+    if (character === "\n" || character === "\r") {
+      result += character;
+      if (state === "line-comment") state = "code";
+      continue;
+    }
+    result += " ";
+    if (state === "line-comment") continue;
+    if (state === "block-comment") {
+      if (character === "*" && next === "/") {
+        result += " ";
+        index += 1;
+        state = "code";
+      }
+      continue;
+    }
+    if (character === "\\") {
+      if (next !== undefined) {
+        result += next === "\n" || next === "\r" ? next : " ";
+        index += 1;
+      }
+      continue;
+    }
+    if ((state === "single-string" && character === "'")
+      || (state === "double-string" && character === '"')
+      || (state === "template-string" && character === "`")) {
+      state = "code";
+    }
+  }
+  return result;
+}
+
+function extractMutationTransports(source) {
+  const searchable = codeWithoutCommentsOrStrings(source);
+  const matches = [];
+  const patterns = [
+    ["fetch()", /\b(?:globalThis\s*\.\s*)?fetch\s*\(/g],
+    ["XMLHttpRequest", /\bnew\s+XMLHttpRequest\s*\(/g],
+    ["FormData", /\bnew\s+FormData\s*\(/g],
+    ["navigator.sendBeacon()", /\bnavigator\s*\.\s*sendBeacon\s*\(/g],
+  ];
+  for (const [specifier, pattern] of patterns) {
+    for (const match of searchable.matchAll(pattern)) {
+      matches.push({
+        specifier,
+        line: searchable.slice(0, match.index).split(/\r?\n/).length,
+      });
+    }
+  }
+  return matches.sort((left, right) => left.line - right.line || left.specifier.localeCompare(right.specifier));
 }
 
 function isPresentationFile(file, sourceRoot) {
@@ -148,10 +272,7 @@ function violation(repositoryRoot, file, dependency, code, message) {
   };
 }
 
-/**
- * Enforce ownership boundaries for packages under src/wayfinders/features.
- * The other top-level folders are stable shared layers, not feature packages.
- */
+/** Enforce engine/presentation ownership rules plus feature-package public seams. */
 export async function checkFeatureBoundaries(
   repositoryRoot,
   { sourceRoot = path.join(repositoryRoot, "src", "wayfinders") } = {},
@@ -163,11 +284,50 @@ export async function checkFeatureBoundaries(
 
   for (const file of await sourceFiles(absoluteSourceRoot)) {
     const importerFeature = featureLocation(file, featuresRoot);
+    const importerArea = sourceArea(file, absoluteSourceRoot);
+    const ownsPresentation = PRESENTATION_OWNING_AREAS.has(importerArea);
     const presentationFile = isPresentationFile(file, absoluteSourceRoot);
-    const dependencies = extractModuleSpecifiers(await readFile(file, "utf8"));
+    const assetTrialScene = isSourceFile(file, absoluteSourceRoot, ["assets", "AssetTrialScene"]);
+    const audioWorkspaceOwner = isWithinSourcePath(
+      file,
+      absoluteSourceRoot,
+      ["assets", "audioPreview"],
+    );
+    const source = await readFile(file, "utf8");
+    const dependencies = extractModuleSpecifiers(source);
+
+    if (audioWorkspaceOwner) {
+      for (const transport of extractMutationTransports(source)) {
+        violations.push(violation(
+          absoluteRepositoryRoot,
+          file,
+          transport,
+          "audio-workspace-no-mutation",
+          "The Audio asset workspace is play-only and cannot own HTTP or form mutation transport.",
+        ));
+      }
+    }
 
     for (const dependency of dependencies) {
       const { specifier } = dependency;
+      if (assetTrialScene && importsGameplayComposition(file, specifier, absoluteSourceRoot)) {
+        violations.push(violation(
+          absoluteRepositoryRoot,
+          file,
+          dependency,
+          "asset-trial-no-gameplay-composition",
+          "The isolated asset trial is candidate-only and cannot depend on GameSimulation or application composition.",
+        ));
+      }
+      if (audioWorkspaceOwner && importsMutationModule(specifier)) {
+        violations.push(violation(
+          absoluteRepositoryRoot,
+          file,
+          dependency,
+          "audio-workspace-no-mutation",
+          "The Audio asset workspace is play-only and cannot import authoring, repository, mutation, or transaction owners.",
+        ));
+      }
       if (importerFeature && importsPhaser(specifier)) {
         violations.push(violation(
           absoluteRepositoryRoot,
@@ -175,6 +335,14 @@ export async function checkFeatureBoundaries(
           dependency,
           "feature-no-phaser",
           `Feature "${importerFeature.owner}" cannot import Phaser. Put engine code in rendering and expose data through the feature's presentation adapter.`,
+        ));
+      } else if (!ownsPresentation && importsPhaser(specifier)) {
+        violations.push(violation(
+          absoluteRepositoryRoot,
+          file,
+          dependency,
+          "domain-no-phaser",
+          "Code below presentation cannot import Phaser. Put engine objects in rendering or an asset preview and expose renderer-neutral data across the boundary.",
         ));
       }
       if (importerFeature && importsRendering(file, specifier, absoluteSourceRoot)) {
@@ -184,6 +352,14 @@ export async function checkFeatureBoundaries(
           dependency,
           "feature-no-rendering",
           `Feature "${importerFeature.owner}" cannot import the rendering layer. Rendering may depend on the feature's public index, contracts, or presentation adapter.`,
+        ));
+      } else if (!ownsPresentation && importsRendering(file, specifier, absoluteSourceRoot)) {
+        violations.push(violation(
+          absoluteRepositoryRoot,
+          file,
+          dependency,
+          "domain-no-rendering",
+          "Code below presentation cannot import the rendering layer. Rendering may consume domain read models and public contracts, but domain code must remain renderer-neutral.",
         ));
       }
 
@@ -223,11 +399,11 @@ async function main() {
     : path.resolve(path.dirname(scriptPath), "..");
   const violations = await checkFeatureBoundaries(repositoryRoot);
   if (violations.length === 0) {
-    console.log("Feature boundaries: OK");
+    console.log("Architecture boundaries: OK");
     return;
   }
 
-  console.error(`Feature boundaries: ${violations.length} ownership violation(s)`);
+  console.error(`Architecture boundaries: ${violations.length} ownership violation(s)`);
   for (const item of violations) console.error(`- ${formatFeatureBoundaryViolation(item)}`);
   process.exitCode = 1;
 }

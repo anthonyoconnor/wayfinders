@@ -1,5 +1,4 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ASSET_LIBRARY_CATALOG } from "../src/wayfinders/assets/AssetLibraryCatalog";
 import { RUNTIME_COLLISION_OBJECT_KINDS } from "../src/wayfinders/assets/CollisionProfileRegistry";
 import {
@@ -8,10 +7,74 @@ import {
   assetWorkspaceHref,
   resolveAssetWorkspace,
 } from "../src/wayfinders/assets/AssetWorkspaceRegistry";
+import { mountAssetWorkspaceTabs } from "../src/wayfinders/assets/AssetWorkspaceTabs";
 import {
   assetWorkspaceSceneKey,
   assetWorkspaceSelectionKey,
 } from "../src/wayfinders/assets/workspaces/AssetWorkspace";
+
+class FakeTabButton extends EventTarget {
+  readonly attributes = new Map<string, string>();
+  readonly dataset: { assetWorkspace: string };
+  tabIndex = 0;
+  focused = false;
+
+  constructor(workspaceId: string) {
+    super();
+    this.dataset = { assetWorkspace: workspaceId };
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  focus(): void {
+    this.focused = true;
+  }
+}
+
+class FakeTabRoot {
+  hidden = true;
+  buttons: FakeTabButton[] = [];
+  private markup = "";
+
+  set innerHTML(value: string) {
+    this.markup = value;
+    this.buttons = [...value.matchAll(/data-asset-workspace="([^"]+)"/gu)]
+      .map((match) => new FakeTabButton(match[1]!));
+  }
+
+  get innerHTML(): string {
+    return this.markup;
+  }
+
+  querySelectorAll<T>(): T[] {
+    return this.buttons as unknown as T[];
+  }
+
+  replaceChildren(): void {
+    this.markup = "";
+    this.buttons = [];
+  }
+}
+
+class FakeBrowserWindow extends EventTarget {
+  readonly pushedUrls: string[] = [];
+  readonly location = { search: "?mode=assets&workspace=islands" };
+  readonly history = {
+    pushState: (_state: unknown, _unused: string, url: string | URL | null): void => {
+      const href = String(url ?? "");
+      this.pushedUrls.push(href);
+      this.location.search = href;
+    },
+  };
+}
+
+function keyboardEvent(key: string): Event {
+  const event = new Event("keydown", { cancelable: true });
+  Object.defineProperty(event, "key", { value: key });
+  return event;
+}
 
 describe("GR-4.0 isolated asset workspaces", () => {
   it("registers the initial workspaces in stable tab order with one owned catalog partition", () => {
@@ -76,56 +139,92 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(assetWorkspaceSelectionKey("ships")).toBe("wayfinders:asset-workspace:ships:selection");
   });
 
-  it("mounts accessible tabs and switches isolated Phaser scenes through one registry seam", () => {
-    const tabs = readFileSync(
-      new URL("../src/wayfinders/assets/AssetWorkspaceTabs.ts", import.meta.url),
-      "utf8",
-    );
-    const main = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
-    const scene = readFileSync(
-      new URL("../src/wayfinders/assets/AssetViewerScene.ts", import.meta.url),
-      "utf8",
-    );
+  it("mounts accessible tabs, activates pointer and keyboard navigation, follows history, and tears down", () => {
+    const root = new FakeTabRoot();
+    const panelAttributes = new Map<string, string>();
+    const panel = {
+      id: "asset-workspace-panel",
+      setAttribute: (name: string, value: string) => panelAttributes.set(name, value),
+      removeAttribute: (name: string) => panelAttributes.delete(name),
+    };
+    const browser = new FakeBrowserWindow();
+    const documentElement = { dataset: {} as Record<string, string | undefined> };
+    vi.stubGlobal("window", browser);
+    vi.stubGlobal("document", { documentElement });
 
-    expect(tabs).toContain('role="tablist"');
-    expect(tabs).toContain('role="tab"');
-    expect(tabs).toContain('panel.setAttribute("role", "tabpanel")');
-    expect(tabs).toContain('"ArrowLeft"');
-    expect(tabs).toContain('"ArrowRight"');
-    expect(tabs).toContain('"popstate"');
-    expect(main).toContain("wayfindersGame!.scene.stop(previousKey)");
-    expect(main).toContain("wayfindersGame!.scene.start(nextKey)");
-    expect(main).toContain("createAssetWorkspaceScene(workspace, audioCatalogResult)");
-    expect(scene).toContain("this.controlsAbort?.abort()");
-    expect(scene).toContain("assetWorkspaceSelectionKey(this.workspace.id)");
-    expect(scene).toContain("this.workspaceCatalog");
-  });
+    try {
+      const activated: string[] = [];
+      const tabs = mountAssetWorkspaceTabs(
+        root as unknown as HTMLElement,
+        panel as unknown as HTMLElement,
+        ASSET_WORKSPACES[0],
+        (workspace) => activated.push(workspace.id),
+      );
+      expect(root.hidden).toBe(false);
+      expect(root.innerHTML).toContain('role="tablist"');
+      expect(root.innerHTML.match(/role="tab"/gu)).toHaveLength(ASSET_WORKSPACES.length);
+      expect(root.buttons).toHaveLength(ASSET_WORKSPACES.length);
+      expect(root.buttons.map((button) => button.attributes.get("aria-selected"))).toEqual([
+        "true", "false", "false", "false", "false", "false", "false", "false",
+      ]);
+      expect(root.buttons.map(({ tabIndex }) => tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1, -1]);
+      expect(panelAttributes.get("role")).toBe("tabpanel");
+      expect(panelAttributes.get("aria-labelledby")).toBe("asset-workspace-tab-islands");
+      expect(documentElement.dataset.assetWorkspace).toBe("islands");
 
-  it("mounts the complete animated icon review set and tears down its DOM bindings", () => {
-    const scene = readFileSync(
-      new URL("../src/wayfinders/assets/achievementIcons/AchievementIconPreviewScene.ts", import.meta.url),
-      "utf8",
-    );
-    const factory = readFileSync(
-      new URL("../src/wayfinders/assets/AssetWorkspaceSceneFactory.ts", import.meta.url),
-      "utf8",
-    );
+      root.buttons[1]!.dispatchEvent(new Event("click"));
+      expect(tabs.activeWorkspace.id).toBe("ships");
+      expect(activated).toEqual(["ships"]);
+      expect(browser.pushedUrls).toEqual(["?mode=assets&workspace=ships"]);
+      expect(root.buttons[1]!.attributes.get("aria-selected")).toBe("true");
+      expect(root.buttons[1]!.tabIndex).toBe(0);
+      expect(root.buttons[0]!.tabIndex).toBe(-1);
 
-    expect(factory).toContain('case "achievement-icons-preview"');
-    expect(factory).toContain('case "cloud-preview"');
-    expect(scene).toContain("ACHIEVEMENT_ICON_KINDS.map");
-    expect(scene).toContain("ACHIEVEMENT_ICON_CATALOG[kind]");
-    expect(scene).toContain('class="achievement-icon"');
-    expect(scene).toContain("data-achievement-icon-kind");
-    expect(scene).toContain("--achievement-icon-row-position");
-    expect(scene).toContain('data-icon-action="pause-play"');
-    expect(scene).toContain('data-icon-control="speed"');
-    expect(scene).toContain("dataset.animationPaused");
-    expect(scene).toContain("this.controlsAbort?.abort()");
-    expect(scene).toContain("this.browser?.remove()");
-    expect(scene).toContain("this.stage?.remove()");
-    expect(scene).toContain("slot.replaceChildren()");
-    expect(scene).not.toContain("GameSimulation");
-    expect(scene).not.toContain("requestAnimationFrame");
+      const arrowRight = keyboardEvent("ArrowRight");
+      root.buttons[1]!.dispatchEvent(arrowRight);
+      expect(arrowRight.defaultPrevented).toBe(true);
+      expect(tabs.activeWorkspace.id).toBe("fishing-shoals");
+      expect(root.buttons[2]!.focused).toBe(true);
+
+      root.buttons[2]!.dispatchEvent(keyboardEvent("End"));
+      expect(tabs.activeWorkspace.id).toBe("audio");
+      expect(root.buttons.at(-1)!.focused).toBe(true);
+      root.buttons.at(-1)!.dispatchEvent(keyboardEvent("Home"));
+      expect(tabs.activeWorkspace.id).toBe("islands");
+      expect(root.buttons[0]!.focused).toBe(true);
+      root.buttons[0]!.dispatchEvent(keyboardEvent("ArrowLeft"));
+      expect(tabs.activeWorkspace.id).toBe("audio");
+      expect(browser.pushedUrls).toEqual([
+        "?mode=assets&workspace=ships",
+        "?mode=assets&workspace=fishing-shoals",
+        "?mode=assets&workspace=audio",
+        "?mode=assets&workspace=islands",
+        "?mode=assets&workspace=audio",
+      ]);
+
+      browser.location.search = "?mode=assets&workspace=clouds";
+      const pushesBeforePopstate = browser.pushedUrls.length;
+      browser.dispatchEvent(new Event("popstate"));
+      expect(tabs.activeWorkspace.id).toBe("clouds");
+      expect(root.buttons[4]!.focused).toBe(true);
+      expect(browser.pushedUrls).toHaveLength(pushesBeforePopstate);
+
+      const detachedButton = root.buttons[1]!;
+      const activationsBeforeDestroy = [...activated];
+      tabs.destroy();
+      expect(root.hidden).toBe(true);
+      expect(root.innerHTML).toBe("");
+      expect(panelAttributes.has("role")).toBe(false);
+      expect(panelAttributes.has("aria-labelledby")).toBe(false);
+      expect(documentElement.dataset.assetWorkspace).toBeUndefined();
+      browser.location.search = "?mode=assets&workspace=ships";
+      detachedButton.dispatchEvent(new Event("click"));
+      detachedButton.dispatchEvent(keyboardEvent("ArrowRight"));
+      browser.dispatchEvent(new Event("popstate"));
+      expect(activated).toEqual(activationsBeforeDestroy);
+      expect(browser.pushedUrls).toHaveLength(pushesBeforePopstate);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

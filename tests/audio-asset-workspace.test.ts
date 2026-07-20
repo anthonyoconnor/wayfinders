@@ -79,25 +79,4 @@ describe("AUD-1 Audio asset workspace", () => {
     expect(formatAudioPreviewTime(65.9)).toBe("1:05");
   });
 
-  it("contains only play-only controls and no mutation transport", () => {
-    const scene = readFileSync(
-      new URL("../src/wayfinders/assets/audioPreview/AudioAssetWorkspaceScene.ts", import.meta.url),
-      "utf8",
-    );
-    expect(scene).toContain('data-audio-action="play"');
-    expect(scene).toContain('data-audio-action="pause-resume"');
-    expect(scene).toContain('data-audio-action="stop"');
-    expect(scene).toContain('data-audio-output="progress"');
-    expect(scene).toContain('data-audio-output="duration"');
-    expect(scene).toContain("renderLoadFailure");
-    expect(scene).not.toContain("fetch(");
-    expect(scene).not.toContain("XMLHttpRequest");
-    expect(scene).not.toContain("FormData");
-    expect(scene).not.toContain("method: \"POST\"");
-    expect(scene).not.toContain("method: \"PUT\"");
-    expect(scene).not.toContain("method: \"DELETE\"");
-    expect(scene).not.toContain("<input");
-    expect(scene).not.toContain("<textarea");
-    expect(scene).not.toContain("<select");
-  });
 });
