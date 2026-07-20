@@ -6,16 +6,18 @@ import { GREAT_HALL_PRESENTATION_ACHIEVEMENT_KIND } from "./greatHall/GreatHallP
 export class CurrentVoyageAchievementsView {
   private readonly root: HTMLElement;
   private readonly list: HTMLOListElement;
+  private readonly layoutHost: HTMLElement;
   private readonly itemsByKey = new Map<string, HTMLLIElement>();
 
-  constructor(private readonly gameHost: HTMLElement) {
+  constructor(gameHost: HTMLElement) {
+    this.layoutHost = gameHost.closest<HTMLElement>("#game-region") ?? gameHost;
     this.root = document.createElement("section");
     this.root.className = "voyage-achievements";
     this.root.setAttribute("aria-label", "Current voyage achievements at risk");
     this.list = document.createElement("ol");
     this.root.append(this.list);
-    this.gameHost.style.setProperty("--voyage-achievements-height", "3.6rem");
-    document.querySelector("#game-region")?.append(this.root);
+    this.layoutHost.style.setProperty("--voyage-achievements-height", "3.6rem");
+    this.layoutHost.append(this.root);
     this.sync(false, []);
   }
 
@@ -60,7 +62,7 @@ export class CurrentVoyageAchievementsView {
   }
 
   destroy(): void {
-    this.gameHost.style.removeProperty("--voyage-achievements-height");
+    this.layoutHost.style.removeProperty("--voyage-achievements-height");
     this.itemsByKey.clear();
     this.root.remove();
   }

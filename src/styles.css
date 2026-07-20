@@ -4928,7 +4928,7 @@ html[data-application-mode="game"] .voyage-achievements {
   );
   left: 50%;
   display: block;
-  width: min(52rem, calc(100vw - 2rem));
+  width: var(--cargo-rack-width, 25.875rem);
   min-height: 3rem;
   padding: 0.3rem 0.45rem;
   border: 3px solid #24150f;

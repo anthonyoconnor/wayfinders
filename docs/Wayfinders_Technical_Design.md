@@ -321,7 +321,9 @@ orange, then red as supply falls. The thread is absent when the ship is already
 in Supported water or no eligible known route exists.
 
 The screen-space cargo rack consumes one renderer-neutral partition of physical
-bundles rather than recalculating gameplay rules. Natural bundle material is
+bundles rather than recalculating gameplay rules. Its column capacity gives it
+a fixed width at each responsive layout, while additional bundles add rows and
+grow it vertically. Natural bundle material is
 uncommitted supply; a contiguous spend-end overlay uses the thread's current
 green, yellow, orange, or red state for the exact shortest-known-return cost;
 and the already-spent travel fraction remains visible as depleted material.
@@ -334,13 +336,14 @@ numbers. A visually hidden live status owns exact usable, return, survey,
 uncommitted, safe/unknown, and shortfall text without announcing animation
 frames.
 
-Immediately above the rack, a screen-space current-voyage strip projects the
-expedition's provisional lead, survey, wreck, and idol credits through
-the same structured achievement builder and eight active icon kinds used by
-the Great Hall. The strip has no visible text; every exact prospective Hall
-label remains available to assistive technology and pointer tooltips. Symbols
-remain in the authoritative order their knowledge transitions occurred, making
-the strip a compact journey log rather than a kind-grouped tally. It remains a
+Immediately above the rack, a matching-width screen-space current-voyage strip
+projects the expedition's provisional lead, survey, wreck, and idol credits
+through the same structured achievement builder and eight active icon kinds
+used by the Great Hall. The strip has no visible text; every exact prospective
+Hall label remains available to assistive technology and pointer tooltips.
+Symbols remain in the authoritative order their knowledge transitions
+occurred, making the strip a compact journey log rather than a kind-grouped
+tally. It remains a
 stable HUD fixture, updates from sparse expedition-owned records, and clears
 on return or wreck. Each newly added symbol plays its authored loop once and
 then holds static for the rest of the voyage; reduced motion uses the static

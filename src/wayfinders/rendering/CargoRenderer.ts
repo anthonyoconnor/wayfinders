@@ -30,7 +30,7 @@ export class CargoRenderer {
   private readonly rack: Phaser.GameObjects.Graphics;
   private readonly views: BundleView[] = [];
   private readonly status: HTMLElement;
-  private readonly gameHost?: HTMLElement;
+  private readonly layoutHost?: HTMLElement;
   private readonly reducedMotionQuery: MediaQueryList;
   private displayedCount = -1;
   private latestModel?: Readonly<CargoPresentationModel>;
@@ -43,7 +43,7 @@ export class CargoRenderer {
     this.container = scene.add.container(0, 0, [this.rack]);
     this.viewportContainer = scene.add.container(0, 0, [this.container]).setScrollFactor(0).setDepth(100);
     this.status = this.getOrCreateStatus();
-    this.gameHost = document.querySelector<HTMLElement>("#game-host") ?? undefined;
+    this.layoutHost = document.querySelector<HTMLElement>("#game-region") ?? undefined;
     this.updateSafeAreaBottomInset();
     this.reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
     this.reducedMotionQuery.addEventListener?.("change", this.onReducedMotionChange);
@@ -106,7 +106,8 @@ export class CargoRenderer {
     this.scene.scale.off(Phaser.Scale.Events.RESIZE, this.onResize);
     this.reducedMotionQuery.removeEventListener?.("change", this.onReducedMotionChange);
     this.scene.tweens.killTweensOf(this.surveyPulseTargets);
-    this.gameHost?.style.removeProperty("--cargo-rack-height");
+    this.layoutHost?.style.removeProperty("--cargo-rack-height");
+    this.layoutHost?.style.removeProperty("--cargo-rack-width");
     this.viewportContainer.destroy(true);
     this.status.remove();
   }
@@ -201,11 +202,11 @@ export class CargoRenderer {
   private redrawRack(model: Readonly<CargoPresentationModel>): void {
     const count = Math.max(1, this.displayedCount);
     const columnsPerRow = this.columnsPerRow();
-    const columns = Math.min(columnsPerRow, count);
     const rows = Math.ceil(count / columnsPerRow);
-    const width = columns * BUNDLE_SPACING + 30;
+    const width = columnsPerRow * BUNDLE_SPACING + 30;
     const height = rows * BUNDLE_SPACING + 30;
-    this.gameHost?.style.setProperty("--cargo-rack-height", `${height}px`);
+    this.layoutHost?.style.setProperty("--cargo-rack-height", `${height}px`);
+    this.layoutHost?.style.setProperty("--cargo-rack-width", `${width}px`);
     const left = -width / 2;
     const top = -height;
     this.rack.clear();
