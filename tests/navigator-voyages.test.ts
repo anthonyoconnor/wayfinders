@@ -6,6 +6,7 @@ import {
   type NavigatorVoyageAchievementRecordV3,
 } from "../src/wayfinders/lineage/NavigatorLineageSystem.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
+import { makeConfig } from "./helpers.ts";
 
 function findUnknownWater(simulation: GameSimulation): GridPoint {
   let result: GridPoint | undefined;
@@ -27,7 +28,7 @@ function returnOneExpedition(simulation: GameSimulation): void {
 
 describe("four-journey navigator tenure", () => {
   it("counts exact-dock returns and automatically nominates a successor after journey four", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const returns: Array<{
       voyageNumber: number;
       voyagesRemaining: number;
@@ -112,7 +113,7 @@ describe("four-journey navigator tenure", () => {
   });
 
   it("assigns the next journey to the successor instead of extending the first tenure", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     for (let voyage = 0; voyage < NAVIGATOR_VOYAGE_LIMIT; voyage++) returnOneExpedition(simulation);
 
     expect(simulation.acknowledgeGenerationHandover()).toBe(true);
@@ -132,7 +133,7 @@ describe("four-journey navigator tenure", () => {
   });
 
   it("installs the fourth-return handover gate before lifecycle subscribers run", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     for (let voyage = 0; voyage < NAVIGATOR_VOYAGE_LIMIT - 1; voyage++) returnOneExpedition(simulation);
     const attemptedTarget = findUnknownWater(simulation);
     let callbackTeleport: boolean | undefined;
@@ -153,7 +154,7 @@ describe("four-journey navigator tenure", () => {
   });
 
   it("does not count idle time or inactive dock arrivals as journeys", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     simulation.update({ turn: 0, throttle: 0 }, 10_000);
     expect(simulation.navigatorVoyagesCompleted).toBe(0);
     expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
@@ -169,7 +170,7 @@ describe("four-journey navigator tenure", () => {
   });
 
   it("kills a wrecked navigator early, preserves their completed journeys, and resumes once", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     returnOneExpedition(simulation);
     returnOneExpedition(simulation);
     expect(simulation.teleport(findUnknownWater(simulation))).toBe(true);

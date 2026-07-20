@@ -8,7 +8,6 @@ import {
   type CloudAssetPackage,
   validateCloudAssetPackage,
 } from "../src/wayfinders/assets/CloudAssetCatalog";
-import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import {
   CloudLayerRenderer,
   isCloudEnvelopeFullyClear,
@@ -21,12 +20,14 @@ import {
 import { ActiveChunkSet, type ActiveChunkEntry } from "../src/wayfinders/rendering/activation";
 import { gridToWorld } from "../src/wayfinders/world/CoordinateSystem";
 import { KnowledgeState } from "../src/wayfinders/world/TileData";
+import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import {
   BOUNDED_WORLD_TOPOLOGY,
   WRAPPING_WORLD_TOPOLOGY,
   WorldTopology,
 } from "../src/wayfinders/world/WorldTopology";
+import { createWorldProfileConfig } from "./fixtures/worldProfiles";
 
 const CLOUD_VARIANT_IDS = [
   "long-broken-wisp",
@@ -466,17 +467,18 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
   });
 
   it("uses ordinary seeded chunk descriptors for the generated starting chunk", () => {
-    const simulation = new GameSimulation();
+    const config = createWorldProfileConfig("P0");
+    const generated = new WorldGenerator(config).plan(13_371);
     const homeWorldPosition = gridToWorld(
-      simulation.generated.landmarks.homeCenter,
-      simulation.config.navigation.tileSize,
+      generated.landmarks.homeCenter,
+      config.navigation.tileSize,
     );
-    const chunkSizePixels = simulation.world.chunkSize * simulation.config.navigation.tileSize;
+    const chunkSizePixels = config.navigation.chunkSize * config.navigation.tileSize;
     const homeChunkX = Math.floor(homeWorldPosition.x / chunkSizePixels);
     const homeChunkY = Math.floor(homeWorldPosition.y / chunkSizePixels);
     const homeEntry = entry(homeChunkX, homeChunkY);
     const descriptors = resolveCloudDescriptorsForChunk(
-      simulation.generated.seed,
+      generated.seed,
       homeEntry,
       chunkSizePixels,
       CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk,
@@ -485,7 +487,7 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     expect(descriptors).toEqual(Array.from(
       { length: CLOUD_ASSET_PACKAGE.presentation.candidatesPerChunk },
       (_, slot) => resolveCloudDescriptor(
-        simulation.generated.seed,
+        generated.seed,
         homeEntry,
         chunkSizePixels,
         CLOUD_ASSET_PACKAGE,
@@ -499,7 +501,7 @@ describe("cloud atmosphere assets and deterministic presentation", () => {
     const renderer = new CloudLayerRenderer(scene as never, false);
     renderer.applyActiveChunkDelta(
       oneChunkDelta(homeChunkX, homeChunkY),
-      simulation.generated.seed,
+      generated.seed,
       chunkSizePixels,
     );
     expect(renderer.getResourceTelemetry()).toMatchObject({

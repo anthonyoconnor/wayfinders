@@ -6,8 +6,6 @@ import { defineConfig, type TestProjectConfiguration } from "vitest/config";
 const quickTests = [
   "tests/active-chunk-set.test.ts",
   "tests/bucketed-cost-search.test.ts",
-  "tests/feature-boundaries.test.mjs",
-  "tests/forward-guidance-task.test.ts",
   "tests/navigation-collision-edges.test.ts",
   "tests/navigation-topology-cache.test.ts",
   "tests/presentation-lifetime.test.ts",
@@ -75,9 +73,7 @@ export default defineConfig({
         "tests/performance/**/*.test.ts",
       ]),
       project("integration", integrationTests),
-      project("io", ["tests/**/*.test.mjs", ...repositoryAssetTests], [
-        "tests/feature-boundaries.test.mjs",
-      ]),
+      project("io", ["tests/**/*.test.mjs", ...repositoryAssetTests]),
       {
         extends: true,
         test: {

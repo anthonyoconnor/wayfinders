@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { DEFAULT_GAME_SETTINGS } from "../src/wayfinders/config/gameSettings";
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGenerator } from "../src/wayfinders/world/WorldGenerator";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
@@ -15,8 +16,14 @@ import {
   WATER_TYPE_IDS,
   WATER_TYPE_CATALOG_VERSION,
   WaterLayoutPlanner,
+  createManifestWaterLayout,
   validateWaterTypeCatalog,
 } from "../src/wayfinders/world/water";
+import { createWorldProfileConfig } from "./fixtures/worldProfiles";
+
+function generateP0World(seed: number) {
+  return new WorldGenerator(createWorldProfileConfig("P0")).generate(seed);
+}
 
 function plannedLayout(
   grid: WorldGrid,
@@ -39,7 +46,7 @@ function plannedLayout(
 }
 
 function waterFacts(seed: number): string[] {
-  const generated = new WorldGenerator().generate(seed);
+  const generated = generateP0World(seed);
   const facts: string[] = [];
   for (let y = 0; y < generated.grid.height; y++) {
     for (let x = 0; x < generated.grid.width; x++) {
@@ -56,6 +63,33 @@ function waterFacts(seed: number): string[] {
 }
 
 describe("generated water layout", () => {
+  it("keeps normal-game manifest and automatic treatments wired without rasterizing it", () => {
+    const manifest = createManifestWaterLayout(
+      DEFAULT_GAME_SETTINGS.world.seed,
+      DEFAULT_GAME_SETTINGS.world.width,
+      DEFAULT_GAME_SETTINGS.world.height,
+    );
+
+    expect(manifest.version).toBe(WATER_LAYOUT_VERSION);
+    expect(manifest.catalogFingerprint).toBe(DEFAULT_WATER_TYPE_CATALOG.fingerprint);
+    expect(manifest.regions.map(({ typeId }) => typeId)).toEqual([
+      WATER_TYPE_IDS.abyss,
+      WATER_TYPE_IDS.current,
+      WATER_TYPE_IDS.rough,
+    ]);
+    expect(DEFAULT_WATER_TYPE_CATALOG.types
+      .filter(({ automaticallyPlaced }) => automaticallyPlaced)
+      .map(({ id }) => id)).toEqual([
+      WATER_TYPE_IDS.abyss,
+      WATER_TYPE_IDS.coastal,
+      WATER_TYPE_IDS.current,
+      WATER_TYPE_IDS.deep,
+      WATER_TYPE_IDS.lagoon,
+      WATER_TYPE_IDS.reef,
+      WATER_TYPE_IDS.rough,
+    ]);
+  });
+
   it("is deterministic and includes every automatically placed treatment", () => {
     const first = waterFacts(84_221);
     const second = waterFacts(84_221);
@@ -68,7 +102,7 @@ describe("generated water layout", () => {
   });
 
   it("keeps reef authority and visual overlays separate from terrain", () => {
-    const generated = new WorldGenerator().generate(84_221);
+    const generated = generateP0World(84_221);
     let currentTiles = 0;
     let roughTiles = 0;
     for (let y = 0; y < generated.grid.height; y++) {
@@ -211,7 +245,8 @@ describe("generated water layout", () => {
   });
 
   it("accepts a new catalog type through an existing placement strategy", () => {
-    const generated = new WorldGenerator().generate(84_221);
+    const grid = new WorldGrid(20, 20, 5, WRAPPING_WORLD_TOPOLOGY);
+    grid.fill(TerrainType.DeepOcean, KnowledgeState.Unknown);
     const catalog = validateWaterTypeCatalog({
       version: WATER_TYPE_CATALOG_VERSION,
       fingerprint: "wayfinders-water-types-extension-v1",
@@ -232,28 +267,25 @@ describe("generated water layout", () => {
     });
     const manifest = {
       waterLayout: {
-        ...generated.manifest.waterLayout,
+        version: WATER_LAYOUT_VERSION,
         catalogFingerprint: catalog.fingerprint,
-        regions: [
-          ...generated.manifest.waterLayout.regions,
-          {
-            id: "water:kelp-sea:000" as const,
-            typeId: "kelp-sea",
-            strategy: "ellipse" as const,
-            seed: 91,
-            center: { x: 8, y: 8 },
-            radiusX: 7,
-            radiusY: 7,
-          },
-        ],
+        regions: [{
+          id: "water:kelp-sea:000" as const,
+          typeId: "kelp-sea",
+          strategy: "ellipse" as const,
+          seed: 91,
+          center: { x: 8, y: 8 },
+          radiusX: 7,
+          radiusY: 7,
+        }],
       },
     };
     const layout = new WaterLayoutPlanner(catalog).plan(
-      generated.grid,
-      generated.analysis,
-      generated.islands,
+      grid,
+      WorldAnalysisIndex.build(grid),
+      [],
       manifest,
-      generated.seed,
+      84_221,
     );
     let extensionTiles = 0;
     for (let y = 1; y < 16; y++) {

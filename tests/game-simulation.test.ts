@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { patchPrototypeConfig, resetPrototypeConfig } from "../src/wayfinders/config/prototypeConfig";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
 import { KnowledgeState } from "../src/wayfinders/world/TileData";
+import { configurePrototypeForTestProfile } from "./helpers";
 
-beforeEach(() => resetPrototypeConfig());
+beforeEach(() => configurePrototypeForTestProfile());
 afterEach(() => resetPrototypeConfig());
 
 describe("GameSimulation exploration integration", () => {

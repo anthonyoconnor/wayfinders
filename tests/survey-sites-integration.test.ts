@@ -9,8 +9,9 @@ import {
   type SurveySiteType,
 } from "../src/wayfinders/exploration/SurveySiteContracts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData";
+import { configurePrototypeForTestProfile } from "./helpers";
 
-beforeEach(() => resetPrototypeConfig());
+beforeEach(() => configurePrototypeForTestProfile());
 afterEach(() => resetPrototypeConfig());
 
 function siteOfType(

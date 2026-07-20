@@ -8,8 +8,9 @@ import {
 } from "../src/wayfinders/exploration/IslandDossierContracts";
 import { buildGreatHallChronicle } from "../src/wayfinders/lineage/GreatHallChronicle";
 import { KnowledgeState } from "../src/wayfinders/world/TileData";
+import { configurePrototypeForTestProfile } from "./helpers";
 
-beforeEach(() => resetPrototypeConfig());
+beforeEach(() => configurePrototypeForTestProfile());
 afterEach(() => resetPrototypeConfig());
 
 function remoteDossiers(

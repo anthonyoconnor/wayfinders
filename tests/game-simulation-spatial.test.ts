@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { GameSimulation } from "../src/wayfinders/core/GameSimulation";
+import { makeConfig } from "./helpers";
 
 describe("GameSimulation spatial descriptor integration", () => {
   it("coalesces all interaction getters into one query per ship tile and spatial revision", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const before = simulation.descriptorSpatialQueryTotals;
 
     void simulation.fishingShoalInteraction;
@@ -19,7 +20,7 @@ describe("GameSimulation spatial descriptor integration", () => {
   });
 
   it("reuses sparse read models and one visible-candidate query while revisions are stable", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const before = simulation.descriptorSpatialQueryTotals;
     const firstFishing = simulation.fishingShoalReadModels;
     const firstSurveys = simulation.surveySiteReadModels;

@@ -6,6 +6,7 @@ import {
 } from "../src/wayfinders/exploration/WreckSurveyContracts.ts";
 import { GridGraph } from "../src/wayfinders/navigation/GridGraph.ts";
 import { KnowledgeState } from "../src/wayfinders/world/TileData.ts";
+import { makeConfig } from "./helpers.ts";
 
 function findUnknownWater(simulation: GameSimulation, excluded: readonly GridPoint[] = []): GridPoint {
   let result: GridPoint | undefined;
@@ -67,7 +68,7 @@ function findOpenHorizontalSeam(simulation: GameSimulation): {
 
 describe("lost navigator wreck surveys", () => {
   it("discovers, surveys, and returns one canonical wreck through the opposite seam image", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const seam = findOpenHorizontalSeam(simulation);
     const discovered: number[] = [];
     const surveyed: number[] = [];
@@ -115,7 +116,7 @@ describe("lost navigator wreck surveys", () => {
   });
 
   it("keeps a found wreck unidentified until a later navigator surveys it", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const discovered: unknown[] = [];
     const surveyed: unknown[] = [];
     simulation.events.on("wreckDiscovered", (event) => discovered.push(event));
@@ -164,7 +165,7 @@ describe("lost navigator wreck surveys", () => {
   });
 
   it("commits the identity report only on exact-dock return", () => {
-    const original = new GameSimulation();
+    const original = new GameSimulation(makeConfig());
     const wreckTile = loseFirstNavigator(original);
     expect(original.teleport(wreckTile)).toBe(true);
     expect(surveyCurrentWreck(original).status).toBe("surveyed");
@@ -202,7 +203,7 @@ describe("lost navigator wreck surveys", () => {
   });
 
   it("loses an unreturned identity report with the surveying navigator and allows a later resurvey", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const firstWreckTile = loseFirstNavigator(simulation);
     expect(simulation.teleport(firstWreckTile)).toBe(true);
     expect(surveyCurrentWreck(simulation).status).toBe("surveyed");
@@ -231,7 +232,7 @@ describe("lost navigator wreck surveys", () => {
   });
 
   it("allows mixed wreck and fishing surveys while provisions remain", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const wreckTile = loseFirstNavigator(simulation);
     expect(simulation.teleport(wreckTile)).toBe(true);
     expect(surveyCurrentWreck(simulation).status).toBe("surveyed");
@@ -258,7 +259,7 @@ describe("lost navigator wreck surveys", () => {
   });
 
   it("starts a journey when a wreck in Supported water is surveyed", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const wreckTile = loseFirstNavigator(simulation);
 
     expect(simulation.teleport(wreckTile)).toBe(true);
@@ -276,7 +277,7 @@ describe("lost navigator wreck surveys", () => {
   });
 
   it("keeps a Supported-water wreck survey atomic against expedition-start callbacks", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const wreckTile = loseFirstNavigator(simulation);
     expect(simulation.teleport(wreckTile)).toBe(true);
     expect(simulation.teleport(simulation.generated.landmarks.homeReturnTile)).toBe(true);
@@ -303,7 +304,7 @@ describe("lost navigator wreck surveys", () => {
   });
 
   it("rejects a wreck survey without enough provisions and changes nothing", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const wreckTile = loseFirstNavigator(simulation);
     expect(simulation.teleport(wreckTile)).toBe(true);
     simulation.setProvisions(1);
@@ -323,7 +324,7 @@ describe("lost navigator wreck surveys", () => {
   });
 
   it("rejects stale contracts and unknown commands without changing the wreck", () => {
-    const simulation = new GameSimulation();
+    const simulation = new GameSimulation(makeConfig());
     const wreckTile = loseFirstNavigator(simulation);
     expect(simulation.teleport(wreckTile)).toBe(true);
 
