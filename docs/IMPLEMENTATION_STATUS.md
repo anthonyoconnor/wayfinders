@@ -1,6 +1,6 @@
 # Wayfinders operational status
 
-Status: current development handoff, verified 2026-07-18.
+Status: current development handoff, verified 2026-07-19.
 
 The asset workflow through GR-4.4, the graphical Great Hall through GR-5.3,
 and gameplay through GP-6.6 are implemented. GP-5.1 replaces the filled return
@@ -11,6 +11,13 @@ fractional partitions, shortfalls, safe and unknown returns, and projected
 post-survey risk. Browser acceptance at normal gameplay zoom verified the
 unlabelled rack, fractional return allocation, two-bundle survey glow, hidden
 exact status, and no warning or error output.
+
+Forward reach remains available as an on-demand player overlay, but its normal
+hidden state now suspends the derived scheduler entirely. Showing it starts a
+current revisioned request, keeps stale contours hidden until publication, and
+hiding it cancels active work without affecting synchronous return authority.
+The Great Hall fixture and preview also normalize handover focus to the
+departing navigator immediately before the successor.
 
 GP-6 focused topology, manifest, periodic generation, navigation, visibility,
 knowledge, feature, full-lap simulation, activation, water, overlay, cloud,
@@ -167,7 +174,7 @@ trend check rather than a gameplay blocker.
   direction reversal, loop seams, cue coalescing, supplementary muted feedback,
   music crossfades and lifecycle ducking, console-clean teardown, and restart.
 - End-to-end browser departure responsiveness has not been remeasured after the
-  current guidance and active-chunk architecture settled. Automated subsystem
+  hidden-guidance suspension and frame-allocation cleanup. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.
 - Repeat the serial generation trend on a quiet machine before using the latest
   loaded-machine `P0`/`P1` p95 samples as a performance baseline.
