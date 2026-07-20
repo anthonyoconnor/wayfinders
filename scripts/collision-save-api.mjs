@@ -108,6 +108,7 @@ export async function runCollisionIntake(candidateFile, repositoryRoot) {
   try {
     const { stdout } = await execFileAsync(process.execPath, [
       viteNodeCli,
+      "--script",
       pipelineFile,
       "intake",
       candidateFile,
