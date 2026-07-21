@@ -1,8 +1,9 @@
 # Wayfinders completed roadmap archive
 
 Status: historical. This document preserves the scope, gates and acceptance
-evidence for completed `GP-0.1` through `GP-5.2`, `GR-1.1` through `GR-5.3`,
-`CLD-1`, `WTR-1.0` through `WTR-2.6`, and `AM-0` through `AM-6` work. It does
+evidence for completed `GP-0.1` through `GP-6.6`, `GR-1.1` through `GR-6.1`,
+`AUD-1` through `AUD-5`, `CLD-1` through `CLD-3`, `WTR-1.0` through
+`WTR-2.6`, `PRS-1` through `PRS-2.4`, and `AM-0` through `AM-6` work. It does
 not define or authorize future work. See `Wayfinders_Roadmap.md` for the small,
 current forward plan.
 
@@ -1614,10 +1615,37 @@ typechecks, `check:quick`, the integration lane, and the production bundle
 passed. The product owner accepted the player-facing result. Implementation was
 recorded in `c686048`.
 
+## Game sound and music
+
+### AUD-1 through AUD-5 — Complete audio presentation
+
+Status: implemented through 2026-07-17 and accepted on 2026-07-20.
+
+The completed track established one validated eleven-file stored-audio catalog,
+a play-only Audio workspace, explicit browser unlock and accessible in-memory
+mix controls, bounded voice ownership and diagnostics, ocean and speed-driven
+wake ambience, transaction-coalesced gameplay and interface cues, two-state
+home-harbor/open-water music, lifecycle ducking, silent fallback, and complete
+scene cleanup. The final restrained palette and rebuilt irregular low-pass
+ambience were accepted without adding audio gameplay authority, preference
+persistence, or browser repository-write tooling.
+
+Automated coverage owns catalog validation, regeneration, mixer and voice
+limits, cue priority and cooldown, ambience smoothing, music selection and
+crossfades, lifecycle reconciliation, diagnostics, and teardown. Product-owner
+acceptance closed keyboard activation, stored-media playback, mute and level
+controls, silence at rest, wake response and direction reversal, repeated loop
+seams, supplementary muted and unmuted cues, crossfades, lifecycle ducking,
+console-clean teardown and restart, and the rebuilt ambience audition.
+
+The implementation sequence was recorded in `8f88295`, `42530f9`, `8bc6801`,
+`234aa6b`, and `13d2722`; final unlock, cue, and ambience refinements were
+recorded in `0299bb1`, `bb54568`, `067e692`, and `15f7307`.
+
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-6.6`, graphics and asset
 work through `GR-6.1`, cloud atmosphere through `CLD-3`, water presentation
-through `WTR-2.6`, Prosperity through `PRS-2.4`, and architecture work through
-`AM-6`. Upcoming, proposed, and deferred work is maintained only in
-`Wayfinders_Roadmap.md`.
+through `WTR-2.6`, audio through `AUD-5`, Prosperity through `PRS-2.4`, and
+architecture work through `AM-6`. Upcoming, proposed, and deferred work is
+maintained only in `Wayfinders_Roadmap.md`.

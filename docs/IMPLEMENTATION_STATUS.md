@@ -38,8 +38,8 @@ the archive owns its durable measurements. Live game and Water-workspace
 acceptance covered all four seams and corners, responsive layout, Great Hall,
 sound enable/mute wiring, and a clean browser console.
 
-The audio layer is implemented through `AUD-5`. Game and asset-library modes
-share one validated stored-audio catalog; game mode has explicit enable, mute,
+The audio layer is complete and accepted through `AUD-5`. Game and asset-library
+modes share one validated stored-audio catalog; game mode has explicit enable, mute,
 master/category controls, bounded voice ownership, diagnostics, and silent
 fallback. The asset library has a play-only Audio workspace over the same
 eleven final WAVs. A deterministic Node.js renderer can regenerate that complete
@@ -70,10 +70,10 @@ selects home-harbor or open-water music from current visible
 presentation state, crossfades two stable loops, and ducks them behind return,
 wreck, succession, and completion. Mixer, controller, ambience, cue and music
 policies/controllers, controls, preview, workspace, and composition checks
-pass. Live keyboard activation, stored-media playback, repeated ambience loops,
-crossfades, and ducking acceptance remain pending. This handoff confirmed the
-live sound-panel enable and mute/unmute controls without browser warnings or
-errors; the rebuilt ambience still awaits product-owner audition.
+pass. The product owner accepted keyboard activation, stored-media playback,
+mute and level controls, repeated ambience and music loops, gameplay cues,
+crossfades, lifecycle ducking, teardown and restart, and the rebuilt ambience
+on 2026-07-20, closing the audio track.
 
 WTR-2.0 through WTR-2.6 are implemented. The world manifest carries stable water
 regions and generation resolves a deterministic canonical chunk-addressable,
@@ -122,8 +122,8 @@ The twenty-generation presentation-fixture baseline measured `0.193 ms` p95 over
 by the technical design. Architecture validation, source and test typechecks,
 the quick, contract, integration, and repository-I/O lanes, focused GP-5.2,
 audio, and water contracts, audio repository-I/O checks, the water and complete
-read-only asset gates, and the production bundle pass. Remaining audio browser
-acceptance is described above. The former clean-repository fixture drift was
+read-only asset gates, and the production bundle pass. Audio browser acceptance
+is complete as described above. The former clean-repository fixture drift was
 corrected during WTR-2 and is no longer an open blocker.
 
 This file records only volatile operational facts. Implemented behavior belongs
@@ -193,10 +193,6 @@ trend check rather than a gameplay blocker.
 
 ## Open operational gaps
 
-- Complete live audio browser acceptance for keyboard focus, stored-file media
-  decode/audition, mute and level controls, silence at rest, smoothed wake,
-  direction reversal, loop seams, cue coalescing, supplementary muted feedback,
-  music crossfades and lifecycle ducking, console-clean teardown, and restart.
 - End-to-end browser departure responsiveness has not been remeasured after the
   hidden-guidance suspension and frame-allocation cleanup. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.

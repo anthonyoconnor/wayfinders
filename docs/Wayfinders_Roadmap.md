@@ -3,8 +3,9 @@
 Status: forward plan. Gameplay is complete through `GP-6.6`; graphics and
 world-discovery presentation are complete through `GR-6.1`; cloud atmosphere
 is complete through `CLD-3`; water presentation is complete through `WTR-2.6`;
-and Prosperity is complete through `PRS-2.4`. `STM-1` remains proposed and its
-runtime implementation is not authorized.
+audio is complete through `AUD-5`; and Prosperity is complete through
+`PRS-2.4`. `STM-1` remains proposed and its runtime implementation is not
+authorized.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -65,8 +66,8 @@ world are implemented through `GP-6.6`. Prosperity and returned-fact traffic
 are implemented through `PRS-2.4`. Home and non-home island de-labelling is
 complete through `GR-6.1`, while `STM-1` proposes the next gameplay and
 presentation system and is not authorized.
-Remaining audio acceptance follow-up requires no new runtime scope; the
-production water system is complete through `WTR-2.6`.
+Audio is complete through `AUD-5`; the production water system is complete
+through `WTR-2.6`.
 Great Hall concept and planning work is complete. The product owner accepted the
 `GR-5.2` view-only approval workspace and recorded **Go** on 2026-07-16. The
 shared presentation contract, renderer, fixture, game adapter, and bounded era
@@ -156,9 +157,8 @@ numbers; exact quantities remain available to assistive technology.
 
 ### AUD — Game sound and music layer
 
-Status: implemented through `AUD-5` on 2026-07-17; rebuilt-ambience product-owner
-audition plus the remaining keyboard/media, audible-loop, cue, crossfade, and
-ducking browser acceptance remains to be recorded.
+Status: complete and accepted through `AUD-5` on 2026-07-20. No further audio
+milestone is planned.
 
 The implemented foundation loads one validated stored-audio catalog, exposes a
 play-only Audio asset workspace, and gives game mode an explicit enable flow,
@@ -166,39 +166,8 @@ in-memory mixer controls, bounded voice ownership, diagnostics, silent fallback,
 and complete scene cleanup. Current ownership and behavior are documented in
 `ARCHITECTURE_MAP.md`, `Wayfinders_Technical_Design.md`, and
 `Wayfinders_Asset_Pipeline.md`; volatile verification state is recorded in
-`IMPLEMENTATION_STATUS.md`.
-
-`AUD-1` closes after live browser acceptance verifies keyboard focus and exact
-values for enable, mute, master, and all four category controls; stored-file
-decode and audition in the Audio workspace; locked startup; and console-clean
-scene teardown and restart without leaked playback.
-
-`AUD-2` adds one persistent ocean bed and one speed-controlled wake loop. It
-closes after live browser acceptance verifies silence at rest, smooth motion
-gain, direction reversal without restart, focus reconciliation, and ten
-seam-free repeats of both reference loops.
-
-`AUD-3` adds deterministic microtask-batched gameplay and UI cues over the
-existing typed event stream. Pure policy and event-adapter contracts cover the
-source table, priority, cooldown, voice cap, replacement, idol-survey, return,
-wreck, high-rate silence, and developer-action suppression. It closes after
-live muted/unmuted browser acceptance confirms cues remain supplementary to the
-existing visual and semantic feedback.
-
-`AUD-4` adds renderer-neutral home-harbor/open-water selection, two stable music
-voices, bounded `1.5`-second crossfades, and priority lifecycle ducking for
-return, wreck, succession, and completion. State/controller contracts cover the
-full lifecycle matrix, stable frames, rapid reversals, focus reconciliation,
-completion priority, modal release, two-voice capacity, and teardown. It closes
-after live browser acceptance confirms audible transitions and ten seamless
-repetitions of both stored reference loops.
-
-`AUD-5` placed the final sounds and music at their existing runtime paths and
-retained a deterministic complete-set renderer for future regeneration. The
-remaining event-to-cue policy, browser constraints, budgets, and acceptance
-gates are defined in `Wayfinders_Audio_System_Milestone.md`. No further audio
-milestone is proposed; the current acceptance follow-up does not authorize new
-runtime scope.
+`IMPLEMENTATION_STATUS.md`. Implementation and acceptance evidence is archived
+in `Wayfinders_Roadmap_Archive.md`.
 
 ## Water presentation
 
@@ -263,8 +232,8 @@ The proposed implementation sequence is:
 4. `STM-1.3` — integrate movement handling, visibility refresh, and atomic
    severe-storm fishing rejection without changing route or provision rules;
 5. `STM-1.4` — integrate the bounded renderer, accessibility, weather status,
-   lifecycle cleanup, and optional audio after the current audio acceptance
-   follow-up is closed; and
+   lifecycle cleanup, and optional audio through the completed audio
+   presentation seam; and
 6. `STM-1.5` — close seam, replay, performance, resource-plateau, live-browser,
    and documentation acceptance.
 

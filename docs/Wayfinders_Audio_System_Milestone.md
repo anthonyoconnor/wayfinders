@@ -1,21 +1,21 @@
-# Wayfinders audio-system proposal
+# Wayfinders audio-system design
 
-Implementation is present through `AUD-5`; live browser and product-owner
-audition acceptance remains to be recorded. Planning and authorization status
-for any follow-up is owned only by `Wayfinders_Roadmap.md`.
+Status: complete and accepted through `AUD-5` on 2026-07-20. Planning and
+authorization status for any follow-up is owned only by
+`Wayfinders_Roadmap.md`.
 
-This document owns the remaining audio design and acceptance criteria. Current
+This document records the closed audio design and acceptance criteria. Current
 runtime behavior is owned by `Wayfinders_Technical_Design.md`; current code
 ownership by `ARCHITECTURE_MAP.md`; stored-artifact and replacement contracts by
 `Wayfinders_Asset_Pipeline.md`; and volatile audio verification state by
 `IMPLEMENTATION_STATUS.md`.
 
-## Recommendation
+## Design direction
 
-Add audio as presentation, not gameplay authority. A small renderer-neutral
-policy should translate existing committed events and visible read models into
-audio intentions. A Phaser adapter should own loading, playback, game mixing,
-unlocking, and cleanup. `GameSimulation` should not know which sound plays,
+Audio is presentation, not gameplay authority. A small renderer-neutral policy
+translates existing committed events and visible read models into audio
+intentions. A Phaser adapter owns loading, playback, game mixing, unlocking,
+and cleanup. `GameSimulation` does not know which sound plays,
 whether audio is enabled, or how a cue is mixed.
 
 The audio track has five milestones:
@@ -26,11 +26,11 @@ The audio track has five milestones:
 2. `AUD-2` added ocean and vessel ambience driven by current presentation state.
 3. `AUD-3` added bounded gameplay and interface cues from existing typed events.
 4. `AUD-4` added two-state music and lifecycle transitions.
-5. `AUD-5` produces the final sounds and music, overwrites the reference files
-   at their stable runtime paths, completes browser acceptance, and closes
+5. `AUD-5` produced the final sounds and music, overwrote the reference files
+   at their stable runtime paths, completed browser acceptance, and closed
    production readiness.
 
-This sequence produces useful sound early without making the simulation depend
+This sequence produced useful sound without making the simulation depend
 on audio. It keeps every content change replaceable through an ordinary file
 overwrite and adds no repository tool for creating or modifying audio.
 
@@ -83,12 +83,12 @@ file format or adding alternate sources is a catalog-contract change rather
 than an implicit content replacement. See the
 [MDN audio codec guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Audio_codecs).
 
-## Target extensions for remaining work
+## Implemented extension seams
 
-`ARCHITECTURE_MAP.md` is the canonical owner of current boundaries. Remaining
-milestones may extend the existing seams only in these directions:
+`ARCHITECTURE_MAP.md` is the canonical owner of current boundaries. The audio
+track used the existing seams in these directions:
 
-| Seam | Remaining extension | Constraint |
+| Seam | Implemented use | Constraint |
 | --- | --- | --- |
 | Audio workspace | continue auditioning the shared stored files without production controls | no upload, creation, editing, mixing, metadata writes, or gameplay state |
 | `public/assets/audio` | store final `AUD-5` bytes at existing paths | no gameplay data or browser-write API |
@@ -240,38 +240,35 @@ not catalog metadata.
 
 ### AUD-1 — Audio foundation, unlock, and controls
 
-Implemented, with live browser acceptance pending. Current behavior and
-ownership are documented by the technical design, architecture map, and asset-
-pipeline guide. The current roadmap owns the remaining acceptance follow-up.
+Implemented and accepted on 2026-07-20. Current behavior and ownership are
+documented by the technical design, architecture map, and asset-pipeline guide.
 
 ### AUD-2 — Sailing ambience
 
-Implemented, with audible browser acceptance pending. Current smoothing,
-hysteresis, input, lifecycle, diagnostic, and voice-bound behavior is owned by
-the technical design. The current roadmap owns the remaining acceptance
-follow-up.
+Implemented and accepted on 2026-07-20. Current smoothing, hysteresis, input,
+lifecycle, diagnostic, and voice-bound behavior is owned by the technical
+design.
 
 ### AUD-3 — Gameplay and interface cues
 
-Implemented, with live muted/unmuted browser acceptance pending. Current cue
+Implemented and accepted on 2026-07-20. Current cue
 behavior and ownership are documented by the technical design and architecture
 map. Contract coverage includes every source row, deterministic fake-clock
 cooldowns and caps, idol-survey coalescing, ordinary survey, return, wreck,
 high-rate silence, blocked-audio discard, bounded diagnostics, and teardown.
-The current roadmap owns the remaining acceptance follow-up.
 
 ### AUD-4 — Adaptive music and lifecycle transitions
 
-Implemented, with audible browser acceptance pending. Current selection,
+Implemented and accepted on 2026-07-20. Current selection,
 crossfade, ducking, lifecycle, diagnostic, and two-voice behavior is owned by
 the technical design. Focused contracts cover dock, Supported departure,
 expedition start, return, wreck hold, handover, completion, Continue, Start New
 Game, stable frames, rapid reversals, completion priority, focus reconciliation,
-and teardown. The current roadmap owns the remaining acceptance follow-up.
+and teardown.
 
 ### AUD-5 — Production audio and closure
 
-Deliver:
+Delivered:
 
 - final, product-ready music, ambience, sound-effect, and UI WAV files for every
   catalog entry;
@@ -284,10 +281,9 @@ Deliver:
 - current-state updates to the architecture map and technical design plus
   durable acceptance evidence in the roadmap archive.
 
-Implemented on 2026-07-17, with live browser and product-owner audition
-acceptance pending. The final eleven-file PCM set occupies the established
-catalog paths. The retained deterministic renderer and its operator workflow
-are owned by `Wayfinders_Asset_Pipeline.md` and
+Implemented on 2026-07-17 and accepted on 2026-07-20. The final eleven-file PCM
+set occupies the established catalog paths. The retained deterministic renderer
+and its operator workflow are owned by `Wayfinders_Asset_Pipeline.md` and
 `ASSET_PRODUCTION_QUICKSTART.md`.
 
 Acceptance gate:
@@ -311,14 +307,12 @@ Acceptance gate:
 - `npm.cmd run check`, browser acceptance, and a final repository diff/status
   review pass before the milestone is archived.
 
-## Product decisions for remaining milestones
+## Product decisions and deferred follow-up
 
-1. Approve, revise, or reject the restrained palette represented by the
-   reference files: wooden percussion, soft bells, low pads, and abstract
-   surf rather than orchestral or cinematic scoring.
-2. Decide after `AUD-4` playtesting whether music should remain two-state or
-   earn a separate risk/danger layer. The initial milestones should not infer
-   danger from hidden world state.
+1. The restrained palette represented by wooden percussion, soft bells, low
+   pads, and abstract surf is accepted.
+2. A separate risk or danger music layer remains a future product decision;
+   current audio does not infer danger from hidden world state.
 3. Decide separately whether audio preferences may persist across refresh.
    The implemented foundation keeps them in memory to avoid expanding the
    current persistence boundary incidentally.
