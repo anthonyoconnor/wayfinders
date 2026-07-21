@@ -31,6 +31,14 @@ Do not label these operations **Load Game** or **Save Game**. A whole-world
 `authored-map` source is also distinct from an `authored` island asset within a
 procedural or authored world.
 
+### Sample visual reference
+
+The [MAP-1 editor concept](../concept_art/authored-map-editor/map-editor-milestone-concept.png)
+illustrates the proposed workspace hierarchy, reusable island palette, shoal
+tool, map validation overlays, and playtest handoff. It is exploratory concept
+art, not an authoritative UI layout or runtime asset; the contracts and
+acceptance criteria below remain authoritative.
+
 ## Intended outcome
 
 `MAP-1` is successful when a developer can:
