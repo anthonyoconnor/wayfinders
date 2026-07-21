@@ -64,9 +64,9 @@ describe("deterministic idol-location catalog", () => {
     expect(replay).toEqual(first);
     expect(reordered).toEqual(first);
     expect(first.map(({ host }) => createIdolLocationHostKey(host))).toEqual([
+      "island-dossier:15",
+      "survey-site:survey-site:v1:coastal-ruin:0000",
       "island-dossier:2",
-      "island-dossier:6",
-      "island-dossier:8",
     ]);
     expect(first.map(({ ordinal }) => ordinal)).toEqual([1, 2, 3]);
     expect(first.map(({ displayLabel }) => displayLabel)).toEqual([

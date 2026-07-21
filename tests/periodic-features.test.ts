@@ -64,7 +64,7 @@ describe("periodic fishing features", () => {
     }
 
     expect(definitions).toBeDefined();
-    expect(definitions).toHaveLength(4);
+    expect(definitions).toHaveLength(5);
     expect(definitions?.some(({ tile }) => tile.x === 0 || tile.y === 0)).toBe(true);
     for (const definition of definitions ?? []) {
       expect(world.topology.minimumImageTileDistanceSquared(home, definition.tile))
