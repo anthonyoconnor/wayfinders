@@ -4,7 +4,7 @@ Status: forward plan. Gameplay is complete through `GP-6.6`; graphics and
 world-discovery presentation are complete through `GR-6.1`; cloud atmosphere
 is complete through `CLD-3`; water presentation is complete through `WTR-2.6`;
 audio is complete through `AUD-5`; and Prosperity is complete through
-`PRS-2.4`. `STM-1` remains proposed and its runtime implementation is not
+`PRS-2.4`. `MAP-1` and `STM-1` remain proposed and their implementation is not
 authorized.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
@@ -17,8 +17,10 @@ The technical design owns the current runtime persistence boundary. For future
 planning, persistence must not be added incidentally to another feature or
 inferred from development-only asset authoring. It may return
 only through an explicitly authorized milestone designed for the game that
-exists at that time. No persistence milestone is currently planned or
-authorized.
+exists at that time. `MAP-1` proposes checked-in initial-world definitions for
+developer playtesting; opening or saving one is repository authoring and never
+serializes or restores gameplay-session state. No gameplay-session persistence
+milestone is currently planned or authorized.
 
 ### Milestones and authorization
 
@@ -30,6 +32,8 @@ authorized.
 - `CLD-x.y` identifies cloud-atmosphere milestones and acceptance gates.
 - `PRS-x.y` identifies Prosperity and living-traffic milestones and acceptance
   gates.
+- `MAP-x.y` identifies authored-map definition, editor, and playtest-launch
+  milestones and acceptance gates.
 - `STM-x.y` identifies cross-system storm milestones and acceptance gates.
 - A milestone is complete only when its behavior, tests, maintainability,
   performance criteria, and acceptance evidence pass.
@@ -64,8 +68,12 @@ They establish the presentation seams used by the proposed storm track.
 The Voyage Sense thread, its supply commitments, and the continuous global
 world are implemented through `GP-6.6`. Prosperity and returned-fact traffic
 are implemented through `PRS-2.4`. Home and non-home island de-labelling is
-complete through `GR-6.1`, while `STM-1` proposes the next gameplay and
-presentation system and is not authorized.
+complete through `GR-6.1`.
+
+Two proposed tracks now follow that baseline. `MAP-1` is the recommended first
+implementation because repeatable authored worlds improve balance and feature
+playtesting without changing the procedural default. `STM-1` remains the next
+proposed gameplay and presentation system. Neither track is authorized.
 Audio is complete through `AUD-5`; the production water system is complete
 through `WTR-2.6`.
 Great Hall concept and planning work is complete. The product owner accepted the
@@ -193,6 +201,59 @@ dependency direction are owned by `ARCHITECTURE_MAP.md`; completion evidence is
 archived in `Wayfinders_Roadmap_Archive.md`. No economy, score-spending,
 settlement-growth, or later Prosperity milestone is proposed or authorized.
 
+## Authored playtest maps
+
+### MAP-1 — Authored-map definitions, editor, and playtest launch
+
+Status: proposed on 2026-07-20. Implementation is not authorized.
+
+Add a developer-only Maps workspace that creates checked-in initial-world
+definitions by placing available authored islands and semantic fishing shoals.
+An explicit saved map constructs a fresh simulation through the same
+rasterize, analysis, water, navigation, feature, and presentation pipeline as
+an ordinary world. No map selected continues to mean the current procedural
+source and seed behavior.
+
+The first version keeps the current normal-game settings snapshot, wrapping
+topology, Home, dock, Supported-water boundary, and protected departure
+corridor fixed. It permits one or more non-home island instances and any number
+of fishing shoals that fit while satisfying the map's semantic and spatial
+invariants. An authored-island asset may be reused by multiple distinct stable
+instances. No fixed island or shoal count is an editor, schema, or runtime rule;
+procedural generation retains its existing default counts and selection policy.
+The editor does not paint terrain or water, place procedural island shapes,
+edit a running world, or persist gameplay-session state.
+
+The proposed implementation sequence is:
+
+1. `MAP-1.0` — lock the product/storage/restart contract, exercise the basic
+   workflow slice, record procedural signatures and performance baselines, and
+   record an explicit product-owner **Go**;
+2. `MAP-1.1` — implement the versioned definition, canonical codec, stable IDs,
+   shared placement validators, deterministic authored-map compiler, and
+   procedural-equivalence coverage;
+3. `MAP-1.2` — build the dedicated editor scene, pure draft/undo model,
+   compiler-backed validation, and guarded atomic catalog/map open-save flow;
+4. `MAP-1.3` — add fail-closed authored-source startup, exact source
+   diagnostics, source-aware fresh restart, and the editor-to-game playtest
+   handoff; and
+5. `MAP-1.4` — close seam, replay, repository-I/O, performance, resource,
+   accessibility, live-browser, and documentation acceptance.
+
+```mermaid
+flowchart LR
+    M0["MAP-1.0 contract and baseline"] --> GO{"Product-owner Go?"}
+    GO -->|Revise| M0
+    GO -->|Go| M1["MAP-1.1 definition and compiler"]
+    M1 --> M2["MAP-1.2 editor and repository save"]
+    M2 --> M3["MAP-1.3 fresh-session playtest"]
+    M3 --> M4["MAP-1.4 acceptance and closure"]
+```
+
+Detailed definition fields, validation rules, editor workflow, repository
+transaction, source boundary, non-goals, risks, budgets, tests, and acceptance
+criteria are defined in `Wayfinders_Authored_Map_Editor_Milestone.md`.
+
 ## Storm system
 
 ### STM-1 — Deterministic regional storm system
@@ -260,9 +321,12 @@ WTR-1.0 through WTR-1.5 and WTR-2.0 through WTR-2.6 are complete. No later water
 milestone is authorized. Gameplay is complete through `GP-6.6`. `PRS-1`
 through `PRS-2.4` are complete; no later Prosperity, economy, or
 settlement-growth milestone is authorized. `GR-6.1` is complete and no later
-world-discovery presentation milestone is planned. `STM-1` remains proposed
-but not authorized. Its
-implementation, like any later gameplay or production-asset milestone, requires
-explicit user authorization.
-Do not implement gameplay saving; it may return only through an explicitly
-authorized milestone designed for the game that exists at that time.
+world-discovery presentation milestone is planned. `MAP-1` and `STM-1` remain
+proposed but not authorized. Their implementation, like any later gameplay,
+developer-authoring, or production-asset milestone, requires explicit user
+authorization.
+
+Do not implement gameplay saving. `MAP-1` proposes only checked-in
+initial-world definitions and fresh-session playtest launch; gameplay-session
+persistence may return only through a separate explicitly authorized milestone
+designed for the game that exists at that time.
