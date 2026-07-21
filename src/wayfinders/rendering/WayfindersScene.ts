@@ -86,7 +86,6 @@ import {
   type DebugEntityBoundsRole,
 } from "./DebugEntityBounds";
 import { FishingShoalRenderer } from "./FishingShoalRenderer";
-import { IslandDossierRenderer } from "./IslandDossierRenderer";
 import { KnowledgeOverlayRenderer } from "./KnowledgeOverlayRenderer";
 import { LiftedViewAnchor } from "./LiftedViewAnchor";
 import { ProsperityTrafficRenderer } from "./ProsperityTrafficRenderer";
@@ -164,7 +163,6 @@ interface PresentationResourceSnapshot {
   readonly prosperityTrafficRoutes: ReturnType<ProsperityTrafficRouteDebugRenderer["getTelemetry"]>;
   readonly markers: Readonly<{
     wrecks: ReturnType<WreckRenderer["getLifetimeTelemetry"]>;
-    islandDossiers: ReturnType<IslandDossierRenderer["getLifetimeTelemetry"]>;
     surveySites: ReturnType<SurveySiteRenderer["getLifetimeTelemetry"]>;
     fishingShoals: ReturnType<FishingShoalRenderer["getLifetimeTelemetry"]>;
   }>;
@@ -273,7 +271,6 @@ export class WayfindersScene extends Phaser.Scene {
   private lastCargoComfortableThreshold = Number.NaN;
   private lastCargoWarningThreshold = Number.NaN;
   private lastCargoCriticalThreshold = Number.NaN;
-  private islandDossierRenderer!: IslandDossierRenderer;
   private surveySiteRenderer!: SurveySiteRenderer;
   private fishingShoalRenderer!: FishingShoalRenderer;
   private prosperityTrafficRenderer!: ProsperityTrafficRenderer;
@@ -324,7 +321,6 @@ export class WayfindersScene extends Phaser.Scene {
   private lastDiagnosticsInputSuppressed = false;
   private lastWrecksRevision = -1;
   private lastWreckVisibilityVersion = -1;
-  private lastIslandDossierRecordsRevision = -1;
   private lastSurveySiteRecordsRevision = -1;
   private lastSurveySiteVisibilityVersion = -1;
   private lastSurveySiteKnowledgeVersion = -1;
@@ -333,7 +329,6 @@ export class WayfindersScene extends Phaser.Scene {
   private lastFishingShoalKnowledgeVersion = -1;
   private lastFishingShoalSupportedTopologyVersion = -1;
   private activeWreckMarkers = 0;
-  private activeIslandDossierMarkers = 0;
   private activeSurveySiteMarkers = 0;
   private activeFishingShoalMarkers = 0;
   private lastViewportX = Number.NaN;
@@ -441,7 +436,6 @@ export class WayfindersScene extends Phaser.Scene {
     );
     this.riskOverlay = new RiskOverlayRenderer(this);
     this.cargoRenderer = new CargoRenderer(this);
-    this.islandDossierRenderer = new IslandDossierRenderer(this);
     this.surveySiteRenderer = new SurveySiteRenderer(this);
     this.fishingShoalRenderer = new FishingShoalRenderer(this, this.pilotAssets);
     this.prosperityTrafficRenderer = new ProsperityTrafficRenderer(this);
@@ -714,7 +708,6 @@ export class WayfindersScene extends Phaser.Scene {
     );
     this.riskOverlay.applyActiveChunkDelta(this.simulation.world, delta);
     this.wreckRenderer.applyActiveChunks(delta.active);
-    this.islandDossierRenderer.applyActiveChunks(delta.active);
     this.surveySiteRenderer.applyActiveChunks(delta.active);
     this.fishingShoalRenderer.applyActiveChunks(delta.active);
     this.prosperityTrafficRenderer.applyActiveChunks(delta.active);
@@ -893,13 +886,6 @@ export class WayfindersScene extends Phaser.Scene {
       this.activeWreckMarkers = wrecks.length;
       this.lastWrecksRevision = this.simulation.wrecksRevision;
       this.lastWreckVisibilityVersion = this.simulation.world.visibilityVersion;
-    }
-    if (force || this.lastIslandDossierRecordsRevision !== this.simulation.islandDossierRecordsRevision) {
-      const records = this.simulation.islandDossierReadModels;
-      this.islandDossierRenderer.sync(records);
-      this.presentationWork.recordRevisionSync(this.activeIslandDossierMarkers, records.length);
-      this.activeIslandDossierMarkers = records.length;
-      this.lastIslandDossierRecordsRevision = this.simulation.islandDossierRecordsRevision;
     }
     if (
       force
@@ -2541,7 +2527,6 @@ export class WayfindersScene extends Phaser.Scene {
       prosperityTrafficRoutes: this.prosperityTrafficRouteDebugRenderer.getTelemetry(),
       markers: Object.freeze({
         wrecks: this.wreckRenderer.getLifetimeTelemetry(),
-        islandDossiers: this.islandDossierRenderer.getLifetimeTelemetry(),
         surveySites: this.surveySiteRenderer.getLifetimeTelemetry(),
         fishingShoals: this.fishingShoalRenderer.getLifetimeTelemetry(),
       }),
@@ -3096,7 +3081,6 @@ export class WayfindersScene extends Phaser.Scene {
     this.cloudLayer.destroy();
     this.riskOverlay.destroy();
     this.cargoRenderer.destroy();
-    this.islandDossierRenderer.destroy();
     this.surveySiteRenderer.destroy();
     this.fishingShoalRenderer.destroy();
     this.prosperityTrafficRenderer.destroy();

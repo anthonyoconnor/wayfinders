@@ -247,7 +247,7 @@ describe("WorldRenderer active chunk resources", () => {
     expect(moved.telemetry.totalResourceObjectsDestroyed).toBe(0);
   });
 
-  it("creates and destroys one authored home image when any footprint chunk is active", () => {
+  it("creates and destroys authored Home art without a floating caption", () => {
     const { scene, images, texts } = makeScene();
     const assets = {
       metadata: () => PILOT_HOME_ISLAND_METADATA,
@@ -263,11 +263,11 @@ describe("WorldRenderer active chunk resources", () => {
     expect(activated.telemetry.activeAuthoredImageObjects)
       .toBe(PILOT_HOME_ISLAND_METADATA.render.slices.length);
     expect(images).toHaveLength(PILOT_HOME_ISLAND_METADATA.render.slices.length);
-    expect(texts).toHaveLength(1);
+    expect(texts).toHaveLength(0);
 
     renderer.syncActiveChunks([entry(0, 0, 0)]);
     expect(images.every(({ destroyed }) => destroyed)).toBe(true);
-    expect(texts.every(({ destroyed }) => destroyed)).toBe(true);
+    expect(texts).toHaveLength(0);
     expect(renderer.getTelemetry().activeAuthoredImageObjects).toBe(0);
   });
 

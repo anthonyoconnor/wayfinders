@@ -565,6 +565,17 @@ prefetch ring when capacity allows, and enforces a hard `25`-image-entry budget.
 Multiple entries may reference one canonical chunk. Deactivation runs before
 activation; visible deferred images use the lifted ocean placeholder.
 
+The sailing world presents Home through its authored inhabited island, harbour,
+and exact dock without a floating caption. Non-home islands likewise have no
+persistent dossier name, chart glyph, letter badge, state or finding caption,
+or lifecycle ring; their landform is their complete persistent world
+presentation. `IslandDossierSystem` current-sight and survey authority is
+unchanged. Generated names and findings remain available through events,
+transient discovery and survey notices, the contextual survey ribbon, lineage,
+and the Great Hall. Fishing shoals, survey sites, navigator wrecks, discovery
+notices, the survey ribbon, and current-voyage achievements retain their
+existing presentation. Rendered pixels remain non-authoritative.
+
 ### Audio foundation, sailing ambience, and discrete cues
 
 Game and asset-library startup fetch and strictly validate

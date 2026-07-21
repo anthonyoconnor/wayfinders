@@ -121,7 +121,6 @@ interface HomeAliasView {
   readonly imageOffset: Readonly<WorldPoint>;
   homeStructures?: Phaser.GameObjects.Graphics;
   homeVisual?: AuthoredHomeIslandVisual;
-  label?: Phaser.GameObjects.Text;
 }
 
 interface AuthoredIslandAliasView {
@@ -137,7 +136,6 @@ export interface WorldRendererTelemetry {
   readonly activeCanonicalChunks: number;
   readonly activeViewKeys: readonly string[];
   readonly activeGraphicsObjects: number;
-  readonly activeTextObjects: number;
   readonly activeAuthoredImageObjects: number;
   /** Per-chunk Phaser objects, excluding the constant ocean backdrop. */
   readonly activeResourceObjects: number;
@@ -298,7 +296,6 @@ export class WorldRenderer {
       activeCanonicalChunks: canonicalChunkKeys.size,
       activeViewKeys: Object.freeze(activeViewKeys),
       activeGraphicsObjects: counts.graphics,
-      activeTextObjects: counts.text,
       activeAuthoredImageObjects: counts.authoredImages,
       activeResourceObjects: counts.resources,
       sharedObjects: this.destroyed ? 0 : 1,
@@ -544,23 +541,6 @@ export class WorldRenderer {
       }
     }
 
-    const labelAt = gridToWorld({
-      x: homeCenter.x,
-      y: homeCenter.y - prototypeConfig.world.homeIslandRadius - 2,
-    });
-    alias.label = this.scene.add.text(
-      labelAt.x + imageOffset.x,
-      labelAt.y + imageOffset.y,
-      "HOME ISLAND",
-      {
-      color: "#f5e4b3",
-      fontFamily: "ui-monospace, monospace",
-      fontSize: "14px",
-      fontStyle: "bold",
-      stroke: "#10242a",
-      strokeThickness: 4,
-      },
-    ).setOrigin(0.5).setDepth(10);
     return alias;
   }
 
@@ -734,23 +714,20 @@ export class WorldRenderer {
 
   private objectCounts(): {
     graphics: number;
-    text: number;
     authoredImages: number;
     resources: number;
   } {
     let graphics = 0;
-    let text = 0;
     let authoredImages = 0;
     for (const chunk of this.chunks.values()) {
       graphics += Object.values(chunk.layers).filter(Boolean).length;
     }
     for (const alias of this.homeAliases.values()) {
       if (alias.homeStructures) graphics++;
-      if (alias.label) text++;
       if (alias.homeVisual) authoredImages += alias.homeVisual.metadata.render.slices.length;
     }
     for (const alias of this.authoredIslandAliases.values()) authoredImages += alias.images.length;
-    return { graphics, text, authoredImages, resources: graphics + text + authoredImages };
+    return { graphics, authoredImages, resources: graphics + authoredImages };
   }
 
   private chunkResourceCount(chunk: ChunkView): number {
@@ -958,14 +935,12 @@ function intersectingAxisOffsets(
 
 function homeAliasResourceCount(alias: Readonly<HomeAliasView>): number {
   return (alias.homeStructures ? 1 : 0)
-    + (alias.label ? 1 : 0)
     + (alias.homeVisual ? alias.homeVisual.metadata.render.slices.length : 0);
 }
 
 function destroyHomeAlias(alias: Readonly<HomeAliasView>): void {
   alias.homeStructures?.destroy();
   alias.homeVisual?.destroy();
-  alias.label?.destroy();
 }
 
 function terrainAtImageNeighbor(

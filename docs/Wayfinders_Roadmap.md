@@ -1,10 +1,11 @@
 # Wayfinders current roadmap
 
 Status: forward plan. Gameplay is complete through `GP-6.6`; the Great Hall
-track is complete through `GR-5.3`; cloud atmosphere is complete through
-`CLD-3`; water presentation is complete through `WTR-2.6`; and Prosperity is
-complete through `PRS-2.4`. `STM-1` is proposed; storm runtime implementation
-is not authorized.
+track is complete through `GR-5.3`, and `GR-6.1` is implemented with live
+browser acceptance pending; cloud atmosphere is complete through `CLD-3`;
+water presentation is complete through `WTR-2.6`;
+and Prosperity is complete through `PRS-2.4`. `STM-1` remains proposed and its
+runtime implementation is not authorized.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -62,10 +63,11 @@ They establish the presentation seams used by the proposed storm track.
 
 The Voyage Sense thread, its supply commitments, and the continuous global
 world are implemented through `GP-6.6`. Prosperity and returned-fact traffic
-are implemented through `PRS-2.4`. `STM-1` is the current proposed gameplay and
-presentation track and is not authorized. Remaining audio
-acceptance follow-up requires no new runtime scope; the production water
-system is complete through `WTR-2.6`.
+are implemented through `PRS-2.4`. `GR-6.1` Home and non-home island
+de-labelling is implemented with live browser acceptance pending, while `STM-1`
+proposes the next gameplay and presentation system and is not authorized.
+Remaining audio acceptance follow-up requires no new runtime scope; the
+production water system is complete through `WTR-2.6`.
 Great Hall concept and planning work is complete. The product owner accepted the
 `GR-5.2` view-only approval workspace and recorded **Go** on 2026-07-16. The
 shared presentation contract, renderer, fixture, game adapter, and bounded era
@@ -75,7 +77,7 @@ integration in `GR-5.3` are implemented.
 
 ### GR-5 — Graphical Great Hall chronicle
 
-Status: complete through `GR-5.3`. No further milestone is planned.
+Status: complete through `GR-5.3`. No further Great Hall milestone is planned.
 
 Replace the text-led Great Hall with the selected **Ancestor Wall** direction:
 reviewed navigator portraits, a stable achievement-symbol language, fixed
@@ -111,6 +113,36 @@ symbol set is defined in `Wayfinders_Great_Hall_Infographic_Lexicon.md`.
 Concept PNGs remain reference-only under `concept_art/great-hall` and never
 load at runtime. The reviewed copies consumed by the approval workspace live at
 stable paths under `public/assets/gr5/great-hall`.
+
+## World discovery presentation
+
+### GR-6 — Home and island de-labelling
+
+Status: implemented on 2026-07-20. Live browser acceptance remains pending.
+
+The persistent `HOME ISLAND` caption and the non-home island name, chart icon,
+letter badge, finding caption, and lifecycle ring have been removed from the
+sailing world. The island art itself is the complete persistent world
+presentation.
+
+This is a presentation-only removal. Current sight continues to create island
+sightings, and generated names, dossier results, survey interaction, survey
+cost, notices, fog reveal, return and wreck settlement, lineage, and completion
+remain unchanged.
+
+The implementation contains one milestone:
+
+1. `GR-6.1` — remove the Home caption and all persistent non-home island dossier
+   names and marker graphics, update presentation resource assertions, and
+   verify unchanged island sighting and survey behavior.
+
+Fishing shoals, survey sites, navigator wrecks, discovery notices, the survey
+ribbon, and current-voyage achievement icons remain as implemented. No later
+`GR-6` milestone is currently proposed.
+
+The impact analysis, scoped presentation inventory, non-goals, and detailed
+acceptance criteria are defined in
+`Wayfinders_World_Discovery_Presentation_Milestone.md`.
 
 ## Voyage Sense
 
@@ -266,8 +298,9 @@ are defined in `Wayfinders_Storm_System_Milestone.md`.
 WTR-1.0 through WTR-1.5 and WTR-2.0 through WTR-2.6 are complete. No later water
 milestone is authorized. Gameplay is complete through `GP-6.6`. `PRS-1`
 through `PRS-2.4` are complete; no later Prosperity, economy, or
-settlement-growth milestone is authorized. `STM-1` remains proposed but not
-authorized. Storm implementation, like any later gameplay or production-asset
-milestone, requires explicit user authorization.
+settlement-growth milestone is authorized. `GR-6.1` is implemented with live
+browser acceptance pending. `STM-1` remains proposed but not authorized. Its
+implementation, like any later gameplay or production-asset milestone, requires
+explicit user authorization.
 Do not implement gameplay saving; it may return only through an explicitly
 authorized milestone designed for the game that exists at that time.
