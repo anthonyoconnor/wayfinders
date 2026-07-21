@@ -54,6 +54,190 @@ body {
     #061923;
 }
 
+.startup-screen {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  overflow: hidden;
+  color: #efe2bd;
+  background:
+    radial-gradient(circle at 50% 46%, rgba(39, 112, 119, 0.38), transparent 28rem),
+    linear-gradient(180deg, #061923, #04141c);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 360ms ease-out, visibility 0s linear 360ms;
+}
+
+.startup-screen::before,
+.startup-screen::after {
+  position: absolute;
+  right: -12vw;
+  bottom: 11vh;
+  left: -12vw;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(120, 205, 199, 0.22), transparent);
+  content: "";
+  transform: rotate(-2deg);
+}
+
+.startup-screen::after {
+  bottom: 7vh;
+  opacity: 0.55;
+  transform: rotate(1deg);
+}
+
+.startup-screen[data-state="ready"] {
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.startup-screen__content {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(28rem, 100%);
+  text-align: center;
+}
+
+.startup-screen__wayfinder {
+  position: relative;
+  width: 4.75rem;
+  height: 4.75rem;
+  margin-bottom: 1.35rem;
+  border: 1px solid rgba(239, 226, 189, 0.44);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 0.35rem rgba(6, 25, 35, 0.7),
+    inset 0 0 0 0.42rem rgba(141, 216, 207, 0.2),
+    0 0 2.5rem rgba(71, 183, 177, 0.12);
+}
+
+.startup-screen__wayfinder::before,
+.startup-screen__wayfinder::after,
+.startup-screen__wayfinder span::before,
+.startup-screen__wayfinder span::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.18rem;
+  height: 2.9rem;
+  border-radius: 999px;
+  background: linear-gradient(#efe2bd 0 45%, rgba(141, 216, 207, 0.26) 46% 100%);
+  content: "";
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+}
+
+.startup-screen__wayfinder::after {
+  transform: translate(-50%, -50%) rotate(90deg);
+}
+
+.startup-screen__wayfinder span::before {
+  height: 2.25rem;
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.startup-screen__wayfinder span::after {
+  height: 2.25rem;
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.startup-screen__wayfinder span {
+  position: absolute;
+  inset: 0;
+  animation: startup-bearing 3.2s ease-in-out infinite;
+}
+
+.startup-screen__eyebrow,
+.startup-screen__title,
+.startup-screen__status {
+  margin: 0;
+}
+
+.startup-screen__eyebrow {
+  color: #91d6ca;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.startup-screen__title {
+  margin-top: 0.32rem;
+  color: #f3e8c8;
+  font-family: Cambria, Georgia, "Times New Roman", serif;
+  font-size: clamp(2.1rem, 7vw, 3.3rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  text-shadow: 0 0.25rem 1.5rem rgba(0, 0, 0, 0.42);
+}
+
+.startup-screen__status {
+  min-height: 1.4rem;
+  margin-top: 0.9rem;
+  color: #9eb4b8;
+  font-size: 0.82rem;
+  letter-spacing: 0.025em;
+}
+
+.startup-screen__status::after {
+  display: inline-block;
+  width: 1.2em;
+  content: "";
+  animation: startup-ellipsis 1.4s steps(4, end) infinite;
+  text-align: left;
+}
+
+.startup-screen[data-state="error"] .startup-screen__wayfinder {
+  border-color: rgba(255, 181, 167, 0.7);
+  animation: none;
+}
+
+.startup-screen[data-state="error"] .startup-screen__status {
+  max-width: 32rem;
+  color: var(--shell-danger);
+}
+
+.startup-screen[data-state="error"] .startup-screen__status::after {
+  content: none;
+}
+
+html:not([data-scene-ready]) .shell-controls {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@keyframes startup-bearing {
+  0%,
+  100% { transform: rotate(-3deg); }
+  50% { transform: rotate(5deg); }
+}
+
+@keyframes startup-ellipsis {
+  0% { content: ""; }
+  25% { content: "."; }
+  50% { content: ".."; }
+  75%,
+  100% { content: "..."; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-screen,
+  .startup-screen__wayfinder span {
+    animation: none;
+    transition-duration: 0.01ms;
+  }
+
+  .startup-screen__status::after {
+    animation: none;
+    content: "…";
+  }
+}
+
 button,
 input,
 select,
@@ -5972,6 +6156,64 @@ html[data-application-mode="game"] .game-lifecycle-cue {
     width: auto;
     min-width: min(16rem, 45vw);
     white-space: nowrap;
+  }
+}
+
+/* Keep live game status available to assistive technology without a permanent HUD plaque. */
+html[data-application-mode="game"] .game-status {
+  position: absolute;
+  width: 1px;
+  min-width: 0;
+  max-width: none;
+  height: 1px;
+  min-height: 0;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  border: 0;
+  white-space: nowrap;
+}
+
+/* Sound belongs to the shared top-right toolbar; its panel still opens below it. */
+html[data-application-mode="game"] .shell-controls > .game-audio-controls {
+  position: relative;
+  z-index: auto;
+  inset: auto;
+  display: grid;
+  justify-items: stretch;
+  color: var(--hud-ink);
+}
+
+html[data-application-mode="game"] .shell-controls .game-audio-controls__toggle {
+  min-width: 0;
+  min-height: 3.25rem;
+}
+
+html[data-application-mode="game"] .shell-controls .game-audio-controls__toggle::before,
+html[data-application-mode="game"] .shell-controls .game-audio-controls__toggle::after {
+  content: none;
+}
+
+html[data-application-mode="game"] .shell-controls .game-audio-controls__panel {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 0.8rem);
+  right: 0;
+  margin-top: 0;
+}
+
+@media (max-width: 40rem) {
+  html[data-application-mode="game"] .shell-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  html[data-application-mode="game"] .shell-controls .game-audio-controls__toggle {
+    width: 100%;
+    min-height: 2.7rem;
+    padding-inline: 0.68rem;
+    font-size: 0.84rem;
   }
 }
 

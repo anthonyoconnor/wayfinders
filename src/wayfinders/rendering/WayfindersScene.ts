@@ -2549,7 +2549,7 @@ export class WayfindersScene extends Phaser.Scene {
   }
 
   private mountAudioControls(): void {
-    const root = document.querySelector<HTMLElement>(".game-region");
+    const root = document.querySelector<HTMLElement>(".shell-controls");
     if (!root) return;
     if (!this.audioCatalogResult?.ok) {
       const message = this.audioCatalogResult

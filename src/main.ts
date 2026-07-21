@@ -32,7 +32,11 @@ import { composeApplicationScenes } from "./wayfinders/app/ApplicationSceneCompo
 import { tryLoadAudioCatalog } from "./wayfinders/audio";
 import { GameSimulation } from "./wayfinders/core/GameSimulation";
 import { WayfindersScene } from "./wayfinders/rendering/WayfindersScene";
-import "./styles.css";
+import {
+  mountStartupPresentation,
+  waitForInitialScenePaint,
+  type StartupPresentation,
+} from "./startupPresentation";
 
 type ShellState = "starting" | "ready" | "error";
 
@@ -65,6 +69,7 @@ const developerLogFeedback = requireElement<HTMLOutputElement>("#developer-log-f
 const assetModeLink = requireElement<HTMLAnchorElement>("#asset-mode-link");
 const appShell = requireElement<HTMLDivElement>("#app");
 const assetWorkspaceTabsRoot = requireElement<HTMLElement>("#asset-workspace-tabs");
+const startupPresentation: StartupPresentation = mountStartupPresentation(document);
 let suppressEscapeUntilKeyUp = false;
 const applicationMode = resolveWayfindersApplicationMode(window.location.search);
 const initialAssetWorkspace = resolveAssetWorkspace(window.location.search);
@@ -85,6 +90,7 @@ function setDeveloperToolsOpen(open: boolean): void {
 function setStatus(message: string, state: ShellState = "ready"): void {
   statusElement.textContent = message;
   statusElement.dataset.state = state;
+  if (state !== "ready") startupPresentation.setStatus(message, state);
 }
 
 function log(message: string): void {
@@ -103,8 +109,6 @@ export const wayfindersShell: WayfindersShell = {
 export function createWayfindersGame(
   scenes: Phaser.Types.Scenes.SceneType[] = [],
 ): Phaser.Game {
-  setStatus("Starting WebGL renderer…", "starting");
-
   return new Phaser.Game({
     type: Phaser.WEBGL,
     parent: gameHost,
@@ -129,7 +133,10 @@ export function createWayfindersGame(
     banner: false,
     callbacks: {
       postBoot: () => {
-        if (scenes.length === 0) setStatus("Renderer ready; awaiting scene binding.");
+        if (scenes.length === 0) {
+          setStatus("Renderer ready; awaiting scene binding.");
+          startupPresentation.reveal();
+        }
       },
     },
   });
@@ -233,7 +240,18 @@ async function startApplication(): Promise<void> {
       log(`Audio unavailable: ${sceneComposition.audioCatalogResult.error.message}`);
     }
 
+    setStatus(
+      sceneComposition.mode === "game" ? "Remembering the voyagers" : "Opening the asset workbench",
+      "starting",
+    );
     wayfindersGame = createWayfindersGame([sceneComposition.initialScene]);
+    waitForInitialScenePaint(
+      () => wayfindersGame?.scene.getScenes(true).some((scene) => scene.scene.isActive()) ?? false,
+      () => {
+        statusElement.dataset.state = "ready";
+        startupPresentation.reveal();
+      },
+    );
     if (sceneComposition.mode === "assets") {
       let activeWorkspace = initialAssetWorkspace;
       const registeredWorkspaceIds = new Set<AssetWorkspaceId>([

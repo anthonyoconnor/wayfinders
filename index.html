@@ -8,12 +8,39 @@
       name="description"
       content="Wayfinders, a browser exploration prototype about charting a scattered ocean world."
     />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #061923;
+      }
+    </style>
+    <link rel="stylesheet" href="/src/styles.css" />
     <title>Wayfinders Prototype</title>
   </head>
   <body>
     <a class="skip-link" href="#developer-tools-panel">Skip to controls</a>
 
     <div id="app" class="app-shell">
+      <section
+        id="startup-screen"
+        class="startup-screen"
+        data-state="starting"
+        aria-labelledby="startup-title"
+        aria-describedby="startup-status"
+      >
+        <div class="startup-screen__content">
+          <div class="startup-screen__wayfinder" aria-hidden="true">
+            <span></span>
+          </div>
+          <p class="startup-screen__eyebrow">A voyage begins</p>
+          <p id="startup-title" class="startup-screen__title">Wayfinders</p>
+          <p id="startup-status" class="startup-screen__status" role="status" aria-live="polite">
+            Charting the archipelago
+          </p>
+        </div>
+      </section>
+
       <nav id="asset-workspace-tabs" class="asset-workspace-tabs" aria-label="Asset workspaces" hidden></nav>
       <main id="game-region" class="game-region" aria-labelledby="game-title">
         <h1 id="game-title" class="visually-hidden">Wayfinders Prototype</h1>
@@ -34,7 +61,7 @@
 
         <div class="shell-controls" aria-label="Prototype controls">
           <p id="game-status" class="game-status" role="status" aria-live="polite">
-            Starting renderer…
+            Charting the archipelago
           </p>
           <a id="asset-mode-link" class="tool-toggle tool-link" href="?mode=assets">Asset tools</a>
           <button
