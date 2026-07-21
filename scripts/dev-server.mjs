@@ -19,16 +19,37 @@ import { createProductionCandidatePromotionMiddleware } from "./production-candi
 import { createProductionCandidatePromoter } from "./production-candidate-promotion.mjs";
 import { createCloudAssetAuthoringMiddleware } from "./cloud-asset-authoring-api.mjs";
 import { createCloudAssetAuthoringService } from "./cloud-asset-authoring.mjs";
+import {
+  createAuthoredMapAuthoringMiddleware,
+  createAuthoredMapStaticMiddleware,
+} from "./authored-map-authoring-api.mjs";
+import { createAuthoredMapRepositoryService } from "./authored-map-repository.mjs";
 
 const DEFAULT_PORT = 5173;
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function parsePort(args) {
-  if (args.length === 0) {
+  const normalized = [];
+  for (let index = 0; index < args.length; index++) {
+    const argument = args[index];
+    if (argument === "--host") {
+      const host = args[++index];
+      if (host === undefined) throw new Error("Usage: npm.cmd run dev -- --host 127.0.0.1 --port <port>");
+      requireLoopbackHost(host);
+      continue;
+    }
+    if (argument.startsWith("--host=")) {
+      requireLoopbackHost(argument.slice("--host=".length));
+      continue;
+    }
+    normalized.push(argument);
+  }
+
+  if (normalized.length === 0) {
     return DEFAULT_PORT;
   }
 
-  const [first, second, ...rest] = args;
+  const [first, second, ...rest] = normalized;
   let value;
 
   if (first === "--port" || first === "-p") {
@@ -54,6 +75,12 @@ function parsePort(args) {
   }
 
   return port;
+}
+
+function requireLoopbackHost(host) {
+  if (host !== "127.0.0.1") {
+    throw new Error("The Wayfinders authoring server only accepts --host 127.0.0.1");
+  }
 }
 
 try {
@@ -84,10 +111,18 @@ try {
     expectedOrigin: collisionSaveOrigin(port),
     authoring: createCloudAssetAuthoringService({ repositoryRoot }),
   });
+  const authoredMapRepository = createAuthoredMapRepositoryService({ repositoryRoot });
+  const authoredMapStaticMiddleware = createAuthoredMapStaticMiddleware({ repositoryRoot });
+  const authoredMapAuthoringMiddleware = createAuthoredMapAuthoringMiddleware({
+    expectedOrigin: collisionSaveOrigin(port),
+    saveMap: authoredMapRepository.save,
+  });
   const server = await createServer({
     plugins: [{
       name: "wayfinders-local-asset-writes",
       configureServer(viteServer) {
+        viteServer.middlewares.use(authoredMapStaticMiddleware);
+        viteServer.middlewares.use(authoredMapAuthoringMiddleware);
         viteServer.middlewares.use(collisionSaveMiddleware);
         viteServer.middlewares.use(assetReviewMiddleware);
         viteServer.middlewares.use(assetIntakeMiddleware);

@@ -2,6 +2,7 @@ export type StartupState = "starting" | "ready" | "error";
 
 export interface StartupPresentation {
   setStatus(message: string, state?: Exclude<StartupState, "ready">): void;
+  setAction(label: string, href: string): void;
   reveal(): void;
 }
 
@@ -16,14 +17,22 @@ function requireStartupElement<T extends HTMLElement>(documentRoot: Document, se
 export function mountStartupPresentation(documentRoot: Document): StartupPresentation {
   const root = requireStartupElement<HTMLElement>(documentRoot, "#startup-screen");
   const status = requireStartupElement<HTMLElement>(documentRoot, "#startup-status");
+  const action = requireStartupElement<HTMLAnchorElement>(documentRoot, "#startup-action");
 
   return {
     setStatus(message, state = "starting"): void {
       status.textContent = message;
       root.dataset.state = state;
       documentRoot.documentElement.dataset.startupState = state;
+      if (state !== "error") action.hidden = true;
+    },
+    setAction(label, href): void {
+      action.textContent = label;
+      action.href = href;
+      action.hidden = false;
     },
     reveal(): void {
+      action.hidden = true;
       root.dataset.state = "ready";
       documentRoot.documentElement.dataset.startupState = "ready";
       documentRoot.documentElement.dataset.sceneReady = "true";

@@ -4,6 +4,8 @@ import { AUTHORED_ASSET_IDS } from "../src/wayfinders/assets/AuthoredAssetContra
 import {
   ASSET_LIBRARY_CATALOG,
   ASSET_LIBRARY_GROUPS,
+  AVAILABLE_AUTHORED_ISLAND_CATALOG,
+  AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
   assetLibraryEntryById,
   buildAssetLibraryCatalog,
   conceptIslandReferenceEntry,
@@ -11,6 +13,7 @@ import {
   islandReferenceEntry,
   waterReferenceEntry,
 } from "../src/wayfinders/assets/AssetLibraryCatalog";
+import { projectAuthoredIslandPresentationCatalog } from "../src/wayfinders/assets/AuthoredIslandPresentation";
 
 const ESTABLISHED_IDS = [
   AUTHORED_ASSET_IDS.homeIsland,
@@ -19,6 +22,30 @@ const ESTABLISHED_IDS = [
 ] as const;
 
 describe("asset library catalog", () => {
+  it("projects one presentation entry per referenced collision asset with the same revision", () => {
+    const source = AVAILABLE_AUTHORED_ISLAND_CATALOG.islands[0];
+    expect(source).toBeDefined();
+    const collisionProjection = {
+      revision: "map-collision-test",
+      islands: [source!],
+    };
+    const presentation = projectAuthoredIslandPresentationCatalog(
+      collisionProjection,
+      AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+    );
+
+    expect(presentation.revision).toBe("map-collision-test");
+    expect(presentation.islands.map(({ assetId }) => assetId)).toEqual([source!.assetId]);
+    const availablePresentation = AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG.islands
+      .find(({ assetId }) => assetId === source!.assetId)!;
+    expect(presentation.islands[0]).not.toBe(availablePresentation);
+    expect(Object.isFrozen(presentation.islands[0]?.layers[0])).toBe(true);
+    expect(() => projectAuthoredIslandPresentationCatalog(collisionProjection, {
+      revision: "duplicate-test",
+      islands: [availablePresentation, availablePresentation],
+    })).toThrow(/repeats island/u);
+  });
+
   it("includes the three runtime packages and current imported-island sources", () => {
     expect(ASSET_LIBRARY_CATALOG).toHaveLength(29);
     const runtime = ASSET_LIBRARY_CATALOG.filter((entry) => entry.entryType === "authored-package");

@@ -38,16 +38,19 @@
           <p id="startup-status" class="startup-screen__status" role="status" aria-live="polite">
             Charting the archipelago
           </p>
+          <a id="startup-action" class="startup-screen__action" href="/" hidden></a>
         </div>
       </section>
 
-      <nav id="asset-workspace-tabs" class="asset-workspace-tabs" aria-label="Asset workspaces" hidden></nav>
+      <nav id="asset-workspace-tabs" class="asset-workspace-tabs" aria-label="Developer workspaces" hidden></nav>
       <main id="game-region" class="game-region" aria-labelledby="game-title">
         <h1 id="game-title" class="visually-hidden">Wayfinders Prototype</h1>
         <p id="game-instructions" class="visually-hidden">
           The game canvas uses keyboard controls once a scene is active. Developer tools remain
           open during sailing; use WASD while editing numeric tuning controls. At the exact home
           dock, use the Go ashore action or F to visit the Great Hall lineage chronicle.
+          The Maps workspace opens and saves checked-in map definitions; those actions are not
+          game-session loading or saving.
         </p>
 
         <div
@@ -63,7 +66,7 @@
           <p id="game-status" class="game-status" role="status" aria-live="polite">
             Charting the archipelago
           </p>
-          <a id="asset-mode-link" class="tool-toggle tool-link" href="?mode=assets">Asset tools</a>
+          <a id="asset-mode-link" class="tool-toggle tool-link" href="?mode=assets">Developer workspaces</a>
           <button
             id="developer-tools-toggle"
             class="tool-toggle"

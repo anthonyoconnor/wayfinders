@@ -1,0 +1,15 @@
+{
+  "formatVersion": 1,
+  "catalogRevision": 1,
+  "maps": [
+    {
+      "id": "wayfinders-playtest",
+      "displayName": "Wayfinders playtest",
+      "mapRepositoryRevision": 1,
+      "currentFingerprint": "7696fc5d82e01f879a9ce84ad347d3ae4ecfe9d77aff3e4d3457da1432ad6d01",
+      "retainedFingerprints": [
+        "7696fc5d82e01f879a9ce84ad347d3ae4ecfe9d77aff3e4d3457da1432ad6d01"
+      ]
+    }
+  ]
+}

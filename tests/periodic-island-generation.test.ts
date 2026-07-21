@@ -10,6 +10,7 @@ import {
 import { KnowledgeState, TerrainType } from "../src/wayfinders/world/TileData";
 import { WorldGrid } from "../src/wayfinders/world/WorldGrid";
 import { WRAPPING_WORLD_TOPOLOGY, WorldTopology } from "../src/wayfinders/world/WorldTopology";
+import { authoredStarterLaneBounds } from "../src/wayfinders/world/authored";
 import { makeConfig } from "./helpers";
 
 function proceduralIsland(
@@ -118,6 +119,12 @@ describe("periodic island generation", () => {
     expect(intersectsPeriodicStarterLane(topology, dock, { x: 0, y: 12 }, 1, 2)).toBe(true);
     expect(intersectsPeriodicStarterLane(topology, dock, { x: 2, y: 12 }, 1, 2)).toBe(false);
     expect(intersectsPeriodicStarterLane(topology, dock, { x: 8, y: 12 }, 1, 2)).toBe(false);
+    expect(authoredStarterLaneBounds(topology, dock, 2)).toEqual({
+      minX: 16,
+      minY: 10,
+      maxX: 32,
+      maxY: 14,
+    });
   });
 
   it("requires a real non-contractible cycle rather than merely reaching a seam", () => {

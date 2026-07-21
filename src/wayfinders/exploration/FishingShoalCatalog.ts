@@ -16,8 +16,16 @@ import {
 } from "./FishingShoalContracts";
 
 const CATALOG_NAMESPACE = 904_321;
-const HOME_EXCLUSION_TILES = 18;
-const MINIMUM_SEPARATION_TILES = 14;
+export const FISHING_SHOAL_HOME_EXCLUSION_TILES = 18;
+export const FISHING_SHOAL_MINIMUM_SEPARATION_TILES = 14;
+
+export type FishingShoalPlacementRejection =
+  | "blocked"
+  | "outside-home-component"
+  | "occupied"
+  | "home-exclusion"
+  | "non-ocean"
+  | "shoal-separation";
 
 interface RankedCandidate {
   index: number;
@@ -25,31 +33,46 @@ interface RankedCandidate {
   rank: number;
 }
 
-const CLUE_LABELS: Readonly<Record<(typeof FISHING_SHOAL_CLUE_KINDS)[number], readonly [string, string, string]>> = {
+export const FISHING_SHOAL_CLUE_LABELS: Readonly<
+  Record<(typeof FISHING_SHOAL_CLUE_KINDS)[number], readonly [string, string, string]>
+> = Object.freeze({
   seabirds: ["A few circling seabirds", "Seabirds gathering low", "A dense wheel of seabirds"],
   "surface-breaks": ["An occasional silver flash", "Repeated breaks at the surface", "Water flashing with movement"],
   "water-colour": ["A faint change in the water", "A distinct green-blue seam", "A broad living stain in the water"],
-};
+});
 
-function candidateIsEligible(
+export function fishingShoalTilePlacementRejection(
   world: WorldGrid,
-  graph: GridGraph | undefined,
   index: number,
   home: GridPoint,
-  analysis: WorldAnalysisIndex | undefined,
+  isPassable: (index: number) => boolean,
   isDockReachable: (index: number) => boolean,
-): GridPoint | undefined {
-  if (!(analysis?.isPassable(index) ?? graph?.isNavigationNodePassable(index))) return undefined;
-  if (!isDockReachable(index)) return undefined;
-  if (world.getIslandIdAtIndex(index) >= 0 || world.getResourceIdAtIndex(index) >= 0) return undefined;
+): Exclude<FishingShoalPlacementRejection, "shoal-separation"> | undefined {
+  if (!isPassable(index)) return "blocked";
+  if (!isDockReachable(index)) return "outside-home-component";
+  if (world.getIslandIdAtIndex(index) >= 0 || world.getResourceIdAtIndex(index) >= 0) return "occupied";
   const tile = world.pointFromIndex(index);
   if (
     world.topology.minimumImageTileDistanceSquared(tile, home)
-    < HOME_EXCLUSION_TILES * HOME_EXCLUSION_TILES
-  ) return undefined;
+    < FISHING_SHOAL_HOME_EXCLUSION_TILES * FISHING_SHOAL_HOME_EXCLUSION_TILES
+  ) return "home-exclusion";
   const terrain = world.getTerrain(tile.x, tile.y);
-  if (terrain !== TerrainType.DeepOcean && terrain !== TerrainType.ShallowOcean) return undefined;
-  return tile;
+  if (terrain !== TerrainType.DeepOcean && terrain !== TerrainType.ShallowOcean) return "non-ocean";
+  return undefined;
+}
+
+export function fishingShoalHasSeparationConflict(
+  world: Pick<WorldGrid, "topology">,
+  tile: Readonly<GridPoint>,
+  otherTiles: Iterable<Readonly<GridPoint>>,
+): boolean {
+  for (const other of otherTiles) {
+    if (
+      world.topology.minimumImageTileDistanceSquared(tile, other)
+      < FISHING_SHOAL_MINIMUM_SEPARATION_TILES * FISHING_SHOAL_MINIMUM_SEPARATION_TILES
+    ) return true;
+  }
+  return false;
 }
 
 function dockReachableMask(
@@ -74,17 +97,21 @@ function dockReachableMask(
   return reachable;
 }
 
-function clueFor(seed: number, candidateIndex: number): FishingShoalClue {
+export function fishingShoalClueForStableKey(
+  seed: number,
+  stableKey: number,
+  namespace: number,
+): FishingShoalClue {
   const kindIndex = Math.min(
     FISHING_SHOAL_CLUE_KINDS.length - 1,
-    Math.floor(seededValue(seed + CATALOG_NAMESPACE, candidateIndex, 31) * FISHING_SHOAL_CLUE_KINDS.length),
+    Math.floor(seededValue(seed + namespace, stableKey, 31) * FISHING_SHOAL_CLUE_KINDS.length),
   );
   const intensity = (1 + Math.min(
     2,
-    Math.floor(seededValue(seed + CATALOG_NAMESPACE, candidateIndex, 32) * 3),
+    Math.floor(seededValue(seed + namespace, stableKey, 32) * 3),
   )) as FishingShoalClueIntensity;
   const kind = FISHING_SHOAL_CLUE_KINDS[kindIndex];
-  return { kind, intensity, label: CLUE_LABELS[kind][intensity - 1] };
+  return { kind, intensity, label: FISHING_SHOAL_CLUE_LABELS[kind][intensity - 1] };
 }
 
 /**
@@ -122,8 +149,17 @@ export function generateFishingShoalCatalog(
   const totalCandidates = candidateIndices?.length ?? world.tileCount;
   for (let ordinal = 0; ordinal < totalCandidates; ordinal++) {
     const index = candidateIndices?.[ordinal] ?? ordinal;
-    const tile = candidateIsEligible(world, graph, index, home, analysis, isDockReachable);
-    if (!tile) continue;
+    const rejection = fishingShoalTilePlacementRejection(
+      world,
+      index,
+      home,
+      (candidateIndex) => analysis?.isPassable(candidateIndex)
+        ?? graph?.isNavigationNodePassable(candidateIndex)
+        ?? false,
+      isDockReachable,
+    );
+    if (rejection) continue;
+    const tile = world.pointFromIndex(index);
     candidates.push({
       index,
       tile,
@@ -135,10 +171,7 @@ export function generateFishingShoalCatalog(
   const selected: RankedCandidate[] = [];
   for (const candidate of candidates) {
     if (selected.length >= config.world.fishingShoalCount) break;
-    if (selected.some(({ tile }) => (
-      world.topology.minimumImageTileDistanceSquared(candidate.tile, tile)
-      < MINIMUM_SEPARATION_TILES * MINIMUM_SEPARATION_TILES
-    ))) {
+    if (fishingShoalHasSeparationConflict(world, candidate.tile, selected.map(({ tile }) => tile))) {
       continue;
     }
     selected.push(candidate);
@@ -156,7 +189,7 @@ export function generateFishingShoalCatalog(
       tile,
       serviceAnchor: tile,
       quality: FISHING_SHOAL_QUALITIES[qualityIndex],
-      clue: Object.freeze(clueFor(seed, candidate.index)),
+      clue: Object.freeze(fishingShoalClueForStableKey(seed, candidate.index, CATALOG_NAMESPACE)),
     });
   }));
 }

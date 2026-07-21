@@ -21,6 +21,7 @@
     "assets:review": "vite-node scripts/production-asset-review.mjs",
     "assets:promote": "vite-node scripts/production-asset-promotion.mjs promote",
     "assets:promote:check": "vite-node scripts/production-asset-promotion.mjs check",
+    "maps:check": "vite-node --script scripts/authored-map-repository-check.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "benchmark:architecture": "vite-node scripts/architecture-benchmark.ts",
     "check:architecture": "node scripts/check-feature-boundaries.mjs",
@@ -35,7 +36,7 @@
     "test:perf": "vitest --configLoader runner run --project performance --no-file-parallelism",
     "test:watch": "vitest --configLoader runner --project quick",
     "check:quick": "npm run check:architecture && npm run test:quick",
-    "check": "npm run assets:check && npm run typecheck && npm run typecheck:test && npm run check:quick && npm run test:contract && npm run test:integration && npm run test:io && npm run build:bundle"
+    "check": "npm run assets:check && npm run maps:check && npm run typecheck && npm run typecheck:test && npm run check:quick && npm run test:contract && npm run test:integration && npm run test:io && npm run build:bundle"
   },
   "dependencies": {
     "phaser": "3.90.0"

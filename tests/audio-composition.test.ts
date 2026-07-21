@@ -20,7 +20,7 @@ describe("audio application composition", () => {
     let loadCount = 0;
     let gameCatalog: AudioCatalogLoadResult | undefined;
     const composition = await composeApplicationScenes<SceneToken>(
-      { mode: "game" },
+      { mode: "game", worldSource: { kind: "procedural" } },
       {
         loadAudioCatalog: async () => {
           loadCount++;
@@ -40,9 +40,38 @@ describe("audio application composition", () => {
     );
 
     expect(composition).toMatchObject({ mode: "game", initialScene: { kind: "game" } });
+    expect(composition.mode === "game" && composition.worldSource).toEqual({ kind: "procedural" });
     expect(loadCount).toBe(1);
     expect(gameCatalog).toBe(unavailableAudio);
     expect(composition.mode === "game" && composition.audioCatalogResult).toBe(unavailableAudio);
+  });
+
+  it("hands the explicit authored world source through the app composition seam", async () => {
+    const worldSource = Object.freeze({
+      kind: "authored-map" as const,
+      mapId: "seam-playtest",
+      contentFingerprint: "a".repeat(64),
+    });
+    let receivedSource: unknown;
+    const composition = await composeApplicationScenes<SceneToken>(
+      { mode: "game", worldSource },
+      {
+        loadAudioCatalog: async () => unavailableAudio,
+        createGameScene: (_catalog, source) => {
+          receivedSource = source;
+          return { kind: "game" };
+        },
+        createAssetWorkspaceScene: () => {
+          throw new Error("Game composition must not create an asset workspace scene");
+        },
+        createAssetTrialScene: () => {
+          throw new Error("Game composition must not create a trial scene");
+        },
+      },
+    );
+
+    expect(receivedSource).toBe(worldSource);
+    expect(composition.mode === "game" && composition.worldSource).toBe(worldSource);
   });
 
   it("reuses the initial asset catalog result when a later workspace scene is created", async () => {

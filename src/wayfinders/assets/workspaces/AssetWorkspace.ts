@@ -11,6 +11,7 @@ export interface AssetWorkspaceBase {
     | "great-hall-preview"
     | "audio-preview"
     | "cloud-preview"
+    | "map-editor"
     | "prosperity-traffic-preview"
     | "water-preview";
 }
@@ -42,6 +43,10 @@ export interface CloudAssetWorkspaceModule extends AssetWorkspaceBase {
   readonly kind: "cloud-preview";
 }
 
+export interface MapEditorWorkspaceModule extends AssetWorkspaceBase {
+  readonly kind: "map-editor";
+}
+
 export interface ProsperityTrafficAssetWorkspaceModule extends AssetWorkspaceBase {
   readonly kind: "prosperity-traffic-preview";
 }
@@ -52,6 +57,7 @@ export type AssetWorkspaceModule =
   | GreatHallAssetWorkspaceModule
   | AudioAssetWorkspaceModule
   | CloudAssetWorkspaceModule
+  | MapEditorWorkspaceModule
   | ProsperityTrafficAssetWorkspaceModule
   | WaterAssetWorkspaceModule;
 

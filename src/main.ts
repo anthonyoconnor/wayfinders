@@ -27,8 +27,15 @@ import {
   mountAssetWorkspaceTabs,
   type AssetWorkspaceTabs,
 } from "./wayfinders/assets/AssetWorkspaceTabs";
+import { createAssetWorkspaceNavigationController } from "./wayfinders/assets/AssetWorkspaceNavigationGuard";
 import { assetWorkspaceSceneKey } from "./wayfinders/assets/workspaces/AssetWorkspace";
 import { composeApplicationScenes } from "./wayfinders/app/ApplicationSceneComposition";
+import {
+  loadAuthoredMapSourceV1,
+  proceduralGameHref,
+  resolveAuthoredMapLaunchRequestV1,
+  type LoadedAuthoredMapSourceV1,
+} from "./wayfinders/app/authoredMaps";
 import { tryLoadAudioCatalog } from "./wayfinders/audio";
 import { GameSimulation } from "./wayfinders/core/GameSimulation";
 import { WayfindersScene } from "./wayfinders/rendering/WayfindersScene";
@@ -192,15 +199,15 @@ window.addEventListener("blur", () => { suppressEscapeUntilKeyUp = false; });
 assetModeLink.href = applicationModeHref(applicationMode);
 assetModeLink.textContent = applicationMode === "assets"
   ? "Back to game"
-  : applicationMode === "asset-trial" ? "Return to asset tools" : "Asset tools";
+  : applicationMode === "asset-trial" ? "Return to workspaces" : "Developer workspaces";
 toolsToggle.hidden = permanentAssetTools;
 toolsClose.hidden = permanentAssetTools;
 toolsToggle.textContent = applicationMode === "assets"
-  ? "Asset controls"
+  ? "Workspace controls"
   : applicationMode === "asset-trial" ? "Trial controls" : "Developer tools";
 const toolsTitle = document.querySelector<HTMLElement>("#developer-tools-title");
 if (toolsTitle) toolsTitle.textContent = applicationMode === "assets"
-  ? "Asset workbench"
+  ? "Developer workspaces"
   : applicationMode === "asset-trial" ? "Sea trial" : "Developer tools";
 const toolsEyebrow = document.querySelector<HTMLElement>(".developer-tools__header .eyebrow");
 if (toolsEyebrow) toolsEyebrow.textContent = applicationMode === "assets"
@@ -212,9 +219,36 @@ document.documentElement.dataset.applicationMode = applicationMode;
 
 export let wayfindersGame: Phaser.Game | undefined;
 let assetWorkspaceTabs: AssetWorkspaceTabs | undefined;
+const assetWorkspaceNavigation = createAssetWorkspaceNavigationController();
+
+function simulationSourceFromLoadedMap(source: Readonly<LoadedAuthoredMapSourceV1>) {
+  let initial: typeof source.compiled | undefined = source.compiled;
+  return Object.freeze({
+    identity: source.compiled.sourceIdentity,
+    catalogRepositoryRevision: source.catalogRepositoryRevision,
+    compileFresh: () => {
+      const compiled = initial ?? source.compileFresh();
+      initial = undefined;
+      return Object.freeze({
+        generated: compiled.generated,
+        fishingDefinitions: compiled.fishingDefinitions,
+      });
+    },
+  });
+}
 
 async function startApplication(): Promise<void> {
   try {
+    const mapLaunchRequest = applicationMode === "game"
+      ? resolveAuthoredMapLaunchRequestV1(window.location.search)
+      : Object.freeze({ kind: "procedural" as const });
+    const authoredMapSource = mapLaunchRequest.kind === "authored-map"
+      ? await loadAuthoredMapSourceV1(mapLaunchRequest, {
+        availableCollisionCatalog: AVAILABLE_AUTHORED_ISLAND_CATALOG,
+        availablePresentationCatalog: AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+        config: prototypeConfig,
+      })
+      : undefined;
     const compositionRequest = applicationMode === "assets"
       ? { mode: applicationMode, initialWorkspace: initialAssetWorkspace } as const
       : applicationMode === "asset-trial"
@@ -222,17 +256,26 @@ async function startApplication(): Promise<void> {
           mode: applicationMode,
           trialRequest: resolveAssetTrialApplicationRequest(window.location.search)!,
         } as const
-        : { mode: applicationMode } as const;
+        : { mode: applicationMode, worldSource: mapLaunchRequest } as const;
     const sceneComposition = await composeApplicationScenes(compositionRequest, {
       loadAudioCatalog: tryLoadAudioCatalog,
-      createAssetWorkspaceScene,
+      createAssetWorkspaceScene: (workspace, audioCatalogResult) => createAssetWorkspaceScene(
+        workspace,
+        audioCatalogResult,
+        assetWorkspaceNavigation,
+      ),
       createAssetTrialScene: (request) => new AssetTrialScene(request),
       createGameScene: (audioCatalogResult) => new WayfindersScene(
         new GameSimulation(prototypeConfig, undefined, {
-          authoredIslandCatalog: AVAILABLE_AUTHORED_ISLAND_CATALOG,
+          authoredIslandCatalog: authoredMapSource?.compiled.collisionCatalog
+            ?? AVAILABLE_AUTHORED_ISLAND_CATALOG,
+          ...(authoredMapSource
+            ? { authoredMapSource: simulationSourceFromLoadedMap(authoredMapSource) }
+            : {}),
           forwardGuidanceEnabled: DEFAULT_GAME_SETTINGS.overlays.forwardRange,
         }),
-        AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
+        authoredMapSource?.presentationCatalog
+          ?? AVAILABLE_AUTHORED_ISLAND_PRESENTATION_CATALOG,
         audioCatalogResult,
       ),
     });
@@ -241,7 +284,7 @@ async function startApplication(): Promise<void> {
     }
 
     setStatus(
-      sceneComposition.mode === "game" ? "Remembering the voyagers" : "Opening the asset workbench",
+      sceneComposition.mode === "game" ? "Remembering the voyagers" : "Opening developer workspaces",
       "starting",
     );
     wayfindersGame = createWayfindersGame([sceneComposition.initialScene]);
@@ -276,6 +319,7 @@ async function startApplication(): Promise<void> {
           wayfindersGame!.scene.start(nextKey);
           activeWorkspace = workspace;
         },
+        assetWorkspaceNavigation,
       );
     }
     window.dispatchEvent(
@@ -286,6 +330,13 @@ async function startApplication(): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : "The renderer could not be started.";
     setStatus(message, "error");
+    if (
+      applicationMode === "game"
+      && (new URLSearchParams(window.location.search).has("map")
+        || new URLSearchParams(window.location.search).has("mapFingerprint"))
+    ) {
+      startupPresentation.setAction("Start a procedural voyage", proceduralGameHref(window.location));
+    }
     log(message);
     console.error(error);
   }
@@ -296,6 +347,7 @@ void startApplication();
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     assetWorkspaceTabs?.destroy();
+    assetWorkspaceNavigation.destroy();
     wayfindersGame?.destroy(true);
   });
 }

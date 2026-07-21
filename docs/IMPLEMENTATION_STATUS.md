@@ -1,6 +1,6 @@
 # Wayfinders operational status
 
-Status: current development handoff, verified 2026-07-20.
+Status: current development handoff, updated 2026-07-21.
 
 The asset workflow through GR-4.4, the graphical Great Hall through GR-5.3,
 and gameplay through GP-6.6 are implemented. GP-5.1 replaces the filled return
@@ -20,6 +20,21 @@ lane is otherwise green but reaches an unrelated in-progress production-island
 asset fixture whose recipe count currently differs from its expected count
 (`28` versus `29`). The product owner accepted the resulting presentation on
 2026-07-20, closing the milestone.
+
+`MAP-1.0` through `MAP-1.4` are implemented in the current worktree. The Maps
+workspace can create, duplicate, edit, validate, save, reopen, and launch exact
+checked-in initial-world definitions. The repository contains one current
+`wayfinders-playtest` head; explicit game startup loads its retained fingerprint
+before scene creation, and authored restart/new-game actions rebuild fresh state
+from that same source. Procedural startup remains
+the default. Focused codec, compiler, fishing, editor-draft, preview,
+navigation-guard, browser-client, repository service/API/checker, launch,
+source-loader, and simulation tests are present. The focused authored-map
+performance file and the full aggregate source gate are green, including asset
+and map repository validation, both typechecks, architecture, quick, contract,
+integration, repository-I/O, and production-bundle coverage. Responsive
+live-browser and product-owner playtest results have not yet been recorded and
+must not be inferred from the automated implementation evidence.
 
 Forward reach remains available as an on-demand player overlay, but its normal
 hidden state now suspends the derived scheduler entirely. Showing it starts a
@@ -133,9 +148,13 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
 
 ## Runnable surfaces
 
-- The default browser route starts a fresh playable voyage.
-- `?mode=assets` opens URL-addressable Islands, Ships, Fishing shoals, Water,
-  Icons, Great Hall, and Audio workspaces. Islands use a focused import, properties,
+- The default browser route starts a fresh procedural voyage. Supplying exactly
+  one cataloged `map` and retained `mapFingerprint` starts a fresh authored-map
+  voyage; an invalid explicit source blocks startup and offers a procedural
+  action.
+- `?mode=assets` opens URL-addressable Maps, Islands, Ships, Ship Traffic,
+  Fishing shoals, Water, Clouds, Icons, Great Hall, and Audio workspaces.
+  Islands use a focused import, properties,
   availability-status, sea-trial, collision-mask, and single-save workflow.
   Ships and Fishing shoals retain general asset inspection and production
   controls. Water is a read-only production inspection surface over the same
@@ -147,19 +166,23 @@ scope in `Wayfinders_Roadmap.md`, and completed evidence in
   Great Hall is a view-only host for the validated V1 fixture and the
   same bounded renderer used by the game, with a one-to-twenty navigator-count
   selector. Audio is a play-only stored-file browser with no edit or repository
-  operation.
+  operation. Maps is the checked-in initial-world editor with compact semantic
+  preview, compiler diagnostics, guarded save, and exact-fingerprint playtest
+  handoff.
 - Game mode exposes a **Sound** panel with explicit enable, mute, master, music,
   ambience, sound-effect, and interface levels. Ocean and speed-controlled wake
   ambience, automatic gameplay/UI cues, and home-harbor/open-water music start
   after enable.
 - An imported island can launch a disposable open-water sea trial from its
   library record and return directly to that same record.
-- Gameplay-session saving is absent; refresh starts a new session.
+- Gameplay-session saving is absent; refresh starts a new session from the
+  selected procedural or immutable authored source.
 - Repository asset authoring is local development tooling and is independent of
   gameplay persistence.
 
-Use `npm.cmd run dev` and open `http://127.0.0.1:5173/`. The asset operator flow
-is in `ASSET_PRODUCTION_QUICKSTART.md`.
+Use `npm.cmd run dev -- --host 127.0.0.1 --port 5173` and open
+`http://127.0.0.1:5173/`. The asset operator flow is in
+`ASSET_PRODUCTION_QUICKSTART.md`.
 
 ## Verification state
 
@@ -173,6 +196,40 @@ npm.cmd run test:perf
 Exact test counts are intentionally not recorded here because project and file
 assignment change frequently. `vitest.config.ts` is the source of truth for lane
 membership; `tests/README.md` explains lane selection.
+
+The pre-MAP source baseline was recorded on the currently loaded development
+machine before authored-source changes:
+
+| Profile | Construction p95 | World generation p95 | Tile entry p95 | Guidance slice p95 | Loaded / active / texture resources | Heap delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `P0` | `505.5147 ms` | `396.5938 ms` | `2.8755 ms` | `3.1365 ms` | `9 / 9 / 27` | `10,610,808` bytes |
+| `P1` | `1005.8768 ms` | `796.7826 ms` | `2.1325 ms` | `3.1018 ms` | `36 / 25 / 75` | `31,774,656` bytes |
+
+These loaded-machine `P0`/`P1` generation values already exceeded the existing
+`350 ms`/`600 ms` generation limits before MAP implementation, consistent with
+the timing variance below. They distinguish inherited noise from authored-map
+work but do not replace the approved generation budgets.
+
+The final focused MAP performance run passed its four MAP-specific tests as
+part of the complete serial performance lane. The normal fixture
+used the `192 x 192` P1 world with `32` repeated-asset islands and no shoals;
+the dense-valid fixture used `96` repeated-asset islands and `96` valid shoals.
+Each timing phase used three samples, feature seeding produced six trace
+samples, stable runtime used `500` updates, and preview queries used `1,000`
+samples:
+
+| Fixture | Parse p95 | Compile p95 | Construction p95 | Restart p95 | Feature seeding p95 | Stable frame p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Normal | `0.3668 ms` | `177.4781 ms` | `395.2264 ms` | `259.1130 ms` | `15.9021 ms` | `0.0426 ms` |
+| Dense valid | `4.2961 ms` | `332.6571 ms` | `256.0005 ms` | `349.2557 ms` | `12.2552 ms` | `0.0538 ms` |
+
+| Fixture | Committed editor rebuild p95 | Preview-index rebuild p95 | Preview query p95 |
+| --- | ---: | ---: | ---: |
+| Normal | `293.6483 ms` | `0.4874 ms` | `0.0101 ms` |
+| Dense valid | `245.5340 ms` | `1.8447 ms` | `0.0056 ms` |
+
+All measurements are below the authored-map budgets owned by the technical
+design. They do not replace responsive browser resource-plateau acceptance.
 
 The final GP-6 live pass sailed and teleported through the west/east,
 north/south, and corner joins; exercised the game, Great Hall, and Water
@@ -193,6 +250,13 @@ trend check rather than a gameplay blocker.
 
 ## Open operational gaps
 
+- Complete responsive live-browser acceptance for Maps create/open/edit/save/
+  reopen/playtest, dirty tab/history/page guards, explicit-source refresh and
+  restart, procedural escape, workspace teardown, accessibility, resource
+  plateau, and console output; record product-owner playtest acceptance. The
+  current attempts confirmed the local app and map catalog return HTTP `200`,
+  but the browser-control backend exposed no available browser; this is an
+  environment blocker rather than a reported application failure.
 - End-to-end browser departure responsiveness has not been remeasured after the
   hidden-guidance suspension and frame-allocation cleanup. Automated subsystem
   budgets do not by themselves close the original user-reported sluggishness.

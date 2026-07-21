@@ -15,7 +15,17 @@ import {
 } from "./AuthoredIslandCatalog";
 import { collisionSubcellBit } from "./CollisionMask";
 import type { WorldGrid } from "./WorldGrid";
-import type { WorldTopology } from "./WorldTopology";
+import {
+  createAuthoredIslandPlacementProfile,
+  finishIslandPlacement,
+  islandPlacementProfileExtent,
+  islandPlacementRejection,
+  minimumIslandHomeDistance,
+  stableIslandAssetHash,
+  type IslandPlacementProfile,
+} from "./authored/AuthoredIslandPlacement";
+
+export { intersectsPeriodicStarterLane } from "./authored/AuthoredIslandPlacement";
 
 export enum IslandKind {
   HighIsland = "high-island",
@@ -57,7 +67,7 @@ export interface GeneratedIsland {
   }>;
 }
 
-interface IslandProfile extends Omit<GeneratedIsland, "center" | "bounds"> {}
+interface IslandProfile extends IslandPlacementProfile {}
 
 export type IslandPlacementRejection = "home-clearance" | "starter-lane" | "island-channel";
 
@@ -119,32 +129,6 @@ function lerp(from: number, to: number, amount: number): number {
 
 function angularDistance(a: number, b: number): number {
   return Math.abs(((a - b + Math.PI) % TWO_PI + TWO_PI) % TWO_PI - Math.PI);
-}
-
-/** Exact finite lifted opening corridor used by periodic island placement. */
-export function intersectsPeriodicStarterLane(
-  topology: Readonly<WorldTopology>,
-  dock: Readonly<GridPoint>,
-  center: Readonly<GridPoint>,
-  outerRadius: number,
-  corridorHalfWidth: number,
-): boolean {
-  const minimumX = dock.x;
-  const maximumX = dock.x + Math.floor(topology.tileWidth / 2);
-  const minimumY = dock.y - corridorHalfWidth;
-  const maximumY = dock.y + corridorHalfWidth;
-  const imageXs = topology.wrapsX ? [-topology.tileWidth, 0, topology.tileWidth] : [0];
-  const imageYs = topology.wrapsY ? [-topology.tileHeight, 0, topology.tileHeight] : [0];
-  for (const imageY of imageYs) {
-    for (const imageX of imageXs) {
-      const liftedX = center.x + imageX;
-      const liftedY = center.y + imageY;
-      const closestX = Math.max(minimumX, Math.min(maximumX, liftedX));
-      const closestY = Math.max(minimumY, Math.min(maximumY, liftedY));
-      if (Math.hypot(liftedX - closestX, liftedY - closestY) <= outerRadius) return true;
-    }
-  }
-  return false;
 }
 
 /** Deterministic, bounded scatter and terrain painter for non-home islands. */
@@ -226,29 +210,9 @@ export class IslandGenerator {
 
   private buildProfiles(seed: number, catalog: Readonly<AuthoredIslandCatalog>): IslandProfile[] {
     const selectedAuthored = this.selectAuthoredIslands(seed, catalog.islands);
-    const profiles: IslandProfile[] = selectedAuthored.map((entry, index) => {
-      const radiusX = entry.gridWidth / 2;
-      const radiusY = entry.gridHeight / 2;
-      const major = Math.max(radiusX, radiusY);
-      return {
-        id: index + 1,
-        kind: IslandKind.LowCay,
-        size: major <= this.config.islands.minRadius ? IslandSize.Small
-          : major >= this.config.islands.maxRadius * 0.75 ? IslandSize.Large : IslandSize.Medium,
-        radiusX,
-        radiusY,
-        outerRadius: Math.hypot(Math.ceil(radiusX), Math.ceil(radiusY)) + this.config.islands.apronWidth,
-        rotation: 0,
-        shapeSeed: this.stableStringHash(entry.assetId),
-        sourceKind: "authored",
-        authoredAssetId: entry.assetId,
-        authoredCollision: {
-          gridWidth: entry.gridWidth,
-          gridHeight: entry.gridHeight,
-          solidSubcells: entry.solidSubcells,
-        },
-      };
-    });
+    const profiles: IslandProfile[] = selectedAuthored.map((entry, index) => (
+      createAuthoredIslandPlacementProfile(index + 1, entry, this.config)
+    ));
     for (let index = selectedAuthored.length; index < this.config.islands.count; index++) {
       const id = index + 1;
       const kind = this.chooseKind(seed, index);
@@ -283,21 +247,12 @@ export class IslandGenerator {
     return stable
       .map((entry) => ({
         entry,
-        rank: seededValue(seed + AUTHORED_SELECTION_NAMESPACE, this.stableStringHash(entry.assetId), 0),
+        rank: seededValue(seed + AUTHORED_SELECTION_NAMESPACE, stableIslandAssetHash(entry.assetId), 0),
       }))
       .sort((left, right) => left.rank - right.rank || left.entry.assetId.localeCompare(right.entry.assetId, "en"))
       .slice(0, this.config.islands.count)
       .map(({ entry }) => entry)
       .sort((left, right) => left.assetId.localeCompare(right.assetId, "en"));
-  }
-
-  private stableStringHash(value: string): number {
-    let hash = 0x811c9dc5;
-    for (let index = 0; index < value.length; index++) {
-      hash ^= value.charCodeAt(index);
-      hash = Math.imul(hash, 0x01000193) >>> 0;
-    }
-    return hash;
   }
 
   private chooseKind(seed: number, index: number): IslandKind {
@@ -489,19 +444,16 @@ export class IslandGenerator {
     diagnostics: PlacementAttemptDiagnostics,
   ): boolean {
     diagnostics.candidatesEvaluated++;
-    const homeDisplacement = grid.topology.minimumImageTileDisplacement(home, center);
-    if (Math.hypot(homeDisplacement.x, homeDisplacement.y) < this.minimumHomeDistance(profile)) {
-      return this.reject(diagnostics, "home-clearance");
-    }
-
-    if (this.intersectsStarterLane(grid, dock, center, profile.outerRadius)) {
-      return this.reject(diagnostics, "starter-lane");
-    }
-
-    if (placementIndex.findConflict(center, profile.outerRadius)) {
-      return this.reject(diagnostics, "island-channel");
-    }
-    return true;
+    const rejection = islandPlacementRejection(
+      grid.topology,
+      home,
+      dock,
+      profile,
+      center,
+      placementIndex,
+      this.config,
+    );
+    return rejection === undefined ? true : this.reject(diagnostics, rejection);
   }
 
   private createAttemptDiagnostics(): PlacementAttemptDiagnostics {
@@ -549,64 +501,15 @@ export class IslandGenerator {
   }
 
   private minimumHomeDistance(profile: IslandProfile): number {
-    return this.config.world.supportedWaterRadius
-      + this.config.world.supportedBoundaryNoise
-      + this.config.islands.homeClearance
-      + profile.outerRadius;
+    return minimumIslandHomeDistance(profile, this.config);
   }
 
   private profileExtent(profile: Readonly<IslandProfile>): Readonly<{ width: number; height: number }> {
-    if (profile.sourceKind === "authored" && profile.authoredCollision) {
-      return {
-        width: profile.authoredCollision.gridWidth,
-        height: profile.authoredCollision.gridHeight,
-      };
-    }
-    const extent = Math.ceil(profile.outerRadius);
-    return { width: extent * 2 + 1, height: extent * 2 + 1 };
-  }
-
-  private intersectsStarterLane(
-    grid: Readonly<WorldGrid>,
-    dock: Readonly<GridPoint>,
-    center: Readonly<GridPoint>,
-    outerRadius: number,
-  ): boolean {
-    return intersectsPeriodicStarterLane(
-      grid.topology,
-      dock,
-      center,
-      outerRadius,
-      this.config.islands.safeCorridorHalfWidth,
-    );
+    return islandPlacementProfileExtent(profile);
   }
 
   private finishRecord(profile: IslandProfile, center: GridPoint): GeneratedIsland {
-    if (profile.sourceKind === "authored" && profile.authoredCollision) {
-      const minX = center.x - Math.floor(profile.authoredCollision.gridWidth / 2);
-      const minY = center.y - Math.floor(profile.authoredCollision.gridHeight / 2);
-      return {
-        ...profile,
-        center,
-        bounds: {
-          minX,
-          minY,
-          maxX: minX + profile.authoredCollision.gridWidth - 1,
-          maxY: minY + profile.authoredCollision.gridHeight - 1,
-        },
-      };
-    }
-    const extent = Math.ceil(profile.outerRadius);
-    return {
-      ...profile,
-      center,
-      bounds: {
-        minX: center.x - extent,
-        minY: center.y - extent,
-        maxX: center.x + extent,
-        maxY: center.y + extent,
-      },
-    };
+    return finishIslandPlacement(profile, center);
   }
 
   private paintAuthoredIsland(grid: WorldGrid, island: GeneratedIsland): void {

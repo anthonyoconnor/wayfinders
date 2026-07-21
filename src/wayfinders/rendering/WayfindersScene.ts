@@ -176,6 +176,7 @@ type WayfindersDeveloperProsperitySource = Pick<GameSimulation, "prosperityScore
 
 interface BrowserDebugApi {
   snapshot: () => ReturnType<GameSimulation["snapshot"]>;
+  source: () => GameSimulation["sourceIdentity"];
   teleport: (x: number, y: number) => boolean;
   addProvisions: (delta: number) => ReturnType<GameSimulation["snapshot"]>;
   forceWreck: () => boolean;
@@ -990,6 +991,22 @@ export class WayfindersScene extends Phaser.Scene {
     if (diagnosticsDue && host) {
       if (this.datasetGenerated !== this.simulation.generated) {
         host.dataset.seed = String(this.simulation.generated.seed);
+        const source = this.simulation.sourceIdentity;
+        host.dataset.worldSource = source.label;
+        host.dataset.worldSourceKind = source.kind;
+        if (source.kind === "authored-map") {
+          host.dataset.mapId = source.mapId;
+          host.dataset.mapFingerprint = source.contentFingerprint;
+          host.dataset.mapCatalogRevision = String(source.catalogRepositoryRevision);
+          host.dataset.mapLayoutFingerprint = source.layoutSettingsFingerprint;
+          host.dataset.mapIslandCatalogRevision = source.referencedIslandCatalogRevision;
+        } else {
+          delete host.dataset.mapId;
+          delete host.dataset.mapFingerprint;
+          delete host.dataset.mapCatalogRevision;
+          delete host.dataset.mapLayoutFingerprint;
+          delete host.dataset.mapIslandCatalogRevision;
+        }
         host.dataset.islandCount = String(this.simulation.generated.islands.length);
         host.dataset.islandKinds = String(new Set(this.simulation.generated.islands.map(({ kind }) => kind)).size);
         host.dataset.islandSizes = String(new Set(this.simulation.generated.islands.map(({ size }) => size)).size);
@@ -1240,6 +1257,7 @@ export class WayfindersScene extends Phaser.Scene {
     this.developerToolsAbort?.abort();
     this.developerToolsAbort = new AbortController();
     const signal = this.developerToolsAbort.signal;
+    const authoredSource = this.simulation.sourceIdentity.kind === "authored-map";
     slot.classList.add("tool-slot--connected");
 
     slot.innerHTML = `
@@ -1247,6 +1265,9 @@ export class WayfindersScene extends Phaser.Scene {
         <section class="tool-card tool-card--status" aria-labelledby="current-expedition-title">
           <h3 id="current-expedition-title">Current expedition</h3>
           <dl class="tool-facts">
+            <div><dt>Source</dt><dd data-state="source"></dd></div>
+            ${authoredSource ? '<div><dt>Layout contract</dt><dd data-state="source-layout"></dd></div>' : ""}
+            ${authoredSource ? '<div><dt>Island catalog</dt><dd data-state="source-island-catalog"></dd></div>' : ""}
             <div><dt>Generation</dt><dd data-state="generation"></dd></div>
             <div><dt>Navigator</dt><dd data-state="navigator"></dd></div>
             <div><dt>Voyage</dt><dd data-state="voyage"></dd></div>
@@ -1261,9 +1282,9 @@ export class WayfindersScene extends Phaser.Scene {
 
         <fieldset class="tool-card">
           <legend>World and travel</legend>
-          <label class="tool-number tool-number--seed"><span>Seed</span><input data-field="seed" type="number" step="1" value="${this.simulation.generated.seed}"></label>
+          <label class="tool-number tool-number--seed"><span>${authoredSource ? "Base seed" : "Seed"}</span><input data-field="seed" type="number" step="1" value="${this.simulation.generated.seed}" ${authoredSource ? "disabled" : ""}></label>
           <div class="tool-button-grid">
-            <button class="tool-button--wide" data-action="regenerate" type="button">Reset world from entered seed</button>
+            <button class="tool-button--wide" data-action="regenerate" type="button">${authoredSource ? "Restart this authored map" : "Reset world from entered seed"}</button>
             <button class="tool-button--wide" data-action="return-dock" type="button">Return to home dock (complete voyage)</button>
             <button data-action="inspect-island" type="button">Move to next island dossier</button>
             <button data-action="inspect-fishing-shoal" type="button">Move to next fishing ground</button>
@@ -1400,9 +1421,12 @@ export class WayfindersScene extends Phaser.Scene {
     });
     slot.querySelector<HTMLButtonElement>("[data-action='regenerate']")?.addEventListener("click", () => {
       const seed = this.field("seed").valueAsNumber;
-      this.simulation.regenerate(seed);
+      this.simulation.restartCurrentSource(seed);
       this.afterWorldChanged();
-      this.log(`Regenerated deterministic world from seed ${this.simulation.generated.seed}.`);
+      const source = this.simulation.sourceIdentity;
+      this.log(source.kind === "authored-map"
+        ? `Restarted ${source.label} from fresh gameplay state.`
+        : `Regenerated deterministic world from seed ${this.simulation.generated.seed}.`);
     }, { signal });
     slot.querySelector<HTMLButtonElement>("[data-action='return-dock']")?.addEventListener("click", () => {
       this.returnToDockForTesting();
@@ -1920,7 +1944,10 @@ export class WayfindersScene extends Phaser.Scene {
     const developerLog = document.querySelector<HTMLDivElement>("#developer-log");
     if (developerLog) clearDeveloperLog(developerLog);
     this.afterWorldChanged();
-    this.log(`Started a new game in world ${nextSeed}; completed world ${previousSeed} was left behind.`);
+    const source = this.simulation.sourceIdentity;
+    this.log(source.kind === "authored-map"
+      ? `Started fresh gameplay on ${source.label}; the completed voyage state was left behind.`
+      : `Started a new game in world ${nextSeed}; completed world ${previousSeed} was left behind.`);
     this.audioCueController?.enqueueUiAction("confirm");
     return nextSeed;
   }
@@ -2006,6 +2033,18 @@ export class WayfindersScene extends Phaser.Scene {
     const navigator = this.simulation.currentNavigator;
     const handover = this.simulation.pendingGenerationHandover;
     const prosperity = this.developerProsperitySource.prosperityScoreSnapshot;
+    const source = this.simulation.sourceIdentity;
+
+    set("source", source.kind === "authored-map"
+      ? `${source.mapId}@${source.contentFingerprint.slice(0, 12)} · catalog r${source.catalogRepositoryRevision}`
+      : source.label);
+    if (source.kind === "authored-map") {
+      set(
+        "source-layout",
+        `v${source.layoutContractVersion} · ${source.layoutSettingsFingerprint}`,
+      );
+      set("source-island-catalog", source.referencedIslandCatalogRevision);
+    }
 
     if (this.simulation.wreckPresentationActive) {
       set("generation", String(navigator.generation));
@@ -2450,6 +2489,7 @@ export class WayfindersScene extends Phaser.Scene {
   private installBrowserDebugApi(): void {
     const api: BrowserDebugApi = {
       snapshot: () => this.simulation.snapshot(),
+      source: () => this.simulation.sourceIdentity,
       teleport: (x, y) => this.teleportForDeveloper(
         { x: Math.trunc(x), y: Math.trunc(y) },
         `Teleported to ${Math.trunc(x)}, ${Math.trunc(y)}.`,

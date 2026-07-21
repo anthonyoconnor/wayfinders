@@ -1,7 +1,8 @@
 # Wayfinders authored-asset pipeline
 
 This document owns the current source, preparation, island availability,
-general-family review/promotion, and repository-transaction contracts. The
+general-family review/promotion, authored-map repository, and repository
+transaction contracts. The
 operator sequence is in `ASSET_PRODUCTION_QUICKSTART.md`; shared visual
 direction is in `Wayfinders_Art_Style_Guide.md`; runtime rendering and collision
 behavior are in `Wayfinders_Technical_Design.md`; future workflow scope is in
@@ -23,6 +24,77 @@ Audio is a separate stored-runtime artifact family. It does not use PNG source
 recipes, preparation, candidate review, promotion, or browser repository-write
 APIs. Its checked-in deterministic renderer is the only supported bulk
 regeneration path.
+
+Authored map definitions are checked-in initial-world sources, not asset
+packages and not gameplay saves. Their app/world/fishing schema and runtime
+behavior are owned by `Wayfinders_Technical_Design.md`; this document owns only
+their catalog, immutable files, guarded local write transaction, and read-only
+repository gate.
+
+## Authored map repository
+
+The canonical V1 repository is:
+
+```text
+public/maps/catalog.json
+public/maps/v1/<stable-map-id>/<content-fingerprint>.map.json
+```
+
+The strictly validated, stable-ID-sorted catalog contains `formatVersion: 1`, a
+non-negative monotonic `catalogRevision`, and map entries. Each entry contains
+its immutable stable ID, current display name, positive monotonic
+`mapRepositoryRevision`, current lowercase SHA-256 fingerprint, and a sorted
+unique list of retained fingerprints that includes the current one. Every
+fingerprint names one immutable canonical definition file. Repository revisions
+are catalog metadata and are neither stored in nor hashed with definition
+bytes.
+
+The Maps workspace reads the catalog and exact immutable definitions with
+same-origin `GET`. Content-addressed files are served immutable; the catalog is
+served without caching. The development middleware explicitly serves newly
+created files so a save can be reopened before Vite's public-file index
+refreshes. A static/production build can read these checked-in files but has no
+map write endpoint.
+
+Local **Save changes** posts JSON only to
+`/__wayfinders/maps/save`. The exact request contains repository format version,
+stable map ID, expected catalog revision, optional expected map repository
+revision, and the complete semantic definition; it never contains a filesystem
+path. The endpoint accepts only exact-route same-origin `POST` with JSON,
+valid UTF-8, and a body no larger than the conservative maximum canonical map
+size plus exact envelope overhead. That bound is derived from bounded semantic
+strings and the fixed-world geometric island/shoal capacity proofs, so it is
+not an effective object-count limit.
+
+Under the repository-wide collision/intake lock, the service:
+
+1. parses the request and re-reads the canonical map catalog from disk;
+2. checks the expected catalog and independent per-map revisions, including
+   create races;
+3. re-reads current available-island metadata, prepared outputs, and collision
+   masks from disk rather than using a module-time snapshot;
+4. normalizes, fingerprints, and completely compiles the definition against
+   those current inputs; and
+5. for a semantic change, commits the new immutable definition first and the
+   catalog pointer last through the shared rollback-safe atomic transaction.
+
+An unchanged current definition is byte-identical and advances neither
+revision. A stale optimistic token returns a conflict; malformed, oversized,
+or semantically invalid content cannot reach commit. A failed late transaction
+restores the catalog and removes a newly introduced orphan. An existing
+content-addressed file must have the exact canonical bytes or the save is
+rejected. Updating one map preserves every unrelated entry and retained file.
+Git remains the deletion, rename, import/export, and recovery path; V1 exposes
+no browser operation for those tasks.
+
+`npm.cmd run maps:check` is the read-only repository gate. It rejects an invalid
+or noncanonical catalog, unsafe paths or symlinks, missing retained files,
+unlisted directories/files, fingerprint/ID/display-name disagreement,
+noncanonical definition bytes, bad semantic hashes, and current heads that no
+longer compile against current settings and fresh island inputs. Retained
+non-current definitions remain structurally and hash validated; exact runtime
+launch still fails stale if a required external revision is no longer current.
+The full `npm.cmd run check` invokes this gate before typechecks and tests.
 
 ## Stored audio library
 
@@ -330,10 +402,11 @@ or alter world content.
 | `npm.cmd run assets:prepare -- [--id <id> \| --family <family>]` | Prepare one job, one family, or the production batch |
 | `npm.cmd run assets:review -- <approve\|reject> <id> <fingerprint>` | Record an exact non-island candidate review decision for scripting |
 | `npm.cmd run assets:promote -- [--id <id>]` | Publish approved current non-island production output for scripting or batch operation |
+| `npm.cmd run maps:check` | Read-only validation of the authored-map catalog, immutable retained definitions, safe repository closure, hashes, and current-head compilation |
 
 Use the narrow command for the intended mutation. Do not run intake, prepare,
-review, or promotion as generic verification. `assets:check` is the read-only
-gate and is included in `npm.cmd run check`.
+review, or promotion as generic verification. `assets:check` and `maps:check`
+are independent read-only gates and are included in `npm.cmd run check`.
 
 ## Determinism and safety
 
@@ -351,3 +424,7 @@ gate and is included in `npm.cmd run check`.
   additional exact-fingerprint gates only for non-island families.
 - Keep atlas packing absent until texture or draw-call evidence justifies its
   continuing cost.
+- Keep authored-map definition filenames content-addressed, catalog and
+  definition bytes canonical, and map saves under the same repository lock as
+  island availability. Never repair a retained map revision in place or expose
+  its local path to the browser.

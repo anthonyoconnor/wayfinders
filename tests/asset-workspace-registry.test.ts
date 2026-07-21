@@ -4,6 +4,7 @@ import { RUNTIME_COLLISION_OBJECT_KINDS } from "../src/wayfinders/assets/Collisi
 import {
   ASSET_WORKSPACES,
   adjacentAssetWorkspaceId,
+  assetWorkspaceById,
   assetWorkspaceHref,
   resolveAssetWorkspace,
 } from "../src/wayfinders/assets/AssetWorkspaceRegistry";
@@ -60,13 +61,25 @@ class FakeTabRoot {
 
 class FakeBrowserWindow extends EventTarget {
   readonly pushedUrls: string[] = [];
-  readonly location = { search: "?mode=assets&workspace=islands" };
+  readonly replacedUrls: string[] = [];
+  readonly historyMoves: number[] = [];
+  readonly location = {
+    search: "?mode=assets&workspace=islands",
+    href: "http://localhost/?mode=assets&workspace=islands",
+  };
   readonly history = {
+    state: undefined as unknown,
     pushState: (_state: unknown, _unused: string, url: string | URL | null): void => {
+      this.history.state = _state;
       const href = String(url ?? "");
       this.pushedUrls.push(href);
       this.location.search = href;
     },
+    replaceState: (_state: unknown, _unused: string, url: string | URL | null): void => {
+      this.history.state = _state;
+      this.replacedUrls.push(String(url ?? ""));
+    },
+    go: (delta: number): void => { this.historyMoves.push(delta); },
   };
 }
 
@@ -79,6 +92,7 @@ function keyboardEvent(key: string): Event {
 describe("GR-4.0 isolated asset workspaces", () => {
   it("registers the initial workspaces in stable tab order with one owned catalog partition", () => {
     expect(ASSET_WORKSPACES.map(({ id, label }) => ({ id, label }))).toEqual([
+      { id: "maps", label: "Maps" },
       { id: "islands", label: "Islands" },
       { id: "ships", label: "Ships" },
       { id: "traffic", label: "Ship traffic" },
@@ -107,6 +121,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
   });
 
   it("resolves direct links, defaults invalid values, and builds stable history URLs", () => {
+    expect(resolveAssetWorkspace("?mode=assets&workspace=maps").id).toBe("maps");
     expect(resolveAssetWorkspace("?mode=assets&workspace=ships").id).toBe("ships");
     expect(resolveAssetWorkspace("?mode=assets&workspace=traffic").id).toBe("traffic");
     expect(resolveAssetWorkspace("?mode=assets&workspace=fishing-shoals").id).toBe("fishing-shoals");
@@ -116,6 +131,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(resolveAssetWorkspace("?mode=assets&workspace=great-hall").id).toBe("great-hall");
     expect(resolveAssetWorkspace("?mode=assets&workspace=audio").id).toBe("audio");
     expect(resolveAssetWorkspace("?mode=assets&workspace=unknown").id).toBe("islands");
+    expect(assetWorkspaceHref("maps")).toBe("?mode=assets&workspace=maps");
     expect(assetWorkspaceHref("islands")).toBe("?mode=assets&workspace=islands");
     expect(assetWorkspaceHref("traffic")).toBe("?mode=assets&workspace=traffic");
     expect(assetWorkspaceHref("water")).toBe("?mode=assets&workspace=water");
@@ -126,7 +142,9 @@ describe("GR-4.0 isolated asset workspaces", () => {
   });
 
   it("supports wrapping arrow navigation and namespaces scene and selection state", () => {
-    expect(adjacentAssetWorkspaceId("islands", -1)).toBe("audio");
+    expect(adjacentAssetWorkspaceId("maps", -1)).toBe("audio");
+    expect(adjacentAssetWorkspaceId("maps", 1)).toBe("islands");
+    expect(adjacentAssetWorkspaceId("islands", -1)).toBe("maps");
     expect(adjacentAssetWorkspaceId("islands", 1)).toBe("ships");
     expect(adjacentAssetWorkspaceId("ships", 1)).toBe("traffic");
     expect(adjacentAssetWorkspaceId("traffic", 1)).toBe("fishing-shoals");
@@ -135,7 +153,8 @@ describe("GR-4.0 isolated asset workspaces", () => {
     expect(adjacentAssetWorkspaceId("clouds", 1)).toBe("icons");
     expect(adjacentAssetWorkspaceId("icons", 1)).toBe("great-hall");
     expect(adjacentAssetWorkspaceId("great-hall", 1)).toBe("audio");
-    expect(adjacentAssetWorkspaceId("audio", 1)).toBe("islands");
+    expect(adjacentAssetWorkspaceId("audio", 1)).toBe("maps");
+    expect(assetWorkspaceSceneKey("maps")).toBe("AssetViewerScene:maps");
     expect(assetWorkspaceSceneKey("ships")).toBe("AssetViewerScene:ships");
     expect(assetWorkspaceSceneKey("traffic")).toBe("AssetViewerScene:traffic");
     expect(assetWorkspaceSceneKey("icons")).toBe("AssetViewerScene:icons");
@@ -163,7 +182,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
       const tabs = mountAssetWorkspaceTabs(
         root as unknown as HTMLElement,
         panel as unknown as HTMLElement,
-        ASSET_WORKSPACES[0],
+        assetWorkspaceById("islands")!,
         (workspace) => activated.push(workspace.id),
       );
       expect(root.hidden).toBe(false);
@@ -171,32 +190,32 @@ describe("GR-4.0 isolated asset workspaces", () => {
       expect(root.innerHTML.match(/role="tab"/gu)).toHaveLength(ASSET_WORKSPACES.length);
       expect(root.buttons).toHaveLength(ASSET_WORKSPACES.length);
       expect(root.buttons.map((button) => button.attributes.get("aria-selected"))).toEqual([
-        "true", "false", "false", "false", "false", "false", "false", "false", "false",
+        "false", "true", "false", "false", "false", "false", "false", "false", "false", "false",
       ]);
-      expect(root.buttons.map(({ tabIndex }) => tabIndex)).toEqual([0, -1, -1, -1, -1, -1, -1, -1, -1]);
+      expect(root.buttons.map(({ tabIndex }) => tabIndex)).toEqual([-1, 0, -1, -1, -1, -1, -1, -1, -1, -1]);
       expect(panelAttributes.get("role")).toBe("tabpanel");
       expect(panelAttributes.get("aria-labelledby")).toBe("asset-workspace-tab-islands");
       expect(documentElement.dataset.assetWorkspace).toBe("islands");
 
-      root.buttons[1]!.dispatchEvent(new Event("click"));
+      root.buttons[2]!.dispatchEvent(new Event("click"));
       expect(tabs.activeWorkspace.id).toBe("ships");
       expect(activated).toEqual(["ships"]);
       expect(browser.pushedUrls).toEqual(["?mode=assets&workspace=ships"]);
-      expect(root.buttons[1]!.attributes.get("aria-selected")).toBe("true");
-      expect(root.buttons[1]!.tabIndex).toBe(0);
-      expect(root.buttons[0]!.tabIndex).toBe(-1);
+      expect(root.buttons[2]!.attributes.get("aria-selected")).toBe("true");
+      expect(root.buttons[2]!.tabIndex).toBe(0);
+      expect(root.buttons[1]!.tabIndex).toBe(-1);
 
       const arrowRight = keyboardEvent("ArrowRight");
-      root.buttons[1]!.dispatchEvent(arrowRight);
+      root.buttons[2]!.dispatchEvent(arrowRight);
       expect(arrowRight.defaultPrevented).toBe(true);
       expect(tabs.activeWorkspace.id).toBe("traffic");
-      expect(root.buttons[2]!.focused).toBe(true);
+      expect(root.buttons[3]!.focused).toBe(true);
 
-      root.buttons[2]!.dispatchEvent(keyboardEvent("End"));
+      root.buttons[3]!.dispatchEvent(keyboardEvent("End"));
       expect(tabs.activeWorkspace.id).toBe("audio");
       expect(root.buttons.at(-1)!.focused).toBe(true);
       root.buttons.at(-1)!.dispatchEvent(keyboardEvent("Home"));
-      expect(tabs.activeWorkspace.id).toBe("islands");
+      expect(tabs.activeWorkspace.id).toBe("maps");
       expect(root.buttons[0]!.focused).toBe(true);
       root.buttons[0]!.dispatchEvent(keyboardEvent("ArrowLeft"));
       expect(tabs.activeWorkspace.id).toBe("audio");
@@ -204,7 +223,7 @@ describe("GR-4.0 isolated asset workspaces", () => {
         "?mode=assets&workspace=ships",
         "?mode=assets&workspace=traffic",
         "?mode=assets&workspace=audio",
-        "?mode=assets&workspace=islands",
+        "?mode=assets&workspace=maps",
         "?mode=assets&workspace=audio",
       ]);
 
@@ -212,10 +231,10 @@ describe("GR-4.0 isolated asset workspaces", () => {
       const pushesBeforePopstate = browser.pushedUrls.length;
       browser.dispatchEvent(new Event("popstate"));
       expect(tabs.activeWorkspace.id).toBe("clouds");
-      expect(root.buttons[5]!.focused).toBe(true);
+      expect(root.buttons[6]!.focused).toBe(true);
       expect(browser.pushedUrls).toHaveLength(pushesBeforePopstate);
 
-      const detachedButton = root.buttons[1]!;
+      const detachedButton = root.buttons[2]!;
       const activationsBeforeDestroy = [...activated];
       tabs.destroy();
       expect(root.hidden).toBe(true);

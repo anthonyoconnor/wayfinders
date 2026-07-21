@@ -5,6 +5,7 @@ export const FISHING_SHOAL_CONTRACT_VERSION = 2 as const;
 export const FISHING_SHOAL_CONTENT_VERSION = 1 as const;
 export const FISHING_SHOAL_SURVEY_PRESENTATION_MS = 1_200 as const;
 export const FISHING_SHOAL_INTERACTION_RANGE_TILES = 1.5 as const;
+export const FISHING_SHOAL_MAX_ORDINAL = 9_999 as const;
 
 const FISHING_SHOAL_ID_PREFIX = `fishing-shoal:v${FISHING_SHOAL_CONTENT_VERSION}:`;
 const FISHING_SHOAL_ID_PATTERN = /^fishing-shoal:v([1-9]\d*):(\d{4})$/;
@@ -18,7 +19,7 @@ export interface ParsedFishingShoalId {
 }
 
 export function createFishingShoalId(ordinal: number): FishingShoalId {
-  if (!Number.isInteger(ordinal) || ordinal < 0 || ordinal > 9_999) {
+  if (!Number.isInteger(ordinal) || ordinal < 0 || ordinal > FISHING_SHOAL_MAX_ORDINAL) {
     throw new RangeError("Fishing shoal ordinal must be an integer from 0 through 9999");
   }
   return `${FISHING_SHOAL_ID_PREFIX}${ordinal.toString().padStart(4, "0")}` as FishingShoalId;

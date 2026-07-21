@@ -29,6 +29,8 @@ const repositoryAssetTests = [
 // the list explicit: building a complete simulation should be a deliberate
 // test choice rather than the default for a new contract.
 const integrationTests = [
+  "tests/authored-map-game-simulation.test.ts",
+  "tests/authored-map-source-loader.test.ts",
   "tests/authored-home-island.test.ts",
   "tests/config-world-movement.test.ts",
   "tests/discoveries.test.ts",
@@ -42,6 +44,7 @@ const integrationTests = [
   "tests/islands.test.ts",
   "tests/navigator-voyages.test.ts",
   "tests/periodic-game-simulation-journeys.test.ts",
+  "tests/procedural-source-signature.test.ts",
   "tests/simulation-clock.test.ts",
   "tests/survey-sites-integration.test.ts",
   "tests/survey-sites.test.ts",

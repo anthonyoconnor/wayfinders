@@ -3,9 +3,9 @@
 Status: historical. This document preserves the scope, gates and acceptance
 evidence for completed `GP-0.1` through `GP-6.6`, `GR-1.1` through `GR-6.1`,
 `AUD-1` through `AUD-5`, `CLD-1` through `CLD-3`, `WTR-1.0` through
-`WTR-2.6`, `PRS-1` through `PRS-2.4`, and `AM-0` through `AM-6` work. It does
-not define or authorize future work. See `Wayfinders_Roadmap.md` for the small,
-current forward plan.
+`WTR-2.6`, `PRS-1` through `PRS-2.4`, `MAP-1.0` through `MAP-1.4`, and `AM-0`
+through `AM-6` work. It does not define or authorize future work. See
+`Wayfinders_Roadmap.md` for the small, current forward plan.
 
 ## Reading this archive
 
@@ -21,7 +21,9 @@ The completed tracks used these historical labels:
 
 - **Baseline** — the implemented and protected starting point;
 - **GP-x.y** — gameplay major milestones and their minor acceptance gates;
-- **GR-x.y** — graphics, asset-pipeline and production-presentation gates.
+- **GR-x.y** — graphics, asset-pipeline and production-presentation gates; and
+- **MAP-x.y** — authored initial-world definition, editor, repository, and
+  playtest-source gates.
 
 The architecture record below additionally uses `AM-x` labels for its completed
 scale and development-feedback milestones.
@@ -1642,10 +1644,127 @@ The implementation sequence was recorded in `8f88295`, `42530f9`, `8bc6801`,
 `234aa6b`, and `13d2722`; final unlock, cue, and ambience refinements were
 recorded in `0299bb1`, `bb54568`, `067e692`, and `15f7307`.
 
+## Authored playtest maps
+
+### MAP-1.0 through MAP-1.4 — Authored definitions, editor, and fresh playtest
+
+Status: implementation and automated verification completed on 2026-07-21.
+Current live-browser and product-owner acceptance state is recorded only in
+`IMPLEMENTATION_STATUS.md`.
+
+The product owner authorized the ordered MAP-1 batch on 2026-07-20. MAP-1.0
+locked a developer-only initial-world contract rather than gameplay-session
+persistence: one current normal `192 x 192` wrapping world, fixed Home/dock/
+Supported water/departure corridor, one or more reusable available authored-
+island instances, capacity-by-fit semantic fishing shoals, deterministic
+derived content, and fresh-state restart from one exact map ID and content
+fingerprint.
+
+The cardinality review required no identifier migration. The conservative
+normal-world island proof yields at most `256` placements while positive
+signed-32-bit source IDs provide `2,147,483,647` identities; the shoal proof yields at most `400`
+placements while current fishing IDs provide `10,000` ordinals. The canonical
+definition/request bounds derive from those geometric maxima and bounded
+semantic strings instead of becoming editor count limits.
+
+MAP-1.0 also captured the pre-source procedural signatures now enforced by
+`tests/procedural-source-signature.test.ts`:
+
+| Profile | Islands | Manifest SHA-256 | Terrain SHA-256 | Knowledge SHA-256 | Island-ID SHA-256 |
+| --- | ---: | --- | --- | --- | --- |
+| `P0` | `8` | `485cc484a573483b60a8db111c52a74c2870e2884b58feb1d94b47dd5121b80b` | `12a743950ae174cc5d93cd859b1e212873dccc197380793f7958a881d91b58ec` | `872c7bf4e98f56af680778cc635085253fe7dd445e61950ae3e7337e203ba74b` | `89a72ba7296142a3662374bd65448dbbfe2f5bce2a3a2449231614103b0cff2c` |
+| `P1` | `32` | `49215f2a790110b650829a739c90a6c5f317e125e63de0c3d45087adeb7d4ed2` | `718bd7005b42aec37ba4a658aab1e0008727ec19fb15ff29e06ee0da0ae221c0` | `0babc93c95d9e27d1b7a100a1e34c30488ef39f36b68eeda02fb207532b9f5f0` | `2d42dcf13dc371706b01a4930ddf2dfd90cd260198743fb4bc7bb0a680eb83a1` |
+
+The same regression contract locks procedural feature and initial-gameplay
+observables, excluding only the intentionally added source-provenance field:
+
+| Profile | Fishing shoals | Fishing-definition SHA-256 | Initial gameplay-observable SHA-256 |
+| --- | ---: | --- | --- |
+| `P0` | `4` | `7dd1b7c8a568a9e3bbfddb5e97d0d53cf558d3aeda4852a35ae494b934784f35` | `ba41c5842f1ea919300a81f3ac310640d91752810fc389a661229438600d0da5` |
+| `P1` | `4` | `51c051c2dd8823b8fec2cc70a7a164c7f7edb0d8dc8b0f8cd1c0a05b876eb079` | `351dc99328282304c3b2853f7e4a1e8693de396dceead65b3ff17264d03d4a27` |
+
+MAP-1.1 added the strict app-owned `AuthoredMapDefinitionV1`, canonical codec
+and SHA-256 semantic fingerprint, exact source identity, and map-scoped island
+catalog projection. The world-owned layout compiler resolves stable reusable
+asset instances and sends one explicit plan through the existing rasterize,
+global-ocean analysis, and water stages. The fishing public seam owns saved
+clues, periodic placement validation, materialization, and exact service
+anchors. App composition then proves ordinary dossier, survey-site, and idol-
+location viability. Repeated asset provenance is valid while source/stable
+instance IDs remain unique; unrelated island catalog changes cannot perturb a
+compiled map.
+
+MAP-1.2 added a dedicated Maps workspace with a pure immutable draft model,
+stable island/shoal commands, compiler-backed diagnostics, selection and drag,
+periodic aliases, pan/zoom/fit, grid/validation overlays, undo/redo/discard,
+explicit stale island/layout adoption, dirty navigation guards, guarded save,
+and saved-fingerprint playtest handoff. Its compact preview owns one semantic
+terrain texture and a bucketed index rather than a running simulation or the
+production water renderer.
+
+The checked-in repository now uses a canonical stable-sorted catalog plus
+immutable files under `public/maps/v1/<id>/<fingerprint>.map.json`. The local
+same-origin save service checks capacity-derived byte bounds and separate
+catalog/map optimistic revisions, re-reads island state under the shared lock,
+compiles before commit, writes a new immutable definition before the catalog,
+and rolls back late failure. Semantic no-ops preserve bytes and revisions.
+`maps:check`, included in the full gate, rejects unsafe/noncanonical, missing,
+or orphaned repository state and recompiles each current head. The initial
+checked-in `wayfinders-playtest` head provides a real editor/runtime fixture.
+
+MAP-1.3 added all-or-nothing `map` plus `mapFingerprint` startup. Runtime loads
+an exact retained immutable file, recomputes its fingerprint, compiles the
+source and matching presentation projection before Phaser creation, and shows
+an actionable procedural escape on failure. `GameSimulation` recompiles a new
+grid before state replacement and supplies authored fishing definitions to the
+existing feature factory; navigation, discoveries, surveys, return,
+Prosperity, traffic, water, clouds, audio, events, and rendering remain shared.
+Refresh, developer restart, and completion new-game retain the exact authored
+source while resetting all live state. Source provenance is exposed in the
+snapshot, developer drawer, host diagnostics, and browser API.
+
+Focused evidence is owned by the following contracts:
+
+- `authored-map-codec`, `authored-map-compiler`, `authored-fishing-layout`, and
+  `procedural-source-signature` cover canonical identity, compatibility,
+  repeated instances, wrapping geometry, capacity, materialization, and the
+  unchanged procedural path;
+- `map-editor-draft-model`, `map-editor-preview`, `map-repository-client`,
+  `asset-workspace-navigation-guard`, and workspace registry coverage own pure
+  commands, compact indexed aliases, guarded transport/navigation, and
+  registration;
+- `authored-map-repository-io`, `authored-map-authoring-api`,
+  `authored-map-island-catalog`, and `authored-map-repository-check` cover fresh
+  disk authority, races, optimistic conflicts, size/origin checks, immutable-
+  first transactions, rollback, no-op identity, static reads, and repository
+  closure; and
+- `authored-map-launch-request`, `authored-map-source-loader`,
+  `authored-map-game-simulation`, and `performance/authored-map-performance`
+  cover fail-closed launch, fresh-grid restart atomicity, shared feature
+  composition, normal/dense compilation and runtime budgets, stable frames,
+  and indexed editor work.
+
+The closing aggregate gate passed authored-map and asset repository checks,
+both typechecks, architecture validation, quick, contract, integration,
+repository-I/O, and the production bundle. The complete serial performance lane
+also passed, including the normal and dense-valid MAP profiles. These automated
+results do not stand in for the responsive live-browser and product-owner
+playtest acceptance tracked in `IMPLEMENTATION_STATUS.md`.
+
+Deliberately excluded or deferred decisions remain browser rename/deletion,
+portable import/export, arbitrary world sizes/topologies, Home/dock/Supported-
+water editing, procedural-island controls, terrain or water painting, live
+world editing, generic editor infrastructure, and every form of gameplay-
+session saving or restoration. Git remains map deletion, rename, and recovery.
+Current behavior is owned by `Wayfinders_Technical_Design.md`; current ownership
+is in `ARCHITECTURE_MAP.md`; repository rules and operator steps are in
+`Wayfinders_Asset_Pipeline.md` and `ASSET_PRODUCTION_QUICKSTART.md`.
+
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-6.6`, graphics and asset
 work through `GR-6.1`, cloud atmosphere through `CLD-3`, water presentation
-through `WTR-2.6`, audio through `AUD-5`, Prosperity through `PRS-2.4`, and
-architecture work through `AM-6`. Upcoming, proposed, and deferred work is
-maintained only in `Wayfinders_Roadmap.md`.
+through `WTR-2.6`, audio through `AUD-5`, Prosperity through `PRS-2.4`, authored
+playtest maps through `MAP-1.4`, and architecture work through `AM-6`.
+Upcoming, proposed, and deferred work is maintained only in
+`Wayfinders_Roadmap.md`.

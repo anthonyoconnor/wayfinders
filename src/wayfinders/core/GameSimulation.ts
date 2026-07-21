@@ -24,6 +24,7 @@ import {
   type FishingShoalReturnedRecordV1,
 } from "../exploration/FishingShoalContracts";
 import {
+  createFishingFeature,
   createGeneratedFishingFeature,
   type FishingFeatureSystem,
 } from "../features/fishing";
@@ -109,6 +110,7 @@ import {
 } from "../lineage/NavigatorLineageSystem";
 import type { GeneratedWorld } from "../world/WorldGenerator";
 import { WorldGenerator } from "../world/WorldGenerator";
+import type { WorldSourceIdentityV1 } from "../app/authoredMaps/AuthoredMapContracts";
 import type { WorldGrid } from "../world/WorldGrid";
 import { worldToGrid } from "../world/CoordinateSystem";
 import { KnowledgeState } from "../world/TileData";
@@ -145,6 +147,7 @@ export interface IdolLocationProgress {
 
 export interface SimulationSnapshot {
   seed: number;
+  source: Readonly<SimulationWorldSourceIdentityV1>;
   ship: Readonly<ShipState>;
   tile: GridPoint;
   world: { width: number; height: number };
@@ -209,9 +212,32 @@ export interface SimulationSnapshot {
   idolLocations: Readonly<IdolLocationProgress>;
 }
 
+export type SimulationWorldSourceIdentityV1 =
+  | Readonly<{
+      readonly kind: "procedural";
+      readonly seed: number;
+      readonly label: string;
+    }>
+  | Readonly<WorldSourceIdentityV1 & {
+      readonly catalogRepositoryRevision: number;
+      readonly label: string;
+    }>;
+
+export interface GameSimulationAuthoredMapSourceV1 {
+  readonly identity: Readonly<WorldSourceIdentityV1>;
+  readonly catalogRepositoryRevision: number;
+  /** Must compile a new GeneratedWorld and grid for every invocation. */
+  compileFresh(): Readonly<{
+    readonly generated: Readonly<GeneratedWorld>;
+    readonly fishingDefinitions: readonly Readonly<FishingShoalDefinition>[];
+  }>;
+}
+
 export interface GameSimulationOptions {
   /** Snapshot used only when creating or regenerating a world. */
   readonly authoredIslandCatalog?: Readonly<AuthoredIslandCatalog>;
+  /** Prevalidated explicit map source. Its compiler is rerun for every reset. */
+  readonly authoredMapSource?: Readonly<GameSimulationAuthoredMapSourceV1>;
   /** Enables the optional, derived forward-range scheduler. */
   readonly forwardGuidanceEnabled?: boolean;
   /** Main-thread wall-clock target for one cooperative guidance slice. */
@@ -329,6 +355,7 @@ export class GameSimulation {
   };
   private idolLocationDefinitionsValue: readonly Readonly<IdolLocationDefinition>[] = Object.freeze([]);
   private readonly generator: WorldGenerator;
+  private readonly authoredMapSource?: Readonly<GameSimulationAuthoredMapSourceV1>;
   private expeditionId = 1;
   private activeExpedition = false;
   private voyageAchievementOrder: NavigatorVoyageAchievementOrderEntryV1[] = [];
@@ -410,12 +437,36 @@ export class GameSimulation {
         config.movement,
       ),
     };
+    this.authoredMapSource = options.authoredMapSource;
+    if (
+      this.authoredMapSource
+      && options.authoredIslandCatalog
+      && options.authoredIslandCatalog.revision
+        !== this.authoredMapSource.identity.referencedIslandCatalogRevision
+    ) {
+      throw new RangeError(
+        "Authored map collision catalog revision does not match the selected source",
+      );
+    }
     this.generator = new WorldGenerator(this.config, options.authoredIslandCatalog);
     this.regenerate(this.config.world.seed);
   }
 
   get world(): WorldGrid {
     return this.generated.grid;
+  }
+
+  get sourceIdentity(): Readonly<SimulationWorldSourceIdentityV1> {
+    const authored = this.authoredMapSource;
+    if (!authored) {
+      const seed = this.generated.seed;
+      return Object.freeze({ kind: "procedural", seed, label: `procedural:${seed}` });
+    }
+    return Object.freeze({
+      ...authored.identity,
+      catalogRepositoryRevision: authored.catalogRepositoryRevision,
+      label: `authored-map:${authored.identity.mapId}@${authored.identity.contentFingerprint}`,
+    });
   }
 
   get forwardGuidanceStatus(): ForwardGuidanceStatus {
@@ -887,33 +938,48 @@ export class GameSimulation {
 
   regenerate(seed = this.config.world.seed): void {
     if (this.interactionTransactionActive) return;
-    this.cancelForwardGuidanceTask();
-    this.forwardGuidanceWorldEpoch++;
     PILOT_COLLISION_PROFILE_REGISTRY.assertMovementConfigCompatible(this.config);
     const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
-    this.generated = measureSimulationPhase(
+    const prepared = measureSimulationPhase(
       this.trace,
       "world-generation",
-      () => {
-        const planned = measureSimulationPhase(
-          this.trace,
-          "manifest-generation",
-          () => this.generator.plan(normalizedSeed),
-        );
-        const rasterized = measureSimulationPhase(
-          this.trace,
-          "logical-rasterization",
-          () => this.generator.rasterize(planned),
-        );
-        const analysis = measureSimulationPhase(
-          this.trace,
-          "world-analysis",
-          () => this.generator.analyze(rasterized),
-        );
-        const water = this.generator.planWater(rasterized, analysis);
-        return { ...rasterized, analysis, water };
-      },
+      () => this.authoredMapSource
+        ? this.authoredMapSource.compileFresh()
+        : {
+          generated: (() => {
+            const planned = measureSimulationPhase(
+              this.trace,
+              "manifest-generation",
+              () => this.generator.plan(normalizedSeed),
+            );
+            const rasterized = measureSimulationPhase(
+              this.trace,
+              "logical-rasterization",
+              () => this.generator.rasterize(planned),
+            );
+            const analysis = measureSimulationPhase(
+              this.trace,
+              "world-analysis",
+              () => this.generator.analyze(rasterized),
+            );
+            const water = this.generator.planWater(rasterized, analysis);
+            return { ...rasterized, analysis, water };
+          })(),
+          fishingDefinitions: undefined,
+        },
     );
+    if (
+      this.authoredMapSource
+      && prepared.generated.manifest.authoredIslandCatalogRevision
+        !== this.authoredMapSource.identity.referencedIslandCatalogRevision
+    ) {
+      throw new RangeError(
+        "Compiled authored map manifest does not match its referenced island catalog revision",
+      );
+    }
+    this.cancelForwardGuidanceTask();
+    this.forwardGuidanceWorldEpoch++;
+    this.generated = prepared.generated;
     this.expeditionId = 1;
     this.activeExpedition = false;
     this.voyageAchievementOrder = [];
@@ -985,14 +1051,22 @@ export class GameSimulation {
           this.generated.landmarks.homeReturnTile,
           this.config,
         );
-        this.fishingFeature = createGeneratedFishingFeature({
-          world: this.world,
-          seed: this.generated.seed,
-          homeReturnTile: this.generated.landmarks.homeReturnTile,
-          config: this.config,
-          analysis: this.generated.analysis,
-          supportedConnectivity: this.supportedConnectivity,
-        });
+        this.fishingFeature = prepared.fishingDefinitions
+          ? createFishingFeature({
+            world: this.world,
+            definitions: prepared.fishingDefinitions,
+            homeReturnTile: this.generated.landmarks.homeReturnTile,
+            config: this.config,
+            supportedConnectivity: this.supportedConnectivity,
+          })
+          : createGeneratedFishingFeature({
+            world: this.world,
+            seed: this.generated.seed,
+            homeReturnTile: this.generated.landmarks.homeReturnTile,
+            config: this.config,
+            analysis: this.generated.analysis,
+            supportedConnectivity: this.supportedConnectivity,
+          });
         this.prosperityScoreSystem = new ProsperityScoreSystem({
           islandDossiers: this.islandDossierSystem.definitions,
           surveySites: this.surveySiteSystem.definitions,
@@ -1014,7 +1088,12 @@ export class GameSimulation {
     });
     this.lifecycleResolutionRevision++;
     this.revision++;
-    this.events.emit("worldRegenerated", { seed: normalizedSeed });
+    this.events.emit("worldRegenerated", { seed: this.generated.seed });
+  }
+
+  /** Resets all live state while retaining the exact selected source. */
+  restartCurrentSource(proceduralSeed = this.generated.seed): void {
+    this.regenerate(this.authoredMapSource ? this.generated.seed : proceduralSeed);
   }
 
   teleport(tile: GridPoint): boolean {
@@ -1429,7 +1508,9 @@ export class GameSimulation {
 
   startNewGame(): number | undefined {
     if (this.interactionTransactionActive || !this.completionChoiceActive) return undefined;
-    const nextSeed = createNextWorldSeed(this.generated.seed);
+    const nextSeed = this.authoredMapSource
+      ? this.generated.seed
+      : createNextWorldSeed(this.generated.seed);
     this.regenerate(nextSeed);
     return nextSeed;
   }
@@ -1561,6 +1642,7 @@ export class GameSimulation {
     };
     return {
       seed: this.generated.seed,
+      source: this.sourceIdentity,
       ship: { ...this.ship },
       tile: { x: this.ship.currentTileX, y: this.ship.currentTileY },
       world: { width: this.world.width, height: this.world.height },

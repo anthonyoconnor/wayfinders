@@ -295,7 +295,6 @@ function validateIslands(
   if (!Array.isArray(value)) fail("$.islands", "must be an array");
   const seenIds = new Set<string>();
   const seenSourceIds = new Set<number>();
-  const seenAuthoredAssetIds = new Set<string>();
   return value.map((entry, index) => {
     const path = `$.islands[${index}]`;
     const source = exactRecord(entry, path, [
@@ -340,10 +339,6 @@ function validateIslands(
     let authoredAssetId: string | undefined;
     if (sourceKind === "authored") {
       authoredAssetId = identifier(source.authoredAssetId, `${path}.authoredAssetId`);
-      if (seenAuthoredAssetIds.has(authoredAssetId)) {
-        fail(`${path}.authoredAssetId`, `duplicates authored asset ID ${authoredAssetId}`);
-      }
-      seenAuthoredAssetIds.add(authoredAssetId);
     } else if (source.authoredAssetId !== undefined) {
       fail(`${path}.authoredAssetId`, "is only valid for authored islands");
     }

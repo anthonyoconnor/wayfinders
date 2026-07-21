@@ -29,7 +29,8 @@ The implementation follows these rules:
 Gameplay-session persistence is not a runtime capability. A launch or refresh
 constructs a fresh `GameSimulation`; there is no game save schema, browser game
 store, autosave, checkpoint, migration, or restoration path. Repository writes
-performed by local asset tools are asset authoring, not gameplay saving.
+performed by local asset and authored-map tools are development authoring, not
+gameplay saving.
 
 ## 2. Runtime composition
 
@@ -160,12 +161,12 @@ no legal position after its bounded random attempts and complete fallback scan
 is omitted, and planning continues with later profiles.
 
 Non-home island manifests record stable numeric identity, source kind, and—when
-authored—the stable asset ID. Planning receives a validated catalog snapshot
-sorted by stable asset ID, selects authored islands deterministically without
-replacement, uses each selected asset at most once, and creates procedural
-islands only for the configured shortfall. Catalog traversal order cannot
-change selection. Authored canvas and collision bounds retain periodic home,
-starter-lane, and navigable-channel clearances.
+authored—the stable asset ID. Procedural planning receives a validated catalog
+snapshot sorted by stable asset ID, selects authored islands deterministically
+without replacement, uses each selected asset at most once, and creates
+procedural islands only for the configured shortfall. Catalog traversal order
+cannot change selection. Authored canvas and collision bounds retain periodic
+home, starter-lane, and navigable-channel clearances.
 
 Authored island rasterization installs the saved `32`/`8` solid mask as
 collision authority, retains enclosed water, and derives a narrow deterministic
@@ -178,6 +179,96 @@ stable kind, size, centre, radii, rotation, shape seed, and bounds. Placement,
 shape, terrain, dossier content, and visual content use separate deterministic
 namespaces. High Island, Low Cay, Atoll, and Rocky Skerry remain procedural
 kinds; atolls receive a navigable passage.
+
+### Authored initial-world sources
+
+Procedural generation remains the default when the URL has no authored-map
+selector. An authored playtest is selected only by exactly one safe `map` ID and
+one lowercase SHA-256 `mapFingerprint`. Partial, duplicated, malformed,
+unlisted, unretained, missing, hash-mismatched, stale, or non-compiling explicit
+sources fail before scene creation and present a separate action for starting an
+ordinary procedural voyage; they never fall back implicitly.
+
+`AuthoredMapDefinitionV1` is the app-owned, strict initial-world envelope. It
+contains:
+
+- `formatVersion: 1`, an immutable 1-through-64-byte lowercase hyphenated map
+  ID, a trimmed display name of at most 80 Unicode scalars and 320 UTF-8 bytes,
+  and a lowercase SHA-256 `contentFingerprint`;
+- exact dossier, survey-site, and idol-location content versions;
+- one world-owned `AuthoredWorldLayoutV1` containing its contract version,
+  dedicated layout-settings fingerprint, generator version, fixed normal-world
+  dimensions/scales and two-axis wrapping topology, base seed, and stable
+  island instances; and
+- one fishing-owned `AuthoredFishingLayoutV1` containing its contract/content
+  versions and stable semantic shoals.
+
+The codec rejects unknown or missing keys with a JSON path, normalizes arrays
+by stable identity, recursively freezes the result, and serializes canonical
+JSON. The content fingerprint is SHA-256 over the normalized semantic payload
+with only the fingerprint field excluded. The definition never contains a
+`WorldGrid`, knowledge, routes, gameplay-session state, collision pixels,
+water textures, or Phaser objects.
+
+V1 is fixed to the current normal `192 x 192` world, normal chunk/tile/art
+scales, and wrapping topology. Home, the dock and return tile, Supported-water
+shape, protected eastbound departure corridor, navigation collision inputs,
+island apron/channel/clearance values, configured idol count, and water layout
+and catalog identities contribute to the dedicated layout-settings
+fingerprint. Procedural island selection counts, weights, attempts,
+archipelago/edge noise, and procedural fishing count do not. A stale settings,
+generator, nested contract, or initial-content version blocks compilation until
+the editor explicitly adopts current contracts and the result validates.
+
+Every authored map contains at least one non-home island. Each instance has a
+positive signed-32-bit `sourceId`, exact available authored-asset ID and
+revision, and canonical tile centre. The source ID becomes the generated source
+and stable island identity; removing another object never renumbers it. Any
+number of instances may reuse one asset and its collision/presentation inputs.
+Authored capacity is determined only by fixed-world fit and the ordinary Home,
+departure-corridor, periodic footprint, and minimum-channel rules. The
+conservative normal-world proof admits at most `256` islands, while the source
+ID range extends through `2,147,483,647` and therefore stays exact in the
+world's signed-32-bit tile authority.
+
+Each authored fishing entry saves a current-format stable ID, canonical tile,
+quality, and deterministic clue. New clues derive only from the map base seed
+and stable shoal ID, so moving a shoal or changing its quality does not reroll
+the clue. Compilation requires passable ocean in Home's connected component,
+no occupied island/resource identity, the current Home exclusion and periodic
+inter-shoal separation, and `serviceAnchor === tile`. There is no procedural-
+count cap: normal-world geometry proves at most `400` separated shoals while
+the current ID form supplies `10,000` identities.
+
+Application composition projects the available island catalogs to the unique
+assets referenced by the definition. Collision and presentation projections
+share one deterministic revision, so an unrelated available-island change does
+not change the map. A missing or revision-mismatched collision or catalog
+presentation entry blocks source loading. After the exact presentation entry
+is selected, an ordinary runtime texture/load failure may still use the
+existing coherent developer-graphics fallback without changing gameplay.
+
+The composed compiler validates current content contracts, asks the world owner
+to resolve and spatially validate explicit islands, and sends one planned-world
+contract through the existing rasterization, global-ocean analysis, and water
+stages. It then asks the fishing owner to materialize the exact saved shoals and
+generates the ordinary dossier, survey-site, and idol-location definitions to
+prove mandatory downstream viability. Expected failures return immutable
+diagnostics grouped as catalog projection, world, fishing, or initial content;
+no partial grid escapes.
+
+The result contains the ordinary `GeneratedWorld`, explicit fishing
+definitions, viability catalogs, the map-scoped collision catalog, and a
+`WorldSourceIdentityV1` with map ID, content fingerprint, layout contract and
+settings fingerprint, and referenced-island catalog revision. `GameSimulation`
+uses the existing generated-fishing path for procedural sources and the normal
+explicit-definition fishing factory for authored sources. It recompiles the
+captured immutable authored definition into a new grid before every refresh,
+developer restart, or completion **Start new game**, and replaces live state
+only after compilation succeeds. Those actions retain the exact authored map
+ID and fingerprint while resetting ship, knowledge, provisions, expedition,
+lineage, wreck, completion, Prosperity, traffic, feature, and presentation
+state. Leaving authored play requires an explicit procedural URL.
 
 `WorldAnalysisIndex` uses periodic cardinal/eight-neighbour topology for
 components, coastlines, service anchors, and split bounds. Coordinate zero is
@@ -884,8 +975,9 @@ navigation grid, the form warns before submission and offers transparent canvas
 padding to the next aligned size; it does not require the operator to calculate
 the dimensions or stretch the source.
 
-The asset-library route provides persistent **Islands**, **Ships**, **Fishing
-shoals**, **Water**, **Clouds**, **Icons**, **Great Hall**, and **Audio** tabs. Production workspaces use
+The asset-library route provides persistent **Maps**, **Islands**, **Ships**,
+**Ship Traffic**, **Fishing shoals**, **Water**, **Clouds**, **Icons**, **Great
+Hall**, and **Audio** tabs. Production workspaces use
 permanent left-library, centre-preview, and right-workbench regions. Water is the focused
 production inspection surface: it reads the versioned water package and the
 same `WorldGenerator`/`GeneratedWaterLayout` facts as the game, offers seed,
@@ -915,6 +1007,43 @@ prepared-canvas dimension. It deliberately ignores image pixels so a baked
 water apron remains navigable, and retains its method and refinement warning
 with the draft. Passable families remain explicitly empty, and no generated
 draft becomes runtime authority automatically.
+
+The Maps workspace at `?mode=assets&workspace=maps` is the dedicated authored-
+initial-world editor. Its left library opens checked-in catalog heads, creates
+a new current-format definition, duplicates the currently saved definition
+under a new immutable stable ID, and selects a reusable available island or
+lean/steady/rich fishing-shoal placement tool. The centre uses one compact
+semantic terrain texture plus the actual prepared island and shoal visuals; it
+supports selection, canonical tile placement and drag, pan, wheel/button zoom,
+fit, grid and validation overlays, and lifted seam/corner aliases. Home and its
+dock are visible fixed facts. The preview does not create `GameSimulation`,
+production water chunk canvases, knowledge, fog, routes, or gameplay state.
+
+The pure `MapEditorDraftModel` owns map-name/base-seed changes, stable positive
+island source IDs, available fishing IDs, placement/removal,
+shoal-quality changes, undo, redo, discard, dirty state, explicit island-
+revision adoption, explicit layout-contract adoption, full compiler results,
+and repository rebasing. Selection is view state. Pointer motion updates only
+a ghost/local conflict cue; complete fingerprinting and compilation occurs for
+a committed command or explicit save preparation, never each pointer-move
+frame. The preview's periodic aliases and bucketed spatial index make one
+canonical object selectable at seams without a total-object scan per query.
+
+The right workbench exposes immutable ID, editable display name and base seed,
+catalog/map revisions, fingerprint, source state, selected-object details,
+actionable compiler diagnostics, adoption and history actions, **Save
+changes**, and **Playtest map**. Save is disabled for a blocking definition;
+playtest is enabled only for a valid definition whose exact current fingerprint
+has been accepted by the repository. A successful response becomes the new
+immutable baseline without a page reload. A stale optimistic save remains an
+error and cannot overwrite a newer catalog or map head.
+
+The shell guards tab clicks, roving-keyboard workspace changes, browser history,
+and page unload while the Maps draft is dirty, and refuses workspace changes
+during a repository operation. Confirmed discard drops the in-memory draft and
+undo history. Scene shutdown aborts the workspace's DOM listeners and requests,
+removes Phaser bindings and preview objects/textures, and unregisters only that
+scene's guard.
 
 The Islands workspace replaces the general production surface with one focused
 workbench. Left-library selection alone chooses the preview and editor. The
@@ -1052,6 +1181,16 @@ checked-by-default cloud switch is session-only and scene-owned; it is not a
 simulation debug or configuration value. Opening the drawer does not pause
 sailing. Lifecycle gates still suppress input.
 
+The current-expedition developer status always identifies the selected world
+source. Procedural play reports `procedural:<seed>`. Authored play reports
+`authored-map:<id>@<content-fingerprint>` in the simulation snapshot/debug API,
+shows the stable ID, a short fingerprint, and repository catalog revision in
+the drawer, and publishes the full content, layout-settings, and referenced-
+island catalog revisions as game-host data attributes. Authored mode disables
+seed editing and relabels regeneration as **Restart this authored map**; the
+command recompiles the exact source and creates fresh state. These provenance
+fields are read-only diagnostics and never select or mutate a source.
+
 `window.__WAYFINDERS__` exposes bounded snapshot, command, overlay, resource,
 and performance diagnostics for browser automation. Its cloud command and
 paired cloud/shadow telemetry report and mutate presentation state only. These
@@ -1077,6 +1216,10 @@ Normal sailing avoids work proportional to total world or island count:
   default and at most twelve under live debug tuning, compute one bounded
   current footprint per descriptor, and give active images only translated
   views;
+- authored-map compilation occurs only during source startup, fresh restart,
+  or a committed editor draft revision; stable editor frames perform no world
+  compile, repository request, or terrain-texture allocation, and picking uses
+  the preview spatial index rather than a full placed-object scan;
 - overlays update dirty canonical chunks only and aliases add no redraw; and
 - diagnostics are sampled and capped.
 
@@ -1087,6 +1230,18 @@ Current automated budgets are:
   than 24 slices per request;
 - complete generation p95: `P0 <= 350 ms`, `P1 <= 600 ms`, and
   `P2 <= 3,500 ms` under the named serial benchmark;
+- authored-map normal fixture (`192 x 192`, `32` repeated-asset islands, no
+  shoals): canonical parse p95 below `15 ms`; compile and committed editor
+  rebuild p95 below `1,500 ms`; simulation construction and fresh restart p95
+  below `1,800 ms`; feature seeding p95 below `250 ms`; stable update/snapshot
+  p95 below `5 ms`; preview-index rebuild p95 below `25 ms`; and indexed local
+  query p95 below `1 ms`;
+- authored-map dense-valid fixture (`192 x 192`, `96` repeated-asset islands
+  and `96` shoals): canonical parse p95 below `30 ms`; compile and committed
+  editor rebuild p95 below `1,800 ms`; simulation construction and fresh
+  restart p95 below `2,200 ms`; feature seeding p95 below `400 ms`; stable
+  update/snapshot p95 below `5 ms`; preview-index rebuild p95 below `40 ms`;
+  and indexed local query p95 below `1 ms`;
 - `P2-500`: complete generation at or below `7.5 s`, with each island limited
   to its configured random attempts plus the declared finite row-major fallback
   scan, returning a deterministic plan of up to 500 islands;
@@ -1109,7 +1264,11 @@ seed sweeps, exact manifest replay, periodic channel/global-ocean validation,
 and bounded placement diagnostics.
 
 World planning, rasterization, and analysis may scale with total area because
-they run at explicit generation time. Normal frames may not. A worker or route
+they run at explicit generation time. Authored placement and fishing
+validation may additionally scale with the saved object collection at those
+explicit revision boundaries; placed-object count is capacity-by-fit and is not
+rejected by a presentation budget. Normal gameplay and editor frames may not
+scale with total world or total placed-object count. A worker or route
 hierarchy requires a new attributed budget miss and exact-equivalence,
 cancellation, and stale-publication coverage.
 
@@ -1124,7 +1283,12 @@ the I/O lane; scale sweeps and timing budgets use the serial performance lane.
 Automated tests cover deterministic periodic generation, seam/corner movement,
 collision/topology, sight and knowledge, guidance equivalence and scheduling,
 expedition and feature lifecycles, lineage, completion, rendering invalidation/
-resource bounds, asset contracts, and repository transactions. Full cardinal
+resource bounds, asset contracts, authored-map canonical round trips,
+map-scoped catalog projection, repeated-asset/seam compilation, authored
+fishing materialization, pure editor commands and aliases, explicit source
+loading/restart atomicity, and repository transactions. The `maps:check`
+repository gate is included in `npm.cmd run check` and rejects noncanonical or
+orphaned files and non-compiling current heads before bundling. Full cardinal
 circumnavigations and diagonal corner journeys compare fixed-step partitions,
 canonical state, provisions, knowledge, route edge provenance, events, and
 diagnostics; same-seed regeneration must replay identically. Exact counts are

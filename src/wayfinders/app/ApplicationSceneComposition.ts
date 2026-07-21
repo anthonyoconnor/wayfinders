@@ -3,9 +3,13 @@ import type {
 } from "../assets/AssetAppMode";
 import type { AssetWorkspaceModule } from "../assets/workspaces/AssetWorkspace";
 import type { AudioCatalogLoadResult } from "../audio";
+import type { AuthoredMapLaunchRequestV1 } from "./authoredMaps";
 
 export type ApplicationSceneCompositionRequest =
-  | Readonly<{ mode: "game" }>
+  | Readonly<{
+    mode: "game";
+    worldSource: Readonly<AuthoredMapLaunchRequestV1>;
+  }>
   | Readonly<{
     mode: "assets";
     initialWorkspace: Readonly<AssetWorkspaceModule>;
@@ -17,7 +21,10 @@ export type ApplicationSceneCompositionRequest =
 
 export interface ApplicationSceneFactories<Scene> {
   loadAudioCatalog(): Promise<AudioCatalogLoadResult>;
-  createGameScene(audioCatalogResult: AudioCatalogLoadResult): Scene;
+  createGameScene(
+    audioCatalogResult: AudioCatalogLoadResult,
+    worldSource: Readonly<AuthoredMapLaunchRequestV1>,
+  ): Scene;
   createAssetWorkspaceScene(
     workspace: Readonly<AssetWorkspaceModule>,
     audioCatalogResult: AudioCatalogLoadResult,
@@ -30,6 +37,7 @@ export type ApplicationSceneComposition<Scene> =
     mode: "game";
     initialScene: Scene;
     audioCatalogResult: AudioCatalogLoadResult;
+    worldSource: Readonly<AuthoredMapLaunchRequestV1>;
   }>
   | Readonly<{
     mode: "assets";
@@ -62,8 +70,9 @@ export async function composeApplicationScenes<Scene>(
   if (request.mode === "game") {
     return Object.freeze({
       mode: request.mode,
-      initialScene: factories.createGameScene(audioCatalogResult),
+      initialScene: factories.createGameScene(audioCatalogResult, request.worldSource),
       audioCatalogResult,
+      worldSource: request.worldSource,
     });
   }
 

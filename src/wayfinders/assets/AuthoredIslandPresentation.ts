@@ -1,4 +1,8 @@
 import type Phaser from "phaser";
+import {
+  validateAuthoredIslandCatalog,
+  type AuthoredIslandCatalog,
+} from "../world/AuthoredIslandCatalog";
 
 export type AuthoredIslandPresentationPlane =
   | "water-apron"
@@ -33,6 +37,52 @@ export interface AuthoredIslandPresentationCatalog {
 
 export const EMPTY_AUTHORED_ISLAND_PRESENTATION_CATALOG: Readonly<AuthoredIslandPresentationCatalog> =
   Object.freeze({ revision: "none", islands: Object.freeze([]) });
+
+/**
+ * Presentation sibling for a map-scoped collision projection. The collision
+ * projection owns the revision so the generated manifest and renderer receive
+ * one exact catalog identity.
+ */
+export function projectAuthoredIslandPresentationCatalog(
+  collisionCatalog: Readonly<AuthoredIslandCatalog>,
+  availableCatalog: Readonly<AuthoredIslandPresentationCatalog>,
+): Readonly<AuthoredIslandPresentationCatalog> {
+  const collision = validateAuthoredIslandCatalog(collisionCatalog);
+  const availableById = new Map<string, Readonly<AuthoredIslandPresentationEntry>>();
+  for (const entry of availableCatalog.islands) {
+    if (availableById.has(entry.assetId)) {
+      throw new RangeError(`Available presentation catalog repeats island ${entry.assetId}`);
+    }
+    availableById.set(entry.assetId, entry);
+  }
+  const islands = collision.islands.map((entry) => {
+    const presentation = availableById.get(entry.assetId);
+    if (!presentation) {
+      throw new RangeError(`Available presentation catalog has no island ${entry.assetId}`);
+    }
+    if (presentation.revision !== entry.revision) {
+      throw new RangeError(
+        `Island ${entry.assetId} presentation revision ${presentation.revision} does not match collision revision ${entry.revision}`,
+      );
+    }
+    if (
+      presentation.gridWidth !== entry.gridWidth
+      || presentation.gridHeight !== entry.gridHeight
+    ) {
+      throw new RangeError(
+        `Island ${entry.assetId} presentation dimensions do not match collision dimensions`,
+      );
+    }
+    return Object.freeze({
+      ...presentation,
+      layers: Object.freeze(presentation.layers.map((layer) => Object.freeze({ ...layer }))),
+    });
+  });
+  return Object.freeze({
+    revision: collision.revision,
+    islands: Object.freeze(islands),
+  });
+}
 
 export interface AuthoredIslandPresentationDiagnostic {
   readonly assetId: string;

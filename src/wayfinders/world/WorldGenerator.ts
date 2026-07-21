@@ -60,6 +60,17 @@ export interface GeneratedWorld extends RasterizedWorld {
   water: GeneratedWaterLayout;
 }
 
+export interface ResolvedWorldPlanIdentity {
+  readonly settingsProfileId: string;
+  readonly settingsFingerprint?: string;
+  readonly authoredIslandCatalogRevision: string;
+}
+
+export interface WorldAnalysisIdentity {
+  readonly sourceId: string;
+  readonly sourceRevision?: string | number;
+}
+
 function smoothStep(value: number): number {
   return value * value * (3 - 2 * value);
 }
@@ -121,6 +132,43 @@ export class WorldGenerator {
       home.landmarks.dock,
       this.authoredIslandCatalog,
     );
+    return this.createPlannedWorld(planningGrid, normalizedSeed, home, islands, {
+      settingsProfileId: worldGenerationProfileIdForConfig(this.config, WRAPPING_WORLD_TOPOLOGY),
+      settingsFingerprint: worldGenerationSettingsFingerprint(this.config, WRAPPING_WORLD_TOPOLOGY),
+      authoredIslandCatalogRevision: this.authoredIslandCatalog.revision,
+    });
+  }
+
+  /** Assembles already validated explicit island instances into the ordinary planned-world contract. */
+  planResolvedIslands(
+    seed: number,
+    islands: readonly Readonly<GeneratedIsland>[],
+    identity: Readonly<ResolvedWorldPlanIdentity>,
+  ): PlannedWorld {
+    const normalizedSeed = Number.isFinite(seed) ? Math.trunc(seed) : this.config.world.seed;
+    const planningGrid = new WorldGrid(
+      this.config.world.width,
+      this.config.world.height,
+      this.config.navigation.chunkSize,
+      WRAPPING_WORLD_TOPOLOGY,
+      this.config.navigation.tileSize,
+    );
+    const homePlacement = {
+      x: Math.floor(planningGrid.width / 2),
+      y: Math.floor(planningGrid.height / 2),
+    };
+    const home = resolveAuthoredHomeIslandPlacement(homePlacement);
+    this.assertHomePlacementFits(planningGrid, home.topLeft);
+    return this.createPlannedWorld(planningGrid, normalizedSeed, home, islands, identity);
+  }
+
+  private createPlannedWorld(
+    planningGrid: WorldGrid,
+    normalizedSeed: number,
+    home: ReturnType<typeof resolveAuthoredHomeIslandPlacement>,
+    islands: readonly Readonly<GeneratedIsland>[],
+    identity: Readonly<ResolvedWorldPlanIdentity>,
+  ): PlannedWorld {
     const hiddenObstacle = islands[0];
     if (!hiddenObstacle) throw new RangeError("World generation requires at least one scattered island");
     const landmarks: WorldLandmarks = {
@@ -143,9 +191,11 @@ export class WorldGenerator {
       islands,
     }, {
       generatorVersion: WORLD_GENERATOR_VERSION,
-      settingsProfileId: worldGenerationProfileIdForConfig(this.config, WRAPPING_WORLD_TOPOLOGY),
-      settingsFingerprint: worldGenerationSettingsFingerprint(this.config, WRAPPING_WORLD_TOPOLOGY),
-      authoredIslandCatalogRevision: this.authoredIslandCatalog.revision,
+      settingsProfileId: identity.settingsProfileId,
+      ...(identity.settingsFingerprint === undefined
+        ? {}
+        : { settingsFingerprint: identity.settingsFingerprint }),
+      authoredIslandCatalogRevision: identity.authoredIslandCatalogRevision,
       waterLayout: createManifestWaterLayout(normalizedSeed, planningGrid.width, planningGrid.height),
     });
     return Object.freeze({
@@ -193,11 +243,16 @@ export class WorldGenerator {
   }
 
   /** Builds the one reusable topology/coastline index for all feature seeding. */
-  analyze(world: Readonly<RasterizedWorld>): WorldAnalysisIndex {
+  analyze(
+    world: Readonly<RasterizedWorld>,
+    identity?: Readonly<WorldAnalysisIdentity>,
+  ): WorldAnalysisIndex {
     const graph = new GridGraph(world.grid, this.config);
     return WorldAnalysisIndex.build(world.grid, {
-      sourceId: world.manifest.settingsFingerprint ?? world.manifest.generatorVersion,
-      sourceRevision: world.manifest.generatorVersion,
+      sourceId: identity?.sourceId
+        ?? world.manifest.settingsFingerprint
+        ?? world.manifest.generatorVersion,
+      sourceRevision: identity?.sourceRevision ?? world.manifest.generatorVersion,
       isPassable: (index) => graph.isNavigationNodePassable(index),
     });
   }

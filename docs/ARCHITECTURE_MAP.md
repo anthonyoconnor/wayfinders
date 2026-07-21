@@ -7,17 +7,24 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 ## Startup order
 
 1. `src/main.ts` selects the game, asset-library, or isolated-trial application
-   mode and supplies validated prototype configuration. Game and asset-library
-   modes also load the shared audio catalog once; a catalog failure is retained
-   as an explicit silent/unavailable result rather than blocking startup.
-2. In game mode, `GameSimulation` plans a two-axis-wrapping `WorldManifestV2`,
-   rasterizes the canonical `WorldGrid`, builds one topology-aware
-   `WorldAnalysisIndex`, resolves the presentation-only
-   `GeneratedWaterLayout`, and composes gameplay features.
+   mode and supplies validated prototype configuration. Game mode first resolves
+   either the default procedural source or one exact `map` plus `mapFingerprint`
+   authored source. An explicit authored source is fetched, hashed, projected,
+   and compiled completely before Phaser or live gameplay state is created.
+   Game and asset-library modes also load the shared audio catalog once; a
+   catalog failure is retained as an explicit silent/unavailable result rather
+   than blocking startup.
+2. In game mode, `GameSimulation` receives one prevalidated source. Procedural
+   sources use `WorldGenerator.plan`; authored sources use the app-composed
+   compiler and map-scoped island catalogs. Both converge on the same planned
+   world, rasterization, canonical `WorldGrid`, topology-aware
+   `WorldAnalysisIndex`, presentation-only `GeneratedWaterLayout`, and gameplay
+   feature composition.
 3. `WayfindersScene` creates game presentation and translates input into
    simulation commands.
 4. The asset-library mode resolves a typed asset-workspace registry and starts
-   one workspace-scoped library, Ship Traffic, Icons, Great Hall, Audio, Water, or Clouds preview scene
+   one workspace-scoped Maps editor, library, Ship Traffic, Icons, Great Hall,
+   Audio, Water, or Clouds preview scene
    without gameplay simulation. The Water workspace starts `WaterPreviewScene`
    over the validated water package
    and real seeded generated-water facts, without creating gameplay simulation.
@@ -36,13 +43,14 @@ behavior belongs in `Wayfinders_Technical_Design.md`.
 | Area | Owns | Must not own |
 | --- | --- | --- |
 | `config` | canonical normal-game defaults, validated session tuning values, overlay defaults, and change notification | live gameplay state or benchmark profiles |
-| `world` | explicit topology, canonical/lifted coordinate primitives, named scale profiles, manifests, generation, logical tiles, analysis, and spatial indexes | Phaser objects |
+| `world` | explicit topology, canonical/lifted coordinate primitives, named scale profiles, manifests, procedural generation, authored world-layout compatibility and placement compilation, logical tiles, analysis, and spatial indexes | feature semantics, Phaser objects, or repository I/O |
 | `navigation` | collision topology, movement authority, and route/range mechanics | feature rewards or UI |
-| `exploration` / `features` | feature state, commands, selectors, and mutation results | scene lifecycle |
-| `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering | feature-specific presentation rules |
+| `exploration` / `features` | feature state, commands, selectors, mutation results, and fishing-owned authored shoal construction/validation | scene lifecycle or terrain compilation |
+| `core` / `app` | `GameSimulation` composition and deterministic cross-feature ordering; the app-owned authored-map envelope, canonical codec, source identity/loading, map-scoped catalog projection, and cross-feature viability | feature-specific presentation rules, Phaser/DOM ownership, or filesystem writes |
 | `audio` | validated stored-audio catalog contracts, renderer-neutral gain and sailing-ambience state, and bounded voice-accounting policy | Phaser objects, gameplay authority, decoded media, hidden-world queries, or repository writes |
 | `rendering` | Phaser lifecycle, lifted view placement, periodic image activation, resource ownership, and read-model adaptation | authoritative gameplay decisions |
-| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, isolated trials, and play-only stored-audio preview | navigation authority outside declared collision metadata, gameplay-session state, or browser audio creation/editing/mixing/writes |
+| `assets` | typed asset workspaces, semantic package and candidate contracts, loading, preparation, local authoring, island availability, general-family review/promotion, the Maps editor view/client, isolated trials, and play-only stored-audio preview | authored-map schema/compiler authority, navigation authority outside declared collision metadata, gameplay-session state, or browser audio creation/editing/mixing/writes |
+| `scripts/authored-map-*` | fresh disk island projection, local same-origin map saves under the shared repository lock, immutable revision/catalog transactions, static development reads, and the read-only repository checker | runtime gameplay state, browser filesystem authority, or production writes |
 
 ## Dependency direction
 
@@ -73,9 +81,10 @@ adapter may own Phaser sound instances.
   read-model surface. Cross-feature ordering belongs there; feature rules do
   not.
 - `ApplicationSceneComposition` owns mode-specific initial scene selection,
-  the single validated audio-catalog lifetime, and catalog reuse when asset
-  workspaces switch. It remains Phaser-free; `main.ts` supplies the concrete
-  browser scene factories.
+  carries the normalized procedural/authored launch request for game mode, the
+  single validated audio-catalog lifetime, and catalog reuse when asset
+  workspaces switch. It remains Phaser-free; `main.ts` resolves any authored
+  bytes before composition and supplies the concrete browser scene factories.
 - `DEFAULT_GAME_SETTINGS` is the typed, deeply frozen normal-new-game entry
   point for world, audio, overlay, gameplay, and presentation defaults.
   `prototypeConfig` is its derived mutable session/developer tuning view; it is
@@ -99,6 +108,30 @@ adapter may own Phaser sound instances.
   chunk snapshots stay canonical. Transition masks are
   directional and currently governed by the deep-to-coastal atlas contract,
   rather than treating every different neighbour as a compatible blend pair.
+- `src/wayfinders/world/authored/index.ts` is the renderer-neutral authored
+  layout seam. It owns the current normal-world layout fingerprint, geometric
+  island-capacity proof, shared placement profiles/rejections, stable instance
+  resolution, and compilation into the same `PlannedWorld` contract consumed
+  by `WorldGenerator.rasterize`, `analyze`, and `planWater`. It imports no
+  fishing or other feature contract. Repeated placements may share an authored
+  asset ID and revision, but each retains a distinct positive signed-32-bit source ID.
+- `src/wayfinders/app/authoredMaps/index.ts` is the whole-map composition seam.
+  It owns `AuthoredMapDefinitionV1`, exact-key normalization, canonical
+  serialization and SHA-256 content identity, map-scoped collision/presentation
+  projections, staged compilation diagnostics, checked-in repository transport
+  contracts, explicit URL source resolution, and downstream initial-content
+  viability. `src/wayfinders/features/fishing/index.ts` remains the owner of
+  authored shoal clues, placement/materialization, ID capacity, and exact
+  service anchors. The app seam composes these owners; neither world nor
+  fishing imports the other.
+- `GameSimulation` accepts either its ordinary procedural generator or a
+  prevalidated authored source whose `compileFresh` operation creates a new
+  generated grid and explicit fishing definitions for every reset. Source
+  compilation completes before state replacement. All later navigation,
+  discovery, survey, return, Prosperity, traffic, water, cloud, audio, and
+  rendering paths consume their existing contracts without an authored branch.
+  The public source read model distinguishes `procedural:<seed>` from
+  `authored-map:<id>@<fingerprint>`.
 - `WorldSpatialIndex` owns deterministic canonical chunk buckets, periodic
   footprint decomposition, split seam queries, deduplication, and minimum-image
   nearby ordering.
@@ -207,6 +240,15 @@ adapter may own Phaser sound instances.
   open-water `WorldGrid`, movement authority, and candidate presentation; it
   does not create `GameSimulation`, mutate the runtime world catalog, or add a
   gameplay-persistence seam.
+- Authored map repository authoring is a separate local-development seam under
+  `public/maps`. `scripts/authored-map-repository.mjs` re-reads the canonical
+  catalog and current island availability inside the shared repository lock,
+  checks independent catalog and per-map optimistic revisions, compiles the
+  complete submitted definition, and commits a new immutable definition before
+  replacing the catalog pointer. `scripts/authored-map-repository-check.mjs`
+  is read only and validates safe paths, canonical bytes, hashes, catalog/file
+  closure, and every current head against current inputs. Production/static
+  runtime has no map write endpoint.
 - `AssetWorkspaceRegistry` is the asset-library composition seam. The shell owns
   accessible tab navigation, URL history, and the three permanent mount regions.
   Library workspaces own their catalog partition, collision profiles,
@@ -239,6 +281,17 @@ adapter may own Phaser sound instances.
   its DOM listeners, cancels
   its preview-local animation frame, and removes its Phaser bindings before
   another workspace starts.
+- The Maps workspace is a dedicated `map-editor` scene rather than an
+  `AssetViewerScene` mode. `MapEditorDraftModel` owns immutable draft revisions,
+  stable object allocation, dirty state, compiler results, undo/redo/discard,
+  explicit contract/revision adoption, and save rebasing. The scene owns only
+  the three-column DOM, pointer/keyboard commands, compact semantic preview,
+  periodic aliases, and repository client. Its bucketed preview index bounds
+  picking and view queries; pointer motion changes a ghost only, and complete
+  compilation occurs on committed draft commands. The shell-owned navigation
+  controller guards workspace tabs, history, and page unload while a draft is
+  dirty or a repository operation is active. The workspace never constructs
+  `GameSimulation` or production water renderers.
 - The view-only Ship Traffic workspace lists the fishing workboat and trade
   canoe and renders both through the same code-native craft factory as the
   game. It exposes inspection heading and wake state but no simulation,
@@ -253,8 +306,8 @@ adapter may own Phaser sound instances.
   `availableAuthoredIslandCatalog`
   exposes only validated, stable-ID-ordered planning inputs; repository
   fingerprints remain private and review/promotion do not apply to islands.
-- `WorldGenerator` accepts the renderer-neutral authored-island catalog at
-  composition. It owns deterministic selection without replacement, bounded
+- For procedural planning, `WorldGenerator` accepts the renderer-neutral
+  authored-island catalog at composition. It owns deterministic selection without replacement, bounded
   placement, manifest provenance, exact saved-mask rasterization, and
   procedural shortfall. World code does not import asset-pipeline modules.
 - `availableAuthoredIslandPresentationCatalog` is the presentation-only sibling
@@ -274,7 +327,10 @@ Diagnostics are distributed with their owner: simulation traces and counters
 live in `core`, while overlay visibility, presentation/resource counters, and
 temporary presentation overrides live in `WayfindersScene` and its renderers;
 output adaptation lives in `src/developerLog.ts`. Diagnostics never own
-authoritative mutation. Overlay visibility remains scene-owned; only its
+authoritative mutation. The game host, developer drawer, snapshot, and browser
+debug API expose the selected source identity; authored sources additionally
+expose the map, content fingerprint, repository catalog revision, layout
+fingerprint, and referenced-island catalog revision. Overlay visibility remains scene-owned; only its
 forward-range value is translated into an explicit command that suspends or
 reactivates optional derived guidance work in `GameSimulation`. The cloud
 enable switch, the independent map-review camera and hide-fog switches, and

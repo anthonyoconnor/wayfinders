@@ -206,6 +206,33 @@ body {
   content: none;
 }
 
+.startup-screen__action {
+  display: inline-flex;
+  margin-top: 0.85rem;
+  min-height: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  border: 1px solid rgba(183, 224, 222, 0.56);
+  border-radius: 999px;
+  color: #e3f7f4;
+  font: 700 0.78rem/1 system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.startup-screen__action[hidden] {
+  display: none;
+}
+
+.startup-screen__action:hover,
+.startup-screen__action:focus-visible {
+  border-color: #e3f7f4;
+  background: rgba(227, 247, 244, 0.1);
+  outline: none;
+}
+
 html:not([data-scene-ready]) .shell-controls {
   opacity: 0;
   visibility: hidden;
@@ -6657,5 +6684,451 @@ html[data-application-mode="game"] .shell-controls .game-audio-controls__panel {
 
   .cloud-world-preview-check {
     justify-content: flex-start;
+  }
+}
+
+html[data-asset-workspace="maps"] {
+  --asset-library-width: clamp(14rem, 19vw, 17rem);
+  --asset-inspector-width: clamp(20rem, 28vw, 26rem);
+}
+
+html[data-asset-workspace="maps"] .game-host canvas {
+  cursor: crosshair;
+}
+
+html[data-asset-workspace="maps"] .game-host canvas:active {
+  cursor: grabbing;
+}
+
+.map-editor-library,
+.map-editor-workbench {
+  min-width: 0;
+  min-height: 0;
+  color: var(--shell-ink);
+  background:
+    linear-gradient(180deg, rgba(20, 66, 75, 0.22), transparent 12rem),
+    var(--shell-panel);
+}
+
+.map-editor-library {
+  z-index: 8;
+  display: grid;
+  height: 100%;
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border-right: 1px solid var(--shell-line);
+}
+
+.map-editor-library__scroll,
+.map-editor-workbench__scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.map-editor-library__scroll {
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 0.8rem;
+}
+
+.map-editor-workbench {
+  display: grid;
+  max-height: min(67dvh, 54rem);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.65rem;
+}
+
+.map-editor-workbench__scroll {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 0.8rem;
+}
+
+.map-editor-panel-heading {
+  display: flex;
+  min-width: 0;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  border-bottom: 1px solid var(--shell-line);
+}
+
+.map-editor-panel-heading h2,
+.map-editor-panel-heading p,
+.map-editor-library h3,
+.map-editor-workbench h3 {
+  margin: 0;
+}
+
+.map-editor-panel-heading h2 {
+  overflow-wrap: anywhere;
+  color: #f4e5bb;
+  font: 700 1.05rem/1.2 Cambria, Georgia, serif;
+}
+
+.map-editor-library h3,
+.map-editor-workbench h3,
+.map-editor-workbench legend {
+  color: var(--shell-accent-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.map-editor-library details {
+  border: 1px solid var(--shell-line);
+  border-radius: 0.45rem;
+  background: rgba(3, 17, 23, 0.36);
+}
+
+.map-editor-library summary {
+  padding: 0.65rem;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.map-editor-definition-list,
+.map-editor-diagnostics ol {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0;
+  margin: 0.55rem 0 0;
+  list-style: none;
+}
+
+.map-editor-definition-list button,
+.map-editor-palette button,
+.map-editor-diagnostics button {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: 0.18rem;
+  padding: 0.58rem 0.65rem;
+  border: 1px solid rgba(141, 216, 207, 0.2);
+  border-radius: 0.4rem;
+  color: var(--shell-ink);
+  background: rgba(4, 24, 31, 0.62);
+  cursor: pointer;
+  text-align: left;
+}
+
+.map-editor-definition-list li[data-active="true"] button,
+.map-editor-palette button[aria-pressed="true"],
+.map-editor-actions button[aria-pressed="true"],
+.map-editor-segmented button[aria-pressed="true"] {
+  border-color: rgba(238, 207, 124, 0.78);
+  color: #fff0c5;
+  background: rgba(87, 73, 35, 0.58);
+}
+
+.map-editor-definition-list span,
+.map-editor-palette small,
+.map-editor-diagnostics span,
+.map-editor-diagnostics code,
+.map-editor-help,
+.map-editor-empty {
+  color: var(--shell-muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.map-editor-definition-list .map-editor-library-state {
+  justify-self: start;
+  padding: 0.16rem 0.35rem;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.map-editor-library-state[data-state="saved"] {
+  color: #a8f3c7;
+}
+
+.map-editor-library-state[data-state="unsaved"] {
+  color: #ffe18b;
+}
+
+.map-editor-library-state[data-state="invalid"],
+.map-editor-library-state[data-state="stale"] {
+  color: #ffb2a5;
+}
+
+.map-editor-definition-form,
+.map-editor-workbench fieldset {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.map-editor-definition-form {
+  padding: 0 0.65rem 0.65rem;
+}
+
+.map-editor-definition-form label,
+.map-editor-workbench label {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--shell-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.map-editor-definition-form input,
+.map-editor-workbench input,
+.map-editor-workbench select {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 2.35rem;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+  color: var(--shell-ink);
+  background: #082832;
+}
+
+.map-editor-workbench input[readonly] {
+  color: var(--shell-muted);
+  background: rgba(4, 21, 28, 0.68);
+}
+
+.map-editor-palette {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.map-editor-segmented,
+.map-editor-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.map-editor-segmented {
+  margin-top: 0.55rem;
+}
+
+.map-editor-segmented > *,
+.map-editor-actions > * {
+  flex: 1;
+}
+
+.map-editor-actions--wrap {
+  flex-wrap: wrap;
+}
+
+.map-editor-actions--wrap > * {
+  min-width: 4.2rem;
+}
+
+.map-editor-validation-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem 0.55rem;
+  padding: 0;
+  margin: 0;
+  color: var(--shell-muted);
+  font-size: 0.64rem;
+  list-style: none;
+}
+
+.map-editor-validation-legend span {
+  display: inline-block;
+  width: 1.15rem;
+  color: var(--shell-accent-strong);
+  font-weight: 900;
+  text-align: center;
+}
+
+.map-editor-library button,
+.map-editor-workbench button {
+  min-height: 2.35rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.35rem;
+  color: var(--shell-ink);
+  background: rgba(13, 52, 62, 0.86);
+  cursor: pointer;
+  font-weight: 720;
+}
+
+.map-editor-library button:hover:not(:disabled),
+.map-editor-workbench button:hover:not(:disabled) {
+  border-color: var(--shell-accent);
+  background: rgba(20, 78, 88, 0.92);
+}
+
+.map-editor-library button:disabled,
+.map-editor-workbench button:disabled,
+.map-editor-workbench fieldset:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.map-editor-workbench fieldset {
+  min-width: 0;
+  padding: 0.7rem;
+  border: 1px solid var(--shell-line);
+  border-radius: 0.45rem;
+  background: rgba(3, 17, 23, 0.32);
+}
+
+.map-editor-state {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid currentcolor;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.map-editor-state[data-state="saved"],
+.map-editor-diagnostics [data-state="valid"] {
+  color: #a8f3c7;
+}
+
+.map-editor-state[data-state="dirty"] {
+  color: #ffe18b;
+}
+
+.map-editor-state[data-state="invalid"],
+.map-editor-error {
+  color: #ffb2a5;
+}
+
+.map-editor-error {
+  padding: 0.65rem;
+  border: 1px solid rgba(255, 119, 98, 0.48);
+  border-radius: 0.4rem;
+  background: rgba(97, 29, 24, 0.5);
+  overflow-wrap: anywhere;
+}
+
+.map-editor-facts {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+}
+
+.map-editor-facts > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(5.5rem, 0.9fr) minmax(0, 1.1fr);
+  gap: 0.5rem;
+}
+
+.map-editor-facts dt {
+  color: var(--shell-muted);
+}
+
+.map-editor-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #e6f6f2;
+  font-family: ui-monospace, monospace;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-editor-diagnostics > p {
+  margin-bottom: 0;
+}
+
+.map-editor-diagnostics li button {
+  border-left: 0.25rem solid #ff7a67;
+}
+
+.map-editor-diagnostics code {
+  font-family: ui-monospace, monospace;
+}
+
+.map-editor-save-bar {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  padding: 0.75rem;
+  border-top: 1px solid var(--shell-line);
+  background: rgba(4, 20, 27, 0.96);
+}
+
+.map-editor-save-bar button:first-child:not(:disabled) {
+  border-color: rgba(86, 227, 148, 0.72);
+  color: #dbffeb;
+  background: rgba(24, 104, 73, 0.9);
+}
+
+@media (max-width: 1100px) {
+  html[data-asset-workspace="maps"] {
+    --asset-library-width: clamp(12rem, 22vw, 14rem);
+    --asset-inspector-width: clamp(18rem, 31vw, 22rem);
+  }
+
+  .map-editor-panel-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .map-editor-state {
+    align-self: start;
+  }
+}
+
+@media (max-width: 840px) {
+  html[data-asset-workspace="maps"] .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(24rem, 1fr) minmax(18rem, 42dvh);
+  }
+
+  html[data-asset-workspace="maps"] .game-region {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  html[data-asset-workspace="maps"] .developer-tools {
+    grid-column: 1;
+    grid-row: 3;
+    border-width: 1px 0 0;
+  }
+
+  .map-editor-workbench {
+    max-height: 34dvh;
+  }
+}
+
+@media (max-width: 620px) {
+  html[data-asset-workspace="maps"] .game-region {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(10rem, 32dvh) minmax(16rem, 1fr);
+  }
+
+  html[data-asset-workspace="maps"] .game-host {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .map-editor-library {
+    grid-column: 1;
+    grid-row: 1;
+    border-width: 0 0 1px;
+  }
+
+  .map-editor-library__scroll {
+    grid-template-columns: repeat(2, minmax(10rem, 1fr));
+    overflow: auto;
   }
 }

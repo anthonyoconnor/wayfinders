@@ -4,8 +4,9 @@ Status: forward plan. Gameplay is complete through `GP-6.6`; graphics and
 world-discovery presentation are complete through `GR-6.1`; cloud atmosphere
 is complete through `CLD-3`; water presentation is complete through `WTR-2.6`;
 audio is complete through `AUD-5`; and Prosperity is complete through
-`PRS-2.4`. `MAP-1` and `STM-1` remain proposed and their implementation is not
-authorized.
+`PRS-2.4`. Authored playtest maps are implemented through `MAP-1.4`; current
+closeout verification is tracked in `IMPLEMENTATION_STATUS.md`. `STM-1` remains
+proposed and its implementation is not authorized.
 Implemented behavior belongs in `Wayfinders_Technical_Design.md`; completed
 milestones and acceptance evidence belong in `Wayfinders_Roadmap_Archive.md`.
 
@@ -17,7 +18,7 @@ The technical design owns the current runtime persistence boundary. For future
 planning, persistence must not be added incidentally to another feature or
 inferred from development-only asset authoring. It may return
 only through an explicitly authorized milestone designed for the game that
-exists at that time. `MAP-1` proposes checked-in initial-world definitions for
+exists at that time. `MAP-1` provides checked-in initial-world definitions for
 developer playtesting; opening or saving one is repository authoring and never
 serializes or restores gameplay-session state. No gameplay-session persistence
 milestone is currently planned or authorized.
@@ -62,18 +63,19 @@ architecture map; its delivery history is archived.
 The asset-workspace shell, focused island workshop, single island-availability
 lifecycle, deterministic authored-island world planning, bounded periodic
 authored runtime presentation, independent revealed-map cloud atmosphere, live
-cloud-world authoring preview, and production water system are implemented.
-They establish the presentation seams used by the proposed storm track.
+cloud-world authoring preview, dedicated authored-map editor and playtest
+source, and production water system are implemented. They establish the
+presentation seams used by the proposed storm track.
 
 The Voyage Sense thread, its supply commitments, and the continuous global
 world are implemented through `GP-6.6`. Prosperity and returned-fact traffic
 are implemented through `PRS-2.4`. Home and non-home island de-labelling is
 complete through `GR-6.1`.
 
-Two proposed tracks now follow that baseline. `MAP-1` is the recommended first
-implementation because repeatable authored worlds improve balance and feature
-playtesting without changing the procedural default. `STM-1` remains the next
-proposed gameplay and presentation system. Neither track is authorized.
+Repeatable authored initial worlds are implemented through `MAP-1.4` without
+changing the procedural default or adding gameplay-session persistence.
+`STM-1` remains the next proposed gameplay and presentation system. It is not
+authorized.
 Audio is complete through `AUD-5`; the production water system is complete
 through `WTR-2.6`.
 Great Hall concept and planning work is complete. The product owner accepted the
@@ -205,54 +207,20 @@ settlement-growth, or later Prosperity milestone is proposed or authorized.
 
 ### MAP-1 — Authored-map definitions, editor, and playtest launch
 
-Status: proposed on 2026-07-20. Implementation is not authorized.
+Status: implementation and automated verification complete through `MAP-1.4`
+on 2026-07-21; remaining live-browser and product-owner acceptance is tracked
+in `IMPLEMENTATION_STATUS.md`.
 
-Add a developer-only Maps workspace that creates checked-in initial-world
-definitions by placing available authored islands and semantic fishing shoals.
-An explicit saved map constructs a fresh simulation through the same
-rasterize, analysis, water, navigation, feature, and presentation pipeline as
-an ordinary world. No map selected continues to mean the current procedural
-source and seed behavior.
-
-The first version keeps the current normal-game settings snapshot, wrapping
-topology, Home, dock, Supported-water boundary, and protected departure
-corridor fixed. It permits one or more non-home island instances and any number
-of fishing shoals that fit while satisfying the map's semantic and spatial
-invariants. An authored-island asset may be reused by multiple distinct stable
-instances. No fixed island or shoal count is an editor, schema, or runtime rule;
-procedural generation retains its existing default counts and selection policy.
-The editor does not paint terrain or water, place procedural island shapes,
-edit a running world, or persist gameplay-session state.
-
-The proposed implementation sequence is:
-
-1. `MAP-1.0` — lock the product/storage/restart contract, exercise the basic
-   workflow slice, record procedural signatures and performance baselines, and
-   record an explicit product-owner **Go**;
-2. `MAP-1.1` — implement the versioned definition, canonical codec, stable IDs,
-   shared placement validators, deterministic authored-map compiler, and
-   procedural-equivalence coverage;
-3. `MAP-1.2` — build the dedicated editor scene, pure draft/undo model,
-   compiler-backed validation, and guarded atomic catalog/map open-save flow;
-4. `MAP-1.3` — add fail-closed authored-source startup, exact source
-   diagnostics, source-aware fresh restart, and the editor-to-game playtest
-   handoff; and
-5. `MAP-1.4` — close seam, replay, repository-I/O, performance, resource,
-   accessibility, live-browser, and documentation acceptance.
-
-```mermaid
-flowchart LR
-    M0["MAP-1.0 contract and baseline"] --> GO{"Product-owner Go?"}
-    GO -->|Revise| M0
-    GO -->|Go| M1["MAP-1.1 definition and compiler"]
-    M1 --> M2["MAP-1.2 editor and repository save"]
-    M2 --> M3["MAP-1.3 fresh-session playtest"]
-    M3 --> M4["MAP-1.4 acceptance and closure"]
-```
-
-Detailed definition fields, validation rules, editor workflow, repository
-transaction, source boundary, non-goals, risks, budgets, tests, and acceptance
-criteria are defined in `Wayfinders_Authored_Map_Editor_Milestone.md`.
+The developer-only Maps workspace creates immutable checked-in initial-world
+definitions from reusable available islands and semantic fishing shoals. Exact
+ID/fingerprint launch compiles a fresh source through the ordinary world,
+feature, and presentation contracts; absent selection remains procedural.
+Refresh, authored restart, and completion new-game rebuild the same exact
+source without preserving gameplay state. Current behavior belongs in
+`Wayfinders_Technical_Design.md`, repository operations in
+`Wayfinders_Asset_Pipeline.md`, operator steps in
+`ASSET_PRODUCTION_QUICKSTART.md`, and durable outcome/evidence in
+`Wayfinders_Roadmap_Archive.md`.
 
 ## Storm system
 
@@ -321,12 +289,12 @@ WTR-1.0 through WTR-1.5 and WTR-2.0 through WTR-2.6 are complete. No later water
 milestone is authorized. Gameplay is complete through `GP-6.6`. `PRS-1`
 through `PRS-2.4` are complete; no later Prosperity, economy, or
 settlement-growth milestone is authorized. `GR-6.1` is complete and no later
-world-discovery presentation milestone is planned. `MAP-1` and `STM-1` remain
-proposed but not authorized. Their implementation, like any later gameplay,
-developer-authoring, or production-asset milestone, requires explicit user
-authorization.
+world-discovery presentation milestone is planned. `MAP-1` is implemented
+through `MAP-1.4`. `STM-1` remains proposed but not authorized. Its
+implementation, like any later gameplay, developer-authoring, or production-
+asset milestone, requires explicit user authorization.
 
-Do not implement gameplay saving. `MAP-1` proposes only checked-in
+Do not implement gameplay saving. `MAP-1` provides only checked-in
 initial-world definitions and fresh-session playtest launch; gameplay-session
 persistence may return only through a separate explicitly authorized milestone
 designed for the game that exists at that time.

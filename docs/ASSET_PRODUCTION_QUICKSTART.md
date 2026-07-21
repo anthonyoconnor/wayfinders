@@ -1,9 +1,10 @@
 # Asset production quickstart
 
 This is the current lightweight workflow for importing and finishing an island
-in the focused Islands workspace. Ships and Fishing shoals still use their
-general production tools. This is intentionally a prototype workflow, not a
-general art or atlas tool.
+in the focused Islands workspace and for composing checked-in initial worlds in
+the Maps workspace. Ships and Fishing shoals still use their general production
+tools. This is intentionally a prototype workflow, not a general art, atlas, or
+gameplay-save tool.
 
 Before generating or importing player-facing artwork, use
 `Wayfinders_Art_Style_Guide.md` for visual direction and target-size review.
@@ -40,10 +41,10 @@ play-only; there is no interactive audio editor or mixer.
 
 ## Normal workflow
 
-1. Start the prototype and open the library:
+1. Start the prototype and open the library on the documented local address:
 
    ```powershell
-   npm.cmd run dev
+   npm.cmd run dev -- --host 127.0.0.1 --port 5173
    ```
 
    Open `http://127.0.0.1:5173/?mode=assets&workspace=islands`.
@@ -84,6 +85,62 @@ play-only; there is no interactive audio editor or mixer.
 
    The gate validates source, prepared image, recipe, and saved collision
    consistency without changing the repository.
+
+## Author and playtest a map definition
+
+Map authoring uses only islands whose current saved collision is **Available in
+game**. Finish and save island availability first, then:
+
+1. Start the local development server on the documented address and open the
+   Maps workspace:
+
+   ```powershell
+   npm.cmd run dev -- --host 127.0.0.1 --port 5173
+   ```
+
+   Open `http://127.0.0.1:5173/?mode=assets&workspace=maps`. The checked-in
+   `wayfinders-playtest` entry is available as a starting reference.
+2. Choose **Open map definition**, or create a definition with a new lowercase
+   hyphenated stable ID and display name. To branch from the open saved map,
+   use **Duplicate saved definition** with a new ID. A stable ID is immutable;
+   Git remains the rename or deletion path.
+3. Select an available island in the left library, then click a tile to place
+   it. Select lean, steady, or rich under **Fishing-shoal tool** to place an
+   exact semantic shoal. Use Select to drag an object, and the workbench to
+   remove it or change shoal quality. Wheel or the zoom buttons change scale;
+   middle-drag or Pan moves the camera; **Fit**, **Grid**, and **Validation**
+   control inspection. Edge and corner copies are periodic views of one
+   canonical object, not extra placements.
+4. Resolve every blocking diagnostic. Home, dock, Supported water, and the
+   eastbound departure corridor are fixed. A current-format stale draft can use
+   **Adopt current island revision** for a selected resolvable island or **Adopt
+   current layout contracts**, then must be corrected until the complete
+   compiler passes. Undo, redo, and **Discard / reopen** operate only on the
+   in-memory draft.
+5. Choose **Save changes**. The development service checks current catalog and
+   map revisions, re-reads island state from disk, recompiles the complete map,
+   writes an immutable fingerprinted definition, then advances the catalog. A
+   conflict means another save changed the catalog or map; reopen the current
+   definition before deliberately reapplying edits. Do not edit a retained
+   fingerprinted file in place.
+6. Choose **Playtest map**. It becomes available only after the exact valid
+   fingerprint has been saved, and opens normal game startup with explicit
+   `map` and `mapFingerprint` parameters. Refresh, **Restart this authored
+   map**, and completion **Start new game** all rebuild fresh gameplay state
+   from that same immutable map. To leave authored play, use the startup error's
+   procedural action when present or open the ordinary route with both map
+   parameters removed.
+7. After an authoring session, inspect only the intended files under
+   `public/maps`, then run the read-only map gate:
+
+   ```powershell
+   npm.cmd run maps:check
+   git diff -- public/maps
+   ```
+
+   Commit the catalog together with every new immutable definition it
+   references. Map authoring never stores ship position, knowledge, provisions,
+   expedition, lineage, wreck, Prosperity, route, animation, or UI state.
 
 ## Optional command-line preparation
 
