@@ -1,6 +1,6 @@
 # Wayfinders Home and island de-labelling milestone
 
-Status: `GR-6.1` implementation complete; live browser acceptance pending.
+Status: `GR-6.1` complete and accepted on 2026-07-20.
 Planning and authorization status belong only in `Wayfinders_Roadmap.md`.
 
 ## Product intent
@@ -88,10 +88,7 @@ remain.
 
 Automated acceptance is complete: the focused renderer contract, source and
 test typechecks, `check:quick`, integration lane, and production bundle pass.
-The full contract lane reaches the unrelated in-progress production-island
-recipe fixture and reports its existing `29`-versus-`28` recipe-count drift.
-Live browser verification remains pending because the current in-app browser
-session rejected the local development URL.
+The product owner accepted the player-facing result on 2026-07-20.
 
 ## Non-goals
 

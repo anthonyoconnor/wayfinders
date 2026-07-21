@@ -18,8 +18,8 @@ other discovery presentation. The focused renderer contract, both typechecks,
 `check:quick`, integration lane, and production bundle pass. The full contract
 lane is otherwise green but reaches an unrelated in-progress production-island
 asset fixture whose recipe count currently differs from its expected count
-(`28` versus `29`). Live browser acceptance remains pending because the in-app
-browser session rejected the local development URL.
+(`28` versus `29`). The product owner accepted the resulting presentation on
+2026-07-20, closing the milestone.
 
 Forward reach remains available as an on-demand player overlay, but its normal
 hidden state now suspends the derived scheduler entirely. Showing it starts a
@@ -193,10 +193,6 @@ trend check rather than a gameplay blocker.
 
 ## Open operational gaps
 
-- Complete the `GR-6.1` live scene check: Home and non-home islands have no
-  persistent captions or dossier marker graphics, Home and the dock remain
-  legible, the survey ribbon still appears at valid approaches, and the console
-  remains clean.
 - Complete live audio browser acceptance for keyboard focus, stored-file media
   decode/audition, mute and level controls, silence at rest, smoothed wake,
   direction reversal, loop seams, cue coalescing, supplementary muted feedback,

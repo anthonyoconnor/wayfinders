@@ -1593,10 +1593,31 @@ Planning and concept selection were recorded in `242d09c` and `5652e26`. The
 hidden-score and safe-route foundation was implemented in `d1b8b01`; bounded
 traffic presentation was implemented in `360797d`.
 
+## World discovery presentation
+
+### GR-6.1 — Home and island de-labelling
+
+Status: implemented and accepted on 2026-07-20.
+
+The sailing world no longer creates a floating Home caption or persistent
+non-home island dossier names, chart glyphs, badges, finding captions, or
+lifecycle rings. Home remains readable through its inhabited island, harbour,
+and exact dock; non-home islands remain readable through their landforms.
+Fishing shoals, survey sites, navigator wrecks, discovery notices, the survey
+ribbon, and current-voyage achievements retain their existing presentation.
+
+The removal is presentation-only. Current sight and `IslandDossierSystem`
+sighting and survey authority remain unchanged, and generated names and dossier
+findings continue through events, transient notices, the survey ribbon,
+lineage, and the Great Hall. Focused renderer coverage, source and test
+typechecks, `check:quick`, the integration lane, and the production bundle
+passed. The product owner accepted the player-facing result. Implementation was
+recorded in `c686048`.
+
 ## Archive boundary
 
 This archive includes completed gameplay through `GP-6.6`, graphics and asset
-work through `GR-5.3`, cloud atmosphere through `CLD-3`, water presentation
+work through `GR-6.1`, cloud atmosphere through `CLD-3`, water presentation
 through `WTR-2.6`, Prosperity through `PRS-2.4`, and architecture work through
 `AM-6`. Upcoming, proposed, and deferred work is maintained only in
 `Wayfinders_Roadmap.md`.
