@@ -427,6 +427,10 @@ approach, service-anchor, home exclusion, and inter-feature separation use
 minimum-image distance and periodic spatial queries. Coordinate-zero seams do
 not create an empty feature band.
 
+The configured fishing-shoal count is a maximum; deterministic eligibility and
+spacing constraints may produce fewer shoals when the generated world has no
+additional legal position.
+
 Every non-home island has one immutable dossier definition with stable island
 identity, exact footprint, dock-reachable coastal approaches, a deterministic
 name, and a hidden descriptive result. Surveying an island derives full-island

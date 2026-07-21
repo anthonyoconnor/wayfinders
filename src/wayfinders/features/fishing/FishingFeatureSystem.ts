@@ -145,7 +145,7 @@ export interface GeneratedFishingFeatureDependencies {
   readonly world: WorldGrid;
   readonly seed: number;
   readonly homeReturnTile: Readonly<GridPoint>;
-  readonly config: Pick<PrototypeConfig, "navigation" | "movement">;
+  readonly config: Pick<PrototypeConfig, "navigation" | "movement" | "world">;
   readonly analysis?: WorldAnalysisIndex;
   readonly supportedConnectivity?: SupportedConnectivitySystem;
 }

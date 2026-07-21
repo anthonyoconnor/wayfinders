@@ -37,6 +37,7 @@ and simulation consumers.
 | `supportedNoiseScale` | positive finite value | new game or regeneration |
 | `maxEnclosedUnknownTiles` | non-negative whole tile count | subsequent successful returns in the session |
 | `idolCount` | positive whole count | new game or regeneration |
+| `fishingShoalCount` | non-negative whole maximum | new game or regeneration |
 | `islands.count`, `islands.archipelagoClusters` | non-negative whole counts (`count` is positive) | new game or regeneration |
 | `islands.minRadius`, `maxRadius`, `apronWidth`, `archipelagoRadius` | positive finite values; max radius is not smaller than min radius | new game or regeneration |
 | `islands.minimumChannelWidth`, `homeClearance`, `safeCorridorHalfWidth` | non-negative finite values | new game or regeneration |

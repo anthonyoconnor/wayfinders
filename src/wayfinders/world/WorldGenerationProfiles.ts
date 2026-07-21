@@ -42,6 +42,7 @@ function createBenchmarkBaseConfig(): PrototypeConfig {
       hiddenObstacleDistance: 24,
       maxEnclosedUnknownTiles: 2,
       idolCount: 3,
+      fishingShoalCount: 4,
     },
     islands: {
       count: 8,

@@ -39,6 +39,7 @@ export interface GameSettings {
     hiddenObstacleDistance: number;
     maxEnclosedUnknownTiles: number;
     idolCount: number;
+    fishingShoalCount: number;
     islands: PrototypeConfig["islands"];
   };
   audio: {
@@ -101,8 +102,9 @@ export const DEFAULT_GAME_SETTINGS: DeepReadonly<GameSettings> = deepFreeze<Game
     hiddenObstacleDistance: 24,
     maxEnclosedUnknownTiles: 2,
     idolCount: 3,
+    fishingShoalCount: 30,
     islands: {
-      count: 8,
+      count: 20,
       minRadius: 2,
       maxRadius: 6,
       apronWidth: 1.25,
@@ -202,6 +204,7 @@ export function prototypeConfigFromGameSettings(
       hiddenObstacleDistance: settings.world.hiddenObstacleDistance,
       maxEnclosedUnknownTiles: settings.world.maxEnclosedUnknownTiles,
       idolCount: settings.world.idolCount,
+      fishingShoalCount: settings.world.fishingShoalCount,
     },
     islands: { ...settings.world.islands },
     provisions: { ...settings.gameplay.provisions },

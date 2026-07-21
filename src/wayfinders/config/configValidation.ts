@@ -59,6 +59,7 @@ export function validateWorldTuning(
   assertNonNegative(world.hiddenObstacleDistance, "world.hiddenObstacleDistance");
   nonNegativeInteger(world.maxEnclosedUnknownTiles, "world.maxEnclosedUnknownTiles");
   positiveInteger(world.idolCount, "world.idolCount");
+  nonNegativeInteger(world.fishingShoalCount, "world.fishingShoalCount");
 }
 
 interface IslandValidationOptions {

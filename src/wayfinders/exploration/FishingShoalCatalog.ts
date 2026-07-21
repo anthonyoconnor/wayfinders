@@ -16,7 +16,6 @@ import {
 } from "./FishingShoalContracts";
 
 const CATALOG_NAMESPACE = 904_321;
-const DEFAULT_SHOAL_COUNT = 4;
 const HOME_EXCLUSION_TILES = 18;
 const MINIMUM_SEPARATION_TILES = 14;
 
@@ -97,7 +96,7 @@ export function generateFishingShoalCatalog(
   seed: number,
   home: GridPoint,
   contentVersion: number = FISHING_SHOAL_CONTENT_VERSION,
-  config: Pick<PrototypeConfig, "navigation" | "movement"> = prototypeConfig,
+  config: Pick<PrototypeConfig, "navigation" | "movement" | "world"> = prototypeConfig,
   analysis?: WorldAnalysisIndex,
 ): readonly Readonly<FishingShoalDefinition>[] {
   if (contentVersion !== FISHING_SHOAL_CONTENT_VERSION) {
@@ -135,6 +134,7 @@ export function generateFishingShoalCatalog(
 
   const selected: RankedCandidate[] = [];
   for (const candidate of candidates) {
+    if (selected.length >= config.world.fishingShoalCount) break;
     if (selected.some(({ tile }) => (
       world.topology.minimumImageTileDistanceSquared(candidate.tile, tile)
       < MINIMUM_SEPARATION_TILES * MINIMUM_SEPARATION_TILES
@@ -142,7 +142,6 @@ export function generateFishingShoalCatalog(
       continue;
     }
     selected.push(candidate);
-    if (selected.length === DEFAULT_SHOAL_COUNT) break;
   }
 
   return Object.freeze(selected.map((candidate, ordinal): Readonly<FishingShoalDefinition> => {

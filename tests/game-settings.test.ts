@@ -43,7 +43,7 @@ describe("default game settings contract", () => {
     expect(WORLD_GENERATION_PROFILES.P0.dimensions).toEqual({ width: 96, height: 96 });
     expect(WORLD_GENERATION_PROFILES.P1.dimensions).toEqual({ width: 192, height: 192 });
     expect(WORLD_GENERATION_PROFILES.P2.dimensions).toEqual({ width: 384, height: 384 });
-    expect(DEFAULT_GAME_SETTINGS.world.islands.count).toBe(8);
+    expect(DEFAULT_GAME_SETTINGS.world.islands.count).toBe(20);
     expect(WORLD_GENERATION_PROFILES.P1.config.islands.count).toBe(32);
   });
 

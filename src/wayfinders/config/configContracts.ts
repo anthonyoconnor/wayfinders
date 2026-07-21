@@ -21,6 +21,8 @@ export interface PrototypeConfig {
     maxEnclosedUnknownTiles: number;
     /** Lost idol locations hidden among the world's eligible survey locations. */
     idolCount: number;
+    /** Maximum fishing shoals placed in the generated world. */
+    fishingShoalCount: number;
   };
   islands: {
     count: number;
